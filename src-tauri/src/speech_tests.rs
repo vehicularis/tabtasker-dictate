@@ -72,7 +72,7 @@ fn real_local_model_transcribes_fixture_and_rejects_silence() {
   let root = PathBuf::from(std::env::var("TABTASKER_SPEECH_FIXTURE_DIR").unwrap());
   for model in MODELS { verify_model(&root.join(model.name), model).unwrap(); }
   let bytes = std::fs::read(root.join("fixture.f32")).unwrap();
-  let pcm: Vec<f32> = bytes.chunks_exact(4).map(|b| f32::from_le_bytes(b.try_into().unwrap())).collect();
+  let pcm: Vec<f32> = bytes.as_chunks::<4>().0.iter().map(|b| f32::from_le_bytes(*b)).collect();
   let started = Instant::now();
   let speech = LocalSpeech {
     root: root.clone(), enabled: AtomicBool::new(true), preparing: Mutex::default(), job: Mutex::default(),
@@ -132,10 +132,10 @@ fn a_long_note_is_transcribed_while_it_is_said_and_finishes_at_once() {
   let wav = |name: &str| -> Vec<f32> {
     let bytes = std::fs::read(clips.join(name)).unwrap();
     let at = bytes.windows(4).position(|w| w == b"data").unwrap() + 8;
-    bytes[at..].chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect()
+    bytes[at..].as_chunks::<4>().0.iter().map(|c| f32::from_le_bytes(*c)).collect()
   };
   // The English clips twice over with the pauses of someone thinking: well past the one-minute hold.
-  let english: Vec<(&str, &str)> = manifest.lines().filter_map(|line| { let mut cols = line.split('\t'); Some((cols.next()?, cols.nth(1)?)).filter(|_| line.contains("\ten\t")) }).collect();
+  let english: Vec<(&str, &str)> = manifest.lines().filter_map(|line| { if !line.contains("\ten\t") { return None; } let mut cols = line.split('\t'); Some((cols.next()?, cols.nth(1)?)) }).collect();
   let mut stream = Vec::new();
   for _ in 0..2 { for (name, _) in &english { stream.extend(wav(name)); stream.extend(vec![0.0f32; 12_800]); } }
   assert!(stream.len() > 90 * 16000, "{} s", stream.len() / 16000);

@@ -1,0 +1,25 @@
+import type { PointerEvent as ReactPointerEvent, ReactNode, RefObject } from 'react';
+import { GearIcon, NoteIcon } from './icons';
+import { Orb } from './Orb';
+
+// The dots, the pill they open into on hover, and the orb they become while you talk. `quiet` dots
+// (Appearance › idle hidden) are not drawn and take no clicks until the key is held.
+export function Dock({ mode, menu, dots, label, hint, quiet, level, typing, onHover, onMenu, onGrab, onDots, onNote, onSetup, onOrb }: {
+  mode: string; menu: ReactNode; dots: RefObject<HTMLButtonElement | null>; label: string; hint: boolean; quiet: boolean; level: { current: number }; typing: boolean;
+  onHover: (over: boolean) => void; onMenu: () => void; onGrab: (event: ReactPointerEvent) => void; onDots: () => void; onNote: () => void; onSetup: () => void; onOrb: () => void;
+}) {
+  return <div className="spot" data-spot onPointerEnter={() => onHover(true)} onPointerLeave={() => onHover(false)}
+    onContextMenu={event => { event.preventDefault(); onMenu(); }}>
+    {menu}
+    <span className="glass capsule" data-glass aria-hidden="true" />
+    <button ref={dots} type="button" className="dots" data-hit={quiet ? undefined : 16} aria-label={label} onPointerDown={onGrab} onClick={onDots}>
+      <i /><i /><i />
+    </button>
+    <div className="glass pill" data-glass data-hit aria-hidden={mode !== 'hover'} onPointerDown={onGrab}>
+      <button type="button" aria-label="Take a note" title="Take a note" tabIndex={mode === 'hover' ? 0 : -1} onClick={onNote}><NoteIcon /></button>
+      <button type="button" aria-label="Set up" title="Set up" tabIndex={mode === 'hover' ? 0 : -1} onClick={onSetup}><GearIcon /></button>
+    </div>
+    <Orb mode={mode} level={level} typing={typing} onClick={onOrb} />
+    {hint && <span className="label" aria-hidden="true"><span className="glass"><kbd>fn</kbd> hold to type</span></span>}
+  </div>;
+}

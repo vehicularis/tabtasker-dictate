@@ -17,7 +17,13 @@ It runs from the menu bar, with no account and nothing to sign in to.
 | `src-tauri/src/dictate.m` | The fn key, the microphone (with a picker for other inputs), and typing your words as keystrokes. |
 | `src-tauri/src/speech.rs` | Whisper large-v3 Turbo on Metal, through [whisper.cpp](https://github.com/ggml-org/whisper.cpp). It uses the [audio-context fine-tune](https://huggingface.co/MahmoudAshraf/acft-whisper-large-v3-turbo) so the encoder reads only the speech, not a padded 30-second window. Silero VAD finds where speech ends. |
 | `src-tauri/src/speech_note.rs` | Long notes: the audio is cut where you pause and each piece is transcribed once, while you are still talking. |
-| `src/Overlay.tsx` | The dots, the orb, the note's review card and setup, in a transparent window. |
+| `src-tauri/src/settings.rs` | Settings in one JSON file in the app data folder, saved atomically and sent to every window. |
+| `src/overlay/` | The dots, the orb, the note's review card and setup, in a transparent window. |
+| `src/settings/` | The Settings window, one page per area, built from the shared design system in `src/ui/`. |
+
+Without the app around it, `npm run dev` serves both pages to a browser with a mock of the app:
+`http://localhost:1420/?preview=menu` for an overlay state, `http://localhost:1420/settings.html#notes` for a Settings
+page, and `?theme=light` or `?theme=dark` on either.
 
 The first launch downloads the model once (about 875 MB) from
 [vehicularis-edge-models](https://github.com/vehicularis/vehicularis-edge-models/releases), checking its size

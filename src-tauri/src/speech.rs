@@ -1,6 +1,7 @@
 use std::{ffi::{c_char, c_void, CStr, CString}, fs::File, io::{Read, Write}, path::{Path, PathBuf}, sync::{Arc, Mutex, OnceLock, atomic::{AtomicBool, Ordering}}, time::{Duration, Instant}};
 use ring::digest::{Context as Digest, SHA256};
 use tauri::{AppHandle, Manager};
+use crate::{ai, context, history, settings, text};
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters, WhisperSysContext, WhisperSysState, WhisperVadContext, WhisperVadContextParams, WhisperVadParams};
 
 const MAX_SAMPLES: usize = 60 * 16000;
@@ -140,7 +141,7 @@ pub(crate) async fn cancellable<T>(cancel: &AtomicBool, work: impl std::future::
 #[no_mangle]
 extern "C" fn dictate_prepare_models() {
   let Some(app) = APP.get() else {
-    unsafe { dictate_model_status(b"Voice model storage is unavailable. Restart TabTasker Dictate and try again.\0".as_ptr().cast(), -1); }
+    unsafe { dictate_model_status(c"Voice model storage is unavailable. Restart TabTasker Dictate and try again.".as_ptr(), -1); }
     return;
   };
   let state = app.state::<LocalSpeech>();
@@ -325,6 +326,31 @@ impl Engine {
   }
 }
 
+impl Engine {
+  fn segments(&mut self, pcm: &[f32], language: i32, prompt: Option<&str>, translate: bool) -> Result<Vec<Segment>, String> {
+    let mut state = self.whisper.create_state().map_err(|_| "Not enough memory")?;
+    let mut params = FullParams::new(SamplingStrategy::BeamSearch { beam_size: 5, patience: -1.0 });
+    params.set_n_threads(threads() as i32);
+    params.set_language(whisper_rs::get_lang_str(language));
+    params.set_audio_ctx(audio_ctx(pcm.len()));
+    params.set_translate(translate);
+    params.set_no_context(true);
+    params.set_suppress_nst(true);
+    if let Some(prompt) = prompt.filter(|prompt| !prompt.trim().is_empty()) { params.set_initial_prompt(prompt); }
+    params.set_print_special(false); params.set_print_progress(false); params.set_print_realtime(false); params.set_print_timestamps(false);
+    let mut abort = Abort { cancelled: Arc::new(AtomicBool::new(false)), started: Instant::now() };
+    // The callback borrows this stack value only for the synchronous full() call.
+    unsafe { params.set_abort_callback(Some(should_abort)); params.set_abort_callback_user_data((&mut abort as *mut Abort).cast()); }
+    state.full(params, pcm).map_err(|_| "Couldn’t understand that")?;
+    // Timestamps are in hundredths of a second.
+    let samples = |at: i64| (at.max(0) as usize * 160).min(pcm.len());
+    Ok(state.as_iter().filter(|segment| segment.no_speech_probability() <= 0.6).filter_map(|segment| {
+      let text = segment.to_string().trim().to_owned();
+      (!text.is_empty()).then(|| Segment { start: samples(segment.start_timestamp()), end: samples(segment.end_timestamp()), text })
+    }).collect())
+  }
+}
+
 impl LocalSpeech {
   fn hold<T>(&self, id: &str, use_it: impl FnOnce(&mut Hold) -> T) -> T {
     let mut hold = self.hold.lock().unwrap();
@@ -406,6 +432,7 @@ extern "C" fn dictate_audio(id: *const c_char, samples: *const f32, count: usize
     let result = state.finish(&id, &pcm, cancelled.clone());
     state.job.lock().unwrap().take();
     if cancelled.load(Ordering::Relaxed) || !state.enabled.load(Ordering::Relaxed) { return; }
+    let result = result.map(|text| settle(&id, &text, pcm.len()));
     let id = CString::new(id).unwrap_or_default();
     let (text, error) = match result {
       Ok(text) => (Some(CString::new(text.replace('\0', "")).unwrap_or_default()), None),
@@ -424,7 +451,7 @@ extern "C" fn dictate_audio(id: *const c_char, samples: *const f32, count: usize
 #[no_mangle]
 extern "C" fn dictate_draft(id: *const c_char, samples: *const f32, count: usize) -> bool {
   let Some(app) = APP.get() else { return false };
-  if count < 8_000 || count > MAX_SAMPLES || samples.is_null() || id.is_null() { return false; } // under 0.5 s says nothing yet
+  if !(8_000..=MAX_SAMPLES).contains(&count) || samples.is_null() || id.is_null() { return false; } // under 0.5 s says nothing yet
   let state = app.state::<LocalSpeech>();
   if !state.enabled.load(Ordering::Relaxed) || state.job.lock().unwrap().is_some() { return false; }
   let mut draft = state.draft.lock().unwrap();
@@ -443,10 +470,51 @@ extern "C" fn dictate_draft(id: *const c_char, samples: *const f32, count: usize
     };
     state.draft.lock().unwrap().take();
     let Some(text) = text else { return };
+    let ctx = context::get(&id);
+    let text = if ctx.mode.types() { text::finish(&text, &ctx, true) } else { text };
     let (id, text) = (CString::new(id).unwrap_or_default(), CString::new(text.replace('\0', "")).unwrap_or_default());
     let _ = app.run_on_main_thread(move || unsafe { dictate_draft_result(id.as_ptr(), text.as_ptr()); });
   });
   true
+}
+
+/// A hold's final words on their way out: the text pipeline and Claude's polish for typed modes, then
+/// the history. Claude is asked only where the app's style says so and only once it is connected.
+fn settle(id: &str, raw: &str, samples: usize) -> String {
+  let ctx = context::get(id);
+  let text = if ctx.mode.types() {
+    let text = text::finish(raw, &ctx, false);
+    let settings = settings::get();
+    if settings.claude.enabled && settings.apps.style_for(&ctx.bundle_id).1 { ai::polish(&text, &ctx).unwrap_or(text) } else { text }
+  } else { raw.to_owned() };
+  history::record(history::Entry::new(&ctx, &text, samples as f64 / 16000.0));
+  text
+}
+
+/// What `transcribe_piece` is told about a piece: its language (None or `auto` detects it), words to
+/// spell right, and whether to translate it to English.
+#[derive(Clone, Debug, Default)]
+pub struct PieceOptions { pub language: Option<String>, pub prompt: Option<String>, pub translate: bool }
+
+/// Words Whisper heard in a piece, `start` and `end` in samples from the piece's start.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct Segment { pub start: usize, pub end: usize, pub text: String }
+
+/// One piece of audio of up to 30 s, 16 kHz mono, with timestamps. Blocking: it waits for the engine,
+/// so a hold's pass finishes first. Silence answers no segments.
+pub fn transcribe_piece(pcm: &[f32], opts: PieceOptions) -> Result<Vec<Segment>, String> {
+  let app = APP.get().ok_or("Voice is still loading")?;
+  if pcm.len() > 30 * 16000 || pcm.iter().any(|sample| !sample.is_finite()) { return Err("Invalid audio".into()); }
+  if validate_audio(pcm).is_err() { return Ok(Vec::new()); }
+  let state = app.state::<LocalSpeech>();
+  if !state.enabled.load(Ordering::Relaxed) { return Err("Voice is off".into()); }
+  let mut engine = state.engine.lock().unwrap();
+  let engine = engine.as_mut().ok_or("Voice is still loading")?;
+  let language = match opts.language.as_deref().filter(|language| *language != "auto") {
+    Some(code) => whisper_rs::get_lang_id(code).ok_or("Unknown language")?,
+    None => engine.detect(pcm)?.0,
+  };
+  engine.segments(pcm, language, opts.prompt.as_deref(), opts.translate)
 }
 
 #[path = "speech_note.rs"]

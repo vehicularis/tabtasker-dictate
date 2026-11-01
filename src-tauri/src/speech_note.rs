@@ -27,10 +27,10 @@ pub(super) fn cut(speech: &[(usize, usize)], len: usize) -> Option<usize> {
   };
   let mut pauses: Vec<usize> = speech.windows(2).filter(|pair| pair[1].0 - pair[0].1 >= PAUSE).map(|pair| (pair[0].1 + pair[1].0) / 2).collect();
   if len - last_end.min(len) >= PAUSE { pauses.push((last_end + len) / 2); }
-  let within = pauses.iter().copied().filter(|&at| at <= PIECE);
-  if let Some(at) = within.clone().filter(|&at| at >= ENOUGH).last() { return Some(at); }
+  let mut within = pauses.iter().copied().filter(|&at| at <= PIECE);
+  if let Some(at) = within.clone().rfind(|&at| at >= ENOUGH) { return Some(at); }
   if len <= PIECE { return None; }
-  Some(within.last().unwrap_or(PIECE))
+  Some(within.next_back().unwrap_or(PIECE))
 }
 
 fn join(text: &str, more: &str) -> String {
@@ -175,6 +175,7 @@ extern "C" fn dictate_note_finish(id: *const c_char, base: usize, samples: *cons
     };
     state.job.lock().unwrap().take();
     if cancelled.load(Ordering::Relaxed) || !state.enabled.load(Ordering::Relaxed) { return; }
+    if let Ok(text) = &result { history::record(history::Entry::new(&context::get(&id), text, (base + pcm.len()) as f64 / 16000.0)); }
     let id = CString::new(id).unwrap_or_default();
     let (text, error) = match result {
       Ok(text) => (Some(CString::new(text.replace('\0', "")).unwrap_or_default()), None),

@@ -2,17 +2,28 @@
 //! as a Markdown file. Speech never leaves the Mac: Whisper runs locally on Metal.
 //!
 //! The native side (dictate.m) owns the fn key, the microphone and typing; speech.rs owns the model. This
-//! file is the app around them: the overlay window, the menu bar item, and the bridge to the page.
-mod speech;
+//! file is the app around them: the overlay and Settings windows, the menu bar item, the app menu, and
+//! the bridge to the pages.
+pub mod ai;
+pub mod context;
+pub mod history;
+pub mod notes;
+pub mod settings;
+pub mod speech;
+pub mod text;
 
 use std::ffi::{c_char, c_void, CStr, CString};
 use std::path::PathBuf;
-use std::sync::OnceLock;
-use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+use std::sync::{Mutex, OnceLock};
+use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::TrayIconBuilder;
-use tauri::{AppHandle, Emitter, RunEvent, WebviewUrl, WebviewWindowBuilder};
+use tauri::window::{Effect, EffectState, EffectsBuilder};
+use tauri::{ActivationPolicy, AppHandle, Emitter, LogicalPosition, Manager, RunEvent, TitleBarStyle, WebviewUrl, WebviewWindowBuilder, WindowEvent, Wry};
 
 const OVERLAY: &str = "overlay";
+const SETTINGS: &str = "settings";
+/// The Settings window's pages, by the hash it opens on.
+const ROUTES: &[&str] = &["general", "shortcuts", "dictation", "vocabulary", "apps", "notes", "meetings", "claude", "agents", "history", "appearance", "about", "setup"];
 static APP: OnceLock<AppHandle> = OnceLock::new();
 
 extern "C" {
@@ -24,6 +35,8 @@ extern "C" {
   fn dictate_request(kind: *const c_char);
   fn dictate_overlay_attach(window: *mut c_void);
   fn dictate_overlay_layout(json: *const c_char);
+  fn dictate_type_text(text: *const c_char);
+  fn dictate_meeting(action: *const c_char) -> bool;
 }
 
 // ---------- what the native side tells the page ----------
@@ -51,8 +64,11 @@ extern "C" fn dictate_ui_error(message: *const c_char) {
 extern "C" fn dictate_ui_notice(message: *const c_char) {
   if let Some(message) = text(message) { emit("dictate-notice", serde_json::json!({ "message": message })); }
 }
+/// To every window: setup in Settings tests the key too.
 #[no_mangle]
-extern "C" fn dictate_ui_fn(down: bool) { emit("dictate-fn", serde_json::json!({ "down": down })); }
+extern "C" fn dictate_ui_fn(down: bool) {
+  if let Some(app) = APP.get() { let _ = app.emit("dictate-fn", serde_json::json!({ "down": down })); }
+}
 #[no_mangle]
 extern "C" fn dictate_ui_said(words: *const c_char, dictated: bool, live: bool) {
   if let Some(words) = text(words) { emit("dictate-said", serde_json::json!({ "text": words, "dictated": dictated, "live": live })); }
@@ -75,10 +91,10 @@ extern "C" fn dictate_log(line: *const c_char) {
 }
 #[no_mangle]
 extern "C" fn dictate_cancel(request: *const c_char) {
-  if let (Some(app), Some(id)) = (APP.get(), text(request)) { speech::cancel(app, &id); }
+  if let (Some(app), Some(id)) = (APP.get(), text(request)) { speech::cancel(app, &id); context::forget(&id); }
 }
 
-// ---------- what the page asks for ----------
+// ---------- what the pages ask for ----------
 
 /// Runs `work` on the main thread, where AppKit and the native voice state live.
 async fn on_main<T: Send + 'static>(app: &AppHandle, work: impl FnOnce() -> T + Send + 'static) -> Result<T, String> {
@@ -87,20 +103,26 @@ async fn on_main<T: Send + 'static>(app: &AppHandle, work: impl FnOnce() -> T + 
   result.await.map_err(|e| e.to_string())
 }
 
+fn status_json() -> Option<String> {
+  let mut output = vec![0u8; 16384];
+  unsafe { dictate_settings_status(output.as_mut_ptr().cast(), output.len()) }.then(|| CStr::from_bytes_until_nul(&output).map(|text| text.to_string_lossy().into_owned()).ok()).flatten()
+}
+
 #[tauri::command]
 async fn status(app: AppHandle) -> Result<serde_json::Value, String> {
-  let json = on_main(&app, || {
-    let mut output = vec![0u8; 16384];
-    unsafe { dictate_settings_status(output.as_mut_ptr().cast(), output.len()) }.then(|| CStr::from_bytes_until_nul(&output).map(|text| text.to_string_lossy().into_owned()).ok()).flatten()
-  }).await?.ok_or("Voice settings are unavailable")?;
+  let json = on_main(&app, status_json).await?.ok_or("Voice settings are unavailable")?;
   let mut value: serde_json::Value = serde_json::from_str(&json).map_err(|e| e.to_string())?;
-  value["notes"] = serde_json::Value::String(notes_dir()?.display().to_string());
+  value["notes"] = serde_json::Value::String(notes::notes_dir()?.display().to_string());
+  value["home"] = std::env::var("HOME").map_or(serde_json::Value::Null, serde_json::Value::String);
+  show_paused(value["enabled"] == false);
   Ok(value)
 }
 
 #[tauri::command]
 async fn set_enabled(app: AppHandle, enabled: bool) -> Result<(), String> {
-  on_main(&app, move || unsafe { dictate_set_enabled(enabled) }).await
+  on_main(&app, move || unsafe { dictate_set_enabled(enabled) }).await?;
+  show_paused(!enabled);
+  Ok(())
 }
 
 /// The microphone picked in the menu, by its CoreAudio UID; none for the Mac's own input.
@@ -131,51 +153,40 @@ fn layout(app: AppHandle, glass: Vec<[f64; 6]>, hit: Vec<[f64; 4]>, dark: Option
   app.run_on_main_thread(move || unsafe { dictate_overlay_layout(json.as_ptr()) }).map_err(|e| e.to_string())
 }
 
-/// Notes go to Documents/TabTasker Dictate, one Markdown file each.
-fn notes_dir() -> Result<PathBuf, String> {
-  let home = std::env::var_os("HOME").ok_or("No home folder")?;
-  Ok(PathBuf::from(home).join("Documents").join("TabTasker Dictate"))
-}
-
-/// A file name from the note's title: what a Mac allows, short, never an existing note's.
-fn note_path(dir: &std::path::Path, title: &str, stamp: &str) -> PathBuf {
-  let clean: String = title.chars().map(|c| if c == '/' || c == ':' || c.is_control() { ' ' } else { c }).collect();
-  let clean = clean.split_whitespace().collect::<Vec<_>>().join(" ");
-  let clean: String = clean.trim_start_matches('.').chars().take(80).collect();
-  let base = if clean.is_empty() { format!("Note {stamp}") } else { format!("{stamp} {clean}") };
-  let mut path = dir.join(format!("{base}.md"));
-  let mut n = 2;
-  while path.exists() { path = dir.join(format!("{base} {n}.md")); n += 1; }
-  path
-}
-
+/// A meeting from the menu or the dots: `start` or `stop`. False when nothing changed.
 #[tauri::command]
-fn save_note(title: String, text: String, stamp: String) -> Result<String, String> {
-  if text.trim().is_empty() || text.chars().count() > 1_000_000 { return Err("Nothing to save".into()); }
-  if !stamp.chars().all(|c| c.is_ascii_digit() || c == '-' || c == ' ' || c == '.') || stamp.len() > 20 { return Err("Invalid date".into()); }
-  let dir = notes_dir()?;
-  std::fs::create_dir_all(&dir).map_err(|e| format!("Couldn’t make the notes folder: {e}"))?;
-  let path = note_path(&dir, &title, &stamp);
-  let heading = title.trim();
-  let body = if heading.is_empty() { format!("{}\n", text.trim()) } else { format!("# {heading}\n\n{}\n", text.trim()) };
-  std::fs::write(&path, body).map_err(|e| format!("Couldn’t save the note: {e}"))?;
-  Ok(path.display().to_string())
+async fn meeting(app: AppHandle, action: String) -> Result<bool, String> {
+  if !matches!(action.as_str(), "start" | "stop") { return Err("Unknown action".into()); }
+  let action = CString::new(action).map_err(|e| e.to_string())?;
+  on_main(&app, move || unsafe { dictate_meeting(action.as_ptr()) }).await
 }
 
-/// Shows the notes folder in Finder, with `file` selected when given.
+/// Opens the Settings window on `route` (General when unknown).
 #[tauri::command]
-fn show_notes(file: Option<String>) -> Result<(), String> {
-  let dir = notes_dir()?;
-  std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-  let mut open = std::process::Command::new("/usr/bin/open");
-  match file.map(PathBuf::from).filter(|file| file.starts_with(&dir)) {
-    Some(file) => open.arg("-R").arg(file),
-    None => open.arg(dir),
-  };
-  open.spawn().map(|_| ()).map_err(|e| e.to_string())
+fn open_settings(app: AppHandle, route: Option<String>) -> Result<(), String> {
+  show_settings(&app, route.as_deref().unwrap_or("general")).map_err(|e| e.to_string())
 }
 
-// ---------- the app ----------
+/// Types the newest transcript again where the cursor is.
+#[tauri::command]
+fn paste_last(app: AppHandle) {
+  match history::last() {
+    Some(entry) => {
+      let Ok(text) = CString::new(entry.text) else { return };
+      let _ = app.run_on_main_thread(move || unsafe { dictate_type_text(text.as_ptr()) });
+    }
+    None => emit("dictate-notice", serde_json::json!({ "message": "Nothing to paste yet" })),
+  }
+}
+
+fn start_meeting(app: &AppHandle) {
+  let app = app.clone();
+  let _ = app.clone().run_on_main_thread(move || {
+    if !unsafe { dictate_meeting(c"start".as_ptr()) } { let _ = app.emit_to(OVERLAY, "dictate-notice", serde_json::json!({ "message": "Couldn’t start the meeting" })); }
+  });
+}
+
+// ---------- the windows ----------
 
 fn overlay(app: &AppHandle) -> tauri::Result<()> {
   let window = WebviewWindowBuilder::new(app, OVERLAY, WebviewUrl::App("index.html".into()))
@@ -189,57 +200,147 @@ fn overlay(app: &AppHandle) -> tauri::Result<()> {
   Ok(())
 }
 
-fn tray(app: &AppHandle) -> tauri::Result<()> {
-  let note = MenuItem::with_id(app, "note", "New Note", true, None::<&str>)?;
-  let notes = MenuItem::with_id(app, "notes", "Show Notes in Finder", true, None::<&str>)?;
-  let setup = MenuItem::with_id(app, "setup", "Set Up…", true, None::<&str>)?;
-  let quit = MenuItem::with_id(app, "quit", "Quit TabTasker Dictate", true, Some("CmdOrCtrl+Q"))?;
-  let menu = Menu::with_items(app, &[&note, &notes, &PredefinedMenuItem::separator(app)?, &setup, &PredefinedMenuItem::separator(app)?, &quit])?;
+/// The Settings window, made on demand. While it is open the app has a Dock icon and a menu bar, like
+/// any app with a window; closing it goes back to the menu bar only.
+fn show_settings(app: &AppHandle, route: &str) -> tauri::Result<()> {
+  let route = if ROUTES.contains(&route) { route } else { "general" };
+  app.set_activation_policy(ActivationPolicy::Regular)?;
+  if let Some(window) = app.get_webview_window(SETTINGS) {
+    window.eval(format!("location.hash = '#{route}'"))?;
+    window.unminimize()?;
+    window.show()?;
+    return window.set_focus();
+  }
+  let window = WebviewWindowBuilder::new(app, SETTINGS, WebviewUrl::App(format!("settings.html#{route}").into()))
+    .title("TabTasker Dictate")
+    .inner_size(860.0, 620.0).min_inner_size(760.0, 540.0).center()
+    .title_bar_style(TitleBarStyle::Overlay).hidden_title(true).traffic_light_position(LogicalPosition::new(20.0, 22.0))
+    .transparent(true) // the sidebar's vibrancy shows through the page
+    .effects(EffectsBuilder::new().effect(Effect::Sidebar).state(EffectState::FollowsWindowActiveState).build())
+    .build()?;
+  window.set_focus()
+}
+
+// ---------- the menus ----------
+
+/// The menu bar while Settings is open. Its shortcuts work whenever the app is active, and the Edit
+/// items are what make ⌘C and ⌘V work in a web view at all.
+fn app_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
+  let separator = || PredefinedMenuItem::separator(app);
+  let main = Submenu::with_items(app, "TabTasker Dictate", true, &[
+    &MenuItem::with_id(app, "about", "About TabTasker Dictate", true, None::<&str>)?, &separator()?,
+    &MenuItem::with_id(app, "settings", "Settings…", true, Some("CmdOrCtrl+,"))?, &separator()?,
+    &PredefinedMenuItem::services(app, None)?, &separator()?,
+    &PredefinedMenuItem::hide(app, None)?, &PredefinedMenuItem::hide_others(app, None)?, &PredefinedMenuItem::show_all(app, None)?, &separator()?,
+    &MenuItem::with_id(app, "quit", "Quit TabTasker Dictate", true, Some("CmdOrCtrl+Q"))?,
+  ])?;
+  let edit = Submenu::with_items(app, "Edit", true, &[
+    &PredefinedMenuItem::undo(app, None)?, &PredefinedMenuItem::redo(app, None)?, &separator()?,
+    &PredefinedMenuItem::cut(app, None)?, &PredefinedMenuItem::copy(app, None)?, &PredefinedMenuItem::paste(app, None)?,
+    &PredefinedMenuItem::select_all(app, None)?,
+  ])?;
+  let window = Submenu::with_items(app, "Window", true, &[&PredefinedMenuItem::minimize(app, None)?, &PredefinedMenuItem::close_window(app, None)?])?;
+  window.set_as_windows_menu_for_nsapp()?;
+  Menu::with_items(app, &[&main, &edit, &window])
+}
+
+/// The tray's Recent Notes, and the files its items open.
+static RECENT: OnceLock<(Submenu<Wry>, Mutex<Vec<PathBuf>>)> = OnceLock::new();
+static PAUSED: OnceLock<CheckMenuItem<Wry>> = OnceLock::new();
+
+/// Rebuilds Recent Notes from the notes folder: after a save, or when the folder changes.
+pub(crate) fn recent_changed(app: &AppHandle) {
+  let Some((menu, files)) = RECENT.get() else { return };
+  let notes = notes::recent(10);
+  let rebuild = || -> tauri::Result<()> {
+    while menu.remove_at(0)?.is_some() {}
+    if notes.is_empty() { return menu.append(&MenuItem::with_id(app, "recent-none", "No notes yet", false, None::<&str>)?); }
+    for (i, note) in notes.iter().enumerate() { menu.append(&MenuItem::with_id(app, format!("recent:{i}"), &note.title, true, None::<&str>)?)?; }
+    Ok(())
+  };
+  if let Err(e) = rebuild() { log::warn!("recent notes: {e}"); }
+  *files.lock().unwrap_or_else(|e| e.into_inner()) = notes.into_iter().map(|note| note.path).collect();
+}
+
+fn show_paused(paused: bool) {
+  if let Some(item) = PAUSED.get() { let _ = item.set_checked(paused); }
+}
+
+fn tray(app: &AppHandle, enabled: bool) -> tauri::Result<()> {
+  let separator = || PredefinedMenuItem::separator(app);
+  let recent = Submenu::with_id(app, "recent", "Recent Notes", true)?;
+  let paused = CheckMenuItem::with_id(app, "pause", "Pause Dictation", true, !enabled, None::<&str>)?;
+  let menu = Menu::with_items(app, &[
+    &MenuItem::with_id(app, "note", "New Note", true, None::<&str>)?,
+    &MenuItem::with_id(app, "meeting", "Start Meeting", true, None::<&str>)?,
+    &MenuItem::with_id(app, "paste-last", "Paste Last Transcript", true, None::<&str>)?,
+    &recent, &separator()?,
+    &MenuItem::with_id(app, "settings", "Settings…", true, Some("CmdOrCtrl+,"))?,
+    &MenuItem::with_id(app, "setup", "Set Up…", true, None::<&str>)?,
+    &MenuItem::with_id(app, "notes", "Show Notes in Finder", true, None::<&str>)?, &separator()?,
+    &paused, &separator()?,
+    &MenuItem::with_id(app, "quit", "Quit TabTasker Dictate", true, Some("CmdOrCtrl+Q"))?,
+  ])?;
+  let _ = RECENT.set((recent, Mutex::default()));
+  let _ = PAUSED.set(paused);
+  recent_changed(app);
   // The mark alone, in black: macOS tints a template icon for the menu bar's light or dark look.
   let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray@2x.png"))?;
-  TrayIconBuilder::with_id("dictate").menu(&menu).tooltip("TabTasker Dictate").icon(icon).icon_as_template(true).on_menu_event(|app, event| match event.id().as_ref() {
-    "note" => { let _ = app.run_on_main_thread(|| unsafe { dictate_request(c"note".as_ptr()) }); }
-    "notes" => { let _ = show_notes(None); }
-    "setup" => { let _ = app.emit_to(OVERLAY, "dictate-setup", ()); }
-    "quit" => app.exit(0),
-    "hide" => { let _ = app.emit_to(OVERLAY, "dictate-hide", ()); }
-    _ => {}
-  }).build(app)?;
+  TrayIconBuilder::with_id("dictate").menu(&menu).tooltip("TabTasker Dictate").icon(icon).icon_as_template(true).build(app)?;
   Ok(())
+}
+
+/// The tray's and the app menu's items, by id. Tauri hands every menu's events to one handler.
+fn menu_event(app: &AppHandle, id: &str) {
+  match id {
+    "note" => { let _ = app.run_on_main_thread(|| unsafe { dictate_request(c"note".as_ptr()) }); }
+    "meeting" => start_meeting(app),
+    "paste-last" => paste_last(app.clone()),
+    "notes" => { let _ = notes::show_notes(None); }
+    "settings" => { let _ = show_settings(app, "general"); }
+    "about" => { let _ = show_settings(app, "about"); }
+    "setup" => { let _ = app.emit_to(OVERLAY, "dictate-setup", ()); }
+    // The item has already flipped its own check.
+    "pause" => {
+      let paused = PAUSED.get().and_then(|item| item.is_checked().ok()).unwrap_or(false);
+      let _ = app.run_on_main_thread(move || unsafe { dictate_set_enabled(!paused) });
+    }
+    "quit" => app.exit(0),
+    _ => {
+      let Some(index) = id.strip_prefix("recent:").and_then(|i| i.parse::<usize>().ok()) else { return };
+      let file = RECENT.get().and_then(|(_, files)| files.lock().unwrap_or_else(|e| e.into_inner()).get(index).cloned());
+      if let Some(file) = file { let _ = std::process::Command::new("/usr/bin/open").arg(file).spawn(); }
+    }
+  }
 }
 
 pub fn run() {
   tauri::Builder::default()
-    .invoke_handler(tauri::generate_handler![status, set_enabled, set_input, set_open_at_login, request, layout, save_note, show_notes])
+    .invoke_handler(tauri::generate_handler![
+      status, set_enabled, set_input, set_open_at_login, request, layout, meeting, open_settings, paste_last,
+      notes::save_note, notes::show_notes, settings::get_settings, settings::update_settings, settings::reset_settings,
+    ])
     .setup(|app| {
-      app.set_activation_policy(tauri::ActivationPolicy::Accessory); // a menu bar app: no Dock icon
+      app.set_activation_policy(ActivationPolicy::Accessory); // a menu bar app: no Dock icon
       let handle = app.handle().clone();
       APP.get_or_init(|| handle.clone());
+      settings::init(&handle)?;
       speech::init(&handle)?;
       unsafe { dictate_init() };
+      settings::apply(&handle, &settings::get());
       overlay(&handle)?;
-      tray(&handle)?;
+      handle.set_menu(app_menu(&handle)?)?;
+      let enabled = status_json().and_then(|json| serde_json::from_str::<serde_json::Value>(&json).ok()).is_some_and(|status| status["enabled"] == true);
+      tray(&handle, enabled)?;
       Ok(())
+    })
+    .on_menu_event(|app, event| menu_event(app, event.id().as_ref()))
+    .on_window_event(|window, event| {
+      if window.label() == SETTINGS && matches!(event, WindowEvent::Destroyed) {
+        let _ = window.app_handle().set_activation_policy(ActivationPolicy::Accessory);
+      }
     })
     .build(tauri::generate_context!())
     .expect("TabTasker Dictate failed to start")
     .run(|app, event| if let RunEvent::Exit = event { speech::shutdown(app) });
-}
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn a_note_file_is_named_for_its_title_and_never_overwrites_another() {
-    let dir = std::env::temp_dir().join(format!("dictate-notes-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let first = note_path(&dir, "Call the venue: about Thursday", "2026-11-01 21.40");
-    assert_eq!(first.file_name().unwrap(), "2026-11-01 21.40 Call the venue about Thursday.md");
-    std::fs::write(&first, "x").unwrap();
-    assert_eq!(note_path(&dir, "Call the venue: about Thursday", "2026-11-01 21.40").file_name().unwrap(), "2026-11-01 21.40 Call the venue about Thursday 2.md");
-    assert_eq!(note_path(&dir, "../../etc/passwd", "2026-11-01 21.40").parent().unwrap(), dir); // a slash is never a folder
-    assert_eq!(note_path(&dir, "  ", "2026-11-01 21.40").file_name().unwrap(), "Note 2026-11-01 21.40.md");
-    std::fs::remove_dir_all(dir).unwrap();
-  }
 }

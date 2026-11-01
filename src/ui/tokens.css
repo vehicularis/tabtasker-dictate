@@ -1,0 +1,39 @@
+/* The design tokens. Monochrome: hierarchy comes from weight, size, opacity and fills, never colour.
+   The accent is black in light and white in dark; red is only for a destructive action or an error.
+   The theme follows the Mac unless <html data-theme> pins it (Appearance, or ?theme= in a browser). */
+:root {
+  color-scheme: light;
+  --window: #f5f5f7; --sidebar: transparent; --sidebar-plain: #e8e8ea;
+  --surface: rgb(0 0 0 / .04); --surface-2: rgb(0 0 0 / .07); --surface-3: rgb(0 0 0 / .11);
+  --ink: #1d1d1f; --ink-2: rgb(0 0 0 / .62); --ink-3: rgb(0 0 0 / .42);
+  --accent: #000000; --on-accent: #ffffff; --accent-fill: rgb(0 0 0 / .08); --danger: #d93a2b;
+  --knob: #ffffff; --shadow: 0 1px 2px rgb(0 0 0 / .18), 0 0 0 .5px rgb(0 0 0 / .06);
+
+  --radius-group: 14px; --radius-seam: 5px; --radius-control: 8px; --radius-pill: 999px; --radius-card: 30px;
+  --seam: 3px;
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+  --ease: cubic-bezier(.2, .8, .2, 1); --spring: cubic-bezier(.34, 1.4, .64, 1);
+  --quick: 160ms; --slow: 240ms;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --window: #161618; --sidebar-plain: #232325;
+    --surface: rgb(255 255 255 / .055); --surface-2: rgb(255 255 255 / .09); --surface-3: rgb(255 255 255 / .14);
+    --ink: #f5f5f7; --ink-2: rgb(255 255 255 / .64); --ink-3: rgb(255 255 255 / .42);
+    --accent: #ffffff; --on-accent: #000000; --accent-fill: rgb(255 255 255 / .14); --danger: #ff6b5e;
+    --knob: #f5f5f7; --shadow: 0 1px 2px rgb(0 0 0 / .5);
+  }
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --window: #161618; --sidebar-plain: #232325;
+  --surface: rgb(255 255 255 / .055); --surface-2: rgb(255 255 255 / .09); --surface-3: rgb(255 255 255 / .14);
+  --ink: #f5f5f7; --ink-2: rgb(255 255 255 / .64); --ink-3: rgb(255 255 255 / .42);
+  --accent: #ffffff; --on-accent: #000000; --accent-fill: rgb(255 255 255 / .14); --danger: #ff6b5e;
+  --knob: #f5f5f7; --shadow: 0 1px 2px rgb(0 0 0 / .5);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
+}

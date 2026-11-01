@@ -1,0 +1,64 @@
+/* The Settings window: a sidebar over the window's vibrancy, the page on the window colour. The title
+   bar is hidden; its traffic lights sit over the sidebar, and the strip under them drags the window. */
+html, body, #root { height: 100%; margin: 0; }
+body { font: 13.5px/1.45 var(--font); color: var(--ink); background: var(--window); -webkit-font-smoothing: antialiased; cursor: default; }
+html[data-app] body { background: transparent; }
+button, input, select { font-family: var(--font); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.link { padding: 0; border: 0; background: none; font: inherit; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+
+.titlebar { position: fixed; inset: 0 0 auto; z-index: 0; height: 38px; }
+.window { display: grid; grid-template-columns: 220px 1fr; height: 100%; }
+
+/* ---------- sidebar ---------- */
+.sidebar { position: relative; display: flex; flex-direction: column; gap: 14px; padding: 50px 10px 16px; overflow-y: auto; background: var(--sidebar-plain); user-select: none; -webkit-user-select: none; }
+html[data-app] .sidebar { background: var(--sidebar); }
+.search { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; border-radius: var(--radius-control); color: var(--ink-3); background: var(--surface-2); }
+.search:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.search input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: 0; font-size: 13px; color: var(--ink); background: none; }
+.search input::placeholder { color: var(--ink-3); }
+.search input::-webkit-search-cancel-button { display: none; }
+.group { display: flex; flex-direction: column; gap: 1px; margin: 0; padding: 0; list-style: none; }
+.group a { display: flex; align-items: center; gap: 9px; height: 30px; padding: 0 9px; border-radius: 7px; font-size: 13.5px; color: var(--ink); text-decoration: none; transition: background var(--quick) var(--ease); }
+.group a .ui-icon { color: var(--ink-2); }
+.group a:hover { background: var(--surface-2); }
+.group a[aria-current='page'] { font-weight: 500; color: var(--on-accent); background: var(--accent); }
+.group a[aria-current='page'] .ui-icon { color: var(--on-accent); }
+.no-match { margin: 4px 8px; font-size: 12.5px; color: var(--ink-3); }
+
+/* ---------- the page ---------- */
+.content { position: relative; z-index: 1; overflow-y: auto; background: var(--window); }
+.page { max-width: 600px; margin: 0 auto; padding: 46px 32px 40px; animation: page-in var(--slow) var(--ease) both; }
+@keyframes page-in { from { opacity: 0; transform: translateY(4px); } }
+.pair { display: flex; gap: 6px; }
+.labelled { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--ink-3); }
+.state { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px; border-radius: var(--radius-pill); font-size: 12px; font-weight: 500; color: var(--ink-2); background: var(--surface-2); }
+.state[data-on] { color: var(--on-accent); background: var(--accent); }
+.about { display: flex; flex-direction: column; align-items: center; gap: 2px; margin: 8px 0 28px; text-align: center; }
+.about svg { margin-bottom: 12px; border-radius: 16px; box-shadow: 0 8px 24px rgb(0 0 0 / .18); }
+.about h1 { margin: 0; font-size: 22px; font-weight: 600; }
+.about p { margin: 0; font-size: 12.5px; color: var(--ink-3); }
+.notices { max-height: 260px; margin: 0; overflow: auto; font: 11px/1.5 ui-monospace, 'SF Mono', Menlo, monospace; color: var(--ink-2); white-space: pre-wrap; user-select: text; -webkit-user-select: text; }
+
+/* ---------- setup: the whole window, a step at a time ---------- */
+.onboarding { display: flex; flex-direction: column; align-items: center; box-sizing: border-box; height: 100%; padding: 54px 48px 28px; background: var(--window); }
+html[data-app] .onboarding { background: var(--window); }
+.progress { display: flex; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.progress li { width: 22px; height: 4px; border-radius: 2px; background: var(--surface-3); transition: background var(--slow) var(--ease), width var(--slow) var(--ease); }
+.progress li[data-state='done'] { background: var(--ink-3); }
+.progress li[data-state='now'] { width: 36px; background: var(--accent); }
+.step { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 12px; max-width: 460px; text-align: center; animation: page-in var(--slow) var(--ease) both; }
+.step-icon { display: grid; place-items: center; width: 64px; height: 64px; margin-bottom: 6px; border-radius: 18px; color: var(--on-accent); background: var(--accent); }
+.step h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -.015em; }
+.step .body { display: flex; flex-direction: column; gap: 14px; font-size: 14px; line-height: 1.5; color: var(--ink-2); }
+.step .body .ui-progress { width: 280px; margin: 0 auto; }
+.step-actions { display: flex; gap: 8px; min-height: 28px; }
+.promise { display: inline-flex; align-items: center; justify-content: center; gap: 7px; font-size: 13px; color: var(--ink); }
+.onboarding .ways { display: flex; flex-direction: column; gap: var(--seam); width: 340px; margin: 4px 0 0; padding: 0; list-style: none; }
+.onboarding .ways li { display: flex; align-items: center; justify-content: space-between; height: 44px; padding: 0 14px; border-radius: var(--radius-seam); font-size: 13.5px; color: var(--ink); background: var(--surface); }
+.onboarding .ways li:first-child { border-radius: var(--radius-group) var(--radius-group) var(--radius-seam) var(--radius-seam); }
+.onboarding .ways li:last-child { border-radius: var(--radius-seam) var(--radius-seam) var(--radius-group) var(--radius-group); }
+.onboarding .glyph { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink-2); }
+.nav { display: flex; justify-content: space-between; align-items: center; width: 100%; max-width: 560px; }
+.nav .end { display: flex; gap: 8px; }
+.onboarding .hint { margin: 12px 0 0; font-size: 12.5px; color: var(--ink-3); }

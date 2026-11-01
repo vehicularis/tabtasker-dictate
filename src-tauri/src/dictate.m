@@ -23,6 +23,9 @@ extern bool dictate_audio(const char *request, const float *samples, size_t coun
 extern bool dictate_draft(const char *request, const float *samples, size_t count);
 extern bool dictate_note_step(const char *request, size_t base, const float *samples, size_t count);
 extern bool dictate_note_finish(const char *request, size_t base, const float *samples, size_t count);
+extern void dictate_hold_begin(const char *request, const char *mode, const char *bundle_id);
+// A spoken command for Claude (Rust): false when Claude is not connected.
+extern bool dictate_command(const char *request, const char *instruction, const char *selection, const char *bundle_id);
 bool dictate_open_at_login(int set);
 
 // ---------- The read-aloud player: speech arrives in pieces as it is made, tagged with the reply ----------
@@ -172,6 +175,8 @@ typedef NS_ENUM(NSUInteger, TTVoicePhase) { TTVoiceIdle, TTVoiceListening, TTVoi
 // minutes of quiet.
 @property BOOL noting;
 @property NSTimeInterval lastSpoke;
+// The app's settings as Rust last applied them (settings.json, camelCase).
+@property (copy) NSDictionary *settings;
 @end
 
 // The text field that has the keyboard focus, as Accessibility sees it.
@@ -356,6 +361,8 @@ static dispatch_queue_t TTVoiceAudioQueue(void) {
   self.request = NSUUID.UUID.UUIDString;
   self.generation++;
   [self forgetTyped];
+  NSString *app = NSWorkspace.sharedWorkspace.frontmostApplication.bundleIdentifier ?: @"";
+  dictate_hold_begin(self.request.UTF8String, self.noting ? "note" : "dictate", app.UTF8String);
   self.phase = TTVoiceListening;
   self.listeningSince = NSProcessInfo.processInfo.systemUptime;
   if (!self.engine) [self startCapture]; // otherwise the microphone opened when fn went down
@@ -754,9 +761,12 @@ static BOOL TTVoiceNumbers(id row, NSUInteger count) {
 static TTVoiceCommands *voice;
 static TTVoiceOverlay *overlay;
 
+static NSDictionary *appliedSettings; // settings that arrived before the voice object
+
 void dictate_init(void) {
   if (voice) return;
   voice = [TTVoiceCommands new];
+  voice.settings = appliedSettings;
   voice.enabled = [NSUserDefaults.standardUserDefaults boolForKey:@"DictateEnabled"];
   [voice monitor];
   [voice watchTrust];
@@ -867,3 +877,45 @@ void dictate_result(const char *request, const char *text, const char *error) {
   NSError *failure = error ? [NSError errorWithDomain:@"Dictate" code:1 userInfo:@{NSLocalizedDescriptionKey: @(error)}] : nil;
   [voice receiveText:text ? @(text) : @"" error:failure generation:voice.generation];
 }
+
+// ---------- Settings, typing and commands from Rust ----------
+
+// The whole settings object, each time it changes.
+void dictate_apply_settings(const char *json) {
+  if (!json) return;
+  id values = [NSJSONSerialization JSONObjectWithData:[NSData dataWithBytes:json length:strlen(json)] options:0 error:nil];
+  if (![values isKindOfClass:NSDictionary.class]) return;
+  appliedSettings = values;
+  voice.settings = values;
+}
+// The name the person knows an app by, from its bundle id, while it runs.
+bool dictate_app_name(const char *bundle_id, char *output, size_t capacity) {
+  if (!bundle_id || !output || capacity == 0) return false;
+  NSString *name = [NSRunningApplication runningApplicationsWithBundleIdentifier:@(bundle_id)].firstObject.localizedName;
+  return name && [name getCString:output maxLength:capacity encoding:NSUTF8StringEncoding];
+}
+// Types `text` into the focused field of the front app, over its selection if it has one.
+static void TTVoiceTypeText(NSString *text) {
+  if (!text.length) return;
+  if (!AXIsProcessTrusted()) { dictate_ui_error("Turn on Accessibility to type"); return; }
+  // These keystrokes are ours, so the monitor never sees the field change: the next hold starts afresh.
+  voice.dictated = nil;
+  if (voice.typed.length) voice.typingStopped = YES;
+  TTVoiceType(text, 0);
+}
+static void TTVoiceOnMain(dispatch_block_t work) {
+  if (NSThread.isMainThread) work(); else dispatch_async(dispatch_get_main_queue(), work);
+}
+void dictate_type_text(const char *text) {
+  if (!text) return;
+  NSString *words = @(text);
+  TTVoiceOnMain(^{ TTVoiceTypeText(words); });
+}
+// Claude's answer to a command: `type` puts it at the caret (over the selection); `show` is the
+// overlay's card, which the page draws from the dictate-command event.
+void dictate_command_result(const char *request, const char *text, const char *action) {
+  if (!request || !text || !action || strcmp(action, "type") != 0) return;
+  NSString *words = @(text);
+  TTVoiceOnMain(^{ TTVoiceTypeText(words); });
+}
+
