@@ -3,6 +3,7 @@
 #import <CoreAudio/CoreAudio.h>
 #import <AudioToolbox/AudioToolbox.h>
 #import <ApplicationServices/ApplicationServices.h>
+#import <ServiceManagement/ServiceManagement.h>
 
 // Everything the person sees is drawn by the overlay page (the `voice` window); this file owns the
 // fn key, the microphone and the overlay window's native parts (blur, click-through).
@@ -22,6 +23,7 @@ extern bool dictate_audio(const char *request, const float *samples, size_t coun
 extern bool dictate_draft(const char *request, const float *samples, size_t count);
 extern bool dictate_note_step(const char *request, size_t base, const float *samples, size_t count);
 extern bool dictate_note_finish(const char *request, size_t base, const float *samples, size_t count);
+bool dictate_open_at_login(int set);
 
 // ---------- The read-aloud player: speech arrives in pieces as it is made, tagged with the reply ----------
 
@@ -781,12 +783,22 @@ bool dictate_settings_status(char *output, size_t capacity) {
     @"accessibility": [NSNumber numberWithBool:AXIsProcessTrusted()], @"globeKey": TTVoiceGlobeKey(),
     @"modelReady": [NSNumber numberWithBool:voice.modelReady], @"modelPreparing": [NSNumber numberWithBool:voice.modelPreparing],
     @"modelMessage": voice.modelMessage ?: @"",
-    @"inputs": TTVoiceInputs(), @"input": TTVoiceChosenInput() ?: NSNull.null, @"inputInUse": TTVoiceInputName()
+    @"inputs": TTVoiceInputs(), @"input": TTVoiceChosenInput() ?: NSNull.null, @"inputInUse": TTVoiceInputName(),
+    @"openAtLogin": [NSNumber numberWithBool:dictate_open_at_login(-1)]
   };
   NSData *data = [NSJSONSerialization dataWithJSONObject:snapshot options:0 error:nil];
   if (!data || data.length >= capacity) return false;
   memcpy(output, data.bytes, data.length); output[data.length] = 0;
   return true;
+}
+// Open at Login, through macOS's own login items (System Settings › General › Login Items). `set` is
+// -1 to only read it, 0 for off, 1 for on; answers whether it is on.
+bool dictate_open_at_login(int set) {
+  SMAppService *service = SMAppService.mainAppService;
+  NSError *error;
+  if (set == 1 && service.status != SMAppServiceStatusEnabled) [service registerAndReturnError:&error];
+  if (set == 0 && service.status == SMAppServiceStatusEnabled) [service unregisterAndReturnError:&error];
+  return service.status == SMAppServiceStatusEnabled;
 }
 void dictate_set_enabled(bool enabled) { dictate_init(); [voice applyEnabled:enabled]; }
 // A microphone from the dots' menu by its UID, or NULL for the Mac's own input. It applies from the

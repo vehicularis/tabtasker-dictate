@@ -20,6 +20,7 @@ extern "C" {
   fn dictate_settings_status(output: *mut c_char, capacity: usize) -> bool;
   fn dictate_set_enabled(enabled: bool);
   fn dictate_set_input(uid: *const c_char);
+  fn dictate_open_at_login(set: i32) -> bool;
   fn dictate_request(kind: *const c_char);
   fn dictate_overlay_attach(window: *mut c_void);
   fn dictate_overlay_layout(json: *const c_char);
@@ -109,6 +110,11 @@ async fn set_input(app: AppHandle, id: Option<String>) -> Result<(), String> {
   on_main(&app, move || unsafe { dictate_set_input(id.as_ref().map_or(std::ptr::null(), |id| id.as_ptr())) }).await
 }
 
+#[tauri::command]
+async fn set_open_at_login(app: AppHandle, enabled: bool) -> Result<bool, String> {
+  on_main(&app, move || unsafe { dictate_open_at_login(enabled as i32) }).await
+}
+
 /// Setup and recording actions: open macOS's microphone or Accessibility prompts, start or stop a note.
 #[tauri::command]
 async fn request(app: AppHandle, kind: String) -> Result<(), String> {
@@ -189,13 +195,14 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
   let setup = MenuItem::with_id(app, "setup", "Set Up…", true, None::<&str>)?;
   let quit = MenuItem::with_id(app, "quit", "Quit TabTasker Dictate", true, Some("CmdOrCtrl+Q"))?;
   let menu = Menu::with_items(app, &[&note, &notes, &PredefinedMenuItem::separator(app)?, &setup, &PredefinedMenuItem::separator(app)?, &quit])?;
-  let mut builder = TrayIconBuilder::with_id("dictate").menu(&menu).tooltip("TabTasker Dictate").icon_as_template(true);
-  if let Some(icon) = app.default_window_icon() { builder = builder.icon(icon.clone()); }
-  builder.on_menu_event(|app, event| match event.id().as_ref() {
+  // The mark alone, in black: macOS tints a template icon for the menu bar's light or dark look.
+  let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray@2x.png"))?;
+  TrayIconBuilder::with_id("dictate").menu(&menu).tooltip("TabTasker Dictate").icon(icon).icon_as_template(true).on_menu_event(|app, event| match event.id().as_ref() {
     "note" => { let _ = app.run_on_main_thread(|| unsafe { dictate_request(c"note".as_ptr()) }); }
     "notes" => { let _ = show_notes(None); }
     "setup" => { let _ = app.emit_to(OVERLAY, "dictate-setup", ()); }
     "quit" => app.exit(0),
+    "hide" => { let _ = app.emit_to(OVERLAY, "dictate-hide", ()); }
     _ => {}
   }).build(app)?;
   Ok(())
@@ -203,7 +210,7 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
 
 pub fn run() {
   tauri::Builder::default()
-    .invoke_handler(tauri::generate_handler![status, set_enabled, set_input, request, layout, save_note, show_notes])
+    .invoke_handler(tauri::generate_handler![status, set_enabled, set_input, set_open_at_login, request, layout, save_note, show_notes])
     .setup(|app| {
       app.set_activation_policy(tauri::ActivationPolicy::Accessory); // a menu bar app: no Dock icon
       let handle = app.handle().clone();

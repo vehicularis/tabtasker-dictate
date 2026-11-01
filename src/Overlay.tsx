@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { invoke, listen } from './bridge';
 
 type Phase = 'idle' | 'listening' | 'transcribing' | 'sending';
+type Edge = 'bottom' | 'left' | 'right';
 type Status = {
   enabled: boolean; microphone: 'allowed' | 'notDetermined' | 'denied'; accessibility: boolean;
-  modelReady: boolean; modelPreparing: boolean; modelMessage: string; notes: string;
+  modelReady: boolean; modelPreparing: boolean; modelMessage: string; notes: string; openAtLogin?: boolean;
   // What "Press 🌐 key to" does instead of nothing: it competes with holding fn.
   globeKey: '' | 'inputSource' | 'emoji' | 'dictation';
   inputs: { id: string; name: string }[]; input: string | null; inputInUse: string;
@@ -12,54 +13,69 @@ type Status = {
 // A spoken note under review: nothing is saved until Save.
 type Draft = { title: string; text: string };
 const DRAFT = 'tabtasker-dictate:note'; // kept on this Mac until saved or discarded, across a restart
+const EDGE = 'tabtasker-dictate:edge'; // the screen edge the dots sit on
 const GLOBE = { inputSource: 'changes the input source', emoji: 'opens emoji', dictation: 'starts Dictation' };
 
 export const setupDone = (status: Status | null) =>
   !!status && status.enabled && status.microphone === 'allowed' && status.accessibility && status.modelReady;
+const stored = <T,>(key: string, fallback: T): T => { try { return (JSON.parse(localStorage.getItem(key) ?? 'null') as T) ?? fallback; } catch { return fallback; } };
+const store = (key: string, value: unknown) => { try { if (value == null) localStorage.removeItem(key); else localStorage.setItem(key, JSON.stringify(value)); } catch { /* a convenience */ } };
+
+// `?preview=…` shows one state without the app around it, for checking the design in a browser.
+const PREVIEW = new URLSearchParams(location.search).get('preview');
+const SAMPLE: Status = { enabled: true, microphone: 'allowed', accessibility: true, modelReady: true, modelPreparing: false, modelMessage: '', notes: '/Users/you/Documents/TabTasker Dictate', globeKey: '', openAtLogin: true,
+  inputs: [{ id: 'built-in', name: 'MacBook Pro Microphone' }, { id: 'airpods', name: 'AirPods Pro' }], input: null, inputInUse: 'MacBook Pro Microphone' };
 
 export function Overlay() {
   const root = useRef<HTMLDivElement>(null);
-  const [status, setStatus] = useState<Status | null>(null);
-  const [phase, setPhase] = useState<Phase>('idle');
+  const dock = useRef<HTMLDivElement>(null);
+  const dots = useRef<HTMLButtonElement>(null);
+  const [status, setStatus] = useState<Status | null>(PREVIEW ? { ...SAMPLE, ...(PREVIEW === 'setup' ? { accessibility: false, modelReady: false } : {}) } : null);
+  const [phase, setPhase] = useState<Phase>(PREVIEW === 'listening' || PREVIEW === 'typing' ? 'listening' : 'idle');
   const heard = useRef<Phase>('idle');
-  const [dictating, setDictating] = useState(false);
-  const level = useRef(0);
-  const [live, setLive] = useState<string | null>(null); // a note's newest words while it records
-  const [noting, setNoting] = useState(false);
+  const [dictating, setDictating] = useState(PREVIEW === 'typing');
+  const level = useRef(PREVIEW === 'listening' ? 0.05 : 0);
+  const [live, setLive] = useState<string | null>(PREVIEW === 'listening' ? 'Call the venue about Thursday and ask for the bigger room' : null);
+  const [noting, setNoting] = useState(PREVIEW === 'listening');
   const noteRequested = useRef(false);
-  const [since, setSince] = useState(0); // when the note's recording began, for its clock
+  const [since, setSince] = useState(() => PREVIEW === 'listening' ? Date.now() - 83_000 : 0); // when the note's recording began
   const [, setClock] = useState(0);
-  const [draft, setDraft] = useState<Draft | null>(() => { try { return JSON.parse(localStorage.getItem(DRAFT) ?? 'null') as Draft | null; } catch { return null; } });
-  const [reviewing, setReviewing] = useState(false);
+  const [draft, setDraft] = useState<Draft | null>(() => PREVIEW === 'note' ? { title: 'Call the venue about Thursday', text: 'Call the venue about Thursday and ask for the bigger room. Then send Maria the new floor plan before lunch.' } : PREVIEW ? null : stored<Draft | null>(DRAFT, null));
+  const [reviewing, setReviewing] = useState(PREVIEW === 'note');
   const [discarding, setDiscarding] = useState(false);
-  const [saved, setSaved] = useState<string | null>(null);
+  const [saved, setSaved] = useState<string | null>(PREVIEW === 'saved' ? '/Users/you/Documents/TabTasker Dictate/2026-11-01 21.40 Call the venue about Thursday.md' : null);
   const [toast, setToast] = useState<string | null>(null);
-  const [setup, setSetup] = useState(false);
-  const [hover, setHover] = useState(false);
+  const [setup, setSetup] = useState(PREVIEW === 'setup');
+  const [hover, setHover] = useState(PREVIEW === 'hover' || PREVIEW === 'menu' || PREVIEW === 'mics');
+  const [menu, setMenu] = useState(PREVIEW === 'menu' || PREVIEW === 'mics');
+  const [mics, setMics] = useState(PREVIEW === 'mics');
+  const [hidden, setHidden] = useState(false);
+  const [edge, setEdge] = useState<Edge>(() => (new URLSearchParams(location.search).get('edge') as Edge | null) ?? stored<Edge>(EDGE, 'bottom'));
   const [fnTested, setFnTested] = useState(false);
   const fnDownAt = useRef(0);
 
-  const refresh = useCallback(() => { void invoke<Status>('status').then(setStatus).catch(() => {}); }, []);
+  const refresh = useCallback(() => { if (!PREVIEW) void invoke<Status>('status').then(setStatus).catch(() => {}); }, []);
   useEffect(refresh, [refresh]);
   // Setup follows macOS live: permissions and the model download change while it is open.
   useEffect(() => { if (!setup) return; const timer = setInterval(refresh, 1000); return () => clearInterval(timer); }, [setup, refresh]);
   const launched = useRef(false);
   useEffect(() => { if (status && !launched.current) { launched.current = true; if (!setupDone(status)) setSetup(true); } }, [status]); // once, at launch
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(null), 2400); return () => clearTimeout(timer); }, [toast]);
-  useEffect(() => { if (!saved) return; const timer = setTimeout(() => setSaved(null), 8000); return () => clearTimeout(timer); }, [saved]);
-  useEffect(() => { try { if (draft) localStorage.setItem(DRAFT, JSON.stringify(draft)); else localStorage.removeItem(DRAFT); } catch { /* in memory only */ } }, [draft]);
+  useEffect(() => { if (!saved || PREVIEW) return; const timer = setTimeout(() => setSaved(null), 8000); return () => clearTimeout(timer); }, [saved]);
+  useEffect(() => { if (!PREVIEW) store(DRAFT, draft); }, [draft]);
   useEffect(() => { // a note can run long: its bubble counts the time
     if (!noting || phase !== 'listening') return;
     const timer = setInterval(() => setClock(tick => tick + 1), 1000);
     return () => clearInterval(timer);
   }, [noting, phase]);
+  useEffect(() => { if (!menu) setMics(false); }, [menu]);
 
   // ---------- the native voice code ----------
   useEffect(() => {
     const offs = [
       listen<{ phase: Phase; level: number; dictating: boolean }>('dictate-state', next => {
         if (next.phase === 'listening' && heard.current !== 'listening') { // a new recording, not its 30-a-second levels
-          setLive(null); setSaved(null);
+          setLive(null); setSaved(null); setMenu(false);
           if (noteRequested.current) { setNoting(true); setSince(Date.now()); }
         }
         if (next.phase === 'idle') { setNoting(false); noteRequested.current = false; }
@@ -82,7 +98,8 @@ export function Overlay() {
         if (down) fnDownAt.current = performance.now();
         else if (fnDownAt.current && performance.now() - fnDownAt.current > 350) setFnTested(true);
       }),
-      listen('dictate-setup', () => { refresh(); setSetup(true); }),
+      listen('dictate-setup', () => { refresh(); setSetup(true); setHidden(false); }),
+      listen('dictate-hide', () => setHidden(true)),
       // An overlay behind another app gets no hover from WebKit: the native side reports the pointer.
       listen<{ x: number; y: number } | null>('dictate-pointer', at => {
         const spot = root.current?.querySelector('[data-spot]');
@@ -94,6 +111,7 @@ export function Overlay() {
 
   // ---------- tell the native window where the glass and the clickable parts are ----------
   useEffect(() => {
+    if (PREVIEW) return;
     let frame = 0, last = '';
     const report = () => {
       const node = root.current;
@@ -114,11 +132,48 @@ export function Overlay() {
     return () => cancelAnimationFrame(frame);
   }, []);
 
+  // ---------- drag the dots to the bottom, left or right edge ----------
+  const drag = useRef<{ x: number; y: number; moving: boolean } | null>(null);
+  const dragged = useRef(false);
+  const [dragging, setDragging] = useState(false);
+  const grab = (event: ReactPointerEvent) => { if (event.button === 0) drag.current = { x: event.clientX, y: event.clientY, moving: false }; };
+  useEffect(() => {
+    const move = (event: PointerEvent) => {
+      const start = drag.current;
+      if (!start || !dock.current) return;
+      const dx = event.clientX - start.x, dy = event.clientY - start.y;
+      if (!start.moving && Math.hypot(dx, dy) < 5) return; // a wobbly click is still a click
+      start.moving = true;
+      setDragging(true); setMenu(false);
+      dock.current.style.translate = `${dx}px ${dy}px`;
+    };
+    const up = (event: PointerEvent) => {
+      const start = drag.current;
+      drag.current = null;
+      if (!start?.moving || !dock.current || !dots.current) return;
+      setDragging(false);
+      dragged.current = true;
+      setTimeout(() => { dragged.current = false; }); // the click that ends a drag fires before this
+      const distances: Record<Edge, number> = { left: event.clientX, right: innerWidth - event.clientX, bottom: innerHeight - event.clientY };
+      const next = (Object.keys(distances) as Edge[]).reduce((a, b) => distances[a] <= distances[b] ? a : b);
+      const from = dots.current.getBoundingClientRect();
+      root.current!.dataset.edge = next; // lay out at the new edge now, so the spring starts from the drop point
+      dock.current.style.translate = '';
+      const to = dots.current.getBoundingClientRect();
+      dock.current.animate([{ translate: `${from.x - to.x}px ${from.y - to.y}px` }, { translate: '0 0' }], { duration: 450, easing: 'cubic-bezier(.34, 1.36, .64, 1)' });
+      setEdge(next); store(EDGE, next);
+    };
+    addEventListener('pointermove', move);
+    addEventListener('pointerup', up);
+    return () => { removeEventListener('pointermove', move); removeEventListener('pointerup', up); };
+  }, []);
+
   // ---------- actions ----------
   const takeNote = () => {
+    if (dragged.current) return;
     if (!setupDone(status)) { setSetup(true); return; }
     if (phase === 'idle') noteRequested.current = true;
-    setHover(false);
+    setHover(false); setMenu(false);
     void invoke('request', { kind: 'note' }).catch(() => { noteRequested.current = false; });
   };
   const save = async () => {
@@ -131,52 +186,89 @@ export function Overlay() {
     }
   };
   const discard = () => { setDraft(null); setReviewing(false); setDiscarding(false); };
+  const openSetup = () => { setMenu(false); refresh(); setSetup(true); };
+  const hideForAnHour = () => { setMenu(false); setHidden(true); setTimeout(() => setHidden(false), 60 * 60 * 1000); };
+  const pickMic = (id: string | null) => { setMenu(false); void invoke('set_input', { id }).then(refresh).catch(() => setToast('Couldn’t change the microphone')); };
+  const login = () => { const on = !status?.openAtLogin; void invoke<boolean>('set_open_at_login', { enabled: on }).then(refresh).catch(() => setToast('Couldn’t change Open at Login')); };
+  const clickDots = () => {
+    if (dragged.current) return;
+    if (draft && !reviewing) setReviewing(true);
+    else if (phase === 'listening' && noting) takeNote();
+    else if (!setupDone(status)) setSetup(true);
+  };
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { if (setup) setSetup(false); else if (reviewing) setReviewing(false); }
+      if (event.key !== 'Escape') return;
+      if (menu) setMenu(false); else if (setup) setSetup(false); else if (reviewing) setReviewing(false);
     };
-    addEventListener('keydown', key);
-    return () => removeEventListener('keydown', key);
-  }, [setup, reviewing]);
+    const away = (event: PointerEvent) => { if (menu && !(event.target as Element).closest('[role="menu"]')) setMenu(false); };
+    addEventListener('keydown', key); addEventListener('pointerdown', away);
+    return () => { removeEventListener('keydown', key); removeEventListener('pointerdown', away); };
+  }, [setup, reviewing, menu]);
 
-  const mode = phase === 'listening' ? 'listening' : phase !== 'idle' ? 'thinking' : hover ? 'hover' : 'idle';
+  if (hidden) return <div ref={root} className="layer" data-edge={edge} />;
+  const mode = phase === 'listening' ? 'listening' : phase !== 'idle' ? 'thinking' : hover || menu ? 'hover' : 'idle';
   const card = setup || (draft && reviewing);
-  return <div ref={root} className="layer" data-mode={mode} data-pending={(draft && !reviewing) || undefined}>
-    {setup && <Setup status={status} fnTested={fnTested} onClose={() => setSetup(false)} />}
-    {!setup && draft && reviewing && <article className="glass card" data-glass data-hit aria-label="New note"
-      onKeyDown={event => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void save(); } }}>
-      <header className="head"><span className="name"><NoteIcon />New note</span><button type="button" className="close" aria-label="Hide note" onClick={() => setReviewing(false)}><X /></button></header>
-      <input className="title" aria-label="Title" placeholder="Title" value={draft.title} onChange={event => setDraft({ ...draft, title: event.target.value })} />
-      <textarea className="text" aria-label="Note" value={draft.text} onChange={event => setDraft({ ...draft, text: event.target.value })} />
-      {noting && live && <p className="more">{live}</p>}
-      <footer className="actions">
-        <button type="button" className="tool" aria-label="Keep talking" title="Keep talking" disabled={phase !== 'idle'} onClick={takeNote}><MicIcon /></button>
-        {discarding
-          ? <><span className="ask">Discard this note?</span>
-            <button type="button" className="btn" onClick={() => setDiscarding(false)}>Keep</button>
-            <button type="button" className="btn danger" onClick={discard}>Discard</button></>
-          : <><span className="ask" />
-            <button type="button" className="btn" onClick={() => setDiscarding(true)}>Discard</button>
-            <button type="button" className="btn primary" disabled={!draft.text.trim()} onClick={() => void save()}>Save note</button></>}
-      </footer>
-    </article>}
-    {noting && phase === 'listening' && !card && <p className="glass said" data-glass role="status">
-      <small>Note · {clockOf(since)}</small><span>{live ?? 'Listening…'}</span>
-    </p>}
-    {saved && !card && <button type="button" className="glass said saved" data-glass data-hit onClick={() => { void invoke('show_notes', { file: saved }); setSaved(null); }}>
-      <small>Saved · Show in Finder</small><span>{saved.split('/').pop()?.replace(/\.md$/, '')}</span>
-    </button>}
-    {toast && <p className="glass toast" data-glass role="status">{toast}</p>}
-    <div className="spot" data-spot onPointerEnter={() => setHover(true)} onPointerLeave={() => setHover(false)}>
-      <button type="button" className="dots" data-hit="16" aria-label={draft && !reviewing ? 'Open the note' : 'TabTasker Dictate'}
-        onClick={() => { if (draft && !reviewing) setReviewing(true); else if (phase === 'listening' && noting) takeNote(); else if (!setupDone(status)) setSetup(true); }}>
-        <i /><i /><i />
-      </button>
-      <div className="glass pill" data-glass data-hit aria-hidden={mode !== 'hover'}>
-        <button type="button" aria-label="Take a note" title="Take a note" tabIndex={mode === 'hover' ? 0 : -1} onClick={takeNote}><NoteIcon /></button>
-        <button type="button" aria-label="Set up" title="Set up" tabIndex={mode === 'hover' ? 0 : -1} onClick={() => { refresh(); setSetup(true); }}><GearIcon /></button>
+  return <div ref={root} className="layer" data-edge={edge} data-mode={mode} data-card={card || undefined} data-pending={(draft && !reviewing) || undefined} data-dragging={dragging || undefined}>
+    <div ref={dock} className="dock">
+      {setup && <Setup status={status} fnTested={fnTested} onClose={() => setSetup(false)} />}
+      {!setup && draft && reviewing && <article className="glass card" data-glass data-hit aria-label="New note"
+        onKeyDown={event => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void save(); } }}>
+        <header className="head" onPointerDown={event => { if (!(event.target as Element).closest('button')) grab(event); }}><span className="name"><NoteIcon />New note</span><button type="button" className="close" aria-label="Hide note" onClick={() => setReviewing(false)}><X /></button></header>
+        <input className="title" aria-label="Title" placeholder="Title" value={draft.title} onChange={event => setDraft({ ...draft, title: event.target.value })} />
+        <textarea className="text" aria-label="Note" value={draft.text} onChange={event => setDraft({ ...draft, text: event.target.value })} />
+        {noting && live && <p className="more">{live}</p>}
+        <footer className="actions">
+          <button type="button" className="tool" aria-label="Keep talking" title="Keep talking" disabled={phase !== 'idle'} onClick={takeNote}><MicIcon /></button>
+          {discarding
+            ? <><span className="ask">Discard this note?</span>
+              <button type="button" className="btn" onClick={() => setDiscarding(false)}>Keep</button>
+              <button type="button" className="btn danger" onClick={discard}>Discard</button></>
+            : <><span className="ask" />
+              <button type="button" className="btn" onClick={() => setDiscarding(true)}>Discard</button>
+              <button type="button" className="btn primary" disabled={!draft.text.trim()} onClick={() => void save()}>Save note</button></>}
+        </footer>
+      </article>}
+      {noting && phase === 'listening' && !card && <p className="glass said" data-glass role="status">
+        <small>Note · {clockOf(since)}</small><span>{live ?? 'Listening…'}</span>
+      </p>}
+      {saved && !card && <button type="button" className="glass said saved" data-glass data-hit onClick={() => { void invoke('show_notes', { file: saved }).catch(() => {}); setSaved(null); }}>
+        <small>Saved · Show in Finder</small><span>{saved.split('/').pop()?.replace(/\.md$/, '')}</span>
+      </button>}
+      {toast && <p className="glass toast" data-glass role="status">{toast}</p>}
+      <div className="spot" data-spot onPointerEnter={() => setHover(true)} onPointerLeave={() => setHover(false)}
+        onContextMenu={event => { event.preventDefault(); if (phase === 'idle') { setMenu(true); refresh(); } }}>
+        {menu && <div className="glass menu" data-glass data-hit role="menu"
+          onPointerMove={event => { const row = (event.target as Element).closest('[role="menuitem"]'); if (row) setMics(row.hasAttribute('aria-haspopup')); }}>
+          <button type="button" role="menuitem" onClick={() => { setMenu(false); takeNote(); }}><NoteIcon />New note</button>
+          <button type="button" role="menuitem" onClick={() => { setMenu(false); void invoke('show_notes', {}).catch(() => {}); }}><FolderIcon />Show notes in Finder</button>
+          <i className="rule" />
+          {status && status.inputs.length > 0 && <div className="sub">
+            <button type="button" role="menuitem" aria-haspopup="menu" aria-expanded={mics} onClick={() => setMics(!mics)}><MicIcon />Microphone<Caret /></button>
+            {mics && <div className="glass menu submenu" data-glass data-hit role="menu" aria-label="Microphone">
+              {[{ id: null, name: 'Automatic' }, ...status.inputs].map(({ id, name }) => {
+                const on = (status.input ?? null) === id;
+                return <button key={id ?? ''} type="button" role="menuitemradio" aria-checked={on} onClick={() => pickMic(id)}>{on ? <Check /> : <span className="icon" />}{name}</button>;
+              })}
+              <i className="rule" /><p className="in-use">Mic in use<span>{status.inputInUse}</span></p>
+            </div>}
+          </div>}
+          <button type="button" role="menuitemcheckbox" aria-checked={!!status?.openAtLogin} onClick={login}>{status?.openAtLogin ? <Check /> : <span className="icon" />}Open at Login</button>
+          <i className="rule" />
+          <button type="button" role="menuitem" onClick={hideForAnHour}><AlarmIcon />Hide for an hour</button>
+          <button type="button" role="menuitem" onClick={openSetup}><GearIcon />Set up…</button>
+        </div>}
+        <span className="glass capsule" data-glass aria-hidden="true" />
+        <button ref={dots} type="button" className="dots" data-hit="16" aria-label={draft && !reviewing ? 'Open the note' : 'TabTasker Dictate'} onPointerDown={grab} onClick={clickDots}>
+          <i /><i /><i />
+        </button>
+        <div className="glass pill" data-glass data-hit aria-hidden={mode !== 'hover'} onPointerDown={grab}>
+          <button type="button" aria-label="Take a note" title="Take a note" tabIndex={mode === 'hover' ? 0 : -1} onClick={takeNote}><NoteIcon /></button>
+          <button type="button" aria-label="Set up" title="Set up" tabIndex={mode === 'hover' ? 0 : -1} onClick={openSetup}><GearIcon /></button>
+        </div>
+        <Orb mode={mode} level={level} typing={dictating} onClick={() => { if (noting) takeNote(); }} />
+        <span className="label" aria-hidden="true"><span className="glass"><kbd>fn</kbd> hold to type</span></span>
       </div>
-      <Orb mode={mode} level={level} typing={dictating} onClick={() => { if (noting) takeNote(); }} />
     </div>
   </div>;
 }
@@ -189,8 +281,8 @@ function Setup({ status, fnTested, onClose }: { status: Status | null; fnTested:
   const globe = status?.globeKey ? GLOBE[status.globeKey] : undefined;
   const model = !!status?.enabled && !!status.modelReady;
   return <article className="glass card setup" data-glass data-hit aria-label="Set up">
-    <header className="head"><span className="name"><MicIcon />Set up TabTasker Dictate</span><button type="button" className="close" aria-label="Close" onClick={onClose}><X /></button></header>
-    <p className="lead">Hold <kbd>fn</kbd> and talk to type where your cursor is. Click the note button for long notes, saved as Markdown in {status?.notes.replace(/^\/Users\/[^/]+/, '~') ?? 'Documents'}.</p>
+    <header className="head"><span className="name"><Logo />TabTasker Dictate</span><button type="button" className="close" aria-label="Close" onClick={onClose}><X /></button></header>
+    <p className="lead">Hold <kbd>fn</kbd> and talk to type where your cursor is. Click the note on the dots for long notes, saved as Markdown in {status?.notes.replace(/^\/Users\/[^/]+/, '~') ?? 'Documents'}.</p>
     <ol className="steps">
       <Step done={mic} name="Microphone" line="Only on while you hold fn or take a note."
         action={!mic && <button type="button" className="btn primary" onClick={() => ask('microphone')}>{status?.microphone === 'denied' ? 'Open Settings' : 'Allow'}</button>} />
@@ -256,6 +348,12 @@ const stamp = (now: Date) => {
   return `${now.getFullYear()}-${two(now.getMonth() + 1)}-${two(now.getDate())} ${two(now.getHours())}.${two(now.getMinutes())}`;
 };
 
+// The app's objects, drawn like small enamel tiles with one light; the logo is the app icon's mark.
+const Logo = () => <svg width="18" height="18" viewBox="0 0 28 28" aria-hidden="true">
+  <rect x="1" y="1" width="26" height="26" rx="7" fill="#2a2420" />
+  {[[7, 5.6], [10.4, 9.6], [17.6, 9.6], [21, 5.6]].map(([x, h]) => <rect key={x} x={x - 1} y={14 - h / 2} width="2" height={h} rx="1" fill="#E8913B" />)}
+  <path d="M14 7v14M12.6 7h2.8M12.6 21h2.8" stroke="#f6efe4" strokeWidth="1.3" strokeLinecap="round" />
+</svg>;
 const NoteIcon = () => <svg width="17" height="17" viewBox="0 0 28 28" fill="none" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
   <path d="M6 3.5h9l5 5v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-17a2 2 0 0 1 2-2z" fill="var(--enamel)" stroke="currentColor" strokeOpacity="0.5" strokeWidth="1.2" />
   <path d="M15 3.5V7a1.5 1.5 0 0 0 1.5 1.5H20M7.5 12.5h7M7.5 15.5h5M7.5 18.5h3" stroke="currentColor" strokeOpacity="0.45" strokeWidth="1.2" />
@@ -266,7 +364,20 @@ const MicIcon = () => <svg width="17" height="17" viewBox="0 0 28 28" fill="none
   <path d="M12 7.5h4M12 10h4M12 12.5h4" stroke="var(--ember)" strokeWidth="1.3" />
   <path d="M6.5 12.5a7.5 7.5 0 0 0 15 0M14 20v4M10.5 24.5h7" stroke="currentColor" strokeOpacity="0.7" strokeWidth="1.5" />
 </svg>;
-const GearIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
-  <circle cx="12" cy="12" r="3" /><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1" />
+const FolderIcon = () => <svg width="17" height="17" viewBox="0 0 28 28" fill="none" strokeLinejoin="round" aria-hidden="true">
+  <path d="M3.5 8a2 2 0 0 1 2-2h5.5l2.5 2.5h9a2 2 0 0 1 2 2V21a2 2 0 0 1-2 2h-17a2 2 0 0 1-2-2z" fill="var(--enamel)" stroke="currentColor" strokeOpacity="0.5" strokeWidth="1.2" />
+  <path d="M3.5 11.5h21" stroke="currentColor" strokeOpacity="0.3" strokeWidth="1.2" />
 </svg>;
+const AlarmIcon = () => <svg width="17" height="17" viewBox="0 0 28 28" fill="none" strokeLinecap="round" aria-hidden="true">
+  <circle cx="14" cy="15" r="8.5" fill="var(--enamel)" stroke="currentColor" strokeOpacity="0.55" strokeWidth="1.2" />
+  <path d="M14 10.5V15l3 2M5 6.5l3-2.5M23 6.5l-3-2.5" stroke="currentColor" strokeOpacity="0.7" strokeWidth="1.4" />
+</svg>;
+// The teeth are one dashed ring: eight dashes around r=10.4.
+const GearIcon = () => <svg width="17" height="17" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+  <circle cx="14" cy="14" r="10.4" stroke="currentColor" strokeOpacity="0.55" strokeWidth="3.4" strokeDasharray="3.6 4.57" />
+  <circle cx="14" cy="14" r="8.6" fill="var(--enamel)" stroke="currentColor" strokeOpacity="0.55" strokeWidth="1.2" />
+  <circle cx="14" cy="14" r="3" stroke="var(--ember)" strokeWidth="1.5" />
+</svg>;
+const Check = () => <svg className="icon" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" /></svg>;
+const Caret = () => <svg className="more" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4.5 2.5L8 6l-3.5 3.5" /></svg>;
 const X = () => <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M1.5 1.5l7 7m0-7l-7 7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>;
