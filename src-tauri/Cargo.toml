@@ -1,0 +1,28 @@
+[package]
+name = "tabtasker-dictate"
+version = "0.1.0"
+description = "Hold fn to type with your voice, or take long spoken notes. Whisper runs on your Mac."
+edition = "2021"
+license = "Apache-2.0"
+
+[lib]
+name = "dictate_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7.3", features = [] }
+cc = "1"
+
+[dependencies]
+tauri = { version = "2.12.4", features = ["tray-icon", "macos-private-api"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+log = "0.4"
+whisper-rs = { version = "=0.16.0", features = ["metal"] }
+ring = "0.17"
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls-no-provider"] }
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
+tokio = { version = "1", default-features = false, features = ["macros", "sync", "time"] }
+
+[dev-dependencies]
+tokio = { version = "1", default-features = false, features = ["macros", "rt", "sync", "time"] }

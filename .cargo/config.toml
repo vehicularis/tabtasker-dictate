@@ -1,0 +1,4 @@
+# The Whisper engine's CPU code, built for every Apple Silicon Mac rather than the build machine's chip.
+[env]
+GGML_NATIVE = { value = "OFF", force = true }
+GGML_CPU_ARM_ARCH = { value = "armv8-a", force = true }
