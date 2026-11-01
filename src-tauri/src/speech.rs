@@ -1,4 +1,4 @@
-use std::{ffi::{c_char, c_void, CStr, CString}, fs::File, io::{Read, Write}, path::{Path, PathBuf}, sync::{Arc, Mutex, OnceLock, atomic::{AtomicBool, Ordering}}, time::{Duration, Instant}};
+use std::{ffi::{c_char, c_void, CStr, CString}, fs::File, io::{Read, Write}, path::{Path, PathBuf}, sync::{Arc, Mutex, OnceLock, atomic::{AtomicBool, AtomicUsize, Ordering}}, time::{Duration, Instant}};
 use ring::digest::{Context as Digest, SHA256};
 use tauri::{AppHandle, Manager};
 use crate::{ai, context, history, settings, text};
@@ -36,6 +36,8 @@ struct LocalSpeech {
   draft: Mutex<Option<Draft>>,
   hold: Mutex<Hold>,
   note: Mutex<note::Note>,
+  /// Releases waiting for the engine. A meeting piece running meanwhile gives it up for them.
+  releases: AtomicUsize,
 }
 struct Draft { id: String, samples: usize, cancelled: Arc<AtomicBool> }
 /// What the passes of the newest hold found out, for the passes after them.
@@ -54,7 +56,7 @@ extern "C" {
 
 pub fn init(app: &AppHandle) -> Result<(), String> {
   let root = app.path().app_data_dir().map_err(|e| e.to_string())?.join("voice-models");
-  app.manage(LocalSpeech { root, enabled: AtomicBool::new(false), preparing: Mutex::default(), job: Mutex::default(), engine: Mutex::default(), vad: Mutex::default(), draft: Mutex::default(), hold: Mutex::default(), note: Mutex::default() });
+  app.manage(LocalSpeech { root, enabled: AtomicBool::new(false), preparing: Mutex::default(), job: Mutex::default(), engine: Mutex::default(), vad: Mutex::default(), draft: Mutex::default(), hold: Mutex::default(), note: Mutex::default(), releases: AtomicUsize::new(0) });
   APP.get_or_init(|| app.clone());
   Ok(())
 }
@@ -242,10 +244,11 @@ fn validate_audio(pcm: &[f32]) -> Result<(), String> {
   Ok(())
 }
 
-struct Abort { cancelled: Arc<AtomicBool>, started: Instant }
+/// `piece` is set for a meeting piece, which also stops for Pause, Quit and a waiting release.
+struct Abort { cancelled: Arc<AtomicBool>, started: Instant, piece: Option<&'static LocalSpeech> }
 unsafe extern "C" fn should_abort(data: *mut c_void) -> bool {
   let abort = &*(data as *const Abort);
-  abort.cancelled.load(Ordering::Relaxed) || abort.started.elapsed() >= Duration::from_secs(120)
+  abort.cancelled.load(Ordering::Relaxed) || abort.started.elapsed() >= Duration::from_secs(120) || abort.piece.is_some_and(LocalSpeech::piece_yields)
 }
 
 unsafe extern "C" fn stop_before_encoding(_: *mut WhisperSysContext, _: *mut WhisperSysState, _: *mut c_void) -> bool { false }
@@ -309,7 +312,7 @@ impl Engine {
     params.set_no_timestamps(true);
     params.set_suppress_nst(true);
     params.set_print_special(false); params.set_print_progress(false); params.set_print_realtime(false); params.set_print_timestamps(false);
-    let mut abort = Abort { cancelled: cancelled.clone(), started: Instant::now() };
+    let mut abort = Abort { cancelled: cancelled.clone(), started: Instant::now(), piece: None };
     // The callback borrows this stack value only for the synchronous full() call.
     unsafe { params.set_abort_callback(Some(should_abort)); params.set_abort_callback_user_data((&mut abort as *mut Abort).cast()); }
     state.full(params, pcm).map_err(|_| "Couldn’t understand that")?;
@@ -327,7 +330,7 @@ impl Engine {
 }
 
 impl Engine {
-  fn segments(&mut self, pcm: &[f32], language: i32, prompt: Option<&str>, translate: bool) -> Result<Vec<Segment>, String> {
+  fn segments(&mut self, pcm: &[f32], language: i32, prompt: Option<&str>, translate: bool, mut abort: Abort) -> Result<Vec<Segment>, String> {
     let mut state = self.whisper.create_state().map_err(|_| "Not enough memory")?;
     let mut params = FullParams::new(SamplingStrategy::BeamSearch { beam_size: 5, patience: -1.0 });
     params.set_n_threads(threads() as i32);
@@ -338,7 +341,6 @@ impl Engine {
     params.set_suppress_nst(true);
     if let Some(prompt) = prompt.filter(|prompt| !prompt.trim().is_empty()) { params.set_initial_prompt(prompt); }
     params.set_print_special(false); params.set_print_progress(false); params.set_print_realtime(false); params.set_print_timestamps(false);
-    let mut abort = Abort { cancelled: Arc::new(AtomicBool::new(false)), started: Instant::now() };
     // The callback borrows this stack value only for the synchronous full() call.
     unsafe { params.set_abort_callback(Some(should_abort)); params.set_abort_callback_user_data((&mut abort as *mut Abort).cast()); }
     state.full(params, pcm).map_err(|_| "Couldn’t understand that")?;
@@ -352,6 +354,9 @@ impl Engine {
 }
 
 impl LocalSpeech {
+  /// A meeting piece stops when voice is off (Pause, Quit) or a release is waiting for the engine.
+  fn piece_yields(&self) -> bool { !self.enabled.load(Ordering::Relaxed) || self.releases.load(Ordering::SeqCst) > 0 }
+
   fn hold<T>(&self, id: &str, use_it: impl FnOnce(&mut Hold) -> T) -> T {
     let mut hold = self.hold.lock().unwrap();
     if hold.id != id { *hold = Hold { id: id.to_owned(), ..Hold::default() }; }
@@ -399,7 +404,10 @@ impl LocalSpeech {
     if let Some(draft) = self.draft.lock().unwrap().as_ref() {
       if draft.id != id || draft.samples < end { draft.cancelled.store(true, Ordering::Relaxed); } // frees the engine sooner
     }
-    let mut engine = self.engine.lock().unwrap();
+    self.releases.fetch_add(1, Ordering::SeqCst);
+    let engine = self.engine.lock();
+    self.releases.fetch_sub(1, Ordering::SeqCst);
+    let mut engine = engine.unwrap();
     if let Some(text) = heard() { return Ok(text); }
     self.pass(engine.as_mut().ok_or("Voice is still loading")?, id, pcm, cancelled, false)
   }
@@ -492,29 +500,39 @@ fn settle(id: &str, raw: &str, samples: usize) -> String {
 }
 
 /// What `transcribe_piece` is told about a piece: its language (None or `auto` detects it), words to
-/// spell right, and whether to translate it to English.
+/// spell right, whether to translate it to English, and a flag the caller sets to stop it.
 #[derive(Clone, Debug, Default)]
-pub struct PieceOptions { pub language: Option<String>, pub prompt: Option<String>, pub translate: bool }
+pub struct PieceOptions { pub language: Option<String>, pub prompt: Option<String>, pub translate: bool, pub cancel: Option<Arc<AtomicBool>> }
+
+/// `transcribe_piece`'s error when it gave the engine up before finishing: the piece is untouched and
+/// can be tried again.
+pub const INTERRUPTED: &str = "interrupted";
 
 /// Words Whisper heard in a piece, `start` and `end` in samples from the piece's start.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct Segment { pub start: usize, pub end: usize, pub text: String }
 
-/// One piece of audio of up to 30 s, 16 kHz mono, with timestamps. Blocking: it waits for the engine,
-/// so a hold's pass finishes first. Silence answers no segments.
+/// One piece of audio of up to 30 s, 16 kHz mono, with timestamps. Blocking: it waits for the engine.
+/// Dictation comes first: a release waiting for the engine, Pause, Quit or `opts.cancel` stops the
+/// piece with `INTERRUPTED`. Silence answers no segments.
 pub fn transcribe_piece(pcm: &[f32], opts: PieceOptions) -> Result<Vec<Segment>, String> {
   let app = APP.get().ok_or("Voice is still loading")?;
   if pcm.len() > 30 * 16000 || pcm.iter().any(|sample| !sample.is_finite()) { return Err("Invalid audio".into()); }
   if validate_audio(pcm).is_err() { return Ok(Vec::new()); }
-  let state = app.state::<LocalSpeech>();
+  let state: &'static LocalSpeech = app.state::<LocalSpeech>().inner();
   if !state.enabled.load(Ordering::Relaxed) { return Err("Voice is off".into()); }
-  let mut engine = state.engine.lock().unwrap();
+  let cancelled = opts.cancel.unwrap_or_default();
+  let stopped = || cancelled.load(Ordering::Relaxed) || state.piece_yields();
+  let mut engine = state.engine.lock().unwrap_or_else(|e| e.into_inner());
+  if stopped() { return Err(INTERRUPTED.into()); }
   let engine = engine.as_mut().ok_or("Voice is still loading")?;
   let language = match opts.language.as_deref().filter(|language| *language != "auto") {
     Some(code) => whisper_rs::get_lang_id(code).ok_or("Unknown language")?,
     None => engine.detect(pcm)?.0,
   };
-  engine.segments(pcm, language, opts.prompt.as_deref(), opts.translate)
+  if stopped() { return Err(INTERRUPTED.into()); }
+  let abort = Abort { cancelled: cancelled.clone(), started: Instant::now(), piece: Some(state) };
+  engine.segments(pcm, language, opts.prompt.as_deref(), opts.translate, abort).map_err(|e| if stopped() { INTERRUPTED.into() } else { e })
 }
 
 #[path = "speech_note.rs"]

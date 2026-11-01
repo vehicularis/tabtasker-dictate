@@ -13,7 +13,7 @@ export function AppStyles({ settings, update }: PageProps) {
   const set = (index: number, change: Partial<(typeof apps.styles)[number]>) => update({ apps: { styles: apps.styles.map((app, i) => i === index ? { ...app, ...change } : app) } });
   const add = () => {
     if (!bundleId.trim()) return;
-    update({ apps: { styles: [{ bundleId: bundleId.trim(), name: name.trim() || bundleId.trim(), style: 'default', polish: false }, ...apps.styles.filter(app => app.bundleId !== bundleId.trim())] } });
+    update({ apps: { styles: [{ bundleId: bundleId.trim(), name: name.trim() || bundleId.trim(), style: 'default', polish: false }, ...apps.styles.filter(app => app.bundleId.toLowerCase() !== bundleId.trim().toLowerCase())] } });
     setName(''); setBundleId('');
   };
   return <>

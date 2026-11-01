@@ -33,7 +33,8 @@ pub(crate) fn note_path(dir: &Path, title: &str, stamp: &str) -> PathBuf {
   let base = if clean.is_empty() { format!("Note {stamp}") } else { format!("{stamp} {clean}") };
   let mut path = dir.join(format!("{base}.md"));
   let mut n = 2;
-  while path.exists() { path = dir.join(format!("{base} {n}.md")); n += 1; }
+  // A dangling symlink is taken too: writing to its name would create the file it points at.
+  while path.symlink_metadata().is_ok() { path = dir.join(format!("{base} {n}.md")); n += 1; }
   path
 }
 
@@ -44,11 +45,29 @@ pub fn save_markdown(kind: Kind, title: &str, body: &str, stamp: &str, _extra_fr
   if !stamp.chars().all(|c| c.is_ascii_digit() || c == '-' || c == ' ' || c == '.') || stamp.len() > 20 { return Err("Invalid date".into()); }
   let dir = match kind { Kind::Note => notes_dir()?, Kind::Meeting => meetings_dir()? };
   std::fs::create_dir_all(&dir).map_err(|e| format!("Couldn’t make the notes folder: {e}"))?;
-  let path = note_path(&dir, title, stamp);
   let heading = title.trim();
   let text = if heading.is_empty() { format!("{}\n", body.trim()) } else { format!("# {heading}\n\n{}\n", body.trim()) };
-  std::fs::write(&path, text).map_err(|e| format!("Couldn’t save the note: {e}"))?;
-  Ok(path)
+  write_new(&dir, title, stamp, text.as_bytes())
+}
+
+/// Creates the note's file, never opening one that exists: a name taken between choosing and writing
+/// moves on to the next.
+fn write_new(dir: &Path, title: &str, stamp: &str, bytes: &[u8]) -> Result<PathBuf, String> {
+  use std::io::Write;
+  for _ in 0..100 {
+    let path = note_path(dir, title, stamp);
+    match std::fs::OpenOptions::new().write(true).create_new(true).open(&path) {
+      Ok(mut file) => {
+        return match file.write_all(bytes).and_then(|_| file.sync_all()) {
+          Ok(()) => Ok(path),
+          Err(e) => { let _ = std::fs::remove_file(&path); Err(format!("Couldn’t save the note: {e}")) }
+        };
+      }
+      Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+      Err(e) => return Err(format!("Couldn’t save the note: {e}")),
+    }
+  }
+  Err("Couldn’t find a free name for the note".into())
 }
 
 /// The `n` notes changed last in the notes folder.
@@ -83,8 +102,10 @@ pub fn save_note(app: tauri::AppHandle, title: String, text: String, stamp: Stri
 pub fn show_notes(file: Option<String>) -> Result<(), String> {
   let dir = notes_dir()?;
   std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+  let dir = dir.canonicalize().map_err(|e| e.to_string())?;
   let mut open = std::process::Command::new("/usr/bin/open");
-  match file.map(PathBuf::from).filter(|file| file.starts_with(&dir)) {
+  // Resolved first: `starts_with` compares components, so `<notes>/../x` would pass as written.
+  match file.and_then(|file| PathBuf::from(file).canonicalize().ok()).filter(|file| file.starts_with(&dir)) {
     Some(file) => open.arg("-R").arg(file),
     None => open.arg(dir),
   };
@@ -105,6 +126,22 @@ mod tests {
     assert_eq!(note_path(&dir, "Call the venue: about Thursday", "2026-11-01 21.40").file_name().unwrap(), "2026-11-01 21.40 Call the venue about Thursday 2.md");
     assert_eq!(note_path(&dir, "../../etc/passwd", "2026-11-01 21.40").parent().unwrap(), dir); // a slash is never a folder
     assert_eq!(note_path(&dir, "  ", "2026-11-01 21.40").file_name().unwrap(), "Note 2026-11-01 21.40.md");
+    std::fs::remove_dir_all(dir).unwrap();
+  }
+
+  #[test]
+  fn a_note_never_writes_through_a_symlink_or_over_a_file() {
+    let dir = std::env::temp_dir().join(format!("dictate-notes-link-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let target = dir.join("elsewhere.txt");
+    std::os::unix::fs::symlink(&target, dir.join("2026-11-01 21.40 Plan.md")).unwrap();
+    let saved = write_new(&dir, "Plan", "2026-11-01 21.40", b"one").unwrap();
+    assert_eq!(saved.file_name().unwrap(), "2026-11-01 21.40 Plan 2.md");
+    assert!(!target.exists());
+    let again = write_new(&dir, "Plan", "2026-11-01 21.40", b"two").unwrap();
+    assert_eq!(again.file_name().unwrap(), "2026-11-01 21.40 Plan 3.md");
+    assert_eq!(std::fs::read(&saved).unwrap(), b"one");
     std::fs::remove_dir_all(dir).unwrap();
   }
 

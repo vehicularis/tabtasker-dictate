@@ -1,4 +1,4 @@
-import type { CommandKey, DictateKey, PageProps } from '../../store';
+import type { Chord, CommandKey, DictateKey, PageProps } from '../../store';
 import { KeyRecorder, PageHeader, Section, Select, Tile, TileGroup, Toggle } from '../../ui';
 
 const KEYS: { value: DictateKey; label: string }[] = [
@@ -9,8 +9,12 @@ const MODIFIERS: { value: CommandKey; label: string }[] = [
   { value: 'control', label: '⌃ Control' }, { value: 'option', label: '⌥ Option' }, { value: 'command', label: '⌘ Command' }, { value: 'shift', label: '⇧ Shift' }, { value: 'off', label: 'Off' },
 ];
 
+type ChordName = 'note' | 'meeting' | 'pasteLast';
+const CHORDS: [ChordName, string][] = [['note', 'Start or stop a note'], ['meeting', 'Start or stop a meeting'], ['pasteLast', 'Paste last transcript']];
+
 export function Shortcuts({ settings, update }: PageProps) {
   const keys = settings.shortcuts;
+  const record = (name: ChordName) => async (chord: Chord | null) => (await update({ shortcuts: { [name]: chord } }))?.shortcuts[name];
   return <>
     <PageHeader icon="keyboard" title="Shortcuts">The key you hold to talk, and shortcuts for everything else.</PageHeader>
     <Section title="Dictate">
@@ -28,9 +32,10 @@ export function Shortcuts({ settings, update }: PageProps) {
     </Section>
     <Section title="Anywhere on your Mac" note="Click a shortcut, then press the keys. Escape cancels; Delete clears it.">
       <TileGroup>
-        <Tile title="Start or stop a note"><KeyRecorder label="Start or stop a note" value={keys.note} onChange={note => update({ shortcuts: { note } })} /></Tile>
-        <Tile title="Start or stop a meeting"><KeyRecorder label="Start or stop a meeting" value={keys.meeting} onChange={meeting => update({ shortcuts: { meeting } })} /></Tile>
-        <Tile title="Paste last transcript"><KeyRecorder label="Paste last transcript" value={keys.pasteLast} onChange={pasteLast => update({ shortcuts: { pasteLast } })} /></Tile>
+        {CHORDS.map(([name, title]) => <Tile key={name} title={title}>
+          <KeyRecorder label={title} value={keys[name]} onChange={record(name)}
+            taken={CHORDS.filter(([other]) => other !== name).map(([other, otherTitle]) => ({ name: otherTitle, chord: keys[other] }))} />
+        </Tile>)}
       </TileGroup>
     </Section>
   </>;

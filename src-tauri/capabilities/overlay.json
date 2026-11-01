@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "overlay",
+  "description": "The overlay: the app's commands and events from the native voice code. It never drags or closes itself.",
+  "windows": ["overlay"],
+  "permissions": ["core:default"]
+}

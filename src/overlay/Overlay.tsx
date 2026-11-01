@@ -5,6 +5,7 @@ import { applyTheme, isDark } from '../ui/theme';
 import { CommandCard } from './CommandCard';
 import { Dock } from './Dock';
 import { HandsFree } from './HandsFree';
+import { Learned } from './Learned';
 import { MeetingPill } from './MeetingPill';
 import { Menu } from './Menu';
 import { NoteCard, type Draft } from './NoteCard';
@@ -131,7 +132,9 @@ export function Overlay() {
         const box = (element: Element, pad = 0) => { const r = element.getBoundingClientRect(); return [r.x - pad, r.y - pad, r.width + pad * 2, r.height + pad * 2]; };
         const glass = [...node.querySelectorAll<HTMLElement>('[data-glass]')].filter(element => element.getClientRects().length).map(element => {
           const style = getComputedStyle(element);
-          return [...box(element), parseFloat(style.borderTopLeftRadius) || 0, +style.opacity];
+          // The radius as drawn: the box comes scaled (Appearance size, springs), the computed radius doesn't.
+          const scale = element.offsetWidth ? element.getBoundingClientRect().width / element.offsetWidth : 1;
+          return [...box(element), (parseFloat(style.borderTopLeftRadius) || 0) * scale, +style.opacity];
         });
         const hit = [...node.querySelectorAll<HTMLElement>('[data-hit]')].filter(element => element.getClientRects().length).map(element => box(element, Number(element.dataset.hit) || 0));
         const dark = isDark(); // the page's theme, which Appearance can pin apart from the Mac's
@@ -246,6 +249,7 @@ export function Overlay() {
       <CommandCard />
       <MeetingPill />
       <HandsFree />
+      <Learned />
       {toast && <p className="glass toast" data-glass role="status">{toast}</p>}
       <Dock mode={mode} dots={dots} label={pending ? 'Open the note' : 'TabTasker Dictate'} hint={settings.appearance.hint} quiet={quiet} level={level} typing={dictating}
         onHover={setHover} onGrab={grab} onDots={clickDots} onNote={takeNote} onSetup={openSetup} onOrb={() => { if (noting) takeNote(); }}

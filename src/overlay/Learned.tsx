@@ -1,0 +1,26 @@
+import { useEffect, useState } from 'react';
+import { listen } from '../bridge';
+import { updateSettings, useSettings, type Events } from '../store';
+import { PREVIEW } from './preview';
+
+// A word learned from your corrections, near the dots: it listens for dictate-learned itself and adds
+// the word only on Add. Not now leaves it waiting in Settings › Vocabulary.
+export function Learned() {
+  const settings = useSettings();
+  const [word, setWord] = useState<string | null>(PREVIEW === 'learned' ? 'Kubernetes' : null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => listen<Events['dictate-learned']>('dictate-learned', ({ word }) => { setWord(word); setFailed(false); }), []);
+  useEffect(() => { if (!word || PREVIEW) return; const timer = setTimeout(() => setWord(null), 12_000); return () => clearTimeout(timer); }, [word]);
+  if (!word || !settings) return null;
+  const add = () => {
+    const { words, suggestions } = settings.vocabulary;
+    const same = (other: string) => other.toLowerCase() === word.toLowerCase();
+    void updateSettings({ vocabulary: { words: [word, ...words.filter(other => !same(other))], suggestions: suggestions.filter(other => !same(other)) } })
+      .then(() => setWord(null), () => setFailed(true));
+  };
+  return <div className="glass learned" data-glass data-hit role="status">
+    <span className="what"><small>{failed ? 'Couldn’t add it. Try again?' : 'Add to your words?'}</small>{word}</span>
+    <button type="button" className="btn" onClick={() => setWord(null)}>Not now</button>
+    <button type="button" className="btn primary" onClick={add}>Add</button>
+  </div>;
+}

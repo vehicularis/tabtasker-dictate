@@ -46,12 +46,30 @@ fn the_encoder_sees_the_speech_plus_room_never_more_than_whisper_window() {
 #[test]
 fn cancellation_and_deadline_abort_local_inference() {
   let flag = Arc::new(AtomicBool::new(false));
-  let mut abort = Abort { cancelled: flag.clone(), started: Instant::now() };
+  let mut abort = Abort { cancelled: flag.clone(), started: Instant::now(), piece: None };
   assert!(!unsafe { should_abort((&mut abort as *mut Abort).cast()) });
   flag.store(true, Ordering::Relaxed);
   assert!(unsafe { should_abort((&mut abort as *mut Abort).cast()) });
   flag.store(false, Ordering::Relaxed); abort.started = Instant::now() - Duration::from_secs(121);
   assert!(unsafe { should_abort((&mut abort as *mut Abort).cast()) });
+}
+
+#[test]
+fn a_meeting_piece_gives_the_engine_up_to_a_release_pause_and_quit() {
+  let speech: &'static LocalSpeech = Box::leak(Box::new(LocalSpeech {
+    root: PathBuf::new(), enabled: AtomicBool::new(true), preparing: Mutex::default(), job: Mutex::default(), engine: Mutex::default(),
+    vad: Mutex::default(), draft: Mutex::default(), hold: Mutex::default(), note: Mutex::default(), releases: AtomicUsize::new(0),
+  }));
+  let mut abort = Abort { cancelled: Arc::default(), started: Instant::now(), piece: Some(speech) };
+  let stops = |abort: &mut Abort| unsafe { should_abort((abort as *mut Abort).cast()) };
+  assert!(!stops(&mut abort));
+  speech.releases.fetch_add(1, Ordering::SeqCst);
+  assert!(stops(&mut abort));
+  speech.releases.fetch_sub(1, Ordering::SeqCst);
+  speech.enabled.store(false, Ordering::Relaxed);
+  assert!(stops(&mut abort));
+  // A hold's own pass never yields to these.
+  assert!(!stops(&mut Abort { cancelled: Arc::default(), started: Instant::now(), piece: None }));
 }
 
 #[tokio::test]
@@ -76,7 +94,7 @@ fn real_local_model_transcribes_fixture_and_rejects_silence() {
   let started = Instant::now();
   let speech = LocalSpeech {
     root: root.clone(), enabled: AtomicBool::new(true), preparing: Mutex::default(), job: Mutex::default(),
-    engine: Mutex::new(Some(Engine::load(&root).unwrap())), vad: Mutex::new(Some(load_vad(&root).unwrap())), draft: Mutex::default(), hold: Mutex::default(), note: Mutex::default(),
+    engine: Mutex::new(Some(Engine::load(&root).unwrap())), vad: Mutex::new(Some(load_vad(&root).unwrap())), draft: Mutex::default(), hold: Mutex::default(), note: Mutex::default(), releases: AtomicUsize::new(0),
   };
   let loaded = started.elapsed();
   let flag = Arc::new(AtomicBool::new(false));
@@ -141,7 +159,7 @@ fn a_long_note_is_transcribed_while_it_is_said_and_finishes_at_once() {
   assert!(stream.len() > 90 * 16000, "{} s", stream.len() / 16000);
   let speech = LocalSpeech {
     root: root.clone(), enabled: AtomicBool::new(true), preparing: Mutex::default(), job: Mutex::default(),
-    engine: Mutex::new(Some(Engine::load(&root).unwrap())), vad: Mutex::new(Some(load_vad(&root).unwrap())), draft: Mutex::default(), hold: Mutex::default(), note: Mutex::default(),
+    engine: Mutex::new(Some(Engine::load(&root).unwrap())), vad: Mutex::new(Some(load_vad(&root).unwrap())), draft: Mutex::default(), hold: Mutex::default(), note: Mutex::default(), releases: AtomicUsize::new(0),
   };
   let go = || Arc::new(AtomicBool::new(false));
   speech.note("note", |_| ()); // the first step begins it

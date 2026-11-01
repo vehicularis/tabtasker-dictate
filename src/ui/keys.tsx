@@ -1,11 +1,10 @@
-import { useState, type KeyboardEvent, type ReactNode } from 'react';
-import type { Chord } from '../store';
+import { useEffect, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { chordProblem, MODIFIERS, type Chord } from '../store';
 import { Icon } from './Icon';
 
 export const Kbd = ({ children }: { children: ReactNode }) => <kbd className="ui-kbd">{children}</kbd>;
 
-// NSEvent modifier flags, as the native side matches them.
-export const MODIFIERS = { control: 1 << 18, option: 1 << 19, shift: 1 << 17, command: 1 << 20 } as const;
+export { MODIFIERS };
 const GLYPHS: [keyof typeof MODIFIERS, string][] = [['control', '⌃'], ['option', '⌥'], ['shift', '⇧'], ['command', '⌘']];
 
 // macOS virtual key codes by the browser's physical key, with how each reads in a shortcut.
@@ -36,31 +35,49 @@ export function chordOf(event: KeyboardEvent): Chord | null {
   return { keyCode: key[0], modifiers, label: glyphs(on) + key[1] };
 }
 
-/// Records a global shortcut: click, then press it. Escape cancels; Delete clears it.
-export function KeyRecorder({ value, onChange, label }: { value: Chord | null; onChange: (chord: Chord | null) => void; label: string }) {
+/// Records a global shortcut: click, then press it. Escape cancels; Delete clears it. A chord `taken`
+/// holds already, or one the store keeps the old value over, is refused with the reason beside it.
+/// `onChange` answers the chord as saved, when it knows it.
+export function KeyRecorder({ value, onChange, label, taken = [] }: {
+  value: Chord | null; label: string; taken?: { name: string; chord: Chord | null }[];
+  onChange: (chord: Chord | null) => void | Promise<Chord | null | undefined>;
+}) {
   const [recording, setRecording] = useState(false);
   const [partial, setPartial] = useState('');
+  const [refused, setRefused] = useState<string | null>(null);
+  useEffect(() => { if (!refused) return; const timer = setTimeout(() => setRefused(null), 6000); return () => clearTimeout(timer); }, [refused]);
   const stop = () => { setRecording(false); setPartial(''); };
+  const save = (chord: Chord | null) => {
+    const problem = chord && chordProblem(chord, taken);
+    if (problem) { setRefused(problem); return; }
+    setRefused(null);
+    void Promise.resolve(onChange(chord)).then(saved => {
+      if (chord && saved !== undefined && (saved?.keyCode !== chord.keyCode || saved.modifiers !== chord.modifiers)) setRefused(`${chord.label} can’t be used here`);
+    });
+  };
   const key = (event: KeyboardEvent<HTMLButtonElement>) => {
     if (!recording) {
-      if (event.key === 'Backspace' || event.key === 'Delete') { event.preventDefault(); if (value) onChange(null); }
+      if (event.key === 'Backspace' || event.key === 'Delete') { event.preventDefault(); if (value) save(null); }
       return;
     }
     event.preventDefault(); event.stopPropagation();
     const on = held(event);
     const bare = !on.command && !on.option && !on.control && !on.shift;
     if (event.key === 'Escape' && bare) { stop(); return; }
-    if ((event.key === 'Backspace' || event.key === 'Delete') && bare) { onChange(null); stop(); return; }
+    if ((event.key === 'Backspace' || event.key === 'Delete') && bare) { save(null); stop(); return; }
     const chord = chordOf(event);
-    if (chord) { onChange(chord); stop(); return; }
+    if (chord) { save(chord); stop(); return; }
     setPartial(glyphs(on));
   };
+  const clearable = value && !recording;
   return <span className="ui-recorder">
+    {refused && <span className="ui-recorder-refused" role="alert">{refused}</span>}
     <button type="button" className="ui-recorder-key" data-recording={recording || undefined} aria-label={`${label}: ${value?.label ?? 'none'}`}
-      onClick={() => setRecording(!recording)} onBlur={stop} onKeyDown={key} onKeyUp={event => { if (recording) setPartial(glyphs(held(event))); }}>
+      onClick={() => { setRefused(null); setRecording(!recording); }} onBlur={stop} onKeyDown={key} onKeyUp={event => { if (recording) setPartial(glyphs(held(event))); }}>
       {recording ? (partial ? <span className="ui-kbd-text">{partial}</span> : <span className="hint">Type shortcut</span>)
         : value ? <span className="ui-kbd-text">{value.label}</span> : <span className="hint">Record shortcut</span>}
     </button>
-    {value && !recording && <button type="button" className="ui-recorder-clear" aria-label={`Clear ${label}`} onClick={() => onChange(null)}><Icon name="close" size={12} /></button>}
+    {/* Always in place, so recorders in a column line up whether or not they hold a chord. */}
+    <button type="button" className="ui-recorder-clear" aria-label={`Clear ${label}`} hidden={!clearable} onClick={() => save(null)}><Icon name="close" size={12} /></button>
   </span>;
 }

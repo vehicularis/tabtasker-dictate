@@ -161,10 +161,10 @@ async fn meeting(app: AppHandle, action: String) -> Result<bool, String> {
   on_main(&app, move || unsafe { dictate_meeting(action.as_ptr()) }).await
 }
 
-/// Opens the Settings window on `route` (General when unknown).
+/// Opens the Settings window on `route`, or brings it forward on the page it shows when there is none.
 #[tauri::command]
 fn open_settings(app: AppHandle, route: Option<String>) -> Result<(), String> {
-  show_settings(&app, route.as_deref().unwrap_or("general")).map_err(|e| e.to_string())
+  show_settings(&app, route.as_deref()).map_err(|e| e.to_string())
 }
 
 /// Types the newest transcript again where the cursor is.
@@ -201,17 +201,18 @@ fn overlay(app: &AppHandle) -> tauri::Result<()> {
 }
 
 /// The Settings window, made on demand. While it is open the app has a Dock icon and a menu bar, like
-/// any app with a window; closing it goes back to the menu bar only.
-fn show_settings(app: &AppHandle, route: &str) -> tauri::Result<()> {
-  let route = if ROUTES.contains(&route) { route } else { "general" };
+/// any app with a window; closing it goes back to the menu bar only. With no `route`, an open window
+/// keeps its page and a new one starts on General.
+fn show_settings(app: &AppHandle, route: Option<&str>) -> tauri::Result<()> {
+  let route = route.map(|route| if ROUTES.contains(&route) { route } else { "general" });
   app.set_activation_policy(ActivationPolicy::Regular)?;
   if let Some(window) = app.get_webview_window(SETTINGS) {
-    window.eval(format!("location.hash = '#{route}'"))?;
+    if let Some(route) = route { window.eval(format!("location.hash = '#{route}'"))?; }
     window.unminimize()?;
     window.show()?;
     return window.set_focus();
   }
-  let window = WebviewWindowBuilder::new(app, SETTINGS, WebviewUrl::App(format!("settings.html#{route}").into()))
+  let window = WebviewWindowBuilder::new(app, SETTINGS, WebviewUrl::App(format!("settings.html#{}", route.unwrap_or("general")).into()))
     .title("TabTasker Dictate")
     .inner_size(860.0, 620.0).min_inner_size(760.0, 540.0).center()
     .title_bar_style(TitleBarStyle::Overlay).hidden_title(true).traffic_light_position(LogicalPosition::new(20.0, 22.0))
@@ -297,8 +298,8 @@ fn menu_event(app: &AppHandle, id: &str) {
     "meeting" => start_meeting(app),
     "paste-last" => paste_last(app.clone()),
     "notes" => { let _ = notes::show_notes(None); }
-    "settings" => { let _ = show_settings(app, "general"); }
-    "about" => { let _ = show_settings(app, "about"); }
+    "settings" => { let _ = show_settings(app, None); }
+    "about" => { let _ = show_settings(app, Some("about")); }
     "setup" => { let _ = app.emit_to(OVERLAY, "dictate-setup", ()); }
     // The item has already flipped its own check.
     "pause" => {

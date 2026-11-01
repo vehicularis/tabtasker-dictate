@@ -6,12 +6,14 @@ export function Orb({ mode, level, typing, onClick }: { mode: string; level: { c
   useEffect(() => {
     if (mode !== 'listening' || typing) return;
     let frame = 0, peak = 0.005, energy = 0.2;
+    // Under reduced motion the bars still follow your voice, but stop swaying on their own.
+    const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
     const draw = (now: number) => {
       peak = Math.max(level.current, peak * 0.995, 0.005);
       const target = 0.15 + 0.85 * Math.min(1, level.current / peak);
       energy += (target - energy) * (target > energy ? 0.35 : 0.1);
       bars.current?.querySelectorAll('i').forEach((bar, i) => {
-        const sway = 0.5 + 0.5 * Math.sin(now / 140 + i * 1.7);
+        const sway = 0.5 + 0.5 * Math.sin((still ? 0 : now / 140) + i * 1.7);
         (bar as HTMLElement).style.transform = `scaleY(${0.2 + 0.8 * energy * (0.35 + 0.65 * sway)})`;
       });
       frame = requestAnimationFrame(draw);

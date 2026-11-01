@@ -30,7 +30,8 @@ html[data-app] .sidebar { background: var(--sidebar); }
 .content { position: relative; z-index: 1; overflow-y: auto; background: var(--window); }
 .page { max-width: 600px; margin: 0 auto; padding: 46px 32px 40px; animation: page-in var(--slow) var(--ease) both; }
 @keyframes page-in { from { opacity: 0; transform: translateY(4px); } }
-.pair { display: flex; gap: 6px; }
+.pair { display: flex; gap: 6px; width: 100%; }
+.pair .ui-field { flex: 1; min-width: 0; }
 .labelled { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--ink-3); }
 .state { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px; border-radius: var(--radius-pill); font-size: 12px; font-weight: 500; color: var(--ink-2); background: var(--surface-2); }
 .state[data-on] { color: var(--on-accent); background: var(--accent); }

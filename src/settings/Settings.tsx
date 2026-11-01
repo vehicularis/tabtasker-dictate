@@ -61,7 +61,7 @@ export function Settings() {
     return () => removeEventListener('keydown', key);
   }, []);
   const hideToast = useCallback(() => setToast(null), []);
-  const update = useCallback((patch: Patch) => { void updateSettings(patch).catch(error => setToast(typeof error === 'string' ? error : 'Couldn’t save that change')); }, []);
+  const update = useCallback((patch: Patch) => updateSettings(patch).catch(error => { setToast(typeof error === 'string' ? error : 'Couldn’t save that change'); return undefined; }), []);
 
   if (route === 'setup') return <Onboarding />;
   const page = PAGES.find(candidate => candidate.route === route) ?? PAGES[0];
@@ -78,7 +78,9 @@ export function Settings() {
     const links = [...(nav.current?.querySelectorAll<HTMLAnchorElement>('a[data-route]') ?? [])];
     if (!links.length) return;
     event.preventDefault();
-    const at = links.findIndex(link => link === document.activeElement || link.dataset.route === route);
+    // The focused link first: `route` lags until the hash change re-renders, so quick presses would stall.
+    let at = links.indexOf(document.activeElement as HTMLAnchorElement);
+    if (at < 0) at = links.findIndex(link => link.dataset.route === route);
     const next = links[Math.min(links.length - 1, Math.max(0, at + (event.key === 'ArrowDown' ? 1 : -1)))];
     next.focus();
     go(next.dataset.route!);
