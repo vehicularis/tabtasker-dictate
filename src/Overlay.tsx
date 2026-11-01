@@ -25,12 +25,23 @@ const store = (key: string, value: unknown) => { try { if (value == null) localS
 const PREVIEW = new URLSearchParams(location.search).get('preview');
 const SAMPLE: Status = { enabled: true, microphone: 'allowed', accessibility: true, modelReady: true, modelPreparing: false, modelMessage: '', notes: '/Users/you/Documents/TabTasker Dictate', globeKey: '', openAtLogin: true,
   inputs: [{ id: 'built-in', name: 'MacBook Pro Microphone' }, { id: 'airpods', name: 'AirPods Pro' }], input: null, inputInUse: 'MacBook Pro Microphone' };
+// Setup previews, one per step: setup, setup-fn, setup-test, setup-hold, setup-globe, setup-download, setup-model, setup-done.
+const SETUP: Record<string, Partial<Status>> = {
+  setup: { microphone: 'notDetermined', accessibility: false, enabled: false, modelReady: false },
+  'setup-fn': { accessibility: false, enabled: false, modelReady: false },
+  'setup-test': { enabled: false, modelReady: false },
+  'setup-hold': { enabled: false, modelReady: false },
+  'setup-globe': { enabled: false, modelReady: false, globeKey: 'emoji' },
+  'setup-download': { enabled: false, modelReady: false },
+  'setup-model': { modelReady: false, modelPreparing: true, modelMessage: 'Downloading Whisper large-v3 Turbo… 42%' },
+  'setup-done': {},
+};
 
 export function Overlay() {
   const root = useRef<HTMLDivElement>(null);
   const dock = useRef<HTMLDivElement>(null);
   const dots = useRef<HTMLButtonElement>(null);
-  const [status, setStatus] = useState<Status | null>(PREVIEW ? { ...SAMPLE, ...(PREVIEW === 'setup' ? { accessibility: false, modelReady: false } : {}) } : null);
+  const [status, setStatus] = useState<Status | null>(PREVIEW ? { ...SAMPLE, ...SETUP[PREVIEW] } : null);
   const [phase, setPhase] = useState<Phase>(PREVIEW === 'listening' || PREVIEW === 'typing' ? 'listening' : 'idle');
   const heard = useRef<Phase>('idle');
   const [dictating, setDictating] = useState(PREVIEW === 'typing');
@@ -45,13 +56,14 @@ export function Overlay() {
   const [discarding, setDiscarding] = useState(false);
   const [saved, setSaved] = useState<string | null>(PREVIEW === 'saved' ? '/Users/you/Documents/TabTasker Dictate/2026-11-01 21.40 Call the venue about Thursday.md' : null);
   const [toast, setToast] = useState<string | null>(null);
-  const [setup, setSetup] = useState(PREVIEW === 'setup');
+  const [setup, setSetup] = useState(!!PREVIEW && PREVIEW in SETUP);
   const [hover, setHover] = useState(PREVIEW === 'hover' || PREVIEW === 'menu' || PREVIEW === 'mics');
   const [menu, setMenu] = useState(PREVIEW === 'menu' || PREVIEW === 'mics');
   const [mics, setMics] = useState(PREVIEW === 'mics');
   const [hidden, setHidden] = useState(false);
   const [edge, setEdge] = useState<Edge>(() => (new URLSearchParams(location.search).get('edge') as Edge | null) ?? stored<Edge>(EDGE, 'bottom'));
-  const [fnTested, setFnTested] = useState(false);
+  const [fnTested, setFnTested] = useState(PREVIEW === 'setup-download' || PREVIEW === 'setup-model');
+  const [fnDown, setFnDown] = useState(PREVIEW === 'setup-hold');
   const fnDownAt = useRef(0);
 
   const refresh = useCallback(() => { if (!PREVIEW) void invoke<Status>('status').then(setStatus).catch(() => {}); }, []);
@@ -95,6 +107,7 @@ export function Overlay() {
       }),
       listen<{ message: string }>('dictate-notice', ({ message }) => setToast(message)),
       listen<{ down: boolean }>('dictate-fn', ({ down }) => {
+        setFnDown(down);
         if (down) fnDownAt.current = performance.now();
         else if (fnDownAt.current && performance.now() - fnDownAt.current > 350) setFnTested(true);
       }),
@@ -211,7 +224,7 @@ export function Overlay() {
   const card = setup || (draft && reviewing);
   return <div ref={root} className="layer" data-edge={edge} data-mode={mode} data-card={card || undefined} data-pending={(draft && !reviewing) || undefined} data-dragging={dragging || undefined}>
     <div ref={dock} className="dock">
-      {setup && <Setup status={status} fnTested={fnTested} onClose={() => setSetup(false)} />}
+      {setup && <Setup status={status} fnDown={fnDown} fnTested={fnTested} onClose={() => setSetup(false)} />}
       {!setup && draft && reviewing && <article className="glass card" data-glass data-hit aria-label="New note"
         onKeyDown={event => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void save(); } }}>
         <header className="head" onPointerDown={event => { if (!(event.target as Element).closest('button')) grab(event); }}><span className="name"><NoteIcon />New note</span><button type="button" className="close" aria-label="Hide note" onClick={() => setReviewing(false)}><X /></button></header>
@@ -273,36 +286,67 @@ export function Overlay() {
   </div>;
 }
 
-// ---------- setup: the microphone, Accessibility, the fn key, and the model ----------
+// ---------- setup: the microphone, the fn key, then the model, one step at a time ----------
 
-function Setup({ status, fnTested, onClose }: { status: Status | null; fnTested: boolean; onClose: () => void }) {
-  const ask = (kind: string) => void invoke('request', { kind }).catch(() => {});
-  const mic = status?.microphone === 'allowed', access = !!status?.accessibility;
-  const globe = status?.globeKey ? GLOBE[status.globeKey] : undefined;
-  const model = !!status?.enabled && !!status.modelReady;
-  return <article className="glass card setup" data-glass data-hit aria-label="Set up">
-    <header className="head"><span className="name"><Logo />TabTasker Dictate</span><button type="button" className="close" aria-label="Close" onClick={onClose}><X /></button></header>
-    <p className="lead">Hold <kbd>fn</kbd> and talk to type where your cursor is. Click the note on the dots for long notes, saved as Markdown in {status?.notes.replace(/^\/Users\/[^/]+/, '~') ?? 'Documents'}.</p>
-    <ol className="steps">
-      <Step done={mic} name="Microphone" line="Only on while you hold fn or take a note."
-        action={!mic && <button type="button" className="btn primary" onClick={() => ask('microphone')}>{status?.microphone === 'denied' ? 'Open Settings' : 'Allow'}</button>} />
-      <Step done={access} name="Accessibility" line="Lets your words type into other apps, and hears fn anywhere."
-        action={!access && <button type="button" className="btn primary" onClick={() => ask('accessibility')}>Open Settings</button>} />
-      <Step done={model} name="Whisper" line={status?.modelMessage || 'About 875 MB, downloaded once. Speech is transcribed on this Mac.'}
-        action={!model && !status?.modelPreparing && <button type="button" className="btn primary" onClick={() => void invoke('set_enabled', { enabled: true }).catch(() => {})}>Download</button>} />
-      <Step done={fnTested} name="Hold fn" line={globe ? `Your 🌐 key ${globe}: set “Press 🌐 key to” to Do Nothing.` : 'Hold fn for a moment to try it.'}
-        action={globe && <button type="button" className="btn" onClick={() => ask('keyboard')}>Keyboard Settings</button>} />
-    </ol>
-    {setupDone(status) && <footer className="actions"><span className="ask">You’re all set.</span><button type="button" className="btn primary" onClick={onClose}>Done</button></footer>}
+function Setup({ status, fnDown, fnTested, onClose }: { status: Status | null; fnDown: boolean; fnTested: boolean; onClose: () => void }) {
+  const [asked, setAsked] = useState(false);
+  const ask = (kind: string) => { if (kind === 'accessibility') setAsked(true); void invoke('request', { kind }).catch(() => {}); };
+  const notes = status?.notes.replace(/^\/Users\/[^/]+/, '~') ?? '~/Documents/TabTasker Dictate';
+  const sheet = (title: string, body: ReactNode) => <article className="glass card setup" data-glass data-hit aria-label="Set up">
+    <header className="head"><Logo size={28} /><strong>{title}</strong><button type="button" className="close" aria-label="Close" onClick={onClose}><X /></button></header>
+    <Ways notes={notes} />
+    {body}
   </article>;
+  const ready = setupDone(status);
+  if (ready) return sheet('You’re all set', <footer className="actions"><span className="ask" /><button type="button" className="btn primary" onClick={onClose}>Done</button></footer>);
+
+  const mic = status?.microphone === 'allowed' ? 'done' : 'active';
+  const keys = mic !== 'done' ? 'todo' : !status?.accessibility ? 'active' : fnTested ? 'done' : 'test';
+  // Not a gate: a hold that gets through still passes the test.
+  const globe = keys === 'test' && status?.globeKey ? GLOBE[status.globeKey] : undefined;
+  const model = keys !== 'done' ? 'todo' : status?.enabled && status.modelReady ? 'done' : status?.modelPreparing ? 'busy' : 'active';
+  const stalled = model === 'active' && !!status?.enabled; // on, but the last download or load failed
+  const percent = Number(/(\d+(?:\.\d+)?)%/.exec(status?.modelMessage ?? '')?.[1] ?? 0);
+  return sheet('Set up TabTasker Dictate', <>
+    <Keyboard down={fnDown} />
+    <ol className="steps">
+      <Step index={1} status={mic} name="Microphone" line="Only on while you hold fn or take a note."
+        action={mic === 'active' && <button type="button" className="btn primary" onClick={() => ask('microphone')}>{status?.microphone === 'denied' ? 'Open Settings' : 'Allow'}</button>} />
+      <Step index={2} status={keys} name="fn key"
+        line={globe ? <>Your 🌐 key {globe}, which gets in the way of <kbd>fn</kbd>. Open Settings, set “Press 🌐 key to” to Do Nothing, then hold fn here.</>
+          : keys === 'test' ? <>Now hold <kbd>fn</kbd> to test it. If emoji open instead, set “Press 🌐 key to” to Do Nothing in <button type="button" className="link" onClick={() => ask('keyboard')}>Keyboard settings</button>.</>
+          : asked ? 'If macOS asks, choose Open System Settings, then turn TabTasker Dictate on. Already on? Remove it with −, then turn it on again.'
+          : 'Accessibility lets Dictate notice fn and type into any app.'}
+        action={(keys === 'active' || globe) && <button type="button" className="btn primary" onClick={() => ask(globe ? 'keyboard' : 'accessibility')}>Open Settings</button>} />
+      <Step index={3} status={model} name="Speech model"
+        line={model === 'busy' ? <>{status?.modelMessage || 'Preparing…'}<span className="bar"><i style={{ width: `${percent}%` }} /></span></>
+          : stalled ? status?.modelMessage || 'The download stopped.' : '875 MB, kept on this Mac. Your voice is transcribed here.'}
+        action={model === 'active' && <button type="button" className="btn primary" onClick={() => void invoke('set_enabled', { enabled: true }).catch(() => {})}>{stalled ? 'Try again' : 'Download'}</button>} />
+    </ol>
+  </>);
 }
 
-function Step({ done, name, line, action }: { done: boolean; name: string; line: string; action?: ReactNode }) {
-  return <li className="step" data-done={done || undefined}>
-    <span className="check" aria-hidden="true">{done ? '✓' : ''}</span>
-    <span className="what">{name}<small>{line}</small></span>
-    {action}
-  </li>;
+function Step({ index, status, name, line, action }: { index: number; status: string; name: string; line: ReactNode; action: ReactNode }) {
+  return <li data-status={status}><i className="num">{status === 'done' ? '✓' : index}</i><div><b>{name}</b><span>{line}</span></div>{action || null}</li>;
+}
+
+// The two ways in: what each does on the left, its key or button lined up on the right.
+function Ways({ notes }: { notes: string }) {
+  return <ul className="ways">
+    <li><span className="what">Type where your cursor is<small>In any app, as you speak</small></span><span className="chord"><kbd>fn</kbd></span></li>
+    <li><span className="what">Take a spoken note<small>As long as you like, saved as Markdown in {notes}</small></span><span className="chord"><kbd className="glyph"><NoteIcon /></kbd></span></li>
+  </ul>;
+}
+
+// The corner of a Mac keyboard with the fn key; it is also the tester.
+function Keyboard({ down }: { down: boolean }) {
+  return <div className="keys" data-down={down || undefined} aria-hidden="true">
+    <div className="krow"><i className="k wide">shift</i><i className="k">Z</i><i className="k">X</i><i className="k">C</i><i className="k">V</i></div>
+    <div className="krow">
+      <i className="k fn"><b>fn</b><Globe /></i>
+      <i className="k"><b>⌃</b><span>control</span></i><i className="k"><b>⌥</b><span>option</span></i><i className="k wide"><b>⌘</b><span>command</span></i>
+    </div>
+  </div>;
 }
 
 // ---------- the orb: level bars while a note records, a still caret while typing ----------
@@ -349,7 +393,7 @@ const stamp = (now: Date) => {
 };
 
 // The app's objects, drawn like small enamel tiles with one light; the logo is the app icon's mark.
-const Logo = () => <svg width="18" height="18" viewBox="0 0 28 28" aria-hidden="true">
+const Logo = ({ size = 18 }: { size?: number }) => <svg width={size} height={size} viewBox="0 0 28 28" aria-hidden="true">
   <rect x="1" y="1" width="26" height="26" rx="7" fill="#2a2420" />
   {[[7, 5.6], [10.4, 9.6], [17.6, 9.6], [21, 5.6]].map(([x, h]) => <rect key={x} x={x - 1} y={14 - h / 2} width="2" height={h} rx="1" fill="#E8913B" />)}
   <path d="M14 7v14M12.6 7h2.8M12.6 21h2.8" stroke="#f6efe4" strokeWidth="1.3" strokeLinecap="round" />
@@ -380,4 +424,5 @@ const GearIcon = () => <svg width="17" height="17" viewBox="0 0 28 28" fill="non
 </svg>;
 const Check = () => <svg className="icon" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" /></svg>;
 const Caret = () => <svg className="more" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4.5 2.5L8 6l-3.5 3.5" /></svg>;
+const Globe = () => <svg width="12" height="12" viewBox="0 0 256 256" fill="none" stroke="currentColor" strokeWidth="16"><circle cx="128" cy="128" r="96" /><path d="M32 128h192M128 32c-28 26-40 60-40 96s12 70 40 96M128 32c28 26 40 60 40 96s-12 70-40 96" /></svg>;
 const X = () => <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M1.5 1.5l7 7m0-7l-7 7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>;

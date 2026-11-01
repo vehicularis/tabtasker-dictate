@@ -7,6 +7,10 @@
   --fill: rgb(255 255 255 / .07); --fill-2: rgb(255 255 255 / .1); --fill-3: rgb(255 255 255 / .16);
   --tint: rgb(28 28 30 / .55); --rim: rgb(255 255 255 / .22); --drop: rgb(0 0 0 / .35);
   --ember: #f0a54a; --copper: #c4721f; --danger: #ff8a7a; --enamel: #3a3a3c;
+  --amber: #f4bc5c; --accent-ink: var(--amber); --amber-fill: rgb(244 188 92 / .16);
+  --well: rgb(0 0 0 / .24); --well-shadow: rgb(0 0 0 / .35);
+  --key: linear-gradient(#2d2e31, #232427); --key-ink: rgb(255 255 255 / .6); --key-edge: rgb(0 0 0 / .5); --key-light: rgb(255 255 255 / .08);
+  --fn-key: linear-gradient(#3a2f22, #2c241a);
   --ease: cubic-bezier(.2, .8, .2, 1); --spring: cubic-bezier(.34, 1.4, .64, 1);
 }
 @media (prefers-color-scheme: light) {
@@ -16,6 +20,10 @@
     --fill: rgb(0 0 0 / .05); --fill-2: rgb(0 0 0 / .07); --fill-3: rgb(0 0 0 / .11);
     --tint: rgb(255 255 255 / .6); --rim: rgb(255 255 255 / .8); --drop: rgb(0 0 0 / .14);
     --ember: #c06a17; --danger: #c4322b; --enamel: #fdfdfd;
+    --accent-ink: #9a5a12; --amber-fill: rgb(192 106 23 / .12);
+    --well: rgb(0 0 0 / .05); --well-shadow: rgb(0 0 0 / .1);
+    --key: linear-gradient(#ffffff, #f1f1f3); --key-ink: rgb(0 0 0 / .55); --key-edge: rgb(0 0 0 / .14); --key-light: rgb(255 255 255 / .9);
+    --fn-key: linear-gradient(#fbefdc, #f3e2c6);
   }
 }
 html, body, #root { height: 100%; margin: 0; background: transparent; overflow: hidden; }
@@ -116,14 +124,42 @@ button { font: inherit; color: inherit; }
 .primary:hover { background: #b4661c; }
 .primary:disabled { opacity: .5; cursor: default; }
 .danger { color: var(--danger); }
-.lead { margin: 2px 0 10px; color: var(--ink-2); font-size: 13px; }
-.lead kbd { padding: 0 5px; border-radius: 5px; background: var(--fill-2); font: inherit; font-size: 12px; }
-.steps { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
-.step { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 14px; background: var(--fill); }
-.check { display: grid; place-items: center; flex: none; width: 20px; height: 20px; border-radius: 50%; background: var(--fill-2); font-size: 12px; }
-.step[data-done] .check { color: #fff; background: #3c9a5f; }
-.what { flex: 1; min-width: 0; font-weight: 500; }
-.what small { display: block; font-weight: 400; font-size: 12px; color: var(--ink-3); }
+.setup { --inner-radius: 16px; width: 380px; padding: 14px 14px 14px 16px; font-size: 13.5px; }
+.setup .head { gap: 10px; margin-bottom: 10px; font-size: 14.5px; }
+.setup .head svg { flex: none; border-radius: 9px; }
+.setup kbd { padding: 1px 6px; border-radius: 5px; font: inherit; font-size: 12px; color: var(--accent-ink); background: var(--amber-fill); }
+.link { padding: 0; border: 0; background: none; color: var(--accent-ink); font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+/* Tiles, not lines: the group's outer corners follow the card, the seams stay small. */
+.ways { display: flex; flex-direction: column; gap: 3px; margin: 0; padding: 0; list-style: none; }
+.ways li { display: flex; align-items: center; gap: 12px; min-height: 44px; box-sizing: border-box; padding: 8px 12px; border-radius: 6px; background: var(--fill); }
+.ways li:first-child { border-top-left-radius: var(--inner-radius); border-top-right-radius: var(--inner-radius); }
+.ways li:last-child { border-bottom-left-radius: var(--inner-radius); border-bottom-right-radius: var(--inner-radius); }
+.what { display: flex; flex: 1; flex-direction: column; gap: 1px; min-width: 0; font-size: 13px; }
+.what small { font-size: 11.5px; line-height: 1.35; color: var(--ink-3); }
+.chord { display: flex; flex: none; gap: 3px; }
+.chord .glyph { display: grid; padding: 2px 4px; }
+.chord .glyph svg { width: 15px; height: 15px; }
+.steps { display: flex; flex-direction: column; margin: 8px 0 0; padding: 0; list-style: none; }
+.steps li { display: flex; align-items: center; gap: 11px; padding: 9px 0; transition: opacity .25s; }
+.steps li[data-status='todo'] { opacity: .4; }
+.steps li > div { flex: 1; min-width: 0; }
+.steps b { display: block; font-size: 13.5px; font-weight: 600; }
+.steps span { display: block; font-size: 12px; color: var(--ink-3); }
+.num { display: flex; flex: none; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; font-size: 11.5px; font-style: normal; font-weight: 600; background: var(--fill-2); color: var(--ink-2); }
+.steps li:is([data-status='active'], [data-status='busy'], [data-status='test']) .num { background: var(--amber); color: #2a1a08; }
+.steps li[data-status='done'] .num { background: var(--amber-fill); color: var(--accent-ink); }
+.bar { height: 3px; margin-top: 6px; overflow: hidden; border-radius: 2px; background: var(--fill-2); }
+.bar i { display: block; height: 100%; background: var(--accent-ink); transition: width .3s; }
+/* The corner of a Mac keyboard with the fn key; it is also the tester. Colour alone marks fn. */
+.keys { display: flex; flex-direction: column; gap: 6px; margin: 12px 0 4px; padding: 14px 16px; border-radius: var(--inner-radius); background: var(--well); box-shadow: inset 0 1px 3px var(--well-shadow); -webkit-mask: linear-gradient(90deg, #000 50%, transparent 92%); mask: linear-gradient(90deg, #000 50%, transparent 92%); }
+.krow { display: flex; gap: 6px; }
+.krow:first-child { opacity: .35; }
+.k { position: relative; display: flex; flex: none; align-items: center; justify-content: center; width: 44px; height: 40px; border-radius: 8px; font-size: 11px; font-style: normal; color: var(--key-ink); background: var(--key); box-shadow: inset 0 1px 0 var(--key-light), 0 1px 0 var(--key-edge), 0 2px 3px rgb(0 0 0 / .18); transition: transform .08s, background .15s, box-shadow .15s, color .15s; }
+.k.wide { width: 64px; }
+.k b { position: absolute; top: 4px; right: 7px; font-size: 11px; font-weight: 500; }
+.k span, .k svg { position: absolute; bottom: 5px; left: 7px; font-size: 9.5px; }
+.k.fn { color: var(--accent-ink); background: var(--fn-key); }
+.keys[data-down] .k.fn { transform: translateY(1px); color: #fff; background: var(--copper); box-shadow: inset 0 1px 0 rgb(242 189 98 / .4), 0 1px 0 rgb(0 0 0 / .5); }
 
 /* ---------- a preview in a browser (?preview=hover|menu|mics|note|listening|typing|saved|setup&edge=…) ---------- */
 body.preview { background: radial-gradient(120% 90% at 20% 10%, #3b4a6b, #161a24 60%), #161a24; }
