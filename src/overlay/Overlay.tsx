@@ -29,7 +29,7 @@ export function Overlay() {
   const heard = useRef<Phase>('idle');
   const [dictating, setDictating] = useState(PREVIEW === 'typing');
   const level = useRef(PREVIEW === 'listening' ? 0.05 : 0);
-  const [live, setLive] = useState<string | null>(PREVIEW === 'listening' ? 'Call the venue about Thursday and ask for the bigger room' : null);
+  const [live, setLive] = useState<string | null>(PREVIEW === 'listening' || PREVIEW === 'typing' ? 'Call the venue about Thursday and ask for the bigger room' : null);
   const [noting, setNoting] = useState(PREVIEW === 'listening');
   const noteRequested = useRef(false);
   const [since, setSince] = useState(() => PREVIEW === 'listening' ? Date.now() - 83_000 : 0); // when the note's recording began
@@ -39,7 +39,8 @@ export function Overlay() {
   const [discarding, setDiscarding] = useState(false);
   const [saved, setSaved] = useState<string | null>(PREVIEW === 'saved' ? '/Users/you/Documents/TabTasker Dictate/2026-11-01 21.40 Call the venue about Thursday.md' : null);
   const [toast, setToast] = useState<string | null>(null);
-  const [setup, setSetup] = useState(!!PREVIEW && PREVIEW in SETUP);
+  // The gear's card: the quick settings, or ('steps') the setup steps even once set up.
+  const [setup, setSetup] = useState<false | 'quick' | 'steps'>(PREVIEW && PREVIEW in SETUP ? 'quick' : false);
   const [hover, setHover] = useState(PREVIEW === 'hover' || PREVIEW === 'menu' || PREVIEW === 'mics');
   const [menu, setMenu] = useState(PREVIEW === 'menu' || PREVIEW === 'mics');
   const [mics, setMics] = useState(PREVIEW === 'mics');
@@ -59,7 +60,7 @@ export function Overlay() {
   // Setup follows macOS live: permissions and the model download change while it is open.
   useEffect(() => { if (!setup) return; const timer = setInterval(refresh, 1000); return () => clearInterval(timer); }, [setup, refresh]);
   const launched = useRef(false);
-  useEffect(() => { if (status && !launched.current) { launched.current = true; if (!setupDone(status) && !status.firstRun) setSetup(true); } }, [status]); // once, at launch, unless Settings shows the full setup
+  useEffect(() => { if (status && !launched.current) { launched.current = true; if (!setupDone(status) && !status.firstRun) setSetup('steps'); } }, [status]); // once, at launch, unless Settings shows the full setup
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(null), 2400); return () => clearTimeout(timer); }, [toast]);
   useEffect(() => { if (!saved || PREVIEW) return; const timer = setTimeout(() => setSaved(null), 8000); return () => clearTimeout(timer); }, [saved]);
   useEffect(() => { if (!PREVIEW) store(DRAFT, draft); }, [draft]);
@@ -103,7 +104,7 @@ export function Overlay() {
         setLive(null); setReviewing(true); setDiscarding(false);
       }),
       listen<{ message: string }>('dictate-error', ({ message }) => {
-        if (message === 'microphone') setSetup(true);
+        if (message === 'microphone') setSetup('steps');
         else if (message !== 'unheard') setToast(message);
       }),
       listen<{ message: string }>('dictate-notice', ({ message }) => setToast(message)),
@@ -186,7 +187,7 @@ export function Overlay() {
   // ---------- actions ----------
   const takeNote = () => {
     if (dragged.current) return;
-    if (!setupDone(status)) { setSetup(true); return; }
+    if (!setupDone(status)) { setSetup('steps'); return; }
     if (phase === 'idle') noteRequested.current = true;
     setHover(false); setMenu(false);
     void invoke('request', { kind: 'note' }).catch(() => { noteRequested.current = false; });
@@ -214,7 +215,7 @@ export function Overlay() {
     }
   };
   const discard = () => { if (sending.current) return; setDraft(null); setReviewing(false); setDiscarding(false); };
-  const openSetup = () => { setMenu(false); refresh(); setSetup(true); };
+  const openSetup = (what: 'quick' | 'steps' = 'quick') => { setMenu(false); refresh(); setSetup(what); };
   const openSettings = useCallback(() => { setMenu(false); void invoke('open_settings', {}).catch(() => setToast('Couldn’t open Settings')); }, []);
   const startMeeting = () => {
     setMenu(false);
@@ -229,7 +230,7 @@ export function Overlay() {
     if (dragged.current) return;
     if (draft && !reviewing) setReviewing(true);
     else if (phase === 'listening' && noting) takeNote();
-    else if (!setupDone(status)) setSetup(true);
+    else if (!setupDone(status)) setSetup('steps');
   };
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
@@ -255,11 +256,11 @@ export function Overlay() {
   return <div ref={root} className="layer" data-edge={edge} data-mode={mode} data-size={settings.appearance.size} data-quiet={quiet || undefined}
     data-card={card || undefined} data-pending={pending || undefined} data-dragging={dragging || undefined}>
     <div ref={dock} className="dock">
-      {setup && <Setup status={status} fnDown={fnDown} fnTested={fnTested} onClose={() => setSetup(false)} />}
+      {setup && <Setup status={status} fnDown={fnDown} fnTested={fnTested} steps={setup === 'steps'} onClose={() => setSetup(false)} />}
       {!setup && draft && reviewing && <NoteCard draft={draft} onChange={setDraft} more={noting ? live : null} canTalk={phase === 'idle'} saving={saving}
         discarding={discarding} onDiscarding={setDiscarding} onSave={save} onDiscard={discard} onHide={() => setReviewing(false)} onTalk={takeNote} onGrab={grab} />}
-      {noting && phase === 'listening' && !card && <p className="glass said" data-glass role="status">
-        <small>Note · {clockOf(since)}</small><span>{live ?? 'Listening…'}</span>
+      {phase === 'listening' && !card && (noting || live) && <p className="glass said" data-glass data-live role="status">
+        <small>{noting ? `Note · ${clockOf(since)}` : dictating ? 'Typing' : 'Listening'}</small><span>{live ?? 'Listening…'}</span>
       </p>}
       {saved && !card && <button type="button" className="glass said saved" data-glass data-hit onClick={() => { void invoke('show_notes', { file: saved }).catch(() => {}); setSaved(null); }}>
         <small>Saved · Show in Finder</small><span>{saved.split('/').pop()?.replace(/\.md$/, '')}</span>
@@ -271,11 +272,11 @@ export function Overlay() {
       <Learned />
       {toast && <p className="glass toast" data-glass role="status">{toast}</p>}
       <Dock mode={mode} dots={dots} label={pending ? 'Open the note' : 'TabTasker Dictate'} hint={settings.appearance.hint} quiet={quiet} level={level} typing={dictating}
-        onHover={setHover} onGrab={grab} onDots={clickDots} onNote={takeNote} onSetup={openSetup} onOrb={() => { if (noting) takeNote(); }}
+        onHover={setHover} onGrab={grab} onDots={clickDots} onNote={takeNote} onSetup={() => openSetup('quick')} onOrb={() => { if (noting) takeNote(); }}
         onMenu={() => { if (phase === 'idle') { setMenu(true); refresh(); lookMeetings(); } }}
         menu={menu && <Menu status={status} mics={mics} meeting={!!meetings?.recording} onMics={setMics} onNote={() => { setMenu(false); takeNote(); }} onMeeting={startMeeting}
           onShowNotes={() => { setMenu(false); void invoke('show_notes', {}).catch(() => {}); }} onPasteLast={() => { setMenu(false); void invoke('paste_last').catch(() => {}); }} onPickMic={pickMic} onLogin={login}
-          onHide={hideForAnHour} onSettings={openSettings} onSetup={openSetup} />} />
+          onHide={hideForAnHour} onSettings={openSettings} onSetup={() => openSetup('steps')} />} />
     </div>
   </div>;
 }

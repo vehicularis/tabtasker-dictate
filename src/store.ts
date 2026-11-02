@@ -7,6 +7,10 @@ export type Style = 'default' | 'casual' | 'formal' | 'code' | 'raw';
 export type DictateKey = 'fn' | 'rightCommand' | 'rightOption' | 'rightControl' | 'rightShift';
 export type CommandKey = 'control' | 'option' | 'command' | 'shift' | 'off';
 export type ClaudeModel = 'claude-haiku-5-5' | 'claude-sonnet-5-5' | 'claude-opus-5-5';
+/// Anthropic's API with your own key, or the Claude Code on this Mac with your Claude account.
+export type ClaudeVia = 'api' | 'claudeCode';
+/// The Mac's own alert sounds, which the cues are chosen from (settings.rs SOUNDS).
+export const SOUNDS = ['Basso', 'Blow', 'Bottle', 'Frog', 'Funk', 'Glass', 'Hero', 'Morse', 'Ping', 'Pop', 'Purr', 'Sosumi', 'Submarine', 'Tink'] as const;
 export type Keep = 'off' | 'day' | 'week' | 'month' | 'forever';
 export type Theme = 'system' | 'light' | 'dark';
 export type Edge = 'bottom' | 'left' | 'right';
@@ -16,12 +20,12 @@ export type Settings = {
   version: 1;
   general: { menuBarIcon: boolean };
   shortcuts: { dictate: DictateKey; handsFree: boolean; command: CommandKey; note: Chord | null; meeting: Chord | null; pasteLast: Chord | null };
-  dictation: { language: string; translateToEnglish: boolean; liveTyping: boolean; removeFillers: boolean; sounds: boolean; model: 'turbo' | 'small' };
+  dictation: { language: string; translateToEnglish: boolean; liveTyping: boolean; removeFillers: boolean; sounds: boolean; soundVolume: number; startSound: string; stopSound: string; model: 'turbo' | 'small' };
   vocabulary: { words: string[]; replacements: { from: string; to: string }[]; learn: boolean; suggestions: string[] };
   apps: { styles: AppStyle[]; defaultStyle: Style };
   notes: { folder: string | null; fileName: string; frontmatter: boolean; dailyNote: boolean; tags: string[]; claudeTitle: boolean; claudeActions: boolean };
   meetings: { folder: string | null; systemAudio: boolean; summarize: boolean; you: string; others: string };
-  claude: { enabled: boolean; model: ClaudeModel; commands: boolean; claudeCode: string | null; projectFolder: string | null };
+  claude: { enabled: boolean; via: ClaudeVia; model: ClaudeModel; commands: boolean; claudeCode: string | null; projectFolder: string | null };
   agents: { mcp: boolean; shareHistory: boolean; shareNotes: boolean; shareMeetings: boolean; allowWrite: boolean };
   history: { keep: Keep };
   appearance: { theme: Theme; edge: Edge; size: Size; idle: 'dots' | 'hidden'; hint: boolean };

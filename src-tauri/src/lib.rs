@@ -41,6 +41,7 @@ extern "C" {
   fn dictate_overlay_layout(json: *const c_char);
   fn dictate_type_text(text: *const c_char);
   fn dictate_meeting(action: *const c_char) -> bool;
+  fn dictate_play_sound(name: *const c_char, volume: f64);
 }
 
 // ---------- what the native side tells the page ----------
@@ -193,6 +194,15 @@ fn paste_last(app: AppHandle) {
 }
 
 /// Paste Last Transcript from its chord.
+/// Dictation › Sounds: plays one of the Mac's sounds once, at `volume`, so a choice can be heard before it is kept.
+#[tauri::command]
+fn play_sound(app: AppHandle, name: String, volume: f64) -> Result<(), String> {
+  if !settings::SOUNDS.contains(&name.as_str()) { return Err("That isn’t one of the Mac’s sounds.".into()); }
+  let name = CString::new(name).map_err(|_| "Invalid sound".to_owned())?;
+  let volume = if volume.is_finite() { volume.clamp(0.0, 1.0) } else { 0.3 };
+  app.run_on_main_thread(move || unsafe { dictate_play_sound(name.as_ptr(), volume) }).map_err(|e| e.to_string())
+}
+
 #[no_mangle]
 extern "C" fn dictate_paste_last() {
   if let Some(app) = APP.get() { paste_last(app.clone()); }
@@ -238,7 +248,7 @@ fn show_settings(app: &AppHandle, route: Option<&str>) -> tauri::Result<()> {
   let window = WebviewWindowBuilder::new(app, SETTINGS, WebviewUrl::App(format!("settings.html#{}", route.unwrap_or("general")).into()))
     .title("TabTasker Dictate")
     .inner_size(860.0, 620.0).min_inner_size(760.0, 540.0).center()
-    .title_bar_style(TitleBarStyle::Overlay).hidden_title(true).traffic_light_position(LogicalPosition::new(20.0, 22.0))
+    .title_bar_style(TitleBarStyle::Overlay).hidden_title(true).traffic_light_position(LogicalPosition::new(12.0, 21.0)) // centred on the page's 38-point title strip: Tauri keeps the buttons 10 pt up inside a container it makes `y` taller, so their centre lands at y - 2
     .transparent(true) // the sidebar's vibrancy shows through the page
     .effects(EffectsBuilder::new().effect(Effect::Sidebar).state(EffectState::FollowsWindowActiveState).build())
     .build()?;

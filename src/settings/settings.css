@@ -1,6 +1,6 @@
 /* The Settings window, in TabTasker Business's workspace shell: a tinted frame, the rail panel on it, and
-   the page as a raised island that overlaps the rail's inner edge. The title bar is hidden; the traffic
-   lights sit in the rail's corner beside its title. */
+   the page as a raised island that overlaps the rail's inner edge. The native title bar is hidden; a strip
+   across the top of the frame holds the traffic lights (placed there by lib.rs) and the window's name. */
 html, body, #root { height: 100%; margin: 0; }
 body { font: 14px/1.45 var(--font); color: var(--ink); background: var(--frame); -webkit-font-smoothing: antialiased; cursor: default; }
 button, input, select { font-family: var(--font); }
@@ -8,12 +8,12 @@ button, input, select { font-family: var(--font); }
 .link { padding: 0; border: 0; background: none; font: inherit; color: var(--accent-ink); text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); text-underline-offset: 3px; cursor: pointer; }
 .link:hover { text-decoration-color: currentColor; }
 
-.window { --overlap: 24px; display: grid; grid-template-columns: 236px minmax(0, 1fr); box-sizing: border-box; height: 100%; padding: 10px; background: var(--frame); }
+.window { --overlap: 24px; --strip: 38px; display: grid; grid-template-columns: 236px minmax(0, 1fr); grid-template-rows: var(--strip) minmax(0, 1fr); box-sizing: border-box; height: 100%; padding: 0 10px 10px; background: var(--frame); }
+.titlebar { grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; height: var(--strip); margin: 0 -10px; font-size: 13px; font-weight: 600; color: var(--ink-2); user-select: none; -webkit-user-select: none; }
 
 /* ---------- the rail: title, search, the pages in named groups; the open one pressed in ---------- */
-.rail { position: relative; display: flex; flex-direction: column; gap: 10px; min-height: 0; padding: 0 calc(12px + var(--overlap)) 14px 12px; overflow-y: auto; border-radius: 20px 0 0 20px;
+.rail { position: relative; display: flex; flex-direction: column; gap: 10px; min-height: 0; padding: 12px calc(12px + var(--overlap)) 14px 12px; overflow-y: auto; border-radius: 20px 0 0 20px;
   background: var(--rail-panel); box-shadow: var(--elev-raised); user-select: none; -webkit-user-select: none; scrollbar-width: none; }
-.rail-title { display: flex; flex: none; align-items: center; height: 38px; margin: 0; padding: 0 0 0 64px; font-size: 15px; font-weight: 600; color: var(--ink); }
 .search { display: flex; flex: none; align-items: center; gap: 6px; height: 30px; padding: 0 9px; border-radius: var(--radius-control); color: var(--ink-3); background: var(--field); box-shadow: var(--elev-raised); }
 .search:focus-within { box-shadow: var(--elev-well); outline: 2px solid var(--ring); outline-offset: 2px; }
 .search input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: 0; font-size: 14px; color: var(--ink); background: none; }
@@ -57,24 +57,30 @@ button, input, select { font-family: var(--font); }
 .look { --wall: radial-gradient(ellipse 75% 48% at 18% 104%, #8ea88f, rgb(142 168 143 / 0) 72%), radial-gradient(ellipse 85% 52% at 88% 108%, #a9b69a, rgb(169 182 154 / 0) 70%), linear-gradient(180deg, #a7c1da 0%, #d3dee6 56%, #e7e2d5 100%);
   --bar: rgb(246 246 248 / .62); --bar-ink: #1d1d1f; --glass: rgb(255 255 255 / .8); --lift: 0 6px 18px rgb(0 0 0 / .16), 0 1px 3px rgb(0 0 0 / .12);
   --win: #ffffff; --win-bar: #f3f3f4; --win-ink: #1d1d1f; --win-dim: #8a8a8e; --win-rule: rgb(0 0 0 / .08); --win-shadow: 0 10px 30px rgb(0 0 0 / .22), 0 0 0 .5px rgb(0 0 0 / .18);
-  --metal: linear-gradient(#e2e3e6, #b7b9be); --metal-edge: #9fa1a6;
-  display: flex; flex-direction: column; align-items: center; margin: 0 0 14px; padding: 22px 18px 14px; border-radius: var(--radius-section); background: var(--section); }
+  --metal: linear-gradient(#eeeff1 0%, #d6d7db 40%, #b3b5ba 100%); --metal-light: #ffffff; --metal-edge: #8e9095; --rim: #5d5e63;
+  display: flex; flex-direction: column; align-items: center; margin: 0 0 14px; padding: 22px 18px 26px; border-radius: var(--radius-section); background: var(--section); }
 @media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .look { --wall: radial-gradient(ellipse 75% 48% at 18% 104%, #1d3434, rgb(29 52 52 / 0) 72%), radial-gradient(ellipse 85% 52% at 88% 108%, #233128, rgb(35 49 40 / 0) 70%), linear-gradient(180deg, #0e1828 0%, #1a2634 56%, #22282a 100%);
   --bar: rgb(30 30 32 / .55); --bar-ink: #f5f5f7; --glass: rgb(46 46 50 / .84); --lift: 0 6px 18px rgb(0 0 0 / .5), 0 0 0 .5px rgb(255 255 255 / .1);
   --win: #1e1e1f; --win-bar: #2b2b2d; --win-ink: #ececee; --win-dim: #8d8d92; --win-rule: rgb(255 255 255 / .08); --win-shadow: 0 10px 30px rgb(0 0 0 / .55), 0 0 0 .5px rgb(255 255 255 / .12);
-  --metal: linear-gradient(#55565b, #2f3034); --metal-edge: #1f2023; } }
+  --metal: linear-gradient(#66676c 0%, #46474c 40%, #2c2d31 100%); --metal-light: #8d8e93; --metal-edge: #17181b; --rim: #3a3b40; } }
 :root[data-theme='dark'] .look { --wall: radial-gradient(ellipse 75% 48% at 18% 104%, #1d3434, rgb(29 52 52 / 0) 72%), radial-gradient(ellipse 85% 52% at 88% 108%, #233128, rgb(35 49 40 / 0) 70%), linear-gradient(180deg, #0e1828 0%, #1a2634 56%, #22282a 100%);
   --bar: rgb(30 30 32 / .55); --bar-ink: #f5f5f7; --glass: rgb(46 46 50 / .84); --lift: 0 6px 18px rgb(0 0 0 / .5), 0 0 0 .5px rgb(255 255 255 / .1);
   --win: #1e1e1f; --win-bar: #2b2b2d; --win-ink: #ececee; --win-dim: #8d8d92; --win-rule: rgb(255 255 255 / .08); --win-shadow: 0 10px 30px rgb(0 0 0 / .55), 0 0 0 .5px rgb(255 255 255 / .12);
-  --metal: linear-gradient(#55565b, #2f3034); --metal-edge: #1f2023; }
+  --metal: linear-gradient(#66676c 0%, #46474c 40%, #2c2d31 100%); --metal-light: #8d8e93; --metal-edge: #17181b; --rim: #3a3b40; }
 
-/* The lid: a thin black bezel with the notch, and the screen at 16:10. */
-.look-mac { position: relative; width: 100%; max-width: 470px; box-sizing: border-box; padding: 7px 7px 9px; border-radius: 16px 16px 5px 5px; background: #0b0b0c; box-shadow: inset 0 0 0 1px #2a2a2c, 0 1px 0 rgb(255 255 255 / .04); }
-.look-notch { position: absolute; top: 7px; left: 50%; width: 15%; height: 10px; border-radius: 0 0 5px 5px; background: #0b0b0c; translate: -50% 0; }
-.look-base { position: relative; width: calc(min(100%, 470px) * 1.12); height: 8px; border-radius: 1px 1px 9px 9px / 1px 1px 6px 6px; background: var(--metal); box-shadow: inset 0 -1px 0 var(--metal-edge), 0 6px 12px -6px rgb(0 0 0 / .35); }
-.look-base::after { content: ''; position: absolute; top: 0; left: 50%; width: 15%; height: 3px; border-radius: 0 0 4px 4px; background: var(--metal-edge); opacity: .55; translate: -50% 0; }
+/* The lid, seen from the front: an aluminium rim, the black bezel inside it (a little deeper under the
+   screen, as on the Mac), the screen with rounded corners at 16:10 and the notch over its top edge. */
+.look-mac { position: relative; width: 100%; max-width: 470px; box-sizing: border-box; padding: 11px 11px 15px; border-radius: 20px 20px 13px 13px; background: linear-gradient(180deg, #151517, #0a0a0b);
+  box-shadow: inset 0 0 0 1.5px var(--rim), inset 0 0 0 3px #0a0a0b, 0 1px 0 rgb(255 255 255 / .05); }
+.look-notch { position: absolute; top: 11px; left: 50%; width: 15%; height: 9px; border-radius: 0 0 6px 6px; background: #0a0a0b; translate: -50% 0; }
+/* The base: a slab a little wider than the lid, bright along its top edge, with the scoop for a thumb at
+   the front, standing on the shadow it throws. */
+.look-base { position: relative; width: calc(min(100%, 470px) * 1.14); height: 13px; margin-top: 1px; border-radius: 3px 3px 14px 14px / 3px 3px 9px 9px; background: var(--metal);
+  box-shadow: inset 0 1px 0 var(--metal-light), inset 0 -1.5px 0 var(--metal-edge), 0 1px 0 rgb(0 0 0 / .2); }
+.look-base::after { content: ''; position: absolute; top: 0; left: 50%; width: 17%; height: 4px; border-radius: 0 0 6px 6px; background: var(--metal-edge); opacity: .6; translate: -50% 0; }
+.look-base::before { content: ''; position: absolute; left: 4%; right: 4%; bottom: -14px; height: 16px; border-radius: 50%; background: radial-gradient(ellipse at 50% 0, rgb(0 0 0 / .38), rgb(0 0 0 / 0) 70%); }
 /* The dots, pill and orb at a believable share of the screen; Appearance's sizes scale them as the app does. */
-.look-screen { --s: .6; position: relative; aspect-ratio: 16 / 10; overflow: hidden; border-radius: 9px 9px 2px 2px; background: var(--wall); font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+.look-screen { --s: .6; position: relative; aspect-ratio: 16 / 10; overflow: hidden; border-radius: 10px; background: var(--wall); font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
 .look[data-size='small'] .look-screen { --s: .49; }
 .look[data-size='large'] .look-screen { --s: .73; }
 
@@ -124,4 +130,4 @@ button, input, select { font-family: var(--font); }
 .look[data-edge='left'] .look-hint { translate: calc(19px * var(--s) + 7px) -50%; }
 .look[data-edge='right'] .look-hint { translate: calc(-100% - 19px * var(--s) - 7px) -50%; }
 .look[data-moment='idle']:not([data-quiet]) .look-dots, .look[data-moment='hover'] :is(.look-pill, .look-hint, .look-pointer), .look[data-moment='talking'] .look-orb { opacity: 1; scale: 1; }
-.look figcaption { display: flex; align-items: center; justify-content: space-between; gap: 12px; align-self: stretch; margin: 16px 0 0; font-size: 13px; color: var(--ink-2); }
+.look figcaption { display: flex; align-items: center; justify-content: space-between; gap: 12px; align-self: stretch; margin: 26px 0 0; font-size: 13px; color: var(--ink-2); }

@@ -1,6 +1,6 @@
 // The app in a browser: real settings kept in memory, a sample status, and each feature's own commands
 // from its file here. Nothing leaves the page and nothing persists past a reload.
-import { chordProblem, type Chord, type Settings, type Status } from '../store';
+import { chordProblem, SOUNDS, type Chord, type Settings, type Status } from '../store';
 import { register as input } from './input';
 import { register as speech } from './speech';
 import { register as notes } from './notes';
@@ -30,7 +30,7 @@ const DEFAULTS: Settings = {
   version: 1,
   general: { menuBarIcon: true },
   shortcuts: { dictate: 'fn', handsFree: true, command: 'control', note: null, meeting: null, pasteLast: null },
-  dictation: { language: 'auto', translateToEnglish: false, liveTyping: true, removeFillers: true, sounds: true, model: 'turbo' },
+  dictation: { language: 'auto', translateToEnglish: false, liveTyping: true, removeFillers: true, sounds: true, soundVolume: 0.3, startSound: 'Tink', stopSound: 'Pop', model: 'turbo' },
   vocabulary: { words: [], replacements: [], learn: true, suggestions: [] },
   apps: {
     defaultStyle: 'default',
@@ -44,7 +44,7 @@ const DEFAULTS: Settings = {
   },
   notes: { folder: null, fileName: '{date} {title}', frontmatter: true, dailyNote: false, tags: [], claudeTitle: true, claudeActions: false },
   meetings: { folder: null, systemAudio: true, summarize: true, you: 'You', others: 'Others' },
-  claude: { enabled: false, model: 'claude-haiku-5-5', commands: true, claudeCode: null, projectFolder: null },
+  claude: { enabled: false, via: 'api', model: 'claude-haiku-5-5', commands: true, claudeCode: null, projectFolder: null },
   agents: { mcp: true, shareHistory: false, shareNotes: true, shareMeetings: true, allowWrite: false },
   history: { keep: 'week' },
   appearance: { theme: 'system', edge: 'bottom', size: 'medium', idle: 'dots', hint: true },
@@ -76,12 +76,13 @@ const chord: Check = value => value === null || (object(value) && chordProblem(v
 const SCHEMA: Record<string, Record<string, Check>> = {
   general: { menuBarIcon: bool },
   shortcuts: { dictate: oneOf('fn', 'rightCommand', 'rightOption', 'rightControl', 'rightShift'), handsFree: bool, command: oneOf('control', 'option', 'command', 'shift', 'off'), note: chord, meeting: chord, pasteLast: chord },
-  dictation: { language: value => value === 'auto' || LANGUAGES.has(value as string), translateToEnglish: bool, liveTyping: bool, removeFillers: bool, sounds: bool, model: oneOf('turbo', 'small') },
+  dictation: { language: value => value === 'auto' || LANGUAGES.has(value as string), translateToEnglish: bool, liveTyping: bool, removeFillers: bool, sounds: bool,
+    soundVolume: value => typeof value === 'number' && Number.isFinite(value), startSound: oneOf(...SOUNDS), stopSound: oneOf(...SOUNDS), model: oneOf('turbo', 'small') },
   vocabulary: { words: listOf(text), replacements: listOf(pair => object(pair) && text(pair.from) && text(pair.to)), learn: bool, suggestions: listOf(text) },
   apps: { styles: listOf(app => object(app) && text(app.bundleId) && text(app.name) && STYLES.includes(app.style as string) && (app.polish === undefined || bool(app.polish))), defaultStyle: oneOf(...STYLES) },
   notes: { folder, fileName: value => typeof value === 'string' && !/[/:\0]/.test(value) && !value.trimStart().startsWith('.'), frontmatter: bool, dailyNote: bool, tags: listOf(text), claudeTitle: bool, claudeActions: bool },
   meetings: { folder, systemAudio: bool, summarize: bool, you: text, others: text },
-  claude: { enabled: bool, model: oneOf('claude-haiku-5-5', 'claude-sonnet-5-5', 'claude-opus-5-5'), commands: bool, claudeCode: folder, projectFolder: folder },
+  claude: { enabled: bool, via: oneOf('api', 'claudeCode'), model: oneOf('claude-haiku-5-5', 'claude-sonnet-5-5', 'claude-opus-5-5'), commands: bool, claudeCode: folder, projectFolder: folder },
   agents: { mcp: bool, shareHistory: bool, shareNotes: bool, shareMeetings: bool, allowWrite: bool },
   history: { keep: oneOf('off', 'day', 'week', 'month', 'forever') },
   appearance: { theme: oneOf('system', 'light', 'dark'), edge: oneOf('bottom', 'left', 'right'), size: oneOf('small', 'medium', 'large'), idle: oneOf('dots', 'hidden'), hint: bool },
@@ -150,11 +151,12 @@ mock.handle('get_settings', () => copy(settings));
 mock.handle('update_settings', ({ patch }) => {
   if (!object(patch)) throw 'Invalid settings';
   const request = copy(patch);
-  if (object(request.claude)) delete request.claude.enabled; // only the app turns Claude on, once a key is tested
+  if (object(request.claude)) { delete request.claude.enabled; delete request.claude.via; } // only the app turns Claude on, once a connection is tested
   return mock.update(request);
 });
 mock.handle('reset_settings', () => { settings = { ...copy(DEFAULTS), claude: { ...copy(DEFAULTS.claude), enabled: settings.claude.enabled } }; return changed(); });
 mock.handle('status', () => copy(status));
+mock.handle('play_sound', () => {}); // a browser has none of the Mac's sounds
 mock.handle('set_enabled', ({ enabled }) => {
   status.enabled = !!enabled;
   if (!enabled) { Object.assign(status, { modelReady: false, modelPreparing: false, modelMessage: 'Voice is off. Your local model is kept for next time.' }); return; }

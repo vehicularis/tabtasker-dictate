@@ -79,6 +79,10 @@ impl Default for Shortcuts {
 #[serde(rename_all = "camelCase")]
 pub enum Model { Turbo, Small }
 
+/// The Mac's own alert sounds, in /System/Library/Sounds, which the cues are chosen from.
+pub const SOUNDS: [&str; 14] = ["Basso", "Blow", "Bottle", "Frog", "Funk", "Glass", "Hero", "Morse", "Ping", "Pop", "Purr", "Sosumi", "Submarine", "Tink"];
+const DEFAULT_VOLUME: f64 = 0.3;
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Dictation {
@@ -88,10 +92,17 @@ pub struct Dictation {
   pub live_typing: bool,
   pub remove_fillers: bool,
   pub sounds: bool,
+  /// 0 to 1, for both cues.
+  pub sound_volume: f64,
+  /// The cues as listening starts and stops, by name in `SOUNDS`.
+  pub start_sound: String,
+  pub stop_sound: String,
   pub model: Model,
 }
 impl Default for Dictation {
-  fn default() -> Self { Self { language: "auto".into(), translate_to_english: false, live_typing: true, remove_fillers: true, sounds: true, model: Model::Turbo } }
+  fn default() -> Self {
+    Self { language: "auto".into(), translate_to_english: false, live_typing: true, remove_fillers: true, sounds: true, sound_volume: DEFAULT_VOLUME, start_sound: "Tink".into(), stop_sound: "Pop".into(), model: Model::Turbo }
+  }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -168,17 +179,25 @@ pub enum ClaudeModel {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Claude {
-  /// On only once a key is saved in the Keychain and tested. Pages can't set it and a loaded file
-  /// never turns it on: only Rust does, through `update`, after testing the key or finding it at launch.
+  /// On only once the way to Claude works: a key saved in the Keychain and tested, or Claude Code signed
+  /// in and tested. Pages can't set it and a loaded file never turns it on: only Rust does, through
+  /// `update`, after a test or finding the key at launch.
   pub enabled: bool,
+  /// Anthropic's API with the person's own key, or the Claude Code on this Mac with their Claude account.
+  /// Set by Rust with `enabled`, as a connection is made; pages can't set it.
+  pub via: ClaudeVia,
   pub model: ClaudeModel,
   pub commands: bool,
   pub claude_code: Option<String>,
   pub project_folder: Option<String>,
 }
 impl Default for Claude {
-  fn default() -> Self { Self { enabled: false, model: ClaudeModel::Haiku, commands: true, claude_code: None, project_folder: None } }
+  fn default() -> Self { Self { enabled: false, via: ClaudeVia::Api, model: ClaudeModel::Haiku, commands: true, claude_code: None, project_folder: None } }
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ClaudeVia { Api, ClaudeCode }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -269,12 +288,15 @@ impl Settings {
     folder(&self.notes.folder) && folder(&self.meetings.folder) && folder(&self.claude.claude_code) && folder(&self.claude.project_folder)
       && chords.iter().all(|chord| chord.valid()) && distinct
       && !file_name.contains(['/', ':', '\0']) && !file_name.trim_start().starts_with('.')
+      && SOUNDS.contains(&self.dictation.start_sound.as_str()) && SOUNDS.contains(&self.dictation.stop_sound.as_str())
       && (language == "auto" || (0..=whisper_rs::get_lang_max_id()).any(|id| whisper_rs::get_lang_str(id) == Some(language.as_str())))
   }
 
   /// Lengths and lists cut to what the app handles; empty names back to their defaults.
   fn clamp(&mut self) {
     self.version = VERSION;
+    let volume = &mut self.dictation.sound_volume;
+    *volume = if volume.is_finite() { volume.clamp(0.0, 1.0) } else { DEFAULT_VOLUME };
     let vocabulary = &mut self.vocabulary;
     clip_list(&mut vocabulary.words, MAX_LIST, MAX_WORD);
     clip_list(&mut vocabulary.suggestions, MAX_LIST, MAX_WORD);
@@ -454,7 +476,7 @@ pub fn get_settings() -> Settings { get() }
 #[tauri::command]
 pub fn update_settings(app: AppHandle, mut patch: Value) -> Result<Settings, String> {
   if !patch.is_object() { return Err("Invalid settings".into()); }
-  if let Some(claude) = patch.get_mut("claude").and_then(Value::as_object_mut) { claude.remove("enabled"); }
+  if let Some(claude) = patch.get_mut("claude").and_then(Value::as_object_mut) { claude.remove("enabled"); claude.remove("via"); }
   update(&app, &patch)
 }
 
@@ -482,18 +504,42 @@ mod tests {
   }
 
   #[test]
+  fn the_cues_are_the_macs_own_sounds_at_a_volume_between_silent_and_full() {
+    let base = Settings::default();
+    let chosen = base.patched(&json!({ "dictation": { "startSound": "Glass", "stopSound": "Submarine", "soundVolume": 0.75 } }));
+    assert_eq!((chosen.dictation.start_sound.as_str(), chosen.dictation.stop_sound.as_str(), chosen.dictation.sound_volume), ("Glass", "Submarine", 0.75));
+    // A name that isn't one of the Mac's sounds keeps the old one; a volume past the ends is brought back.
+    let refused = chosen.patched(&json!({ "dictation": { "startSound": "../Evil", "stopSound": "", "soundVolume": 4.5 } }));
+    assert_eq!((refused.dictation.start_sound.as_str(), refused.dictation.stop_sound.as_str(), refused.dictation.sound_volume), ("Glass", "Submarine", 1.0));
+    assert_eq!(chosen.patched(&json!({ "dictation": { "soundVolume": -2 } })).dictation.sound_volume, 0.0);
+    assert_eq!(chosen.patched(&json!({ "dictation": { "soundVolume": "loud" } })).dictation.sound_volume, 0.75);
+    for name in SOUNDS { assert!(Path::new(&format!("/System/Library/Sounds/{name}.aiff")).is_file(), "{name}"); }
+  }
+
+  #[test]
+  fn only_rust_chooses_how_claude_is_reached() {
+    let base = Settings::default();
+    assert_eq!(base.patched(&json!({ "claude": { "via": "claudeCode" } })).claude.via, ClaudeVia::ClaudeCode);
+    assert_eq!(base.patched(&json!({ "claude": { "via": "carrier pigeon" } })).claude.via, ClaudeVia::Api);
+    // What a page sends loses `enabled` and `via` before it is applied (update_settings), as the mock does too.
+    let mut page = json!({ "claude": { "enabled": true, "via": "claudeCode", "model": "claude-opus-5-5" } });
+    if let Some(claude) = page.get_mut("claude").and_then(Value::as_object_mut) { claude.remove("enabled"); claude.remove("via"); }
+    assert_eq!(page, json!({ "claude": { "model": "claude-opus-5-5" } }));
+  }
+
+  #[test]
   fn defaults_are_the_documented_ones_in_camel_case() {
     let value = serde_json::to_value(Settings::default()).unwrap();
     assert_eq!(value["version"], 1);
     assert_eq!(value["general"], json!({ "menuBarIcon": true }));
     assert_eq!(value["shortcuts"], json!({ "dictate": "fn", "handsFree": true, "command": "control", "note": null, "meeting": null, "pasteLast": null }));
-    assert_eq!(value["dictation"], json!({ "language": "auto", "translateToEnglish": false, "liveTyping": true, "removeFillers": true, "sounds": true, "model": "turbo" }));
+    assert_eq!(value["dictation"], json!({ "language": "auto", "translateToEnglish": false, "liveTyping": true, "removeFillers": true, "sounds": true, "soundVolume": 0.3, "startSound": "Tink", "stopSound": "Pop", "model": "turbo" }));
     assert_eq!(value["vocabulary"], json!({ "words": [], "replacements": [], "learn": true, "suggestions": [] }));
     assert_eq!(value["apps"]["defaultStyle"], "default");
     assert!(value["apps"]["styles"].as_array().unwrap().iter().any(|app| app["bundleId"] == "com.apple.Terminal" && app["style"] == "code" && app["polish"] == false));
     assert_eq!(value["notes"], json!({ "folder": null, "fileName": "{date} {title}", "frontmatter": true, "dailyNote": false, "tags": [], "claudeTitle": true, "claudeActions": false }));
     assert_eq!(value["meetings"], json!({ "folder": null, "systemAudio": true, "summarize": true, "you": "You", "others": "Others" }));
-    assert_eq!(value["claude"], json!({ "enabled": false, "model": "claude-haiku-5-5", "commands": true, "claudeCode": null, "projectFolder": null }));
+    assert_eq!(value["claude"], json!({ "enabled": false, "via": "api", "model": "claude-haiku-5-5", "commands": true, "claudeCode": null, "projectFolder": null }));
     assert_eq!(value["agents"], json!({ "mcp": true, "shareHistory": false, "shareNotes": true, "shareMeetings": true, "allowWrite": false }));
     assert_eq!(value["history"], json!({ "keep": "week" }));
     assert_eq!(value["appearance"], json!({ "theme": "system", "edge": "bottom", "size": "medium", "idle": "dots", "hint": true }));

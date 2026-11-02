@@ -144,6 +144,12 @@ button { font: inherit; color: inherit; }
 .setup .head svg { flex: none; border-radius: 9px; }
 .setup kbd { padding: 1px 6px; border-radius: 5px; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--ink); background: color-mix(in srgb, var(--ink) 10%, transparent); }
 .link { padding: 0; border: 0; background: none; color: var(--accent-ink); font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+/* Quick settings: Settings' switch, in the card. */
+.switch { position: relative; flex: none; width: 36px; height: 20px; padding: 0; border: 0; border-radius: 10px; background: var(--input); cursor: pointer; transition: background .25s var(--ease); }
+.switch .knob { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--knob); box-shadow: var(--shadow); transition: transform .25s var(--ease); }
+.switch[aria-checked='true'] { background: var(--accent); }
+.switch[aria-checked='true'] .knob { transform: translateX(16px); }
+.quick .ask { font-size: 12.5px; line-height: 1.35; color: var(--ink-3); }
 /* Raised rows, as in Settings. */
 .ways { display: flex; flex-direction: column; gap: 5px; margin: 0; padding: 0; list-style: none; }
 .ways li { display: flex; align-items: center; gap: 12px; min-height: 44px; box-sizing: border-box; padding: 8px 12px; border-radius: 12px; background: var(--surface-2); box-shadow: var(--elev-raised); }

@@ -23,7 +23,7 @@ const GROUPS: { name: string; pages: Page[] }[] = [
     { route: 'shortcuts', title: 'Shortcuts', icon: 'keyboard', Page: Shortcuts, keywords: 'fn key dictate hands-free double tap command modifier chord note meeting paste last' },
   ] },
   { name: 'Speech', pages: [
-    { route: 'dictation', title: 'Dictation', icon: 'waveform', Page: Dictation, keywords: 'language translate english live typing fillers um sounds whisper model turbo small' },
+    { route: 'dictation', title: 'Dictation', icon: 'waveform', Page: Dictation, keywords: 'language translate english live typing fillers um sounds volume start stop cue chime whisper model turbo small' },
     { route: 'vocabulary', title: 'Vocabulary', icon: 'book', Page: Vocabulary, keywords: 'words names terms spelling replacements learn suggestions' },
     { route: 'apps', title: 'App styles', icon: 'apps', Page: AppStyles, keywords: 'style casual formal code raw polish apps' },
   ] },
@@ -32,7 +32,7 @@ const GROUPS: { name: string; pages: Page[] }[] = [
     { route: 'meetings', title: 'Meetings', icon: 'meeting', Page: Meetings, keywords: 'record system audio summary decisions speakers labels folder' },
   ] },
   { name: 'Connections', pages: [
-    { route: 'claude', title: 'Claude', icon: 'claude', Page: Claude, keywords: 'anthropic api key model haiku sonnet opus commands polish claude code project' },
+    { route: 'claude', title: 'Claude', icon: 'claude', Page: Claude, keywords: 'anthropic api key account subscription sign in model haiku sonnet opus commands polish claude code project' },
     { route: 'agents', title: 'Agents (MCP)', icon: 'agents', Page: Agents, keywords: 'mcp server claude code desktop share notes meetings history write' },
   ] },
   { name: 'App', pages: [
@@ -86,11 +86,11 @@ export function Settings() {
     go(next.dataset.route!);
   };
 
-  // The workspace shell from TabTasker Business: a rail panel and the page as a raised island on a tinted
-  // frame. The traffic lights sit in the rail's corner, beside its title; the frame and that row drag.
+  // The workspace shell from TabTasker Business: a title strip with the traffic lights, then a rail panel
+  // and the page as a raised island on a tinted frame. The strip and the frame drag the window.
   return <div className="window" data-tauri-drag-region>
+    <header className="titlebar" data-tauri-drag-region><span data-tauri-drag-region>Settings</span></header>
     <nav ref={nav} className="rail" aria-label="Settings" onKeyDown={arrows}>
-      <p className="rail-title" data-tauri-drag-region>Settings</p>
       <label className="search">
         <Icon name="search" size={15} />
         <input ref={search} type="search" placeholder="Search" aria-label="Search settings" value={query} spellCheck={false}

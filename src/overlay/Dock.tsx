@@ -6,7 +6,7 @@ import { Orb } from './Orb';
 /// The dictate key as the hint and Appearance's preview name it.
 export const KEY_NAMES: Record<DictateKey, string> = { fn: 'fn', rightCommand: 'right ⌘', rightOption: 'right ⌥', rightControl: 'right ⌃', rightShift: 'right ⇧' };
 
-// The dots, the pill they open into on hover, and the orb they become while you talk. `quiet` dots
+// The dots, the pill they open into on hover (a note, and the quick settings), and the orb they become while you talk. `quiet` dots
 // (Appearance › idle hidden) are not drawn and take no clicks until the key is held.
 export function Dock({ mode, menu, dots, label, hint, quiet, level, typing, onHover, onMenu, onGrab, onDots, onNote, onSetup, onOrb }: {
   mode: string; menu: ReactNode; dots: RefObject<HTMLButtonElement | null>; label: string; hint: boolean; quiet: boolean; level: { current: number }; typing: boolean;
@@ -22,7 +22,7 @@ export function Dock({ mode, menu, dots, label, hint, quiet, level, typing, onHo
     </button>
     <div className="glass pill" data-glass data-hit aria-hidden={mode !== 'hover'} onPointerDown={onGrab}>
       <button type="button" aria-label="Take a note" title="Take a note" tabIndex={mode === 'hover' ? 0 : -1} onClick={onNote}><NoteIcon /></button>
-      <button type="button" aria-label="Set up" title="Set up" tabIndex={mode === 'hover' ? 0 : -1} onClick={onSetup}><GearIcon /></button>
+      <button type="button" aria-label="Quick settings" title="Quick settings" tabIndex={mode === 'hover' ? 0 : -1} onClick={onSetup}><GearIcon /></button>
     </div>
     <Orb mode={mode} level={level} typing={typing} onClick={onOrb} />
     {hint && <span className="label" aria-hidden="true"><span className="glass"><kbd>{key}</kbd> hold to type</span></span>}

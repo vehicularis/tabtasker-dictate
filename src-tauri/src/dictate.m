@@ -194,6 +194,8 @@ typedef NS_ENUM(NSUInteger, TTVoicePhase) { TTVoiceIdle, TTVoiceListening, TTVoi
 @property NSEventModifierFlags commandFlag;
 @property (copy) NSDictionary<NSString *, NSArray<NSNumber *> *> *chords;
 @property BOOL handsFree, liveTyping, sounds;
+@property double soundVolume; // 0 to 1
+@property (copy) NSString *startSound, *stopSound; // names in /System/Library/Sounds
 // A hold that speaks to Claude, and a session a double tap keeps listening without the key.
 @property BOOL commanding, locked;
 @property (strong) NSRunningApplication *app; // in front as the hold began: where its words go
@@ -345,7 +347,7 @@ static void TTVoiceBringForward(NSRunningApplication *app, void (^then)(BOOL fro
 }
 @synthesize phase = _phase;
 - (instancetype)init {
-  if ((self = [super init])) { _key = TTKeyFn; _handsFree = _liveTyping = _sounds = YES; }
+  if ((self = [super init])) { _key = TTKeyFn; _handsFree = _liveTyping = _sounds = YES; _soundVolume = 0.3; _startSound = @"Tink"; _stopSound = @"Pop"; }
   return self;
 }
 - (const char *)phaseName {
@@ -448,19 +450,23 @@ static void TTVoiceBringForward(NSRunningApplication *app, void (^then)(BOOL fro
   self.listeningSince = NSProcessInfo.processInfo.systemUptime;
   if (!self.engine) [self startCapture]; // otherwise the microphone opened when the key went down
   if (self.phase != TTVoiceListening) return;
-  [self chime:@"Tink"];
+  [self chime:YES];
   // A hold goes to speech whole, a minute at most, and a locked session runs to ten, transcribed as it is
   // said: tick sends them as they reach it. A note keeps only what is not yet transcribed.
   self.audio.limit = tt_hold_limit(self.noting || self.locked);
   if (self.noting) self.lastSpoke = self.listeningSince;
 }
-// A soft cue as listening starts and stops, from the Mac's own sounds.
-- (void)chime:(NSString *)name {
-  if (!self.sounds) return;
+// A soft cue as listening starts and stops, from the Mac's own sounds, as Dictation › Sounds chooses them.
+static void TTVoicePlaySound(NSString *name, double volume) {
   NSSound *sound = [NSSound soundNamed:name];
+  if (!sound) return;
   [sound stop];
-  sound.volume = 0.2;
+  sound.volume = (float)MAX(0, MIN(1, volume));
   [sound play];
+}
+- (void)chime:(BOOL)starting {
+  if (!self.sounds) return;
+  TTVoicePlaySound(starting ? self.startSound : self.stopSound, self.soundVolume);
 }
 - (void)startCapture {
   if ([AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio] != AVAuthorizationStatusAuthorized) {
@@ -557,7 +563,7 @@ static void TTVoiceBringForward(NSRunningApplication *app, void (^then)(BOOL fro
   if (self.phase != TTVoiceListening) return;
   self.phase = TTVoiceFinishing;
   [self stopCapture];
-  [self chime:@"Pop"];
+  [self chime:NO];
   NSUInteger generation = self.generation;
   double patience = tt_words_timeout(self.audio.count);
   [self transcribe];
@@ -802,6 +808,9 @@ static void TTVoiceBringForward(NSRunningApplication *app, void (^then)(BOOL fro
   self.handsFree = ![keys[@"handsFree"] isEqual:@NO];
   self.liveTyping = ![dictation[@"liveTyping"] isEqual:@NO];
   self.sounds = ![dictation[@"sounds"] isEqual:@NO];
+  self.soundVolume = [dictation[@"soundVolume"] isKindOfClass:NSNumber.class] ? [dictation[@"soundVolume"] doubleValue] : 0.3;
+  if ([dictation[@"startSound"] isKindOfClass:NSString.class]) self.startSound = dictation[@"startSound"];
+  if ([dictation[@"stopSound"] isKindOfClass:NSString.class]) self.stopSound = dictation[@"stopSound"];
   NSMutableDictionary *chords = [NSMutableDictionary new];
   for (NSString *name in @[@"note", @"meeting", @"pasteLast"]) {
     NSDictionary *chord = TTVoiceObject(keys[name]);
@@ -1110,6 +1119,10 @@ void dictate_overlay_layout(const char *json) {
   if ([values isKindOfClass:NSDictionary.class]) [overlay layout:values];
 }
 
+// Dictation › Sounds' preview of a cue, at the volume being chosen.
+void dictate_play_sound(const char *name, double volume) {
+  if (name) TTVoicePlaySound(@(name), volume);
+}
 void dictate_model_status(const char *message, int status) {
   if (!voice.enabled) return;
   voice.modelReady = status == 1; voice.modelPreparing = status == 0;
