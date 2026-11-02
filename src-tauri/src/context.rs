@@ -33,7 +33,10 @@ static HOLDS: Mutex<VecDeque<HoldContext>> = Mutex::new(VecDeque::new());
 const KEPT: usize = 16;
 
 pub fn remember(context: HoldContext) {
-  let mut holds = HOLDS.lock().unwrap_or_else(|e| e.into_inner());
+  keep(&mut HOLDS.lock().unwrap_or_else(|e| e.into_inner()), context);
+}
+
+fn keep(holds: &mut VecDeque<HoldContext>, context: HoldContext) {
   holds.retain(|hold| hold.request != context.request);
   if holds.len() >= KEPT { holds.pop_front(); }
   holds.push_back(context);
@@ -83,8 +86,11 @@ mod tests {
     assert_eq!(get("context-test").app_name, "Notes");
     forget("context-test");
     assert_eq!(get("context-test").mode, Mode::Dictate);
-    for i in 0..40 { remember(HoldContext::new(&format!("context-many-{i}"), Mode::Command, "", "")); }
-    assert!(HOLDS.lock().unwrap().len() <= KEPT);
-    assert_eq!(get("context-many-39").mode, Mode::Command);
+    // On a deque of its own: flooding the shared one would drop holds that other tests rely on.
+    let mut holds = VecDeque::new();
+    for i in 0..40 { keep(&mut holds, HoldContext::new(&format!("context-many-{i}"), Mode::Command, "", "")); }
+    assert_eq!(holds.len(), KEPT);
+    assert_eq!(holds.back().map(|hold| hold.request.as_str()), Some("context-many-39"));
+    assert_eq!(holds.front().map(|hold| hold.request.as_str()), Some("context-many-24"));
   }
 }
