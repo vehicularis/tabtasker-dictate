@@ -332,21 +332,7 @@ fn dictations(file: &Path, keep: Keep, limit: usize, now: u64) -> Vec<Value> {
 
 // ---------- time, in the Mac's time zone ----------
 
-#[repr(C)]
-struct Tm { sec: i32, min: i32, hour: i32, mday: i32, mon: i32, year: i32, wday: i32, yday: i32, isdst: i32, gmtoff: i64, zone: *const std::ffi::c_char }
-
-extern "C" {
-  fn localtime_r(clock: *const i64, result: *mut Tm) -> *mut Tm;
-}
-
-fn local(secs: u64) -> Tm {
-  // SAFETY: Tm matches macOS's struct tm, and localtime_r only writes into it.
-  unsafe {
-    let mut tm: Tm = std::mem::zeroed();
-    localtime_r(&(secs as i64), &mut tm);
-    tm
-  }
-}
+fn local(secs: u64) -> crate::history::Tm { crate::history::local(secs as i64) }
 
 fn now_ms() -> u64 { SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |since| since.as_millis() as u64) }
 
