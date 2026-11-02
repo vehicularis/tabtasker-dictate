@@ -423,6 +423,8 @@ pub fn apply(app: &AppHandle, settings: &Settings) {
   if let Ok(json) = serde_json::to_string(settings).map(|json| std::ffi::CString::new(json).unwrap_or_default()) {
     let _ = app.run_on_main_thread(move || unsafe { dictate_apply_settings(json.as_ptr()) });
   }
+  // Settings' sidebar is native vibrancy, which follows the app's appearance, not the page's theme.
+  app.set_theme(match settings.appearance.theme { Theme::System => None, Theme::Light => Some(tauri::Theme::Light), Theme::Dark => Some(tauri::Theme::Dark) });
   let _ = app.emit("dictate-settings", settings);
   crate::show_tray(app, settings.general.menu_bar_icon);
   crate::recent_changed(app); // the notes folder may have moved

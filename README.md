@@ -45,5 +45,5 @@ your words into them. If **System Settings › Keyboard › Press 🌐 key to** 
 
 ## License
 
-Apache-2.0, see [LICENSE](LICENSE). The models and libraries it uses are listed with their licenses in
+Apache-2.0, see [LICENSE](LICENSE). The voice models and whisper.cpp it uses are listed with their licenses in
 [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt).
