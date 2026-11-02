@@ -204,6 +204,13 @@ impl Default for Meetings {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Effort { Low, Medium, High }
+impl Effort {
+  pub fn as_str(self) -> &'static str { match self { Self::Low => "low", Self::Medium => "medium", Self::High => "high" } }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ClaudeModel {
   #[serde(rename = "claude-haiku-5-5")] Haiku,
   #[serde(rename = "claude-sonnet-5-5")] Sonnet,
@@ -221,6 +228,8 @@ pub struct Claude {
   /// Set by Rust with `enabled`, as a connection is made; pages can't set it.
   pub via: ClaudeVia,
   pub model: ClaudeModel,
+  /// How long Claude may think on each request: low is quickest (polish while typing), high the most careful.
+  pub effort: Effort,
   pub commands: bool,
   pub claude_code: Option<String>,
   /// A model on this Mac behind Ollama's API (LM Studio speaks it too): where, and which.
@@ -228,7 +237,7 @@ pub struct Claude {
   pub local_model: String,
 }
 impl Default for Claude {
-  fn default() -> Self { Self { enabled: false, via: ClaudeVia::Api, model: ClaudeModel::Haiku, commands: true, claude_code: None, local_endpoint: "http://localhost:11434".into(), local_model: "llama3.2".into() } }
+  fn default() -> Self { Self { enabled: false, via: ClaudeVia::Api, model: ClaudeModel::Haiku, effort: Effort::Medium, commands: true, claude_code: None, local_endpoint: "http://localhost:11434".into(), local_model: "llama3.2".into() } }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -600,7 +609,7 @@ mod tests {
     assert!(value["apps"]["styles"].as_array().unwrap().iter().any(|app| app["bundleId"] == "com.apple.Terminal" && app["style"] == "code" && app["polish"] == false));
     assert_eq!(value["notes"], json!({ "folder": null, "fileName": "{date} {title}", "frontmatter": true, "dailyNote": false, "tags": [], "claudeTitle": true, "claudeActions": false }));
     assert_eq!(value["meetings"], json!({ "folder": null, "systemAudio": true, "summarize": true, "you": "You", "others": "Others", "speakers": true, "decisions": true, "actionItems": true }));
-    assert_eq!(value["claude"], json!({ "enabled": false, "via": "api", "model": "claude-haiku-5-5", "commands": true, "claudeCode": null, "localEndpoint": "http://localhost:11434", "localModel": "llama3.2" }));
+    assert_eq!(value["claude"], json!({ "enabled": false, "via": "api", "model": "claude-haiku-5-5", "effort": "medium", "commands": true, "claudeCode": null, "localEndpoint": "http://localhost:11434", "localModel": "llama3.2" }));
     assert_eq!(value["agents"], json!({ "mcp": true, "shareHistory": false, "shareNotes": true, "shareMeetings": true, "allowWrite": false }));
     assert_eq!(value["history"], json!({ "keep": "week" }));
     assert_eq!(value["appearance"], json!({ "theme": "system", "edge": "bottom", "size": "medium", "idle": "dots", "hint": true, "margin": 8, "avoidDock": true }));

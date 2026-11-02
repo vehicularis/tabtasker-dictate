@@ -51,15 +51,14 @@ export function Sticky() {
   const folded = !!sticky?.folded;
   const item = (label: string, run: () => void, extra?: { disabled?: boolean; checked?: boolean }) => <button type="button" role={extra?.checked === undefined ? 'menuitem' : 'menuitemcheckbox'} aria-checked={extra?.checked} disabled={extra?.disabled} onClick={() => { setMenu(null); run(); }}>{extra?.checked !== undefined && <span className="tick">{extra.checked ? '✓' : ''}</span>}{label}</button>;
   return <div className="sticky" data-folded={folded || undefined} style={{ '--hue': STICKY_HUES[hue] } as CSSProperties}
-    onContextMenu={event => { event.preventDefault(); setPicking(false); setMenu({ x: Math.min(event.clientX, innerWidth - 190), y: Math.min(event.clientY, innerHeight - 10) }); }}>
+    onContextMenu={event => { event.preventDefault(); setPicking(false); setMenu({ x: Math.max(4, Math.min(event.clientX, innerWidth - 196)), y: Math.max(4, Math.min(event.clientY, Math.max(4, innerHeight - 214))) }); }}>
     <header className="sticky-bar" data-tauri-drag-region onDoubleClick={fold}>
-      <span className="sticky-swatch-wrap">
-        <button type="button" className="sticky-swatch" aria-label={`Colour: ${hue}. Change it`} aria-expanded={picking} title="Colour" onPointerDown={event => event.stopPropagation()} onClick={() => setPicking(open => !open)} />
-        {picking && <span className="sticky-palette" role="radiogroup" aria-label="Colour" onPointerDown={event => event.stopPropagation()}>
+      {picking
+        ? <span className="sticky-palette" role="radiogroup" aria-label="Colour" onPointerDown={event => event.stopPropagation()}>
           {HUES.map(one => <button key={one} type="button" role="radio" aria-checked={one === hue} aria-label={one} className="sticky-hue" style={{ '--hue': STICKY_HUES[one] } as CSSProperties} onClick={() => recolour(one)} />)}
-        </span>}
-      </span>
-      {folded && <span className="sticky-peek" data-tauri-drag-region>{firstLine(text) || 'Empty sticky'}</span>}
+        </span>
+        : <button type="button" className="sticky-swatch" aria-label={`Colour: ${hue}. Change it`} aria-expanded={picking} title="Colour" onPointerDown={event => event.stopPropagation()} onClick={() => setPicking(true)} />}
+      {folded && !picking && <span className="sticky-peek" data-tauri-drag-region>{firstLine(text) || 'Empty sticky'}</span>}
       <span className="sticky-tools">
         <button type="button" className="sticky-tool" title={folded ? 'Open it up' : 'Fold to its bar'} aria-label={folded ? 'Open the sticky up' : 'Fold the sticky to its bar'} onClick={fold}><Icon name={folded ? 'chevronDown' : 'chevronUp'} size={14} /></button>
         <button type="button" className="sticky-tool" data-on={sticky?.pinned || undefined} title={sticky?.pinned ? 'On top of everything. Click to let other windows cover it' : 'Behind other windows. Click to keep it on top'} aria-label={sticky?.pinned ? 'Let other windows cover it' : 'Keep on top of everything'} aria-pressed={!!sticky?.pinned} onClick={pin}><Icon name={sticky?.pinned ? 'pin' : 'pinOff'} size={14} /></button>

@@ -893,9 +893,25 @@ static void TTVoicePlaySound(NSString *name, double volume) {
 /// The Dock's strip on the screen that has it: its edge and thickness, read from the Dock's own
 /// accessibility tree (its one list is the Dock), which reports its size while it is hidden too. Zero
 /// when there is no Dock to ask or no leave to ask it.
+/// Without leave to read the Dock, its own preferences say enough: a Dock that hides itself, on which edge,
+/// and how big its tiles are; its strip is the tile plus the padding around it (47 points at a tile of 26).
+static CGFloat TTDockStripFromPreferences(NSRectEdge *edge) {
+  NSNumber *hides = (__bridge_transfer NSNumber *)CFPreferencesCopyAppValue(CFSTR("autohide"), CFSTR("com.apple.dock"));
+  if (![hides respondsToSelector:@selector(boolValue)] || !hides.boolValue) return 0; // a Dock that stays reserves its space itself
+  NSNumber *tile = (__bridge_transfer NSNumber *)CFPreferencesCopyAppValue(CFSTR("tilesize"), CFSTR("com.apple.dock"));
+  CGFloat size = [tile respondsToSelector:@selector(doubleValue)] ? MAX(16.0, MIN(128.0, tile.doubleValue)) : 48.0;
+  NSString *side = (__bridge_transfer NSString *)CFPreferencesCopyAppValue(CFSTR("orientation"), CFSTR("com.apple.dock"));
+  *edge = [side isEqualToString:@"left"] ? NSRectEdgeMinX : [side isEqualToString:@"right"] ? NSRectEdgeMaxX : NSRectEdgeMinY;
+  return size + 21.0;
+}
 static CGFloat TTDockStrip(NSRectEdge *edge) {
   NSRunningApplication *dock = [NSRunningApplication runningApplicationsWithBundleIdentifier:@"com.apple.dock"].firstObject;
-  if (!dock || !AXIsProcessTrusted()) { dictate_log(dock ? "dock: no leave to read the Dock (Accessibility is off)" : "dock: the Dock isn't running"); return 0; }
+  if (!dock) { dictate_log("dock: the Dock isn't running"); return 0; }
+  if (!AXIsProcessTrusted()) {
+    CGFloat guessed = TTDockStripFromPreferences(edge);
+    dictate_log([NSString stringWithFormat:@"dock: no leave to read the Dock (Accessibility is off); its preferences give a strip of %.0f", guessed].UTF8String);
+    return guessed;
+  }
   AXUIElementRef app = AXUIElementCreateApplication(dock.processIdentifier);
   CFArrayRef children = NULL;
   CGFloat thickness = 0;

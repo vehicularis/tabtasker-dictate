@@ -27,7 +27,7 @@ use tauri::{ActivationPolicy, AppHandle, Emitter, LogicalPosition, Manager, RunE
 const OVERLAY: &str = "overlay";
 const MAIN: &str = "main";
 /// The app window's places, by the first part of the hash it opens on (`notes/<path>` opens that note).
-const ROUTES: &[&str] = &["notes", "meetings", "stickies", "settings", "setup", "about"];
+const ROUTES: &[&str] = &["notes", "meetings", "stickies", "settings", "setup", "about", "help"];
 static APP: OnceLock<AppHandle> = OnceLock::new();
 /// This launch is the first and opened the full setup, so the overlay keeps its own setup card closed.
 static FIRST_RUN: AtomicBool = AtomicBool::new(false);

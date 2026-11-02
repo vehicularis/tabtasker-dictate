@@ -28,7 +28,7 @@ export type Settings = {
   apps: { styles: AppStyle[]; defaultStyle: Style };
   notes: { folder: string | null; fileName: string; frontmatter: boolean; dailyNote: boolean; tags: string[]; claudeTitle: boolean; claudeActions: boolean };
   meetings: { folder: string | null; systemAudio: boolean; summarize: boolean; you: string; others: string; speakers: boolean; decisions: boolean; actionItems: boolean };
-  claude: { enabled: boolean; via: ClaudeVia; model: ClaudeModel; commands: boolean; claudeCode: string | null; localEndpoint: string; localModel: string };
+  claude: { enabled: boolean; via: ClaudeVia; model: ClaudeModel; effort: 'low' | 'medium' | 'high'; commands: boolean; claudeCode: string | null; localEndpoint: string; localModel: string };
   agents: { mcp: boolean; shareHistory: boolean; shareNotes: boolean; shareMeetings: boolean; allowWrite: boolean };
   history: { keep: Keep };
   appearance: { theme: Theme; edge: Edge; size: Size; idle: 'dots' | 'hidden'; hint: boolean; margin: number; avoidDock: boolean };

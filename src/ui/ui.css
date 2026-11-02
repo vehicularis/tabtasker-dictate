@@ -7,6 +7,8 @@
 /* ---------- focus: a 2 px ring, 2 px out, on everything you can reach by keyboard ---------- */
 /* A ring only for keyboard focus on a control; never on a text field, which the browser counts as keyboard-focused
    whenever it holds the caret. A field shows focus by its well deepening instead. */
+/* WebKit keeps a button's native look unless told otherwise, even with a background set through a variable. */
+button { appearance: none; -webkit-appearance: none; }
 :is(button, select, a, [tabindex]):focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 :is(button, select, a, [tabindex]):focus:not(:focus-visible) { outline: none; }
 :is(input, textarea):focus { outline: none; }

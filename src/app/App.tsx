@@ -8,6 +8,7 @@ import { SettingsAI } from './pages/SettingsAI';
 import { SettingsGeneral } from './pages/SettingsGeneral';
 import { SettingsNotes } from './pages/SettingsNotes';
 import { NotesView } from './views/NotesView';
+import { HelpView } from './views/HelpView';
 import { StickiesView } from './views/StickiesView';
 
 // The app's one window, in TabTasker Business's workspace shell: a title strip with the traffic lights
@@ -25,7 +26,7 @@ const PLACES: Place[] = [
 const SETTINGS: (Place & { Page: ComponentType<PageProps> })[] = [
   { route: 'settings', title: 'General', icon: 'general', Page: SettingsGeneral },
   { route: 'settings/notes', title: 'Notes & meetings', icon: 'book', Page: SettingsNotes },
-  { route: 'settings/ai', title: 'Claude & AI', icon: 'claude', Page: SettingsAI },
+  { route: 'settings/agents', title: 'Agents', icon: 'agents', Page: SettingsAI },
   { route: 'settings/appearance', title: 'Appearance', icon: 'appearance', Page: Appearance },
 ];
 
@@ -55,7 +56,7 @@ export function App() {
   const [place, arg] = split(route);
   if (place === 'setup') return <Onboarding />;
   const setting = place === 'settings' ? (SETTINGS.find(page => page.route === route) ?? SETTINGS[0]) : null;
-  const here: Place = setting ?? PLACES.find(candidate => candidate.route === place) ?? (place === 'about' ? { route: 'about', title: 'About', icon: 'about' } : PLACES[0]);
+  const here: Place = setting ?? PLACES.find(candidate => candidate.route === place) ?? (place === 'about' ? { route: 'about', title: 'About', icon: 'about' } : place === 'help' ? { route: 'help', title: 'Help', icon: 'help' } : PLACES[0]);
   const current = (candidate: string) => candidate === (setting ? setting.route : here.route);
   const go = (to: string) => { if (to !== route) location.hash = to; };
   const props: PageProps | null = settings && { settings, update };
@@ -80,7 +81,9 @@ export function App() {
   </li>;
 
   return <div className="window" data-tauri-drag-region>
-    <header className="titlebar" data-tauri-drag-region><span className="titlebar-app" data-tauri-drag-region>TabTasker Dictate</span><span className="titlebar-page" data-tauri-drag-region>{here.title}</span></header>
+    <header className="titlebar" data-tauri-drag-region><span className="titlebar-app" data-tauri-drag-region>TabTasker Dictate</span><span className="titlebar-page" data-tauri-drag-region>{here.title}</span>
+      <button type="button" className="titlebar-help" aria-current={place === 'help' ? 'page' : undefined} onClick={() => go('help')}><Icon name="help" size={15} />Help</button>
+    </header>
     <nav ref={nav} className="rail" aria-label="TabTasker Dictate" onKeyDown={arrows}>
       <ul className="group" aria-label="Your things">{PLACES.map(link)}</ul>
       <hr className="rail-rule" />
@@ -93,6 +96,7 @@ export function App() {
       {props && place === 'meetings' && <NotesView kind="meeting" path={arg} {...props} onError={setToast} />}
       {props && place === 'stickies' && <div className="page wide"><StickiesView onError={setToast} /></div>}
       {props && place === 'about' && <div className="page"><About {...props} /></div>}
+      {props && place === 'help' && <div className="page help"><HelpView settings={props.settings} /></div>}
       {props && setting && <div className="page"><setting.Page {...props} /></div>}
     </main>
     {toast && <Toast message={toast} error onDone={hideToast} />}

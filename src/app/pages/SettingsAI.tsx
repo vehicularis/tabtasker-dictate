@@ -6,7 +6,7 @@ import { Claude } from './Claude';
 /// The model behind polish, commands, titles and summaries, and what Claude Code and Claude Desktop may read.
 export function SettingsAI(props: PageProps) {
   return <>
-    <PageHeader icon="claude" title="Claude & AI">One switch connects a model; everything it does then happens under the hood. Pick Claude Code, your own key, or a model on this Mac.</PageHeader>
+    <PageHeader icon="agents" title="Agents">The model behind titles, summaries, polish and spoken commands. Pick Claude, through Claude Code or your own key, with its model and effort, or a model running on this Mac. It then works under the hood.</PageHeader>
     <Claude {...props} />
     <Agents {...props} />
   </>;

@@ -148,7 +148,7 @@ pub(crate) fn polish_request(text: &str, style: Style, app_name: &str, model: Cl
   let system = format!(
     "You tidy up text the person dictated into {app}, styled as {style}. Fix punctuation, capitalization, obvious transcription mistakes and leftover filler words. Keep their words, meaning, language and order; don't add, answer, summarize or comment on anything. Reply with the tidied text only, without the block's tags. {rule}",
     app = in_app(app_name), style = style_words(style), rule = content_rule(&tag, "dictated text"));
-  Request { model, system, user: wrap(&tag, text), max_tokens: 4096, effort: "low", schema: None, tools: false }
+  Request { model, system, user: wrap(&tag, text), max_tokens: 4096, effort: effort(), schema: None, tools: false }
 }
 
 pub(crate) fn transform_request(instruction: &str, selection: &str, app_name: &str, model: ClaudeModel) -> Request {
@@ -157,7 +157,7 @@ pub(crate) fn transform_request(instruction: &str, selection: &str, app_name: &s
     "You edit text for the person in {app}. They selected some text and spoke an instruction; apply the instruction to the selected text. Reply with only the text that replaces the selection: no preamble, quotes, notes or Markdown unless the selection already uses it. Keep the selection's language unless the instruction asks for another. {rule}",
     app = in_app(app_name), rule = content_rule(&tag, "selected text"));
   let user = format!("Instruction, as the person said it: {}\n\n{}", instruction.trim(), wrap(&tag, selection));
-  Request { model, system, user, max_tokens: 8192, effort: "medium", schema: None, tools: false }
+  Request { model, system, user, max_tokens: 8192, effort: effort(), schema: None, tools: false }
 }
 
 pub(crate) fn spoken_request(instruction: &str, app_name: &str, model: ClaudeModel) -> Request {
@@ -169,7 +169,7 @@ pub(crate) fn spoken_request(instruction: &str, app_name: &str, model: ClaudeMod
     "type": "object", "additionalProperties": false, "required": ["reply", "text"],
     "properties": { "reply": { "type": "string", "enum": ["write", "answer"] }, "text": { "type": "string" } },
   });
-  Request { model, system, user: wrap(&tag, instruction.trim()), max_tokens: 4096, effort: "medium", schema: Some(schema), tools: true }
+  Request { model, system, user: wrap(&tag, instruction.trim()), max_tokens: 4096, effort: effort(), schema: Some(schema), tools: true }
 }
 
 /// The meeting summary's shape: a summary always, decisions and action items as Meetings in Settings has them.
@@ -183,18 +183,21 @@ fn meeting_task() -> String {
     match sections.len() { 1 => "this".to_owned(), n => format!("these {n}") }, if sections.len() == 1 { "" } else { "s" }, if sections.len() == 1 { "" } else { "s" })
 }
 
+/// How long Claude may think, as Agents in Settings has it.
+fn effort() -> &'static str { settings::get().claude.effort.as_str() }
+
 pub(crate) fn summary_request(kind: Kind, text: &str, model: ClaudeModel) -> Request {
   let (tag, what, task) = match kind {
     Kind::Meeting => (fence("transcript", text), "transcript", meeting_task()),
     Kind::Note => (fence("note", text), "note", "You find the action items in a spoken note. Reply with a Markdown task list only (`- [ ] what`), one item per thing to do, in the note's language and only from what it says. Reply with exactly NONE when it has nothing to do.".to_owned()),
   };
-  Request { model, system: format!("{task} {}", content_rule(&tag, what)), user: wrap(&tag, text), max_tokens: 8192, effort: "medium", schema: None, tools: false }
+  Request { model, system: format!("{task} {}", content_rule(&tag, what)), user: wrap(&tag, text), max_tokens: 8192, effort: effort(), schema: None, tools: false }
 }
 
 pub(crate) fn title_request(text: &str, model: ClaudeModel) -> Request {
   let tag = fence("note", text);
   let system = format!("You name notes. Reply with a short title for the note, at most eight words, in its language: no quotes, no Markdown, no full stop. {}", content_rule(&tag, "note"));
-  Request { model, system, user: wrap(&tag, text), max_tokens: 64, effort: "low", schema: None, tools: false }
+  Request { model, system, user: wrap(&tag, text), max_tokens: 64, effort: effort(), schema: None, tools: false }
 }
 
 // ---------- the call ----------
@@ -876,7 +879,7 @@ mod tests {
     assert_eq!(haiku["messages"].as_array().unwrap().len(), 1);
     assert_eq!(haiku["messages"][0]["role"], "user");
     assert_eq!(haiku["thinking"], json!({ "type": "disabled" }));
-    assert_eq!(haiku["output_config"]["effort"], "low");
+    assert_eq!(haiku["output_config"]["effort"], "medium"); // the setting's default
     assert!(haiku.get("fallbacks").is_none());
     for removed in ["temperature", "top_p", "top_k"] { assert!(haiku.get(removed).is_none()); }
     let sonnet = polish_request("a b", Style::Default, "", ClaudeModel::Sonnet).body();
@@ -948,7 +951,7 @@ mod tests {
     let args: Vec<String> = std::fs::read_to_string(dir.join("args")).unwrap().lines().map(str::to_owned).collect();
     let after = |flag: &str| args.iter().position(|arg| arg == flag).map(|at| args[at + 1].as_str());
     assert!(args.contains(&"-p".to_owned()));
-    assert_eq!((after("--output-format"), after("--model"), after("--effort"), after("--tools"), after("--setting-sources")), (Some("json"), Some("claude-sonnet-5-5"), Some("low"), Some(""), Some("")));
+    assert_eq!((after("--output-format"), after("--model"), after("--effort"), after("--tools"), after("--setting-sources")), (Some("json"), Some("claude-sonnet-5-5"), Some("medium"), Some(""), Some("")));
     assert!(args.contains(&"--no-session-persistence".to_owned()) && args.contains(&"--strict-mcp-config".to_owned()));
     assert_eq!(after("--system-prompt"), Some(request.system.as_str()));
     assert!(after("--json-schema").is_none());

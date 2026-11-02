@@ -55,10 +55,13 @@ export function Claude({ settings, update }: PageProps) {
   return <>
     <GroupHeader title="How it connects">Polish, commands, titles and summaries: through the Claude Code on this Mac, with your own Anthropic key, or with a model running on this Mac. Nothing opens; it all happens under the hood.</GroupHeader>
     <Connection claude={claude} home={status?.home} />
-    <Section title="Model" note={claude.enabled ? undefined : 'These take effect once Claude is connected.'}>
+    <Section title="Model and effort" note={claude.enabled ? undefined : 'These take effect once a model is connected.'}>
       <TileGroup>
         <Tile title="Model" detail={ABOUT[claude.model]}>
           <Segmented label="Model" value={claude.model} options={MODELS} onChange={model => void update({ claude: { model } })} />
+        </Tile>
+        <Tile title="Effort" detail={claude.via === 'local' ? 'Claude’s alone: a local model answers as it is set up in Ollama.' : { low: 'Low: quickest, best for polish while you type.', medium: 'Medium: a balance for titles, summaries and commands.', high: 'High: thinks longest; for long meetings and careful rewrites.' }[claude.effort]} dim={claude.via === 'local'}>
+          <Segmented label="Effort" value={claude.effort} options={[{ value: 'low', label: 'Low' }, { value: 'medium', label: 'Medium' }, { value: 'high', label: 'High' }]} onChange={effort => void update({ claude: { effort } })} />
         </Tile>
         <Tile title="Commands" detail={commandsHow}>
           <Toggle label="Commands" checked={claude.commands} onChange={commands => void update({ claude: { commands } })} />

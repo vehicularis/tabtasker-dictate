@@ -21,6 +21,7 @@ const PATHS = {
   history: <><path d="M3.75 10a6.25 6.25 0 1 0 1.83-4.42L3.75 7.4" /><path d="M3.75 3.75V7.4H7.4M10 6.75v3.5l2.5 1.5" /></>,
   appearance: <><circle cx="10" cy="10" r="7.25" /><path d="M10 2.75a7.25 7.25 0 0 1 0 14.5z" fill="currentColor" stroke="none" /></>,
   about: <><circle cx="10" cy="10" r="7.25" /><path d="M10 9.25v4.5M10 6.5h.01" /></>,
+  help: <><circle cx="10" cy="10" r="7.25" /><path d="M7.9 7.9a2.15 2.15 0 1 1 3.1 1.95c-.6.3-1 .8-1 1.4v.5M10 14.25h.01" /></>,
   search: <><circle cx="8.75" cy="8.75" r="5.25" /><path d="m12.75 12.75 3.75 3.75" /></>,
   chevronDown: <path d="m6 8 4 4 4-4" />,
   chevronUp: <path d="m6 12 4-4 4 4" />,

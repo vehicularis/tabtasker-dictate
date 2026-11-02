@@ -87,12 +87,15 @@ button { font: inherit; color: inherit; }
 @media (prefers-reduced-motion: reduce) { .wb-tool-glyph { transition: none; } .pill button .wb-tool-glyph { transform: none; } }
 .layer:is([data-edge='left'], [data-edge='right']) .pill { flex-direction: column; }
 /* The key's hint, beside the pill while you point at it, clear of the pill at every size. */
-.label { --clear: calc(50% + 53px * var(--scale) + 10px); position: absolute; top: 50%; left: var(--clear); display: flex; white-space: nowrap; font-size: 12.5px; pointer-events: none; transform: translate(-4px, -50%); opacity: 0; transition: opacity .15s, transform .3s var(--ease); }
+.label { --clear: calc(50% + 74px * var(--scale) + 10px); /* half the four-button pill, then a gap */ position: absolute; top: 50%; left: var(--clear); display: flex; white-space: nowrap; font-size: 12.5px; pointer-events: none; transform: translate(-4px, -50%); opacity: 0; transition: opacity .15s, transform .3s var(--ease); }
 .label > span { display: flex; align-items: center; gap: 5px; padding: 4px 11px 4px 4px; border-radius: 14px; color: var(--ink-2); }
 .label kbd { padding: 1px 6px; border-radius: 9px; background: color-mix(in srgb, var(--ink) 10%, transparent); font: inherit; font-weight: 600; color: var(--ink); }
 .layer[data-mode='hover']:not([data-card]) .spot:not(:has(.menu)) .label { opacity: 1; transform: translate(0, -50%); transition-delay: .25s; }
 .layer:is([data-edge='left'], [data-edge='right']) .label { --clear: calc(50% + 19px * var(--scale) + 10px); }
 .layer[data-edge='right'] .label { left: auto; right: var(--clear); transform: translate(4px, -50%); }
+/* On a side edge the dock is a row, and a meeting pill would sit exactly where the hint goes: the hint rises above the spot instead. */
+.layer:is([data-edge='left'], [data-edge='right']) .label { --clear: 50%; top: auto; bottom: calc(100% + 6px); left: 50%; right: auto; transform: translate(-50%, 4px); }
+.layer:is([data-edge='left'], [data-edge='right'])[data-mode='hover']:not([data-card]) .spot:not(:has(.menu)) .label { transform: translate(-50%, 0); }
 
 /* Appearance: the dots, pill and orb at three sizes; dots hidden until the key is held. */
 .layer[data-size='small'] { --scale: .82; }
