@@ -27,7 +27,7 @@ export type Settings = {
   vocabulary: { words: string[]; replacements: { from: string; to: string }[]; learn: boolean; suggestions: string[] };
   apps: { styles: AppStyle[]; defaultStyle: Style };
   notes: { folder: string | null; fileName: string; frontmatter: boolean; dailyNote: boolean; tags: string[]; claudeTitle: boolean; claudeActions: boolean };
-  meetings: { folder: string | null; systemAudio: boolean; summarize: boolean; you: string; others: string };
+  meetings: { folder: string | null; systemAudio: boolean; summarize: boolean; you: string; others: string; speakers: boolean };
   claude: { enabled: boolean; via: ClaudeVia; model: ClaudeModel; commands: boolean; claudeCode: string | null; projectFolder: string | null };
   agents: { mcp: boolean; shareHistory: boolean; shareNotes: boolean; shareMeetings: boolean; allowWrite: boolean };
   history: { keep: Keep };

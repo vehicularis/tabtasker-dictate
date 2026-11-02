@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { invoke, listen } from '../bridge';
 import type { LibraryItem } from '../store';
-import { LibraryGlyph, NoteGlyph } from './glyphs';
+import { LibraryGlyph, MeetingGlyph, NoteGlyph } from './glyphs';
 import { Icon } from '../ui/Icon';
 import { Logo, X } from './icons';
 import { PREVIEW } from './preview';
@@ -26,7 +26,7 @@ const SAMPLE: LibraryItem[] = [
 
 // The Library, from the dots: your notes and meetings, newest first, in the overlay's glass. A click opens
 // one in the editor; the whole Library, with search across everything, is a page in Settings.
-export function LibraryCard({ claudeCode, onClose, onError, onWriteNote }: { claudeCode: boolean; onClose: () => void; onError: (message: string) => void; onWriteNote: () => void }) {
+export function LibraryCard({ claudeCode, recording, onClose, onError, onWriteNote, onMeeting }: { claudeCode: boolean; recording: boolean; onClose: () => void; onError: (message: string) => void; onWriteNote: () => void; onMeeting: () => void }) {
   const [items, setItems] = useState<LibraryItem[] | null>(PREVIEW ? SAMPLE : null);
   const [folder, setFolder] = useState(PREVIEW ? 'TabTasker Dictate' : '');
   const [query, setQuery] = useState('');
@@ -63,10 +63,13 @@ export function LibraryCard({ claudeCode, onClose, onError, onWriteNote }: { cla
     </ul>
     <footer className="actions">
       <button type="button" className="btn" onClick={onWriteNote}><NoteGlyph size={16} />Write a note</button>
-      <button type="button" className="ask library-folder" title={folder ? `Your notes are Markdown files in the ${folder} folder. Show it in Finder.` : undefined} onClick={() => void invoke('show_notes', {}).catch(() => onError('Couldn’t show the folder in Finder.'))}>
-        {items ? `${items.filter(item => item.kind === 'note').length} notes, ${items.filter(item => item.kind === 'meeting').length} meetings` : ''}{folder ? <small> · in {folder}</small> : null}
-      </button>
+      <button type="button" className="btn" onClick={onMeeting}><MeetingGlyph size={16} />{recording ? 'Stop meeting' : 'Start meeting'}</button>
+      <span className="ask" />
       <button type="button" className="btn" onClick={all}><LibraryGlyph size={16} />All of it</button>
     </footer>
+    {items && <p className="library-where">
+      {`${items.filter(item => item.kind === 'note').length} notes, ${items.filter(item => item.kind === 'meeting').length} meetings`}
+      {folder && <> · Markdown files in <button type="button" title="Show the folder in Finder" onClick={() => void invoke('show_notes', {}).catch(() => onError('Couldn’t show the folder in Finder.'))}>{folder}</button></>}
+    </p>}
   </article>;
 }

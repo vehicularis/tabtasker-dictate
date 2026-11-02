@@ -52,6 +52,9 @@
 .ed-body .ProseMirror-selectednode { outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; border-radius: 4px; }
 .ed-body p.is-editor-empty:first-child::before { content: attr(data-placeholder); float: left; height: 0; color: var(--ink-3); pointer-events: none; }
 .ed-body .ProseMirror-gapcursor::after { border-top-color: var(--ink); }
+/* ProseMirror's own helpers inside empty lines: WebKit must never draw them as anything. */
+.ed-body img.ProseMirror-separator { display: inline !important; width: 0 !important; height: 0 !important; border: 0 !important; margin: 0 !important; }
+.ed-body br.ProseMirror-trailingBreak { display: inline; }
 
 /* A sticky's words: the same editor, smaller and a touch heavier, filling the paper. */
 .ed.compact { flex: 1; }

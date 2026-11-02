@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { invoke, setWindowTitle } from '../bridge';
+import { inApp, invoke, setWindowTitle } from '../bridge';
 import { Editor } from '../editor/Editor';
 import { useSettings, type NoteDoc } from '../store';
 import { applyTheme, Icon } from '../ui';
 
 const path = new URLSearchParams(location.search).get('path') ?? '';
+// In a browser, `?md=` stands in for the file's body, so a real note can be looked at in the mock.
+const seed = inApp() ? null : new URLSearchParams(location.search).get('md');
 const message = (error: unknown, fallback: string) => typeof error === 'string' ? error : fallback;
 type State = 'reading' | 'clean' | 'dirty' | 'saving' | 'saved' | 'error';
 const WORDS: Record<State, string> = { reading: '', clean: '', dirty: 'Unsaved', saving: 'Saving…', saved: 'Saved', error: 'Not saved' };
@@ -25,7 +27,8 @@ export function Note() {
   const timer = useRef<number | undefined>(undefined);
   const inFlight = useRef<Promise<void> | null>(null);
   useEffect(() => {
-    void invoke<NoteDoc>('note_read', { path }).then(found => {
+    void invoke<NoteDoc>('note_read', { path }).then(read => {
+      const found = seed === null ? read : { ...read, body: seed };
       setDoc(found); setTitle(found.title); latest.current = { title: found.title, body: found.body }; setState('clean');
       setWindowTitle(found.title || 'Note');
     }, error => { setProblem(message(error, 'This note isn’t there any more.')); setState('error'); });

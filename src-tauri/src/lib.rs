@@ -11,6 +11,7 @@ pub mod mcp;
 pub mod meeting;
 pub mod notes;
 pub mod settings;
+pub mod speakers;
 pub mod speech;
 pub mod stickies;
 pub mod text;

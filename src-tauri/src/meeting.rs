@@ -31,7 +31,7 @@ const JITTER: u64 = RATE as u64 / 10;
 /// A meeting stops, or won't start, with less free space than this: about an hour and a half of audio.
 const LOW_DISK: u64 = 512 * 1024 * 1024;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Source { Mic, System }
 const SOURCES: [Source; 2] = [Source::Mic, Source::System];
@@ -40,9 +40,47 @@ impl Source {
   fn file(self) -> &'static str { match self { Self::Mic => "mic.pcm", Self::System => "system.pcm" } }
 }
 
-/// Words heard in one stream, `start` and `end` in samples from the start of the meeting.
+/// Words heard in one stream, `start` and `end` in samples from the start of the meeting. `speaker` is
+/// the voice that said them, once the voices are told apart (speakers.rs); None until then, or when no
+/// voice was found there.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Line { pub source: Source, pub start: u64, pub end: u64, pub text: String }
+pub struct Line { pub source: Source, pub start: u64, pub end: u64, pub text: String, #[serde(default, skip_serializing_if = "Option::is_none")] pub speaker: Option<u32> }
+
+/// Each line of `source` takes the voice that spoke for most of it; a line no voice covers keeps none.
+fn assign_speakers(lines: &mut [Line], source: Source, turns: &[crate::speakers::Turn]) {
+  for line in lines.iter_mut().filter(|line| line.source == source) {
+    let mut best: Option<(u64, u32)> = None;
+    for turn in turns {
+      let overlap = turn.end.min(line.end).saturating_sub(turn.start.max(line.start));
+      if overlap > 0 && best.is_none_or(|(most, _)| overlap > most) { best = Some((overlap, turn.speaker)); }
+    }
+    line.speaker = best.map(|(_, speaker)| speaker);
+  }
+}
+
+/// What each voice is called. The microphone's main voice, by time spoken, is `you`; every other voice is
+/// numbered in order of first appearance, Speaker 1, Speaker 2 and on; a stream whose voices weren't told
+/// apart keeps its own label, `you` for the microphone and `others` for the Mac's sound.
+fn speaker_names(lines: &[Line], you: &str, others: &str) -> std::collections::HashMap<(Source, Option<u32>), String> {
+  let (you, others) = (label(you, "You"), label(others, "Others"));
+  let mut spoke: std::collections::HashMap<u32, u64> = std::collections::HashMap::new();
+  for line in lines.iter().filter(|line| line.source == Source::Mic) {
+    if let Some(voice) = line.speaker { *spoke.entry(voice).or_default() += line.end.saturating_sub(line.start); }
+  }
+  let main = spoke.iter().max_by_key(|(voice, time)| (**time, std::cmp::Reverse(**voice))).map(|(voice, _)| *voice);
+  let mut names = std::collections::HashMap::new();
+  names.insert((Source::Mic, None), you.clone());
+  names.insert((Source::System, None), others);
+  if let Some(main) = main { names.insert((Source::Mic, Some(main)), you); }
+  let mut heard: Vec<&Line> = lines.iter().filter(|line| line.speaker.is_some()).collect();
+  heard.sort_by_key(|line| (line.start, line.source.index()));
+  let mut n = 0;
+  for line in heard {
+    let key = (line.source, line.speaker);
+    if !names.contains_key(&key) { n += 1; names.insert(key, format!("Speaker {n}")); }
+  }
+  names
+}
 
 /// One piece as the spool keeps it: `from..done` of its stream, and what was said there. `failed` is
 /// audio Whisper couldn't read, kept to try again.
@@ -140,18 +178,20 @@ fn label(name: &str, fallback: &str) -> String {
 /// Both streams' lines in the order they were said: one paragraph per turn, a speaker's lines that
 /// follow on within two seconds joined up to a minute long. Audio with no transcript says so where it
 /// was. Answers the Markdown (`**You** 00:01:23 words`) and a plain version for Claude
-/// (`You 00:01:23: words`).
+/// (`You 00:01:23: words`). Speakers are named by `speaker_names`.
 fn transcript(lines: &[Line], gaps: &[Gap], you: &str, others: &str) -> (String, String) {
-  struct Turn { source: Source, start: u64, end: u64, words: String, gap: bool }
+  struct Turn { who: String, source: Source, start: u64, end: u64, words: String, gap: bool }
+  let names = speaker_names(lines, you, others);
+  let name = |source: Source, speaker: Option<u32>| names.get(&(source, speaker)).or_else(|| names.get(&(source, None))).cloned().unwrap_or_default();
   let mut said: Vec<Turn> = lines.iter().filter(|line| !line.text.trim().is_empty())
-    .map(|line| Turn { source: line.source, start: line.start, end: line.end, words: line.text.trim().to_owned(), gap: false })
-    .chain(gaps.iter().map(|gap| Turn { source: gap.source, start: gap.from, end: gap.to, words: String::new(), gap: true }))
+    .map(|line| Turn { who: name(line.source, line.speaker), source: line.source, start: line.start, end: line.end, words: line.text.trim().to_owned(), gap: false })
+    .chain(gaps.iter().map(|gap| Turn { who: name(gap.source, None), source: gap.source, start: gap.from, end: gap.to, words: String::new(), gap: true }))
     .collect();
-  said.sort_by_key(|turn| (turn.start, turn.source.index()));
+  said.sort_by_key(|turn| (turn.start, turn.source.index(), turn.who.clone())); // the same moment: the microphone first
   let mut turns: Vec<Turn> = Vec::new();
   for turn in said {
     match turns.last_mut() {
-      Some(last) if !last.gap && !turn.gap && last.source == turn.source && turn.start <= last.end + 2 * RATE as u64 && turn.start < last.start + 60 * RATE as u64 => {
+      Some(last) if !last.gap && !turn.gap && last.who == turn.who && turn.start <= last.end + 2 * RATE as u64 && turn.start < last.start + 60 * RATE as u64 => {
         last.words.push(' ');
         last.words.push_str(&turn.words);
         last.end = last.end.max(turn.end);
@@ -159,13 +199,11 @@ fn transcript(lines: &[Line], gaps: &[Gap], you: &str, others: &str) -> (String,
       _ => turns.push(turn),
     }
   }
-  let (you, others) = (label(you, "You"), label(others, "Others"));
-  let name = |source: Source| if source == Source::Mic { &you } else { &others };
   let words = |turn: &Turn, italic: &str| if turn.gap {
     format!("{italic}({} not transcribed){italic}", length((turn.end - turn.start) / RATE as u64))
   } else { turn.words.clone() };
-  let markdown = turns.iter().map(|turn| format!("**{}** {} {}", name(turn.source), clock(turn.start), words(turn, "_"))).collect::<Vec<_>>().join("\n\n");
-  let plain = turns.iter().map(|turn| format!("{} {}: {}", name(turn.source), clock(turn.start), words(turn, ""))).collect::<Vec<_>>().join("\n");
+  let markdown = turns.iter().map(|turn| format!("**{}** {} {}", turn.who, clock(turn.start), words(turn, "_"))).collect::<Vec<_>>().join("\n\n");
+  let plain = turns.iter().map(|turn| format!("{} {}: {}", turn.who, clock(turn.start), words(turn, ""))).collect::<Vec<_>>().join("\n");
   (markdown, plain)
 }
 
@@ -446,6 +484,7 @@ fn text(text: *const c_char) -> Option<String> {
 extern "C" fn dictate_meeting_begin(stamp: *const c_char) -> i32 {
   REFUSED.lock().unwrap_or_else(|e| e.into_inner()).take();
   let Some(root) = ROOT.get() else { return refuse("Meetings aren’t available") };
+  crate::speakers::prepare_in_background();
   let Some(stamp) = text(stamp).filter(|stamp| stamp.len() == 16 && stamp.chars().all(|c| c.is_ascii_digit() || matches!(c, '-' | ' ' | '.'))) else { return refuse("Couldn’t start the meeting") };
   let mut meetings = state();
   if meetings.recording.is_some() { return refuse("The last meeting is still closing. Try again in a moment."); }
@@ -593,7 +632,7 @@ fn step(job: &Job, source: Source, at: &mut Progress, retry: &mut Vec<Gap>, fail
     }
     return Ok(true);
   };
-  let found: Vec<Line> = heard.into_iter().map(|segment| Line { source, start: from + segment.start as u64, end: from + segment.end as u64, text: segment.text }).collect();
+  let found: Vec<Line> = heard.into_iter().map(|segment| Line { source, start: from + segment.start as u64, end: from + segment.end as u64, text: segment.text, speaker: None }).collect();
   keep(job, &Piece { source, from, done: to, lines: found.clone(), failed: false });
   if again.is_some() { fill(&mut at.gaps, source, from, to); }
   at.lines.extend(found);
@@ -639,6 +678,30 @@ fn work(job: Arc<Job>) {
   emit(outcome);
 }
 
+/// The lines with their voices told apart, stream by stream, over the whole recording (clustering wants
+/// all of a voice). Without the models, or when a stream fails, its lines keep their stream's label.
+fn with_speakers(job: &Job, lines: &[Line]) -> Vec<Line> {
+  let mut lines = lines.to_vec();
+  let Some(root) = speech::models_root() else { return lines };
+  if !crate::speakers::ready(&root) { log::info!("meeting: the speaker models aren’t downloaded yet, so lines are labelled by stream"); return lines; }
+  emit(saving_payload(job, "Telling speakers apart"));
+  for source in SOURCES {
+    let len = job.len(source);
+    if len == 0 || !lines.iter().any(|line| line.source == source && !line.text.trim().is_empty()) { continue; }
+    let pcm = match job.spool.read(source, 0, len as usize) { Ok(pcm) => pcm, Err(e) => { log::warn!("meeting: couldn’t read the {source:?} stream for speakers: {e}"); continue; } };
+    let began = Instant::now();
+    match crate::speakers::diarize(&root, &pcm) {
+      Ok(turns) => {
+        let voices = turns.iter().map(|turn| turn.speaker).collect::<std::collections::HashSet<_>>().len();
+        log::info!("meeting: {source:?} stream: {voices} voice(s) in {} turns, {:.1}s", turns.len(), began.elapsed().as_secs_f32());
+        assign_speakers(&mut lines, source, &turns);
+      }
+      Err(e) => log::warn!("meeting: speakers in the {source:?} stream: {e}"),
+    }
+  }
+  lines
+}
+
 /// "1 part" or "3 parts".
 fn parts(n: usize) -> String { if n == 1 { "1 part".into() } else { format!("{n} parts") } }
 
@@ -666,7 +729,8 @@ fn finish(job: &Job, at: &Progress, recovered: bool) -> serde_json::Value {
   if let Some(path) = job.spool.header.saved.as_deref().filter(|_| !recovered) {
     return outcome(path, Some(format!("{} still not transcribed. The audio is kept.", parts(at.gaps.len()))));
   }
-  let (markdown, plain) = transcript(&at.lines, &at.gaps, &settings.meetings.you, &settings.meetings.others);
+  let lines = if settings.meetings.speakers { with_speakers(job, &at.lines) } else { at.lines.clone() };
+  let (markdown, plain) = transcript(&lines, &at.gaps, &settings.meetings.you, &settings.meetings.others);
   let claude = settings.claude.enabled && settings.meetings.summarize;
   if claude { emit(saving_payload(job, "Writing the summary")); }
   let summary = if claude { ai::summarize(ai::Kind::Meeting, &plain) } else { None };
@@ -778,7 +842,7 @@ mod tests {
 
   fn line(source: Source, seconds: f64, text: &str) -> Line {
     let start = (seconds * RATE as f64) as u64;
-    Line { source, start, end: start + 2 * RATE as u64, text: text.into() }
+    Line { source, start, end: start + 2 * RATE as u64, text: text.into(), speaker: None }
   }
 
   /// Speech-like audio for `seconds`, or silence with a little hiss.
@@ -811,6 +875,22 @@ mod tests {
     // Same moment: the microphone first, every time.
     let (tie, _) = transcript(&[line(Source::System, 1.0, "b"), line(Source::Mic, 1.0, "a")], &[], "You", "Others");
     assert_eq!(tie, "**You** 00:00:01 a\n\n**Others** 00:00:01 b");
+  }
+
+  #[test]
+  fn voices_told_apart_are_named_in_order_and_the_microphones_main_voice_is_you() {
+    use crate::speakers::Turn;
+    let s = RATE as u64;
+    let mut lines = vec![line(Source::Mic, 0.0, "Hello all."), line(Source::Mic, 3.0, "Thanks for coming."), line(Source::Mic, 6.0, "Glad to be here."), line(Source::System, 9.0, "Hi from the call.")];
+    // The second voice in the room speaks at 6 s; a stretch nobody covers keeps no voice.
+    assign_speakers(&mut lines, Source::Mic, &[Turn { start: 0, end: 5 * s, speaker: 0 }, Turn { start: 6 * s, end: 8 * s, speaker: 1 }]);
+    assign_speakers(&mut lines, Source::System, &[Turn { start: 9 * s, end: 11 * s, speaker: 0 }]);
+    assert_eq!(lines.iter().map(|line| line.speaker).collect::<Vec<_>>(), vec![Some(0), Some(0), Some(1), Some(0)]);
+    let (markdown, _) = transcript(&lines, &[], "Can", "Others");
+    assert_eq!(markdown, "**Can** 00:00:00 Hello all. Thanks for coming.\n\n**Speaker 1** 00:00:06 Glad to be here.\n\n**Speaker 2** 00:00:09 Hi from the call.");
+    // A line no voice covers keeps its stream's label; without any voices, the old labels stand.
+    let plain = [line(Source::Mic, 0.0, "a"), line(Source::System, 3.0, "b")];
+    assert_eq!(transcript(&plain, &[], "You", "Others").0, "**You** 00:00:00 a\n\n**Others** 00:00:03 b");
   }
 
   #[test]
@@ -973,7 +1053,7 @@ mod tests {
     let spool = Spool::create(&root, Header { stamp: "2026-11-02 14.05".into(), since_ms: 3, saved: None }).unwrap();
     let piece = |source, from, done, text: Option<&str>| Piece {
       source, from, done, failed: text.is_none(),
-      lines: text.map(|text| vec![Line { source, start: from, end: done, text: text.into() }]).unwrap_or_default(),
+      lines: text.map(|text| vec![Line { source, start: from, end: done, text: text.into(), speaker: None }]).unwrap_or_default(),
     };
     spool.record(&piece(Source::Mic, 0, 100, Some("one"))).unwrap();
     spool.record(&piece(Source::Mic, 100, 400, None)).unwrap();

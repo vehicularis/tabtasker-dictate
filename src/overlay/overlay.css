@@ -39,22 +39,22 @@ button { font: inherit; color: inherit; }
 .dock { position: fixed; display: flex; align-items: center; gap: 10px; --menu-at: translateX(-50%); }
 /* Appearance › Margin: how far the dots sit from the edge; the window itself already stops at the Dock when asked. */
 .layer { --margin: 8px; }
-.layer[data-edge='bottom'] .dock { left: 50%; bottom: var(--margin); flex-direction: column; transform: translateX(-50%); }
-.layer[data-edge='left'] .dock { left: var(--margin); top: 50%; flex-direction: row-reverse; transform: translateY(-50%); --menu-at: translateY(-50%); }
-.layer[data-edge='right'] .dock { right: var(--margin); top: 50%; flex-direction: row; transform: translateY(-50%); --menu-at: translateY(-50%); }
+.layer[data-edge='bottom'] .dock { left: 50%; bottom: calc(var(--margin) - var(--out)); flex-direction: column; transform: translateX(-50%); transition: bottom .25s var(--ease); }
+.layer[data-edge='left'] .dock { left: calc(var(--margin) - var(--out)); top: 50%; flex-direction: row-reverse; transform: translateY(-50%); --menu-at: translateY(-50%); transition: left .25s var(--ease); }
+.layer[data-edge='right'] .dock { right: calc(var(--margin) - var(--out)); top: 50%; flex-direction: row; transform: translateY(-50%); --menu-at: translateY(-50%); transition: right .25s var(--ease); }
 .layer[data-dragging] { cursor: grabbing; }
 .glass { position: relative; background: var(--tint); box-shadow: inset 0 1px 0 var(--rim), 0 18px 50px var(--drop), 0 2px 8px rgb(0 0 0 / .12); }
 
 /* ---------- the dots, their pill and the orb ---------- */
 /* It grows with the size, so the parts scaled inside it keep their share of margin to the screen's edge. */
 .spot { position: relative; display: grid; place-items: center; min-width: calc(48px * var(--scale)); min-height: calc(48px * var(--scale)); }
-/* The dots, their capsule, the pill and the orb all sit on the spot's screen-side edge, and scale from it, so a margin of 0 puts them on the edge itself. */
-.layer[data-edge='bottom'] .spot { align-items: end; }
-.layer[data-edge='bottom'] :is(.capsule, .dots, .pill, .orb) { transform-origin: 50% 100%; }
-.layer[data-edge='left'] .spot { justify-items: start; }
-.layer[data-edge='left'] :is(.capsule, .dots, .pill, .orb) { transform-origin: 0 50%; }
-.layer[data-edge='right'] .spot { justify-items: end; }
-.layer[data-edge='right'] :is(.capsule, .dots, .pill, .orb) { transform-origin: 100% 50%; }
+/* The margin is measured from the capsule's edge, so 0 puts the dots on the screen's edge itself. The spot
+   around them is bigger (room for the pill and the orb, all centred on one another), so the dock sits that
+   much further out, and comes in by the difference while the pill (on hover) or the orb (while you talk) is
+   the thing at the edge. */
+.layer { --out: calc(17px * var(--scale)); }
+.layer[data-mode='hover'] { --out: calc(4px * var(--scale)); }
+.layer:is([data-mode='listening'], [data-mode='thinking']) { --out: calc(-8px * var(--scale)); }
 /* A small glass capsule behind the dots, so they read on any wallpaper. */
 .capsule { position: absolute; width: 34px; height: 14px; border-radius: 7px; opacity: .9; transition: opacity .2s; }
 .layer:is([data-edge='left'], [data-edge='right']) .capsule { width: 14px; height: 34px; }
@@ -76,6 +76,9 @@ button { font: inherit; color: inherit; }
 .layer[data-mode='hover'] .pill { opacity: 1; pointer-events: auto; transform: none; transition: opacity .15s .04s, transform .4s var(--spring) .04s; }
 .pill button { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; color: var(--ink); background: var(--surface); cursor: pointer; transition: background .15s; }
 .pill button:hover { background: var(--surface-3); }
+/* A meeting under way: a red dot on its button, breathing. */
+.pill button[data-recording]::after { content: ''; position: absolute; top: 3px; right: 3px; width: 7px; height: 7px; border-radius: 50%; background: #e5484d; box-shadow: 0 0 0 1.5px var(--surface); animation: breathe 1.8s ease-in-out infinite; }
+.pill button { position: relative; }
 /* Business's whiteboard tiles: one light, fine edges, a quiet cast shadow, a small lift on hover. */
 .wb-tool-glyph { overflow: visible; transition: transform 180ms cubic-bezier(.2, .8, .2, 1); }
 .wb-glyph-object { filter: drop-shadow(0 1px .65px rgb(0 0 0 / .16)); }
@@ -193,6 +196,9 @@ button { font: inherit; color: inherit; }
 .library-none { margin: 6px 4px 10px; font-size: 13px; color: var(--ink-3); }
 .library .actions .btn { display: inline-flex; align-items: center; gap: 6px; }
 .library .actions .ask { text-align: center; }
+.library-where { margin: 8px 0 0; font-size: 12px; line-height: 1.4; color: var(--ink-3); text-align: center; }
+.library-where button { padding: 0; border: 0; background: none; font: inherit; color: var(--ink-2); text-decoration: underline dotted; text-underline-offset: 3px; cursor: pointer; }
+.library-where button:hover { color: var(--ink); }
 /* Ask Claude: one field and a button; the answer comes on Claude's card. */
 .askcard { width: 400px; }
 .askfield { height: 34px; margin-bottom: 10px; }

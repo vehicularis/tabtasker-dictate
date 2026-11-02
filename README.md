@@ -15,6 +15,10 @@ Talk instead of typing, on your Mac. Speech is transcribed on the Mac by Whisper
 - **Find everything in the Library.** The middle button on the dots lists every note and meeting, newest
   first, to open in the editor, open in another app, show in Finder or hand to Claude Code; the window
   the dots open has the full page.
+- **Record meetings with who said what.** Start one from the dots (the meeting button on their pill), the
+  Library or the menu bar. The room and, on a call, the other side are transcribed on this Mac as it goes,
+  and when you stop, every voice gets its own label: yours keeps your name, the others are Speaker 1,
+  Speaker 2 and on. Meetings have no length limit beyond free disk space.
 - **Ask Claude about your notes.** Ask Claude… from the dots' menu, or a spoken command, and with Claude
   connected through Claude Code it can read and search your notes and meetings to answer.
 

@@ -69,6 +69,8 @@ struct Hold { id: String, language: Option<i32>, spoken: Option<i32>, heard: Opt
 /// Speech that ends this long before a live pass's audio does is all in that pass's words.
 const SETTLED: usize = 16000 * 3 / 10;
 static APP: OnceLock<AppHandle> = OnceLock::new();
+/// Where the voice models live, once the app is up: for other models that belong beside them.
+pub(crate) fn models_root() -> Option<PathBuf> { APP.get().map(|app| app.state::<LocalSpeech>().root.clone()) }
 /// A hold with nothing to send (silence, too short, unclear): the overlay ends it quietly.
 const UNHEARD: &str = "unheard";
 /// Whisper reads at most 224 tokens of prompt; the vocabulary stays under this.

@@ -476,7 +476,10 @@ pub fn summarize(kind: Kind, text: &str) -> Option<String> {
 /// A title as Claude wrote it, made safe for a heading and a file name's start.
 fn clean_title(reply: &str) -> Option<String> {
   let line = reply.lines().map(str::trim).find(|line| !line.is_empty())?;
-  let line = line.trim_start_matches('#').trim().trim_matches(|c: char| matches!(c, '"' | '“' | '”' | '\'' | '‘' | '’' | '*' | '`')).trim();
+  let line = line.trim_start_matches('#').trim();
+  // "Title: Thursday's plan" is a label, not a title.
+  let line = ["title:", "Title:", "TITLE:"].iter().find_map(|label| line.strip_prefix(label)).unwrap_or(line).trim();
+  let line = line.trim_matches(|c: char| matches!(c, '"' | '“' | '”' | '\'' | '‘' | '’' | '*' | '`')).trim();
   let line = line.trim_end_matches(['.', '!', '?', ':', ';', ',']).trim();
   let title: String = line.chars().filter(|c| !c.is_control()).take(80).collect();
   (!title.is_empty()).then_some(title)

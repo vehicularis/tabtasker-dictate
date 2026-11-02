@@ -193,9 +193,11 @@ pub struct Meetings {
   pub summarize: bool,
   pub you: String,
   pub others: String,
+  /// Each voice gets its own label (speaker diarization, two small models downloaded at the first meeting).
+  pub speakers: bool,
 }
 impl Default for Meetings {
-  fn default() -> Self { Self { folder: None, system_audio: true, summarize: true, you: "You".into(), others: "Others".into() } }
+  fn default() -> Self { Self { folder: None, system_audio: true, summarize: true, you: "You".into(), others: "Others".into(), speakers: true } }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -589,7 +591,7 @@ mod tests {
     assert_eq!(value["apps"]["defaultStyle"], "default");
     assert!(value["apps"]["styles"].as_array().unwrap().iter().any(|app| app["bundleId"] == "com.apple.Terminal" && app["style"] == "code" && app["polish"] == false));
     assert_eq!(value["notes"], json!({ "folder": null, "fileName": "{date} {title}", "frontmatter": true, "dailyNote": false, "tags": [], "claudeTitle": true, "claudeActions": false }));
-    assert_eq!(value["meetings"], json!({ "folder": null, "systemAudio": true, "summarize": true, "you": "You", "others": "Others" }));
+    assert_eq!(value["meetings"], json!({ "folder": null, "systemAudio": true, "summarize": true, "you": "You", "others": "Others", "speakers": true }));
     assert_eq!(value["claude"], json!({ "enabled": false, "via": "api", "model": "claude-haiku-5-5", "commands": true, "claudeCode": null, "projectFolder": null }));
     assert_eq!(value["agents"], json!({ "mcp": true, "shareHistory": false, "shareNotes": true, "shareMeetings": true, "allowWrite": false }));
     assert_eq!(value["history"], json!({ "keep": "week" }));

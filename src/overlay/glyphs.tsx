@@ -48,6 +48,15 @@ export const LibraryGlyph = ({ size }: { size?: number }) => <Glyph size={size}>
   <path d="M6 15.5h2" stroke="white" strokeOpacity="0.7" strokeWidth="0.8" />
 </Glyph>;
 
+/// Two people side by side, the nearer one in enamel: a meeting.
+export const MeetingGlyph = ({ size }: { size?: number }) => <Glyph size={size}>
+  <circle cx="18.5" cy="9.5" r="3.4" fill={BLUE} fillOpacity="0.9" stroke={INK} strokeOpacity="0.4" strokeWidth="0.9" />
+  <path d="M13.2 23.5c0-3.6 2.3-6.2 5.3-6.2s5.3 2.6 5.3 6.2a1 1 0 0 1-1 1h-8.6a1 1 0 0 1-1-1z" fill={BLUE} fillOpacity="0.9" stroke={INK} strokeOpacity="0.4" strokeWidth="0.9" />
+  <circle cx="10" cy="8.5" r="4.2" fill={ENAMEL} stroke={INK} strokeOpacity="0.5" strokeWidth="1.1" />
+  <path d="M3 24.5c0-4.6 3-7.8 7-7.8s7 3.2 7 7.8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z" fill={ENAMEL} stroke={INK} strokeOpacity="0.5" strokeWidth="1.1" />
+  <path d="M7.4 6.3a3 3 0 0 1 2.6-1.4M5.4 19.6a5.6 5.6 0 0 1 3.2-2" stroke="white" strokeOpacity="0.7" strokeWidth="0.9" />
+</Glyph>;
+
 /// A gear with an enamel face: the settings.
 export const SettingsGlyph = ({ size }: { size?: number }) => {
   const teeth = Array.from({ length: 8 }, (_, i) => {

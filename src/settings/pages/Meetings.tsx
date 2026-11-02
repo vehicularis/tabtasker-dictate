@@ -74,12 +74,12 @@ export function Meetings({ settings, update }: PageProps) {
     ? 'Needs macOS 14.2 or later. On this Mac, meetings record your microphone only.'
     : `Includes the Mac’s own sound, such as the other side of a call.${permission === 'notDetermined' ? ' macOS asks once, when the first meeting starts.' : ''}`;
   return <>
-    <PageHeader icon="meeting" title="Meetings">Record a call or a room, and get a transcript with who said what.</PageHeader>
+    <PageHeader icon="meeting" title="Meetings">Record a call or a room, and get a transcript with who said what. Start one from the dots’ pill, their menu, the menu bar, or here.</PageHeader>
     <Section note={startProblem ?? undefined}>
       <TileGroup>
         <Tile title={recording ? 'Recording a meeting' : 'Start a meeting'}
           detail={recording?.since ? `Started at ${new Date(recording.since).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}. Stop it here or with Stop by the dots.`
-            : `Also from the menu bar, the dots’ menu${chord ? ` or ${chord}` : ''}. A pill by the dots shows the time and Stop.`}>
+            : `Also from the meeting button on the dots, their menu, the menu bar${chord ? ` or ${chord}` : ''}. A pill by the dots shows the time and Stop.`}>
           <Button id={`${base}-start`} variant={recording ? 'secondary' : 'primary'} disabled={!state} onClick={startOrStop}>{recording ? 'Stop' : 'Start'}</Button>
         </Tile>
         {outcomeTile}
@@ -116,8 +116,11 @@ export function Meetings({ settings, update }: PageProps) {
     </Section>
     <Section title="Transcript">
       <TileGroup>
+        <Tile title="Tell speakers apart" detail={meetings.speakers ? 'Each voice gets its own label, Speaker 1, Speaker 2 and on, whether it comes through the microphone or the call; yours keeps your name. Two small models (47 MB) download when a meeting first needs them, and the telling apart happens on this Mac after Stop.' : 'Lines are labelled by where they came from: your microphone, or the Mac’s sound.'}>
+          <Toggle label="Tell speakers apart" checked={meetings.speakers} onChange={speakers => update({ meetings: { speakers } })} />
+        </Tile>
         <Tile title="Your name" detail="How your lines are labelled."><TextField label="Your name" value={meetings.you} onCommit={you => update({ meetings: { you } })} /></Tile>
-        <Tile title="Everyone else" detail="How the Mac’s sound is labelled."><TextField label="Everyone else" value={meetings.others} onCommit={others => update({ meetings: { others } })} /></Tile>
+        <Tile title="Everyone else" detail={meetings.speakers ? 'How the Mac’s sound is labelled when speakers can’t be told apart.' : 'How the Mac’s sound is labelled.'}><TextField label="Everyone else" value={meetings.others} onCommit={others => update({ meetings: { others } })} /></Tile>
       </TileGroup>
     </Section>
     <Section title="Where" note={problem ?? undefined}>
