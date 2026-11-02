@@ -16,7 +16,7 @@ const message = (error: unknown, fallback: string) => typeof error === 'string' 
 export function Sticky() {
   const [sticky, setSticky] = useState<Record | null>(null);
   const [text, setText] = useState('');
-  const [picking, setPicking] = useState(false);
+  const [picking, setPicking] = useState(new URLSearchParams(location.search).get('preview') === 'picker'); // ?preview=picker shows the colours open, for a look in a browser
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const menuBox = useRef<HTMLDivElement>(null);
   // The menu is placed at the click, then kept inside the window once its size is known.
@@ -31,7 +31,13 @@ export function Sticky() {
   const timer = useRef<number | undefined>(undefined);
   useEffect(() => { void invoke<Record>('sticky_get', { id }).then(found => { setSticky(found); setText(found.text); }, () => setProblem('This sticky is gone.')); }, []);
   // A press anywhere but on the colours themselves folds the palette (the press on a colour must reach it).
-  useEffect(() => { if (!picking) return; const away = (event: PointerEvent) => { if (!(event.target as Element).closest('.sticky-palette')) setPicking(false); }; addEventListener('pointerdown', away, { capture: true }); return () => removeEventListener('pointerdown', away, { capture: true }); }, [picking]);
+  useEffect(() => {
+    if (!picking) return;
+    const away = (event: PointerEvent) => { if (!(event.target as Element).closest('.sticky-swatch-wrap')) setPicking(false); };
+    const key = (event: KeyboardEvent) => { if (event.key === 'Escape') setPicking(false); };
+    addEventListener('pointerdown', away, { capture: true }); addEventListener('keydown', key);
+    return () => { removeEventListener('pointerdown', away, { capture: true }); removeEventListener('keydown', key); };
+  }, [picking]);
   useEffect(() => {
     if (!menu) return;
     const away = (event: PointerEvent) => { if (!(event.target as Element).closest('.sticky-menu')) setMenu(null); };

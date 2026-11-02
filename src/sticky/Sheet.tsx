@@ -16,12 +16,14 @@ export function Sheet({ hue, folded, pinned, text, picking, onPicking, actions, 
 } & Omit<HTMLAttributes<HTMLDivElement>, 'children'>) {
   return <div className="sticky" data-folded={folded || undefined} style={{ '--hue': STICKY_HUES[hue] } as CSSProperties} {...rest}>
     <header className="sticky-bar" data-tauri-drag-region onDoubleClick={actions.fold}>
-      {picking
-        ? <span className="sticky-palette" role="radiogroup" aria-label="Colour" onPointerDown={event => event.stopPropagation()}>
-          {HUES.map(one => <button key={one} type="button" role="radio" aria-checked={one === hue} aria-label={one} className="sticky-hue" style={{ '--hue': STICKY_HUES[one] } as CSSProperties} onClick={() => actions.recolour(one)} />)}
-        </span>
-        : <button type="button" className="sticky-swatch" aria-label={`Colour: ${hue}. Change it`} aria-expanded={picking} title="Colour" onPointerDown={event => event.stopPropagation()} onClick={() => onPicking(true)} />}
-      {folded && !picking && <span className="sticky-peek" data-tauri-drag-region>{firstLine(text) || 'Empty sticky'}</span>}
+      <span className="sticky-swatch-wrap">
+        <button type="button" className="sticky-swatch" aria-label={`Colour: ${hue}. Change it`} aria-expanded={picking} aria-haspopup="dialog" title="Colour" onPointerDown={event => event.stopPropagation()} onClick={() => onPicking(!picking)} />
+        {/* The colours, as dots on a small card under the swatch: pick one and it closes; a press anywhere else closes it (Sticky.tsx). */}
+        {picking && <span className="sticky-picker" role="radiogroup" aria-label="Colour" onPointerDown={event => event.stopPropagation()}>
+          {HUES.map(one => <button key={one} type="button" role="radio" aria-checked={one === hue} aria-label={one} title={one} className="sticky-hue" style={{ '--hue': STICKY_HUES[one] } as CSSProperties} onClick={() => actions.recolour(one)} />)}
+        </span>}
+      </span>
+      {folded && <span className="sticky-peek" data-tauri-drag-region>{firstLine(text) || 'Empty sticky'}</span>}
       <span className="sticky-tools">
         <button type="button" className="sticky-tool" title={folded ? 'Open it up' : 'Fold to its bar'} aria-label={folded ? 'Open the sticky up' : 'Fold the sticky to its bar'} onClick={actions.fold}><Icon name={folded ? 'chevronDown' : 'chevronUp'} size={14} /></button>
         <button type="button" className="sticky-tool" data-on={pinned || undefined} title={pinned ? 'On top of everything. Click to let other windows cover it' : 'Behind other windows. Click to keep it on top'} aria-label={pinned ? 'Let other windows cover it' : 'Keep on top of everything'} aria-pressed={pinned} onClick={actions.pin}><Icon name={pinned ? 'pin' : 'pinOff'} size={14} /></button>

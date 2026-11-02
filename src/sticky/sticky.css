@@ -14,10 +14,13 @@
 .sticky-swatch-wrap { position: relative; display: flex; flex: none; }
 .sticky-swatch { width: 14px; height: 14px; padding: 0; border: 0; border-radius: 50%; background: var(--hue); box-shadow: inset 0 0 0 .5px rgb(0 0 0 / .25), 0 0 0 2px color-mix(in srgb, #fff 55%, transparent); cursor: pointer; }
 .sticky-swatch:hover { transform: scale(1.1); }
-/* The other colours, unfolded in the swatch's place along the bar. */
-.sticky-palette { display: flex; flex: none; align-items: center; gap: 6px; }
+/* The colours: dots on a small card under the swatch, as Business's colour picker hangs its swatches under its trigger. */
+.sticky-picker { position: absolute; top: calc(100% + 8px); left: -6px; z-index: 6; display: grid; grid-template-columns: repeat(4, 18px); gap: 9px; padding: 9px; border-radius: 10px; background: var(--popover, #fff); box-shadow: var(--elev-float); cursor: default; }
+.sticky-picker .sticky-hue { width: 18px; height: 18px; }
+.sticky-picker .sticky-hue[aria-checked='true'] { box-shadow: 0 0 0 2px var(--popover, #fff), 0 0 0 3.5px var(--hue); }
+.sticky-picker .sticky-hue:hover { transform: scale(1.12); }
 .sticky-hue { width: 14px; height: 14px; padding: 0; border: 0; border-radius: 50%; background: var(--hue); box-shadow: inset 0 0 0 .5px rgb(0 0 0 / .25); cursor: pointer; }
-.sticky-hue[aria-checked='true'] { box-shadow: 0 0 0 2px var(--paper), 0 0 0 3.5px var(--hue); }
+.sticky-hue[aria-checked='true'] { box-shadow: 0 0 0 2px var(--popover, #fff), 0 0 0 3.5px var(--hue); }
 .sticky-peek { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; color: var(--ink); }
 .sticky-tools { display: flex; flex: none; gap: 1px; margin-left: auto; }
 .sticky-tool { display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 6px; color: var(--dim); background: none; cursor: pointer; }
