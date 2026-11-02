@@ -7,21 +7,20 @@ import { Appearance } from './pages/Appearance';
 import { SettingsAI } from './pages/SettingsAI';
 import { SettingsGeneral } from './pages/SettingsGeneral';
 import { SettingsNotes } from './pages/SettingsNotes';
-import { AskView } from './views/AskView';
 import { NotesView } from './views/NotesView';
 import { StickiesView } from './views/StickiesView';
 
 // The app's one window, in TabTasker Business's workspace shell: a title strip with the traffic lights
 // and the place you are, a rail with the places (your notes, meetings and stickies, a question for Claude)
-// and the four settings pages, and the place itself as a raised island. The hash is the place:
-// `notes`, `notes/<path>` for one note, `meetings/<path>`, `stickies`, `ask`, `settings`,
+// and the four settings pages, and the place itself as a raised island. The rail is Business's
+// NavigationRail: 40-point rows with an icon column, separators between its parts (184 points wide here, for our labels). The
+// hash is the place: `notes`, `notes/<path>` for one note, `meetings/<path>`, `stickies`, `settings`,
 // `settings/<page>`, `setup` (the first-run steps) and `about`.
 type Place = { route: string; title: string; icon: IconName };
 const PLACES: Place[] = [
   { route: 'notes', title: 'Notes', icon: 'note' },
   { route: 'meetings', title: 'Meetings', icon: 'meeting' },
   { route: 'stickies', title: 'Stickies', icon: 'sticky' },
-  { route: 'ask', title: 'Ask Claude', icon: 'claude' },
 ];
 const SETTINGS: (Place & { Page: ComponentType<PageProps> })[] = [
   { route: 'settings', title: 'General', icon: 'general', Page: SettingsGeneral },
@@ -76,7 +75,7 @@ export function App() {
   };
   const link = (candidate: Place) => <li key={candidate.route}>
     <a href={`#${candidate.route}`} data-route={candidate.route} aria-current={current(candidate.route) ? 'page' : undefined} tabIndex={current(candidate.route) ? 0 : -1}>
-      <Icon name={candidate.icon} size={17} />{candidate.title}
+      <span className="rail-icon"><Icon name={candidate.icon} size={18} /></span><span className="rail-label">{candidate.title}</span>
     </a>
   </li>;
 
@@ -84,18 +83,15 @@ export function App() {
     <header className="titlebar" data-tauri-drag-region><span className="titlebar-app" data-tauri-drag-region>TabTasker Dictate</span><span className="titlebar-page" data-tauri-drag-region>{here.title}</span></header>
     <nav ref={nav} className="rail" aria-label="TabTasker Dictate" onKeyDown={arrows}>
       <ul className="group" aria-label="Your things">{PLACES.map(link)}</ul>
-      <ul className="group" aria-label="Settings">
-        <li className="group-name" aria-hidden="true">Settings</li>
-        {SETTINGS.map(link)}
-      </ul>
-      <ul className="group rail-foot" aria-label="About">{link({ route: 'about', title: 'About', icon: 'about' })}</ul>
+      <hr className="rail-rule" />
+      <ul className="group" aria-label="Settings">{SETTINGS.map(link)}</ul>
+      <ul className="group rail-foot" aria-label="About"><hr className="rail-rule" />{link({ route: 'about', title: 'About', icon: 'about' })}</ul>
     </nav>
     <main key={wide ? place : route} className="content" data-wide={wide || undefined} aria-label={here.title}>
       {!settings && null}
       {props && place === 'notes' && <NotesView kind="note" path={arg} {...props} onError={setToast} />}
       {props && place === 'meetings' && <NotesView kind="meeting" path={arg} {...props} onError={setToast} />}
       {props && place === 'stickies' && <div className="page wide"><StickiesView onError={setToast} /></div>}
-      {props && place === 'ask' && <div className="page"><AskView settings={props.settings} /></div>}
       {props && place === 'about' && <div className="page"><About {...props} /></div>}
       {props && setting && <div className="page"><setting.Page {...props} /></div>}
     </main>

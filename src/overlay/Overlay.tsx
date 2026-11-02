@@ -205,10 +205,9 @@ export function Overlay() {
     void invoke<string>('note_new', { title: '', text: '', stamp: stamp(new Date()) }).then(path => invoke('note_open', { path }))
       .catch(error => setToast(typeof error === 'string' ? error : 'Couldn’t make a note'));
   }, []);
-  const askClaude = useCallback(() => openApp('ask'), [openApp]);
   const newSticky = useCallback(() => { setMenu(false); void invoke('sticky_new', {}).catch(error => setToast(typeof error === 'string' ? error : 'Couldn’t make a sticky')); }, []);
-  // The global shortcuts for a typed note and a question, which the native side hears and hands here.
-  useEffect(() => listen<{ what: 'writeNote' | 'ask' }>('dictate-open', ({ what }) => { if (what === 'writeNote') writeNote(); else if (what === 'ask') askClaude(); }), [writeNote, askClaude]);
+  // The global shortcut for a typed note, which the native side hears and hands here.
+  useEffect(() => listen<{ what: string }>('dictate-open', ({ what }) => { if (what === 'writeNote') writeNote(); }), [writeNote]);
   const startMeeting = () => {
     setMenu(false);
     const action = meetings?.recording ? 'stop' : 'start';
@@ -264,7 +263,7 @@ export function Overlay() {
       <Dock mode={mode} dots={dots} label="TabTasker Dictate" hint={settings.appearance.hint} quiet={quiet} level={level} typing={dictating} words={noting ? '' : live ?? ''}
         onHover={setHover} onGrab={grab} onDots={clickDots} onNote={takeNote} onMeeting={startMeeting} recording={!!meetings?.recording} onOpen={() => openApp('notes')} onSettings={openSettings} onOrb={() => { if (noting) takeNote(); }}
         onMenu={() => { if (phase === 'idle') { setMenu(true); refresh(); lookMeetings(); } }}
-        menu={menu && <Menu status={status} mics={mics} meeting={!!meetings?.recording} onMics={setMics} onNote={() => { setMenu(false); takeNote(); }} onWriteNote={writeNote} onSticky={newSticky} onAsk={askClaude} onMeeting={startMeeting}
+        menu={menu && <Menu status={status} mics={mics} meeting={!!meetings?.recording} onMics={setMics} onNote={() => { setMenu(false); takeNote(); }} onWriteNote={writeNote} onSticky={newSticky} onMeeting={startMeeting}
           onOpen={() => openApp()} onPasteLast={() => { setMenu(false); void invoke('paste_last').catch(() => {}); }} onPickMic={pickMic} onLogin={login}
           onHide={hideForAnHour} onSettings={openSettings} onSetup={openSetup} />} />
     </div>

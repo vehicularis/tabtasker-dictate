@@ -42,9 +42,8 @@ export function NotesView({ kind, path, settings, onError }: { kind: 'note' | 'm
     <aside className="list" aria-label={kind === 'note' ? 'Your notes' : 'Your meetings'}>
       <div className="list-head">
         <label className="search"><Icon name="search" size={15} /><input type="search" placeholder={kind === 'note' ? 'Search notes' : 'Search meetings'} aria-label={kind === 'note' ? 'Search notes' : 'Search meetings'} value={query} spellCheck={false} onChange={event => setQuery(event.target.value)} /></label>
-        {kind === 'note' && <Button variant="primary" icon="plus" aria-label="New note" title="New note (type, or hold fn and talk)" onClick={newNote} />}
+        {kind === 'note' ? <Button variant="primary" icon="plus" aria-label="New note" title="New note (type, or hold fn and talk)" onClick={newNote} /> : <MeetingBar onError={onError} />}
       </div>
-      {kind === 'meeting' && <MeetingBar onError={onError} />}
       <div className="list-scroll">
         {items && !items.length && <p className="list-none">{kind === 'note' ? 'No notes yet. Make one with the button above, or click the note on the dots and talk.' : 'No meetings yet. Start one above, or from the dots.'}</p>}
         {items && items.length > 0 && !shown.length && <p className="list-none">Nothing has those words.</p>}
@@ -87,14 +86,20 @@ function MeetingBar({ onError }: { onError: (message: string) => void }) {
   const since = recording?.since ?? 0;
   const seconds = since ? Math.max(0, Math.floor((Date.now() - since) / 1000)) : 0;
   const elapsed = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
-  return <div className="meeting-bar">
-    <Button variant={recording ? 'danger' : 'primary'} icon={recording ? undefined : 'mic'} disabled={!state || busy} onClick={toggle}>{recording ? `Stop · ${elapsed}` : 'Start meeting'}</Button>
-    <span className="meeting-note">{recording ? (recording.system === 'on' ? 'Recording you and the call.' : 'Recording your microphone.') : state?.saving.length ? 'Saving the last meeting…' : 'The room and, on a call, the other side.'}</span>
-    {state?.leftovers.map(leftover => <div key={leftover.id} className="leftover">
+  // The record button sits beside the search, as the plus does for notes; while a meeting runs it is the stop, and a strip under the head shows the time.
+  return <>
+    <button type="button" className={`ui-button record${recording ? ' on' : ' primary'}`} aria-label={recording ? `Stop the meeting, ${elapsed} so far` : 'Start a meeting'} title={recording ? 'Stop the meeting' : 'Start a meeting: the room and, on a call, the other side'} disabled={!state || busy} onClick={toggle}>
+      {recording ? <span className="record-stop" /> : <Icon name="mic" size={16} />}
+    </button>
+    {(recording || state?.saving.length || state?.leftovers.length) ? <div className="meeting-strip">
+      {recording && <span className="meeting-live"><i />{elapsed} · {recording.system === 'on' ? 'you and the call' : 'your microphone'}</span>}
+      {!recording && !!state?.saving.length && <span className="meeting-live">Saving the last meeting…</span>}
+      {state?.leftovers.map(leftover => <div key={leftover.id} className="leftover">
       <span>{meetingWhen(leftover.sinceMs)} · {meetingLength(leftover.seconds)} · {leftover.saved ? 'saved, with parts left' : 'not saved yet'}</span>
       {confirming === leftover.id
         ? <><Button small variant="quiet" onClick={() => setConfirming(null)}>Keep</Button><Button small variant="danger" onClick={() => recover(leftover.id, false)}>Discard</Button></>
         : <><Button small variant="quiet" onClick={() => setConfirming(leftover.id)}>Discard</Button><Button small variant="primary" onClick={() => recover(leftover.id, true)}>{leftover.saved ? 'Try again' : 'Save'}</Button></>}
     </div>)}
-  </div>;
+    </div> : null}
+  </>;
 }

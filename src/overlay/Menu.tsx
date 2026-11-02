@@ -7,8 +7,8 @@ const itemsOf = (menu: Element) => [...menu.querySelectorAll<HTMLElement>(':scop
 
 // The dots' right-click menu. It works from the keyboard like a Mac menu: arrows move, → and ← open and
 // close the microphones, Escape closes a level.
-export function Menu({ status, mics, meeting, onMics, onNote, onWriteNote, onSticky, onAsk, onMeeting, onOpen, onPasteLast, onPickMic, onLogin, onHide, onSettings, onSetup }: {
-  status: Status | null; mics: boolean; meeting: boolean; onMics: (open: boolean) => void; onNote: () => void; onWriteNote: () => void; onSticky: () => void; onAsk: () => void; onMeeting: () => void; onOpen: () => void; onPasteLast: () => void;
+export function Menu({ status, mics, meeting, onMics, onNote, onWriteNote, onSticky, onMeeting, onOpen, onPasteLast, onPickMic, onLogin, onHide, onSettings, onSetup }: {
+  status: Status | null; mics: boolean; meeting: boolean; onMics: (open: boolean) => void; onNote: () => void; onWriteNote: () => void; onSticky: () => void; onMeeting: () => void; onOpen: () => void; onPasteLast: () => void;
   onPickMic: (id: string | null) => void; onLogin: () => void; onHide: () => void; onSettings: () => void; onSetup: () => void;
 }) {
   const root = useRef<HTMLDivElement>(null);
@@ -41,7 +41,6 @@ export function Menu({ status, mics, meeting, onMics, onNote, onWriteNote, onSti
     <button type="button" role="menuitem" tabIndex={-1} onClick={onWriteNote}><Icon name="keyboard" size={16} />Write a note</button>
     <button type="button" role="menuitem" tabIndex={-1} onClick={onSticky}><Icon name="sticky" size={16} />New sticky</button>
     <button type="button" role="menuitem" tabIndex={-1} onClick={onMeeting}><MeetingIcon />{meeting ? 'Stop meeting' : 'Start meeting'}</button>
-    <button type="button" role="menuitem" tabIndex={-1} onClick={onAsk}><Icon name="claude" size={16} />Ask Claude…</button>
     <button type="button" role="menuitem" tabIndex={-1} onClick={onOpen}><LibraryIcon />Open TabTasker Dictate</button>
     <button type="button" role="menuitem" tabIndex={-1} onClick={onPasteLast}><PasteIcon />Paste last transcript</button>
     <i className="rule" role="separator" />

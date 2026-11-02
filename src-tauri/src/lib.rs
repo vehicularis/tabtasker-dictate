@@ -27,7 +27,7 @@ use tauri::{ActivationPolicy, AppHandle, Emitter, LogicalPosition, Manager, RunE
 const OVERLAY: &str = "overlay";
 const MAIN: &str = "main";
 /// The app window's places, by the first part of the hash it opens on (`notes/<path>` opens that note).
-const ROUTES: &[&str] = &["notes", "meetings", "stickies", "ask", "settings", "setup", "about"];
+const ROUTES: &[&str] = &["notes", "meetings", "stickies", "settings", "setup", "about"];
 static APP: OnceLock<AppHandle> = OnceLock::new();
 /// This launch is the first and opened the full setup, so the overlay keeps its own setup card closed.
 static FIRST_RUN: AtomicBool = AtomicBool::new(false);
@@ -488,7 +488,7 @@ pub fn run() {
       status, set_enabled, set_input, set_open_at_login, request, layout, meeting, open_app, paste_last, play_sound,
       notes::save_note, notes::show_notes, notes::notes_folder, notes::preview_note, notes::choose_folder, notes::library_list, notes::library_open,
       notes::note_read, notes::note_write, notes::note_new, notes::note_delete, notes::note_attach, note_open,
-      stickies::sticky_list, stickies::sticky_get, stickies::sticky_new, stickies::sticky_update, stickies::sticky_remove, stickies::sticky_to_note, stickies::sticky_show, settings::get_settings, settings::update_settings, settings::reset_settings,
+      stickies::sticky_list, stickies::sticky_get, stickies::sticky_new, stickies::sticky_update, stickies::sticky_remove, stickies::sticky_to_note, stickies::sticky_show, stickies::sticky_pin, stickies::sticky_fold, settings::get_settings, settings::update_settings, settings::reset_settings,
       speech::speech_models, speech::prepare_model, speech::vocabulary_fit, text::list_apps,
       history::history_list, history::history_stats, history::history_delete, history::history_clear, history::history_type,
       ai::claude_save_key, ai::claude_test, ai::claude_remove_key, ai::claude_open_console, ai::claude_insert, ai::claude_dismiss,

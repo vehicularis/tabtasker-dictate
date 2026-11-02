@@ -25,7 +25,7 @@ const lowlight = createLowlight(common);
 // to-do lists, quotes, code with colours, tables, pictures, links and highlights, typed with Markdown
 // shortcuts, from the bar above, from "/" or from the bar that comes up over a selection; a handle to
 // drag a block by. Kept as Markdown, so a note is still a plain file any other app can read. `compact`
-// is a sticky: the same editor with no bars and smaller type. `notePath` is the file the note is, for
+// is a sticky: the same editor with no bar above and no handle, but "/" and the selection bar, in smaller type. `notePath` is the file the note is, for
 // pictures: a pasted or dropped one is saved beside it and shown from there.
 export function Editor({ markdown, onChange, placeholder, compact = false, autoFocus = false, label, bar, notePath }: {
   markdown: string; onChange: (markdown: string) => void; placeholder?: string; compact?: boolean; autoFocus?: boolean; label: string; bar?: ReactNode; notePath?: string;
@@ -61,7 +61,7 @@ export function Editor({ markdown, onChange, placeholder, compact = false, autoF
       }).configure({ allowBase64: true }),
       Placeholder.configure({ placeholder: placeholder ?? 'Type, or hold fn and talk' }),
       Markdown,
-      ...(compact ? [] : [slash(() => files.current?.click())]),
+      slash(() => files.current?.click()),
     ],
     content: markdown, contentType: 'markdown',
     autofocus: autoFocus ? 'end' : false,
@@ -86,7 +86,7 @@ export function Editor({ markdown, onChange, placeholder, compact = false, autoF
   const editorRef = useRef<TipTap | null>(null); editorRef.current = editor;
   return <div className={`ed${compact ? ' compact' : ''}`}>
     {!compact && editor && <Toolbar editor={editor} tail={bar} onImage={notePath ? () => files.current?.click() : undefined} />}
-    {!compact && editor && <BubbleMenu editor={editor} className="ed-bubble" shouldShow={({ editor, state }) => !state.selection.empty && !editor.isActive('codeBlock') && !editor.isActive('image')}>
+    {editor && <BubbleMenu editor={editor} className="ed-bubble" shouldShow={({ editor, state }) => !state.selection.empty && !editor.isActive('codeBlock') && !editor.isActive('image')}>
       <Bubble editor={editor} />
     </BubbleMenu>}
     {!compact && editor && <DragHandle editor={editor} className="ed-handle"><Icon name="grip" size={14} /></DragHandle>}

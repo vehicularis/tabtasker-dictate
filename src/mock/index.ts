@@ -160,17 +160,19 @@ mock.handle('status', () => copy(status));
 mock.handle('play_sound', () => {}); // a browser has none of the Mac's sounds
 // Stickies, in memory: `?sticky=<id>` is one for the sticky page to show.
 const folderOf = () => settings.notes.folder ?? status.notes;
-const stickies: Sticky[] = [{ id: 'demo', text: 'Call the venue about Thursday', hue: 'amber', x: 120, y: 140, width: 240, height: 200, createdMs: Date.now(), updatedMs: Date.now() }];
+const stickies: Sticky[] = [{ id: 'demo', text: 'Call the venue about Thursday', hue: 'amber', x: 120, y: 140, width: 240, height: 200, pinned: true, folded: false, createdMs: Date.now(), updatedMs: Date.now() }];
 const stickyHue = (hue: unknown): Sticky['hue'] => (typeof hue === 'string' && hue in STICKY_HUES ? hue : 'amber') as Sticky['hue'];
 mock.handle('sticky_list', () => copy(stickies));
 mock.handle('sticky_get', ({ id }) => { const found = stickies.find(one => one.id === id) ?? stickies[0]; if (!found) throw 'That sticky is gone.'; return copy(found); });
 mock.handle('sticky_new', ({ hue, text }) => {
   const last = stickies.at(-1);
-  const made: Sticky = { id: Math.random().toString(16).slice(2, 14), text: typeof text === 'string' ? text : '', hue: stickyHue(hue ?? ['amber', 'sky', 'sage', 'coral', 'violet', 'teal'][stickies.length % 6]), x: (last?.x ?? 92) + 28, y: (last?.y ?? 112) + 28, width: 240, height: 200, createdMs: Date.now(), updatedMs: Date.now() };
+  const made: Sticky = { id: Math.random().toString(16).slice(2, 14), text: typeof text === 'string' ? text : '', hue: stickyHue(hue ?? ['amber', 'sky', 'sage', 'coral', 'violet', 'teal'][stickies.length % 6]), x: (last?.x ?? 92) + 28, y: (last?.y ?? 112) + 28, width: 240, height: 200, pinned: true, folded: false, createdMs: Date.now(), updatedMs: Date.now() };
   stickies.push(made); emit('dictate-stickies', { count: stickies.length }); return copy(made);
 });
 mock.handle('sticky_update', ({ id, text, hue }) => { const found = stickies.find(one => one.id === id); if (!found) throw 'That sticky is gone.'; if (typeof text === 'string') found.text = text; if (hue) found.hue = stickyHue(hue); found.updatedMs = Date.now(); return copy(found); });
 mock.handle('sticky_show', () => {});
+mock.handle('sticky_pin', ({ id, pinned }) => { const found = stickies.find(one => one.id === id); if (!found) throw 'That sticky is gone.'; found.pinned = !!pinned; return copy(found); });
+mock.handle('sticky_fold', ({ id, folded }) => { const found = stickies.find(one => one.id === id); if (!found) throw 'That sticky is gone.'; found.folded = !!folded; return copy(found); });
 mock.handle('sticky_remove', ({ id }) => { const at = stickies.findIndex(one => one.id === id); if (at >= 0) stickies.splice(at, 1); emit('dictate-stickies', { count: stickies.length }); });
 mock.handle('sticky_to_note', ({ id }) => { const at = stickies.findIndex(one => one.id === id); if (at < 0) throw 'That sticky is gone.'; const [gone] = stickies.splice(at, 1); return `${folderOf()}/${gone.text.split('\n')[0].slice(0, 40)}.md`; });
 mock.handle('set_enabled', ({ enabled }) => {

@@ -12,16 +12,16 @@ Talk instead of typing, on your Mac. Speech is transcribed on the Mac by Whisper
   that comes up over a selection; dragged about by the handle; still a plain file underneath.
 - **Keep stickies on the screen.** A small coloured note on top of everything: from the window, the dots’
   menu, a shortcut, or by voice, saying “sticky: call Thomas” while you dictate. It stays where you leave
-  it, and can become a note.
+  it; fold it to its bar or let other windows cover it when it is in the way; right-click it for its
+  colours and everything else; it can become a note.
 - **Record meetings with who said what.** Start one from the dots (the meeting button on their pill), the
   window or the menu bar. The room and, on a call, the other side are transcribed on this Mac as it goes.
   When you stop, every voice gets its own label: yours keeps your name, the others are Person 1, Person 2
   and on, each renamable in one go in the window. A summary, decisions and action items are written if a
   model is connected, each part a switch. No length limit beyond free disk space.
-- **One window.** Notes, Meetings and Stickies in a sidebar, the one you pick open beside the list, Ask
-  Claude for a question, and four settings pages: General, Notes & meetings, Claude & AI, Appearance.
-- **Ask about your notes.** Ask Claude in the window, or a spoken command, and with Claude connected
-  through Claude Code it can read and search your notes and meetings to answer.
+- **One window.** Notes, Meetings and Stickies in a sidebar, the one you pick open beside the list, and
+  four settings pages: General, Notes & meetings, Claude & AI, Appearance. A model, once connected, works
+  under the hood on titles, summaries, polish and spoken commands; there is nothing to chat with.
 
 It runs from the menu bar, with no account and nothing to sign in to. A model is optional and works under
 the hood, never opening anything: connect Claude in Settings through the Claude Code on your Mac with the
