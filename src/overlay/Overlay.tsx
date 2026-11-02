@@ -59,7 +59,7 @@ export function Overlay() {
   // Setup follows macOS live: permissions and the model download change while it is open.
   useEffect(() => { if (!setup) return; const timer = setInterval(refresh, 1000); return () => clearInterval(timer); }, [setup, refresh]);
   const launched = useRef(false);
-  useEffect(() => { if (status && !launched.current) { launched.current = true; if (!setupDone(status)) setSetup(true); } }, [status]); // once, at launch
+  useEffect(() => { if (status && !launched.current) { launched.current = true; if (!setupDone(status) && !status.firstRun) setSetup(true); } }, [status]); // once, at launch, unless Settings shows the full setup
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(null), 2400); return () => clearTimeout(timer); }, [toast]);
   useEffect(() => { if (!saved || PREVIEW) return; const timer = setTimeout(() => setSaved(null), 8000); return () => clearTimeout(timer); }, [saved]);
   useEffect(() => { if (!PREVIEW) store(DRAFT, draft); }, [draft]);
@@ -112,7 +112,6 @@ export function Overlay() {
         if (down) fnDownAt.current = performance.now();
         else if (fnDownAt.current && performance.now() - fnDownAt.current > 350) setFnTested(true);
       }),
-      listen('dictate-setup', () => { refresh(); setSetup(true); setHidden(false); }),
       listen('dictate-hide', () => setHidden(true)),
       // An overlay behind another app gets no hover from WebKit: the native side reports the pointer.
       listen<{ x: number; y: number } | null>('dictate-pointer', at => {

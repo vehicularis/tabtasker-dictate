@@ -26,6 +26,7 @@ export type Mock = {
 // The same as settings.rs's defaults.
 const DEFAULTS: Settings = {
   version: 1,
+  general: { menuBarIcon: true },
   shortcuts: { dictate: 'fn', handsFree: true, command: 'control', note: null, meeting: null, pasteLast: null },
   dictation: { language: 'auto', translateToEnglish: false, liveTyping: true, removeFillers: true, sounds: true, model: 'turbo' },
   vocabulary: { words: [], replacements: [], learn: true, suggestions: [] },
@@ -71,6 +72,7 @@ const listOf = (item: Check): Check => value => Array.isArray(value) && value.ev
 const folder: Check = value => value === null || (typeof value === 'string' && value.startsWith('/') && !value.includes('\0'));
 const chord: Check = value => value === null || (object(value) && chordProblem(value as Chord) === null);
 const SCHEMA: Record<string, Record<string, Check>> = {
+  general: { menuBarIcon: bool },
   shortcuts: { dictate: oneOf('fn', 'rightCommand', 'rightOption', 'rightControl', 'rightShift'), handsFree: bool, command: oneOf('control', 'option', 'command', 'shift', 'off'), note: chord, meeting: chord, pasteLast: chord },
   dictation: { language: value => value === 'auto' || LANGUAGES.has(value as string), translateToEnglish: bool, liveTyping: bool, removeFillers: bool, sounds: bool, model: oneOf('turbo', 'small') },
   vocabulary: { words: listOf(text), replacements: listOf(pair => object(pair) && text(pair.from) && text(pair.to)), learn: bool, suggestions: listOf(text) },
