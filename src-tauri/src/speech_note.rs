@@ -1,6 +1,7 @@
 //! Notes: talk for as long as you like. While you are still talking the words are transcribed a piece
 //! at a time, cut where you pause, each piece once; the live preview is only the piece still being
-//! said. Letting go leaves only that last piece to transcribe, however long the note.
+//! said. Letting go leaves only that last piece to transcribe, however long the note. A hands-free
+//! session, up to ten minutes, is transcribed the same way.
 use super::*;
 
 /// The longest piece transcribed at once: inside Whisper's 30 s window.
@@ -15,7 +16,7 @@ pub(super) const TAIL: usize = 10 * 60 * 16000;
 /// The note being taken. `committed` counts the samples since the note began that are in `text`;
 /// `cancelled` stops its steps when the note is.
 #[derive(Default)]
-pub(super) struct Note { id: String, text: String, committed: usize, busy: bool, cancelled: Arc<AtomicBool> }
+pub(super) struct Note { id: String, text: String, pub(super) committed: usize, busy: bool, cancelled: Arc<AtomicBool> }
 
 /// Where to cut `len` untranscribed samples, given the speech in them as (start, end) sample ranges:
 /// in the middle of the last pause that closes a piece of at least ENOUGH, within PIECE. A tail that
@@ -94,6 +95,18 @@ impl LocalSpeech {
     }
     let preview = if speech.is_empty() { None } else { self.pass(engine, id, tail, cancelled, true).ok() };
     Ok((base + skip, preview))
+  }
+
+  /// A live pass of a hands-free session, `pcm` starting `base` samples in: the pieces that have ended
+  /// go into its words for good, and the draft is those words and the piece still being said. Until a
+  /// piece is in, it is an ordinary live pass, which a release can take as the answer.
+  pub(super) fn long_draft(&self, engine: &mut Engine, id: &str, base: usize, pcm: &[f32], cancelled: Arc<AtomicBool>) -> Option<String> {
+    let (committed, preview) = self.note_step(engine, id, base, pcm, cancelled.clone()).ok()?;
+    if cancelled.load(Ordering::Relaxed) { return None; }
+    let said = self.same_note(id, |note| note.text.clone()).ok()?;
+    if let (0, Some(words)) = (committed, &preview) { self.hold(id, |hold| hold.heard = Some((base + pcm.len(), words.clone()))); }
+    let text = join(&said, preview.as_deref().unwrap_or_default());
+    (!text.is_empty()).then_some(text)
   }
 
   /// The whole note once the key is let go: what is left of `pcm` (starting `base` samples in) is

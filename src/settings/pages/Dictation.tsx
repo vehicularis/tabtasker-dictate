@@ -1,30 +1,75 @@
+import { useEffect, useState } from 'react';
+import { invoke, listen } from '../../bridge';
 import type { PageProps } from '../../store';
-import { PageHeader, Section, Segmented, Select, Tile, TileGroup, Toggle } from '../../ui';
+import { Button, PageHeader, ProgressBar, Section, Select, Tile, TileGroup, Toggle } from '../../ui';
+import './speech.css';
 
 // The languages Whisper knows best, by name; any of its codes works in settings.json.
 const LANGUAGES: [string, string][] = [
-  ['ar', 'Arabic'], ['bg', 'Bulgarian'], ['bn', 'Bengali'], ['ca', 'Catalan'], ['cs', 'Czech'], ['da', 'Danish'], ['de', 'German'], ['el', 'Greek'],
-  ['en', 'English'], ['es', 'Spanish'], ['fa', 'Persian'], ['fi', 'Finnish'], ['fr', 'French'], ['he', 'Hebrew'], ['hi', 'Hindi'], ['hr', 'Croatian'],
-  ['hu', 'Hungarian'], ['id', 'Indonesian'], ['it', 'Italian'], ['ja', 'Japanese'], ['ko', 'Korean'], ['ms', 'Malay'], ['nl', 'Dutch'], ['no', 'Norwegian'],
-  ['pl', 'Polish'], ['pt', 'Portuguese'], ['ro', 'Romanian'], ['ru', 'Russian'], ['sk', 'Slovak'], ['sl', 'Slovenian'], ['sr', 'Serbian'], ['sv', 'Swedish'],
-  ['th', 'Thai'], ['tr', 'Turkish'], ['uk', 'Ukrainian'], ['ur', 'Urdu'], ['vi', 'Vietnamese'], ['zh', 'Chinese'],
+  ['ar', 'Arabic'], ['az', 'Azerbaijani'], ['bg', 'Bulgarian'], ['bn', 'Bengali'], ['ca', 'Catalan'], ['cs', 'Czech'], ['da', 'Danish'], ['de', 'German'],
+  ['el', 'Greek'], ['en', 'English'], ['es', 'Spanish'], ['et', 'Estonian'], ['fa', 'Persian'], ['fi', 'Finnish'], ['fr', 'French'], ['he', 'Hebrew'],
+  ['hi', 'Hindi'], ['hr', 'Croatian'], ['hu', 'Hungarian'], ['id', 'Indonesian'], ['it', 'Italian'], ['ja', 'Japanese'], ['ko', 'Korean'], ['lt', 'Lithuanian'],
+  ['lv', 'Latvian'], ['ms', 'Malay'], ['nl', 'Dutch'], ['no', 'Norwegian'], ['pl', 'Polish'], ['pt', 'Portuguese'], ['ro', 'Romanian'], ['ru', 'Russian'],
+  ['sk', 'Slovak'], ['sl', 'Slovenian'], ['sr', 'Serbian'], ['sv', 'Swedish'], ['th', 'Thai'], ['tr', 'Turkish'], ['uk', 'Ukrainian'], ['ur', 'Urdu'],
+  ['vi', 'Vietnamese'], ['zh', 'Chinese'],
 ];
 const sorted = [...LANGUAGES].sort((a, b) => a[1].localeCompare(b[1])).map(([value, label]) => ({ value, label }));
 
+type Model = 'turbo' | 'small';
+/// What speech.rs says about the models: the one in use, each one's size and whether it is on this
+/// Mac, and the newest download or load, under way or failed.
+type Models = {
+  active: Model | null; enabled: boolean;
+  step: { model: Model; message: string; percent: number | null; failed: boolean } | null;
+  models: { model: Model; bytes: number; downloaded: boolean }[];
+};
+const MODELS: Record<Model, { name: string; detail: string }> = {
+  turbo: { name: 'Large-v3 Turbo', detail: 'The most accurate.' },
+  small: { name: 'Small', detail: 'Faster and lighter, a little less accurate. Better at translating.' },
+};
+const megabytes = (bytes: number) => `${Math.round(bytes / 1e6)} MB`;
+
+/// The models, kept current by dictate-model, and asked for again when the choice changes.
+function useModels(choice: Model) {
+  const [models, setModels] = useState<Models | null>(null);
+  useEffect(() => listen<Models>('dictate-model', setModels), []);
+  useEffect(() => {
+    let live = true;
+    void invoke<Models>('speech_models').then(next => { if (live) setModels(next); }).catch(() => {});
+    return () => { live = false; };
+  }, [choice]);
+  return models;
+}
+
 export function Dictation({ settings, update }: PageProps) {
   const dictation = settings.dictation;
+  const models = useModels(dictation.model);
+  const [retrying, setRetrying] = useState(false);
   const options = [{ value: 'auto', label: 'Detect automatically' }, ...sorted];
   if (!options.some(option => option.value === dictation.language)) options.push({ value: dictation.language, label: dictation.language });
+  const language = options.find(option => option.value === dictation.language)?.label;
+
+  const step = models?.step?.model === dictation.model ? models.step : null;
+  const active = models?.active ?? null;
+  // The model still answering while the chosen one gets ready.
+  const keeping = active && active !== dictation.model ? MODELS[active].name : null;
+  const keep = () => { if (active) void update({ dictation: { model: active } }); };
+  const chosen = MODELS[dictation.model];
+  const retry = () => { setRetrying(true); void invoke('prepare_model').catch(() => {}).finally(() => setRetrying(false)); };
+
   return <>
     <PageHeader icon="waveform" title="Dictation">How your speech becomes text. Whisper runs on this Mac.</PageHeader>
     <Section title="Language">
       <TileGroup>
-        <Tile title="Language" detail="Pick yours to skip detection and get it right from the first word.">
+        <Tile title="Language" detail={dictation.language === 'auto' ? 'Whisper works out the language each time. Pick yours to get the first words right.' : `Whisper always hears ${language}.`}>
           <Select label="Language" value={dictation.language} options={options} onChange={language => update({ dictation: { language } })} />
         </Tile>
-        <Tile title="Translate to English" detail="Speak any language, type English.">
+        <Tile title="Translate to English" detail="Speak any language, get English.">
           <Toggle label="Translate to English" checked={dictation.translateToEnglish} onChange={translateToEnglish => update({ dictation: { translateToEnglish } })} />
         </Tile>
+        {dictation.translateToEnglish && dictation.model === 'turbo' && <Tile title="Small translates better" detail="Large-v3 Turbo isn’t trained to translate, so it often types what you said as you said it.">
+          <Button small onClick={() => update({ dictation: { model: 'small' } })}>Use Small</Button>
+        </Tile>}
       </TileGroup>
     </Section>
     <Section title="Typing">
@@ -32,7 +77,7 @@ export function Dictation({ settings, update }: PageProps) {
         <Tile title="Live typing" detail="Words appear as you speak. Off, they arrive all at once when you let go.">
           <Toggle label="Live typing" checked={dictation.liveTyping} onChange={liveTyping => update({ dictation: { liveTyping } })} />
         </Tile>
-        <Tile title="Remove filler words" detail="Leaves out um, uh and er.">
+        <Tile title="Remove filler words" detail="Leaves out um, uh, er, ah and hmm. “Like” always stays.">
           <Toggle label="Remove filler words" checked={dictation.removeFillers} onChange={removeFillers => update({ dictation: { removeFillers } })} />
         </Tile>
         <Tile title="Sounds" detail="A soft sound when listening starts and stops.">
@@ -40,11 +85,41 @@ export function Dictation({ settings, update }: PageProps) {
         </Tile>
       </TileGroup>
     </Section>
-    <Section title="Speech model" note="Both models stay on this Mac; switching keeps the other for later.">
-      <TileGroup>
-        <Tile title="Model" detail={dictation.model === 'turbo' ? 'Whisper large-v3 Turbo: the most accurate.' : 'Whisper small: faster and lighter, a little less accurate.'}>
-          <Segmented label="Model" value={dictation.model} options={[{ value: 'turbo', label: 'Turbo' }, { value: 'small', label: 'Small' }]} onChange={model => update({ dictation: { model } })} />
-        </Tile>
+    <Section title="Speech model" note={models && !models.enabled
+      ? 'Dictation is paused. The chosen model downloads when you turn it back on.'
+      : 'Each model is downloaded once and kept, so switching back needs no download.'}>
+      <TileGroup label="Speech model">
+        {(['turbo', 'small'] as const).map(model => {
+          const file = models?.models.find(one => one.model === model);
+          const inUse = active === model;
+          return <Tile key={model} title={MODELS[model].name} detail={`${MODELS[model].detail}${file ? ` ${megabytes(file.bytes)}.` : ''}`}>
+            {dictation.model === model
+              ? <span className="state" data-on={inUse || undefined}>{inUse ? 'In use' : step && !step.failed ? 'Getting ready' : 'Chosen'}</span>
+              : inUse
+                // Still answering while the chosen one gets ready: the card below offers to keep it.
+                ? <span className="state">In use</span>
+                : <Button small aria-label={`Use ${MODELS[model].name}`} onClick={() => update({ dictation: { model } })}>{file?.downloaded ? 'Use' : 'Download'}</Button>}
+          </Tile>;
+        })}
+        {step && <Tile title={step.failed ? `${chosen.name} isn’t ready` : `Getting ${chosen.name} ready`} stack>
+          <div className="speech-progress" aria-live="polite">
+            {step.failed ? <>
+              <span className="line" data-failed>{step.message}</span>
+              <span className="why">{keeping ? `${keeping} is still in use.` : 'Dictation starts as soon as it is ready.'}</span>
+              <span className="actions">
+                <Button small variant="primary" disabled={retrying} onClick={retry}>Try again</Button>
+                {keeping && <Button small onClick={keep}>Keep {keeping}</Button>}
+              </span>
+            </> : <>
+              <div className="row">
+                <span className="line">{step.message}</span>
+                {keeping && <Button small variant="quiet" onClick={keep}>Cancel</Button>}
+              </div>
+              <ProgressBar label={step.message} value={step.percent == null ? null : step.percent / 100} />
+              <span className="why">{keeping ? `${keeping} keeps working until ${chosen.name} is ready.` : 'Dictation starts as soon as it is ready.'}</span>
+            </>}
+          </div>
+        </Tile>}
       </TileGroup>
     </Section>
   </>;
