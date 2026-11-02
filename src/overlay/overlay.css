@@ -64,8 +64,14 @@ button { font: inherit; color: inherit; }
 
 .pill { position: absolute; display: flex; z-index: 1; gap: 4px; padding: 4px; border-radius: 19px; opacity: 0; pointer-events: none; transform: scale(.6); transition: opacity .15s, transform .25s var(--ease); }
 .layer[data-mode='hover'] .pill { opacity: 1; pointer-events: auto; transform: none; transition: opacity .15s .04s, transform .4s var(--spring) .04s; }
-.pill button { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: var(--surface); cursor: pointer; transition: background .15s; }
+.pill button { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; color: var(--ink); background: var(--surface); cursor: pointer; transition: background .15s; }
 .pill button:hover { background: var(--surface-3); }
+/* Business's whiteboard tiles: one light, fine edges, a quiet cast shadow, a small lift on hover. */
+.wb-tool-glyph { overflow: visible; transition: transform 180ms cubic-bezier(.2, .8, .2, 1); }
+.wb-glyph-object { filter: drop-shadow(0 1px .65px rgb(0 0 0 / .16)); }
+.pill button:hover .wb-tool-glyph { transform: translateY(-1px); }
+.pill button:active .wb-tool-glyph { transform: translateY(0) scale(.94); }
+@media (prefers-reduced-motion: reduce) { .wb-tool-glyph { transition: none; } .pill button .wb-tool-glyph { transform: none; } }
 .layer:is([data-edge='left'], [data-edge='right']) .pill { flex-direction: column; }
 /* The key's hint, beside the pill while you point at it, clear of the pill at every size. */
 .label { --clear: calc(50% + 53px * var(--scale) + 10px); position: absolute; top: 50%; left: var(--clear); display: flex; white-space: nowrap; font-size: 12.5px; pointer-events: none; transform: translate(-4px, -50%); opacity: 0; transition: opacity .15s, transform .3s var(--ease); }

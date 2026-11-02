@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { KEY_NAMES } from '../../overlay/Dock';
-import { GearIcon } from '../../overlay/icons';
+import { LibraryGlyph, NoteGlyph, SettingsGlyph } from '../../overlay/glyphs';
 import type { Edge, PageProps, Patch, Settings, Size, Theme } from '../../store';
-import { Icon, PageHeader, Section, Segmented, Tile, TileGroup, Toggle } from '../../ui';
+import { PageHeader, Section, Segmented, Tile, TileGroup, Toggle } from '../../ui';
 
 const THEMES: { value: Theme; label: string }[] = [{ value: 'system', label: 'Automatic' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }];
 const EDGES: { value: Edge; label: string }[] = [{ value: 'left', label: 'Left' }, { value: 'bottom', label: 'Bottom' }, { value: 'right', label: 'Right' }];
@@ -75,7 +75,7 @@ function Preview({ look, keyName, moment, onMoment }: { look: Settings['appearan
         </div>
         <span className="look-dock">
           <span className="look-dots"><i /><i /><i /></span>
-          <span className="look-pill"><i><Icon name="note" size={17} /></i><i><Icon name="library" size={17} /></i><i><GearIcon /></i></span>
+          <span className="look-pill"><i><NoteGlyph size={18} /></i><i><LibraryGlyph size={18} /></i><i><SettingsGlyph size={18} /></i></span>
           <span className="look-orb"><i /><i /><i /><i /><i /></span>
           {look.hint && <span className="look-hint"><kbd>{keyName}</kbd>hold to type</span>}
           <svg className="look-pointer" viewBox="0 0 12 18"><path d="M1 1v14l3.6-3.4 2.3 5.4 2.3-1-2.3-5.3H12z" /></svg>
