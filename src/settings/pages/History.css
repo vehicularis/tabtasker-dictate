@@ -1,0 +1,44 @@
+/* History & stats: figures as tiles, a 30-day chart, top apps, and what you said. */
+
+/* ---------- figures: tiles in a grid, outer corners round, seams small ---------- */
+.stats-figures { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--seam); margin: 0; overflow: hidden; border-radius: var(--radius-group); }
+.stats-figure { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 12px 14px 13px; border-radius: var(--radius-seam); background: var(--surface); }
+.stats-figure dt { font-size: 12px; color: var(--ink-2); }
+.stats-figure dd { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 4px; margin: 0; }
+.stats-figure .value { font-size: 22px; font-weight: 600; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+.stats-figure .unit { font-size: 13px; font-weight: 500; color: var(--ink-2); }
+.stats-figure .hint { flex-basis: 100%; font-size: 11.5px; color: var(--ink-3); }
+
+/* ---------- the chart ---------- */
+.stats-chart { padding: 12px 14px 10px; border-radius: var(--radius-group); background: var(--surface); }
+.stats-readout { margin: 0 0 12px; font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.stats-readout strong { font-weight: 600; color: var(--ink); }
+.stats-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.stats-chart .hit { fill: transparent; }
+.stats-chart .bar { fill: var(--ink-3); transition: fill var(--quick) var(--ease); }
+.stats-chart [data-empty] .bar { fill: var(--surface-3); }
+.stats-chart [data-picked] .bar { fill: var(--accent); }
+.stats-axis { display: flex; justify-content: space-between; margin-top: 7px; font-size: 11.5px; color: var(--ink-3); }
+
+/* ---------- top apps ---------- */
+.stats-share { display: inline-flex; align-items: center; gap: 10px; }
+.stats-share .ui-progress { width: 120px; }
+.stats-share .percent { min-width: 32px; font-size: 12px; text-align: right; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+
+/* ---------- what you said ---------- */
+.history-search { margin: 0 0 4px; }
+/* The field's own ring would sit inside the label's. */
+.history-search input:focus-visible { outline: none; }
+.history-count { flex: none; font-size: 12px; color: var(--ink-3); }
+.history-day { margin: 18px 4px 8px; font-size: 11.5px; font-weight: 600; color: var(--ink-3); }
+.history-entry { padding: 11px 10px 8px 14px; border-radius: var(--radius-seam); background: var(--surface); }
+.history-entry .text { margin: 0 4px 0 0; font-size: 13.5px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; user-select: text; -webkit-user-select: text; }
+.history-entry[data-folded] .text { display: -webkit-box; overflow: hidden; -webkit-line-clamp: 4; -webkit-box-orient: vertical; }
+.history-entry mark { border-radius: 3px; color: inherit; background: var(--accent-fill); box-shadow: 0 0 0 1.5px var(--accent-fill); }
+.history-entry .meta { display: flex; align-items: center; gap: 10px; min-height: 24px; margin-top: 5px; font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.history-entry .fold { font-size: 12px; color: var(--ink-2); }
+.history-entry .actions { display: flex; gap: 2px; margin-left: auto; }
+.history-entry .actions .ui-button { color: var(--ink-3); }
+.history-entry:hover .actions .ui-button, .history-entry .actions .ui-button:focus-visible { color: var(--ink-2); }
+.history-entry .actions .ui-button:hover { color: var(--ink); }
+.history-more { display: flex; justify-content: center; margin-top: 12px; }
