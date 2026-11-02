@@ -341,6 +341,8 @@ pub fn run() {
       notes::save_note, notes::show_notes, notes::notes_folder, notes::preview_note, notes::choose_folder, settings::get_settings, settings::update_settings, settings::reset_settings,
       speech::speech_models, speech::prepare_model, speech::vocabulary_fit, text::list_apps,
       history::history_list, history::history_stats, history::history_delete, history::history_clear, history::history_type,
+      ai::claude_save_key, ai::claude_test, ai::claude_remove_key, ai::claude_open_console, ai::claude_insert, ai::claude_dismiss,
+      ai::claude_code_find, ai::claude_code_set, ai::send_to_claude_code,
     ])
     .setup(|app| {
       app.set_activation_policy(ActivationPolicy::Accessory); // a menu bar app: no Dock icon
@@ -348,6 +350,7 @@ pub fn run() {
       APP.get_or_init(|| handle.clone());
       settings::init(&handle)?;
       history::init(&handle)?;
+      ai::init(&handle);
       speech::init(&handle)?;
       unsafe { dictate_init() };
       settings::apply(&handle, &settings::get());

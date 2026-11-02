@@ -436,10 +436,15 @@ pub fn update_settings(app: AppHandle, mut patch: Value) -> Result<Settings, Str
   update(&app, &patch)
 }
 
-/// Everything back to how it was on first launch.
+/// Everything back to how it was on first launch. The Anthropic key is no setting: it stays in the
+/// Keychain, so Claude stays connected as it was, now and at the next launch.
 #[tauri::command]
 pub fn reset_settings(app: AppHandle) -> Result<Settings, String> {
-  replace(&app, |_| Settings::default())
+  replace(&app, |current| {
+    let mut fresh = Settings::default();
+    fresh.claude.enabled = current.claude.enabled;
+    fresh
+  })
 }
 
 #[cfg(test)]
