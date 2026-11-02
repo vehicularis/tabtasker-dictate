@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { invoke, listen } from '../../bridge';
 import { meetingLength, meetingWhen, useMeetingState, type MeetingEvent } from '../../overlay/MeetingPill';
 import { folderPath, tilde, useStatus, type PageProps } from '../../store';
-import { Button, GroupHeader, Section, TextField, Tile, TileGroup, Toggle } from '../../ui';
+import { Button, PageHeader, Section, TextField, Tile, TileGroup, Toggle } from '../../ui';
 
 const sentence = (text: string) => /[.!?]$/.test(text) ? text : `${text}.`;
 
@@ -73,7 +73,7 @@ export function Meetings({ settings, update }: PageProps) {
     ? 'Needs macOS 14.2 or later. On this Mac, meetings record your microphone only.'
     : `Includes the Mac’s own sound, such as the other side of a call.${permission === 'notDetermined' ? ' macOS asks once, when the first meeting starts.' : ''}`;
   return <>
-    <GroupHeader title="Meetings">Record a call or a room, and get a transcript with who said what. Start one from the dots’ pill, their menu, the menu bar, or here.</GroupHeader>
+    <PageHeader icon="meeting" title="Meetings">Record a call or a room, and get a transcript with who said what. Start one from the dots’ pill, their menu, the menu bar, or here.</PageHeader>
     <Section note={startProblem ?? undefined}>
       <TileGroup>
         <Tile title={recording ? 'Recording a meeting' : 'Start a meeting'}

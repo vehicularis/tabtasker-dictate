@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { invoke, listen } from '../../bridge';
 import type { DictateKey, HistoryEntry, HoldMode, Keep, PageProps } from '../../store';
-import { Button, EmptyState, Icon, GroupHeader, Section, Select, Tile, TileGroup, Toast } from '../../ui';
+import { Button, EmptyState, Icon, PageHeader, Section, Select, Tile, TileGroup, Toast } from '../../ui';
 import './History.css';
 
 /// history.rs's stats: `today` is a local day number (days since 1970-01-01 on this Mac) and `days`
@@ -121,7 +121,7 @@ export function History({ settings, update }: PageProps) {
   }
 
   return <>
-    <GroupHeader title="History & stats">What you dictated, and how much typing it saved.</GroupHeader>
+    <PageHeader icon="history" title="History & stats">What you dictated, and how much typing it saved.</PageHeader>
     {stats && <>
       <Section title="Stats">
         <Figures stats={stats} />

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { invoke } from '../../bridge';
 import { sendsByDefault, type AppStyle, type PageProps, type Style } from '../../store';
-import { Button, Icon, GroupHeader, Section, Select, Tile, TileGroup, Toggle } from '../../ui';
+import { Button, Icon, PageHeader, Section, Select, Tile, TileGroup, Toggle } from '../../ui';
 import './speech.css';
 
 const STYLES: { value: Style; label: string; detail: string; said?: string; typed?: string }[] = [
@@ -99,7 +99,7 @@ export function AppStyles({ settings, update }: PageProps) {
   const claude = settings.claude.enabled;
 
   return <>
-    <GroupHeader title="App styles">How your words are written in each app.</GroupHeader>
+    <PageHeader icon="apps" title="App styles">How your words are written in each app.</PageHeader>
     <Section title="Everywhere else">
       <TileGroup>
         <Tile title="Default style" detail="For every app without a style of its own.">

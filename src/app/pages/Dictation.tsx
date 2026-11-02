@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { invoke, listen } from '../../bridge';
 import { SOUNDS, type PageProps } from '../../store';
-import { Button, GroupHeader, ProgressBar, Section, Select, Slider, Tile, TileGroup, Toggle } from '../../ui';
+import { Button, PageHeader, ProgressBar, Section, Select, Slider, Tile, TileGroup, Toggle } from '../../ui';
 import './speech.css';
 
 // The languages Whisper knows best, by name; any of its codes works in settings.json.
@@ -62,7 +62,7 @@ export function Dictation({ settings, update }: PageProps) {
   const play = (name: string) => invoke('play_sound', { name, volume: dictation.soundVolume }).catch(() => {});
 
   return <>
-    <GroupHeader title="Dictation">How your speech becomes text. Whisper runs on this Mac.</GroupHeader>
+    <PageHeader icon="waveform" title="Speech">How your speech becomes text. Whisper runs on this Mac.</PageHeader>
     <Section title="Language">
       <TileGroup>
         <Tile title="Language" detail={dictation.language === 'auto' ? 'Whisper works out the language each time. Pick yours to get the first words right.' : `Whisper always hears ${language}.`}>

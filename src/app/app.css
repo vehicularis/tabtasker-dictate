@@ -76,6 +76,9 @@ button, input, select { font-family: var(--font); }
 .column-group-head .count { margin-left: auto; width: 28px; font-weight: 400; letter-spacing: 0; text-align: center; font-variant-numeric: tabular-nums; }
 .column-group[data-open] .count { display: none; }
 .column-rows { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+/* A plain heading over rows that do not fold (the settings groups), the same type as the folding one. */
+.column-section + .column-section { margin-top: 12px; }
+.column-heading { margin: 0; padding: 0 8px 4px; font: 600 10px/16px var(--font); letter-spacing: 1px; text-transform: uppercase; color: var(--ink-3); }
 .column-row, .list-item { position: relative; display: flex; align-items: flex-start; gap: 9px; width: 100%; min-height: 36px; box-sizing: border-box; padding: 8px 8px; border: 0; border-radius: 8px; font-size: 12px; line-height: 20px; text-align: left; color: color-mix(in srgb, var(--ink) 90%, transparent); background: none; cursor: pointer; transition: background var(--quick) var(--ease), color var(--quick) var(--ease); }
 .column-row:hover, .list-item:hover { background: color-mix(in srgb, var(--secondary) 60%, transparent); }
 .column-row:focus-visible, .list-item:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }

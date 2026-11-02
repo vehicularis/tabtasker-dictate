@@ -212,11 +212,11 @@ function Seen({ settings }: { settings: Settings }) {
   const polished = apps.styles.filter(app => app.polish && app.style !== 'raw').length;
   const commands = claude.commands && shortcuts.command !== 'off';
   const rows: { title: string; detail: string; on: boolean; state: string; route?: string; place?: string }[] = [
-    { title: 'Polish', detail: 'What you dictate, in apps where polish is on, to tidy it.', on: polished > 0, state: polished ? `In ${polished} ${polished === 1 ? 'app' : 'apps'}` : 'Off', route: 'settings', place: 'General' },
+    { title: 'Polish', detail: 'What you dictate, in apps where polish is on, to tidy it.', on: polished > 0, state: polished ? `In ${polished} ${polished === 1 ? 'app' : 'apps'}` : 'Off', route: 'settings/apps', place: 'App styles' },
     { title: 'Commands', detail: 'What you say with the command key, and the text you selected.', on: commands, state: commands ? 'On' : 'Off',
-      ...(shortcuts.command === 'off' && { route: 'settings', place: 'General' }) },
-    { title: 'Notes', detail: 'A saved note’s words, for its title and action items.', on: notes.claudeTitle || notes.claudeActions, state: notes.claudeTitle || notes.claudeActions ? 'On' : 'Off', route: 'settings/notes', place: 'Notes & meetings' },
-    { title: 'Meetings', detail: 'The transcript, for a summary, decisions and action items.', on: meetings.summarize, state: meetings.summarize ? 'On' : 'Off', route: 'settings/notes', place: 'Notes & meetings' },
+      ...(shortcuts.command === 'off' && { route: 'settings/shortcuts', place: 'Shortcuts' }) },
+    { title: 'Notes', detail: 'A saved note’s words, for its title and action items.', on: notes.claudeTitle || notes.claudeActions, state: notes.claudeTitle || notes.claudeActions ? 'On' : 'Off', route: 'settings/notes', place: 'Notes' },
+    { title: 'Meetings', detail: 'The transcript, for a summary, decisions and action items.', on: meetings.summarize, state: meetings.summarize ? 'On' : 'Off', route: 'settings/meetings', place: 'Meetings' },
   ];
   return <Section title="What the model sees" note={claude.via === 'local' ? 'Only text, and only to the model on this Mac.' : claude.via === 'claudeCode' ? 'Only text, sent through Claude Code with your Claude account. Your voice never leaves this Mac.' : 'Only text, sent straight to Anthropic over an encrypted connection with your key. Your voice never leaves this Mac.'}>
     <TileGroup>

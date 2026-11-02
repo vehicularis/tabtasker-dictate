@@ -7,9 +7,15 @@ import { applyTheme, Icon, Toast, type IconName } from '../ui';
 import { ColumnHead } from './Column';
 import { About } from './pages/About';
 import { Appearance } from './pages/Appearance';
+import { AppStyles } from './pages/AppStyles';
+import { Dictation } from './pages/Dictation';
+import { General } from './pages/General';
+import { History } from './pages/History';
+import { Meetings } from './pages/Meetings';
+import { Notes } from './pages/Notes';
 import { SettingsAI } from './pages/SettingsAI';
-import { SettingsGeneral } from './pages/SettingsGeneral';
-import { SettingsNotes } from './pages/SettingsNotes';
+import { Shortcuts } from './pages/Shortcuts';
+import { Vocabulary } from './pages/Vocabulary';
 import { HelpView } from './views/HelpView';
 import { NotePage, NotesColumn } from './views/NotesView';
 import { StickiesView } from './views/StickiesView';
@@ -28,12 +34,20 @@ const PLACES: Place[] = [
   { route: 'meetings', title: 'Meetings', icon: 'meeting' },
   { route: 'stickies', title: 'Stickies', icon: 'sticky' },
 ];
-const SETTINGS: (Place & { Page: ComponentType<PageProps> })[] = [
-  { route: 'settings', title: 'General', icon: 'general', Page: SettingsGeneral },
-  { route: 'settings/notes', title: 'Notes & meetings', icon: 'book', Page: SettingsNotes },
-  { route: 'settings/agents', title: 'Agents', icon: 'agents', Page: SettingsAI },
-  { route: 'settings/appearance', title: 'Appearance', icon: 'appearance', Page: Appearance },
+/// The settings, a page each, in three groups as Business's settings column groups its sections.
+const SETTINGS: (Place & { Page: ComponentType<PageProps>; group: string })[] = [
+  { route: 'settings', title: 'General', icon: 'general', Page: General, group: 'Dictation' },
+  { route: 'settings/shortcuts', title: 'Shortcuts', icon: 'keyboard', Page: Shortcuts, group: 'Dictation' },
+  { route: 'settings/speech', title: 'Speech', icon: 'waveform', Page: Dictation, group: 'Dictation' },
+  { route: 'settings/apps', title: 'App styles', icon: 'apps', Page: AppStyles, group: 'Dictation' },
+  { route: 'settings/vocabulary', title: 'Vocabulary', icon: 'book', Page: Vocabulary, group: 'Dictation' },
+  { route: 'settings/notes', title: 'Notes', icon: 'note', Page: Notes, group: 'Notes' },
+  { route: 'settings/meetings', title: 'Meetings', icon: 'meeting', Page: Meetings, group: 'Notes' },
+  { route: 'settings/agents', title: 'Agents', icon: 'agents', Page: SettingsAI, group: 'App' },
+  { route: 'settings/appearance', title: 'Appearance', icon: 'appearance', Page: Appearance, group: 'App' },
+  { route: 'settings/history', title: 'History & stats', icon: 'history', Page: History, group: 'App' },
 ];
+const SETTINGS_GROUPS = [...new Set(SETTINGS.map(page => page.group))];
 const EXTRA: Record<string, Place> = {
   about: { route: 'about', title: 'About', icon: 'about' },
   help: { route: 'help', title: 'Help', icon: 'help' },
@@ -194,19 +208,22 @@ export function App() {
   </div>;
 }
 
-/// The settings pages as the column's rows.
+/// The settings pages as the column's rows, under their group's heading.
 function SettingsColumn({ current, onOpen }: { current: string; onOpen: (route: string) => void }) {
   return <>
     <ColumnHead title="Settings" />
     <div className="column-scroll">
-      <ul className="column-rows">
-        {SETTINGS.map(page => <li key={page.route}>
-          <button type="button" className="column-row" aria-current={current === page.route || undefined} onClick={() => onOpen(page.route)}>
-            <span className="column-row-icon"><Icon name={page.icon} size={16} /></span>
-            <span className="column-row-words"><span className="t">{page.title}</span></span>
-          </button>
-        </li>)}
-      </ul>
+      {SETTINGS_GROUPS.map(group => <section key={group} className="column-section">
+        <h3 className="column-heading">{group}</h3>
+        <ul className="column-rows">
+          {SETTINGS.filter(page => page.group === group).map(page => <li key={page.route}>
+            <button type="button" className="column-row" aria-current={current === page.route || undefined} onClick={() => onOpen(page.route)}>
+              <span className="column-row-icon"><Icon name={page.icon} size={16} /></span>
+              <span className="column-row-words"><span className="t">{page.title}</span></span>
+            </button>
+          </li>)}
+        </ul>
+      </section>)}
     </div>
   </>;
 }

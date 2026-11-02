@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { invoke } from '../../bridge';
 import { resetSettings, useStatus, type PageProps } from '../../store';
-import { Button, Icon, GroupHeader, Section, Select, Tile, TileGroup, Toggle } from '../../ui';
+import { Button, Icon, PageHeader, Section, Select, Tile, TileGroup, Toggle } from '../../ui';
 
 const ask = (kind: string) => void invoke('request', { kind }).catch(() => {});
 
@@ -18,7 +18,7 @@ export function General({ settings, update }: PageProps) {
   const icon = settings.general.menuBarIcon;
   const mic = status?.microphone;
   return <>
-    <GroupHeader title="Startup and listening">How TabTasker Dictate starts, and which microphone it listens with.</GroupHeader>
+    <PageHeader icon="general" title="General">How TabTasker Dictate starts, and which microphone it listens with.</PageHeader>
     <Section title="Startup">
       <TileGroup>
         <Tile title="Open at Login" detail="Starts in the menu bar when you log in.">

@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { invoke } from '../../bridge';
 import { tilde, useStatus, type PageProps, type Settings } from '../../store';
-import { Button, ChipList, Icon, GroupHeader, Section, Tile, TileGroup, Toggle } from '../../ui';
+import { Button, ChipList, Icon, PageHeader, Section, Tile, TileGroup, Toggle } from '../../ui';
 import './Notes.css';
 
 type Folder = { path: string; vault: string | null };
@@ -95,7 +95,7 @@ export function Notes({ settings, update }: PageProps) {
   const path = folder?.path ?? status?.notes;
   const name = path?.split('/').filter(Boolean).pop() ?? 'TabTasker Dictate';
   return <>
-    <GroupHeader title="Notes">Spoken notes are saved as Markdown files in a folder you choose.</GroupHeader>
+    <PageHeader icon="note" title="Notes">Spoken notes are saved as Markdown files in a folder you choose.</PageHeader>
 
     <Section title="Folder" note={folderProblem ?? (notes.folder
       ? <>Notes are saved here from now on; notes already saved stay where they are. <button type="button" className="link" onClick={() => void update({ notes: { folder: null } })}>Use the default folder</button></>
