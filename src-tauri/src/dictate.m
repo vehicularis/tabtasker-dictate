@@ -4,9 +4,11 @@
 #import <AudioToolbox/AudioToolbox.h>
 #import <ApplicationServices/ApplicationServices.h>
 #import <ServiceManagement/ServiceManagement.h>
+#include <dlfcn.h>
+#include "keys.h"
 
 // Everything the person sees is drawn by the overlay page (the `voice` window); this file owns the
-// fn key, the microphone and the overlay window's native parts (blur, click-through).
+// dictate key, the microphone and the overlay window's native parts (blur, click-through).
 extern void dictate_ui_state(const char *phase, double level, bool dictating);
 extern void dictate_ui_error(const char *message);
 extern void dictate_ui_fn(bool down);
@@ -26,7 +28,11 @@ extern bool dictate_note_finish(const char *request, size_t base, const float *s
 extern void dictate_hold_begin(const char *request, const char *mode, const char *bundle_id);
 // A spoken command for Claude (Rust): false when Claude is not connected.
 extern bool dictate_command(const char *request, const char *instruction, const char *selection, const char *bundle_id);
+extern void dictate_ui_hands_free(bool locked);
+extern void dictate_paste_last(void);
+extern bool dictate_meeting(const char *action);
 bool dictate_open_at_login(int set);
+static NSWindow *TTVoiceOverlayWindow(void);
 
 // ---------- The read-aloud player: speech arrives in pieces as it is made, tagged with the reply ----------
 
@@ -43,6 +49,7 @@ bool dictate_open_at_login(int set);
 @property NSTimeInterval meteredAt;
 - (double)level;
 - (void)resetLevel;
+- (NSUInteger)count;
 - (void)append:(AVAudioPCMBuffer *)buffer;
 - (NSData *)freeze;
 - (NSData *)snapshot;
@@ -134,6 +141,7 @@ bool dictate_open_at_login(int set);
   }
 }
 - (void)resetLevel { @synchronized (self) { self.rms = 0; } }
+- (NSUInteger)count { @synchronized (self) { return self.samples.length / sizeof(float); } }
 - (NSData *)snapshot { @synchronized (self) { return [self.samples copy]; } }
 - (NSData *)snapshotFrom:(NSUInteger *)base { @synchronized (self) { *base = self.dropped; return [self.samples copy]; } }
 // A note's audio up to `transcribed` samples into it is in its words: let it go.
@@ -150,7 +158,7 @@ bool dictate_open_at_login(int set);
 typedef NS_ENUM(NSUInteger, TTVoicePhase) { TTVoiceIdle, TTVoiceListening, TTVoiceFinishing, TTVoiceSubmitting };
 
 @interface TTVoiceCommands : NSObject
-@property BOOL enabled, held, fnDown, blocked, modelReady, modelPreparing, trusted, dictating;
+@property BOOL enabled, held, pressed, blocked, modelReady, modelPreparing, trusted, dictating; // pressed: the dictate key, physically
 @property NSUInteger generation, gesture;
 @property (nonatomic) TTVoicePhase phase;
 @property (copy) NSString *request, *modelMessage;
@@ -175,8 +183,18 @@ typedef NS_ENUM(NSUInteger, TTVoicePhase) { TTVoiceIdle, TTVoiceListening, TTVoi
 // minutes of quiet.
 @property BOOL noting;
 @property NSTimeInterval lastSpoke;
-// The app's settings as Rust last applied them (settings.json, camelCase).
+// The app's settings as Rust last applied them (settings.json, camelCase), and what this file reads
+// from them: the dictate key, the modifier that talks to Claude (0 when off or not connected), the
+// chords by name as [key code, modifiers], live typing and the sounds.
 @property (copy) NSDictionary *settings;
+@property TTKey key;
+@property NSEventModifierFlags commandFlag;
+@property (copy) NSDictionary<NSString *, NSArray<NSNumber *> *> *chords;
+@property BOOL handsFree, liveTyping, sounds;
+// A hold that speaks to Claude, and a session a double tap keeps listening without the key.
+@property BOOL commanding, locked;
+@property (strong) NSRunningApplication *app; // in front as the hold began: where its words go
+@property (copy) NSString *selection; // a command's selected text, as the hold began
 @end
 
 // The text field that has the keyboard focus, as Accessibility sees it.
@@ -186,6 +204,20 @@ static id TTVoiceFocusedField(void) {
   AXUIElementCopyAttributeValue(everything, kAXFocusedUIElementAttribute, &field);
   CFRelease(everything);
   return (__bridge_transfer id)field;
+}
+static NSString *TTVoiceSelectedText(id field) {
+  CFTypeRef selected = NULL;
+  if (!field || AXUIElementCopyAttributeValue((__bridge AXUIElementRef)field, kAXSelectedTextAttribute, &selected) != kAXErrorSuccess) return nil;
+  id value = (__bridge_transfer id)selected;
+  return [value isKindOfClass:NSString.class] ? value : nil;
+}
+// In this app's own windows words go only into a text field: a typed space would press a focused
+// button or flip a switch.
+static BOOL TTVoiceTextField(id field) {
+  CFTypeRef role = NULL;
+  if (!field || AXUIElementCopyAttributeValue((__bridge AXUIElementRef)field, kAXRoleAttribute, &role) != kAXErrorSuccess) return NO;
+  id name = (__bridge_transfer id)role;
+  return [@[(__bridge NSString *)kAXTextFieldRole, (__bridge NSString *)kAXTextAreaRole, (__bridge NSString *)kAXComboBoxRole] containsObject:name];
 }
 static BOOL TTVoiceSameField(id one, id other) {
   return one == other || (one && other && CFEqual((__bridge CFTypeRef)one, (__bridge CFTypeRef)other));
@@ -275,8 +307,44 @@ static dispatch_queue_t TTVoiceAudioQueue(void) {
   return queue;
 }
 
-@implementation TTVoiceCommands
+static NSDictionary *TTVoiceObject(id value) { return [value isKindOfClass:NSDictionary.class] ? value : nil; }
+
+// The app each command was said in, by request, so its answer is typed there. The newest few are kept.
+static NSMutableArray<NSArray *> *TTVoiceCommandApps(void) {
+  static NSMutableArray *apps;
+  if (!apps) apps = [NSMutableArray new];
+  return apps;
+}
+static void TTVoiceRememberCommand(NSString *request, NSRunningApplication *app) {
+  if (!request || !app) return;
+  [TTVoiceCommandApps() addObject:@[request, app]];
+  if (TTVoiceCommandApps().count > 8) [TTVoiceCommandApps() removeObjectAtIndex:0];
+}
+static NSRunningApplication *TTVoiceCommandApp(NSString *request) {
+  for (NSArray *pair in TTVoiceCommandApps()) if ([pair[0] isEqualToString:request]) return pair[1];
+  return nil;
+}
+static BOOL TTVoiceFront(NSRunningApplication *app) {
+  return app && NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier == app.processIdentifier;
+}
+static void TTVoiceWhenFront(NSRunningApplication *app, NSUInteger tries, void (^then)(BOOL front)) {
+  if (TTVoiceFront(app) || !tries || !app || app.terminated) { then(TTVoiceFront(app)); return; }
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 50 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{ TTVoiceWhenFront(app, tries - 1, then); });
+}
+// Brings `app` forward and runs `then` once it is in front, or with NO after about a second.
+static void TTVoiceBringForward(NSRunningApplication *app, void (^then)(BOOL front)) {
+  if (app && !app.terminated && !TTVoiceFront(app)) [app activateWithOptions:0];
+  TTVoiceWhenFront(app, 20, then);
+}
+
+@implementation TTVoiceCommands {
+  TTTaps _taps;
+}
 @synthesize phase = _phase;
+- (instancetype)init {
+  if ((self = [super init])) { _key = TTKeyFn; _handsFree = _liveTyping = _sounds = YES; }
+  return self;
+}
 - (const char *)phaseName {
   switch (self.phase) {
     case TTVoiceListening: return "listening";
@@ -287,6 +355,7 @@ static dispatch_queue_t TTVoiceAudioQueue(void) {
 }
 - (void)setPhase:(TTVoicePhase)phase {
   _phase = phase;
+  if (phase != TTVoiceListening && self.locked) { self.locked = NO; dictate_ui_hands_free(false); }
   if (phase == TTVoiceListening && !self.levelTimer) {
     __weak TTVoiceCommands *weak = self;
     self.levelTimer = [NSTimer timerWithTimeInterval:1.0 / 30 repeats:YES block:^(NSTimer *timer) { (void)timer; [weak tick]; }];
@@ -318,7 +387,14 @@ static dispatch_queue_t TTVoiceAudioQueue(void) {
   self.displayLevel = target > self.displayLevel ? target : self.displayLevel * 0.82;
   if (self.displayLevel < 0.0001) self.displayLevel = 0;
   dictate_ui_state("listening", MIN(1, self.displayLevel), self.dictating);
-  if (!self.noting) return;
+  if (!self.noting) {
+    // Half a second short of what the buffer holds, so the end of what was said is sent, not dropped.
+    TTVoiceAudio *audio = self.audio;
+    if (!audio || audio.count + 8000 < audio.limit) return;
+    dictate_ui_notice("Stopped at one minute");
+    self.held = NO; [self finish];
+    return;
+  }
   NSTimeInterval now = NSProcessInfo.processInfo.systemUptime;
   if (target > 0.01) self.lastSpoke = now;
   else if (now - self.lastSpoke > 180) { // a note left running: what was said is kept
@@ -342,7 +418,8 @@ static dispatch_queue_t TTVoiceAudioQueue(void) {
   self.audio = nil;
   if (self.request) dictate_cancel(self.request.UTF8String);
   [self settleTyped];
-  self.request = nil; self.dictating = NO; self.noting = NO; self.phase = TTVoiceIdle;
+  self.request = nil; self.dictating = NO; self.noting = NO; self.commanding = NO; self.selection = nil; self.app = nil;
+  self.phase = TTVoiceIdle;
 }
 // What this hold typed is in the field now, finished or not; unless the person moved on, the next hold
 // carries on from it.
@@ -356,21 +433,32 @@ static dispatch_queue_t TTVoiceAudioQueue(void) {
   dictate_ui_error(message.UTF8String);
 }
 - (void)begin {
-  if (self.phase != TTVoiceIdle || !self.enabled || !self.held || self.blocked) return;
+  if (self.phase != TTVoiceIdle || !self.enabled || !(self.held || self.locked) || self.blocked) return;
   if (!self.modelReady) { [self fail:@"Voice is still loading"]; return; }
   self.request = NSUUID.UUID.UUIDString;
   self.generation++;
   [self forgetTyped];
-  NSString *app = NSWorkspace.sharedWorkspace.frontmostApplication.bundleIdentifier ?: @"";
-  dictate_hold_begin(self.request.UTF8String, self.noting ? "note" : "dictate", app.UTF8String);
+  self.app = NSWorkspace.sharedWorkspace.frontmostApplication;
+  if (self.commanding) self.selection = AXIsProcessTrusted() ? TTVoiceSelectedText(TTVoiceFocusedField()) : nil;
+  const char *mode = self.noting ? "note" : self.locked ? "handsfree" : self.commanding ? "command" : "dictate";
+  dictate_hold_begin(self.request.UTF8String, mode, (self.app.bundleIdentifier ?: @"").UTF8String);
   self.phase = TTVoiceListening;
   self.listeningSince = NSProcessInfo.processInfo.systemUptime;
-  if (!self.engine) [self startCapture]; // otherwise the microphone opened when fn went down
-  if (self.noting) { self.audio.limit = 10 * 60 * 16000; self.lastSpoke = self.listeningSince; return; } // only what is not yet transcribed
-  NSUInteger generation = self.generation;
-  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 60 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-    if (self.generation == generation && self.phase == TTVoiceListening) [self fail:@"One minute max"];
-  });
+  if (!self.engine) [self startCapture]; // otherwise the microphone opened when the key went down
+  if (self.phase != TTVoiceListening) return;
+  [self chime:@"Tink"];
+  // A note keeps only what is not yet transcribed; the others go to speech whole, which takes a minute
+  // of audio at most, so tick sends them as they reach it.
+  self.audio.limit = (self.noting ? 10 : 1) * 60 * 16000;
+  if (self.noting) self.lastSpoke = self.listeningSince;
+}
+// A soft cue as listening starts and stops, from the Mac's own sounds.
+- (void)chime:(NSString *)name {
+  if (!self.sounds) return;
+  NSSound *sound = [NSSound soundNamed:name];
+  [sound stop];
+  sound.volume = 0.2;
+  [sound play];
 }
 - (void)startCapture {
   if ([AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio] != AVAuthorizationStatusAuthorized) {
@@ -444,7 +532,7 @@ static dispatch_queue_t TTVoiceAudioQueue(void) {
   dictate_log(line.UTF8String);
   if (self.audio.failed) { [self fail:@"Couldn’t record that"]; return; }
   if (self.noting) { // the rest of the note: most of it is in its words already
-    if (!dictate_note_finish(self.request.UTF8String, self.audio.dropped, pcm.bytes, pcm.length / sizeof(float))) [self fail:@"Voice is still loading"];
+    if (!dictate_note_finish(self.request.UTF8String, self.audio.dropped, pcm.bytes, pcm.length / sizeof(float))) [self refused];
     self.audio = nil; return;
   }
   if (!pcm.length) {
@@ -452,15 +540,18 @@ static dispatch_queue_t TTVoiceAudioQueue(void) {
     BOOL tap = NSProcessInfo.processInfo.systemUptime - self.listeningSince < 1.5;
     [self fail:tap ? @"unheard" : @"No sound from the mic"]; return;
   }
-  if (!dictate_audio(self.request.UTF8String, pcm.bytes, pcm.length / sizeof(float))) {
-    [self fail:@"Voice is still loading"];
-  }
+  if (!dictate_audio(self.request.UTF8String, pcm.bytes, pcm.length / sizeof(float))) [self refused];
   self.audio = nil;
+}
+// Speech turned the audio down: still loading, paused, or busy with the last one.
+- (void)refused {
+  [self fail:self.modelReady ? @"Couldn’t transcribe that, try again" : @"Voice is still loading"];
 }
 - (void)finish {
   if (self.phase != TTVoiceListening) return;
   self.phase = TTVoiceFinishing;
   [self stopCapture];
+  [self chime:@"Pop"];
   NSUInteger generation = self.generation;
   [self transcribe];
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 120 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
@@ -473,23 +564,39 @@ static dispatch_queue_t TTVoiceAudioQueue(void) {
   NSString *body = [text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
   if (!body.length) { [self fail:@"unheard"]; return; } // the overlay's "Didn't catch that"
   if (self.noting) { dictate_ui_note(body.UTF8String); [self cancel]; return; } // to the note's review card
+  if (self.commanding) { [self command:body]; return; }
   dictate_ui_said(body.UTF8String, true, false);
   if (!AXIsProcessTrusted()) { [self fail:@"Turn on Accessibility to type"]; return; }
-  [self retype:body]; [self cancel];
+  [self retype:body];
+  // A click elsewhere stops the typing for good; what was said is still the last transcript.
+  if (!self.typed.length) dictate_ui_notice("Nothing to type into here. Paste last transcript has your words.");
+  else if (![self.typed isEqualToString:[self.lead stringByAppendingString:body]]) dictate_ui_notice("Stopped typing when you moved on. Paste last transcript has it all.");
+  [self cancel];
+}
+// A spoken command, with the selection and the app it was said over, for Claude. Its answer comes back
+// through dictate_command_result under the same request, which stays known here for that.
+- (void)command:(NSString *)instruction {
+  NSString *request = self.request;
+  if (dictate_command(request.UTF8String, instruction.UTF8String, (self.selection ?: @"").UTF8String, (self.app.bundleIdentifier ?: @"").UTF8String)) {
+    TTVoiceRememberCommand(request, self.app);
+  } else {
+    dictate_ui_notice("Connect Claude in Settings to use commands");
+  }
+  self.request = nil; // not forgotten: Claude reads the hold's context while it works
+  [self cancel];
 }
 // Dictation: brings what this hold typed at the cursor to `text`, deleting back to where they differ
 // and typing the rest, as keystrokes into whatever has the keyboard focus.
 - (void)retype:(NSString *)text {
   if (self.typingStopped) return;
   pid_t app = NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier;
+  // A click on the overlay brings this app forward for a moment: the words wait for theirs to come back.
+  if (app == getpid() && self.app.processIdentifier != app) return;
   id field = TTVoiceFocusedField();
   if (!self.typed.length) {
+    if (app == getpid() && !TTVoiceTextField(field)) return;
     self.typedApp = app; self.typedField = field;
-    CFTypeRef selected = NULL;
-    if (field && AXUIElementCopyAttributeValue((__bridge AXUIElementRef)field, kAXSelectedTextAttribute, &selected) == kAXErrorSuccess) {
-      id value = (__bridge_transfer id)selected;
-      self.replaced = [value isKindOfClass:NSString.class] ? value : nil;
-    }
+    self.replaced = TTVoiceSelectedText(field);
     BOOL continues = self.dictated.length && app == self.dictatedApp && TTVoiceSameField(field, self.dictatedField);
     if (!continues) { self.dictated = nil; self.dictatedApp = app; self.dictatedField = field; }
     BOOL spaced = !continues || [NSCharacterSet.whitespaceAndNewlineCharacterSet characterIsMember:[self.dictated characterAtIndex:self.dictated.length - 1]];
@@ -525,58 +632,177 @@ static dispatch_queue_t TTVoiceAudioQueue(void) {
   [self begin];
   if (self.phase != TTVoiceListening) self.held = NO;
 }
-- (void)handleEvent:(NSEvent *)event {
-  CGEventRef raw = event.CGEvent;
-  if (event.type == NSEventTypeKeyDown && raw && (CGEventGetIntegerValueField(raw, kCGEventSourceUserData) == TTVoiceMark || CGEventGetIntegerValueField(raw, kCGEventSourceUnixProcessID) == getpid())) return;
-  // Any click or key of the person's own after our words went in can move the caret.
-  if (event.type != NSEventTypeFlagsChanged) { if (self.typed.length) self.typingStopped = YES; self.dictated = nil; }
-  if (event.type == NSEventTypeLeftMouseDown || event.type == NSEventTypeRightMouseDown) return;
-  // fn always reaches the overlay, so its setup can test the key before voice is on.
-  if (event.type == NSEventTypeFlagsChanged && event.keyCode == 63) {
-    BOOL down = (event.modifierFlags & NSEventModifierFlagFunction) != 0;
-    if (down != self.fnDown) { self.fnDown = down; dictate_ui_fn(down); }
-  }
-  if (!self.enabled) return;
-  if (event.type == NSEventTypeKeyDown) {
-    if (event.keyCode == 53) { self.blocked = YES; if (self.phase != TTVoiceSubmitting) [self cancel]; }
-    else if (self.held && self.phase != TTVoiceSubmitting) { self.blocked = YES; [self cancel]; } // fn+key is a shortcut
-    return;
-  }
-  if (event.type != NSEventTypeFlagsChanged) return;
-  // fn alone types where the cursor is; fn with a modifier is a shortcut.
-  NSEventModifierFlags other = event.modifierFlags & (NSEventModifierFlagCommand | NSEventModifierFlagOption | NSEventModifierFlagShift | NSEventModifierFlagControl);
-  if (other && self.held && self.phase != TTVoiceSubmitting) { self.blocked = YES; [self cancel]; }
-  if (event.keyCode != 63) return;
-  BOOL held = (event.modifierFlags & NSEventModifierFlagFunction) != 0;
-  if (held == self.held) return;
-  self.held = held;
-  NSUInteger gesture = ++self.gesture;
-  if (!held) {
-    self.blocked = NO;
-    if (self.phase == TTVoiceIdle) { [self stopCapture]; self.audio = nil; } // a tap: the hold never began
-    [self finish]; return;
-  }
-  self.blocked = other != 0;
-  if (self.phase == TTVoiceIdle) self.dictating = YES;
-  // The microphone opens now rather than when the hold begins, so the first words are not cut off; a
-  // tap or an fn shortcut closes it unheard.
+// Locked listening, from a double tap: no key to hold, up to a minute. A tap sends; Escape cancels.
+- (void)lock {
+  self.locked = YES; self.commanding = NO; self.dictating = YES;
+  [self begin];
+  if (self.phase == TTVoiceListening) dictate_ui_hands_free(true);
+  else self.locked = NO;
+}
+- (void)send {
+  if (self.phase != TTVoiceListening) return;
+  self.held = NO; [self finish];
+}
+// Send from the overlay's button: the click brought this app forward, so the app the words go to
+// comes back first.
+- (void)sendFromOverlay {
+  if (self.phase != TTVoiceListening) return;
+  pid_t me = NSRunningApplication.currentApplication.processIdentifier;
+  if (!TTVoiceFront(NSRunningApplication.currentApplication) || self.app.processIdentifier == me) { [self send]; return; }
+  NSUInteger generation = self.generation;
+  TTVoiceBringForward(self.app, ^(BOOL front) { (void)front; if (self.generation == generation) [self send]; });
+}
+- (void)openEarly {
   if (self.phase == TTVoiceIdle && !self.blocked && self.modelReady && !self.engine
       && [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio] == AVAuthorizationStatusAuthorized) [self startCapture];
-  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 180 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
-    if (self.gesture == gesture) [self begin];
-  });
+}
+// `inApp`: from the local monitor, which hears this app's own windows.
+- (BOOL)handleEvent:(NSEvent *)event inApp:(BOOL)inApp {
+  CGEventRef raw = event.CGEvent;
+  if (event.type == NSEventTypeKeyDown && raw && (CGEventGetIntegerValueField(raw, kCGEventSourceUserData) == TTVoiceMark || CGEventGetIntegerValueField(raw, kCGEventSourceUnixProcessID) == getpid())) return NO;
+  BOOL mouse = event.type == NSEventTypeLeftMouseDown || event.type == NSEventTypeRightMouseDown;
+  if (mouse && inApp && event.window && event.window == TTVoiceOverlayWindow()) return NO; // the overlay's own buttons
+  // Any click or key of the person's own after our words went in can move the caret.
+  if (event.type != NSEventTypeFlagsChanged) { if (self.typed.length) self.typingStopped = YES; self.dictated = nil; }
+  if (mouse) {
+    // A click with the key down (a shift-click, a command-click) is a shortcut, as a key would be.
+    if (self.enabled && self.pressed) {
+      if (self.held && self.phase != TTVoiceSubmitting) { self.blocked = YES; tt_taps_reset(&_taps); [self cancel]; }
+      else if (self.locked) self.blocked = YES; // and its release then doesn't send
+    }
+    return NO;
+  }
+  uint16_t code = tt_key_code(self.key);
+  BOOL pressed = event.type == NSEventTypeFlagsChanged && event.keyCode == code ? tt_key_down(self.key, event.modifierFlags) : self.pressed;
+  BOOL changed = pressed != self.pressed;
+  // The key always reaches the pages, so setup and Shortcuts can test it before voice is on.
+  if (changed) { self.pressed = pressed; dictate_ui_fn(pressed); }
+  if (event.type == NSEventTypeKeyDown) {
+    if (self.enabled) {
+      tt_taps_reset(&_taps); // keys between taps are typing, not a double tap
+      if (event.keyCode == 53) { self.blocked = YES; if (self.phase != TTVoiceSubmitting) [self cancel]; }
+      // The key with another is a shortcut. A talk or note started from the overlay holds no key, so typing goes on.
+      else if (self.held && self.pressed && self.phase != TTVoiceSubmitting) { self.blocked = YES; [self cancel]; }
+      else if (self.locked && self.pressed) self.blocked = YES; // and its release then doesn't send
+    }
+    // In this app only while the overlay is key, so Settings can record a chord without running it.
+    if (event.isARepeat || (inApp && (!event.window || event.window != TTVoiceOverlayWindow()))) return NO;
+    return [self chord:event];
+  }
+  if (!self.enabled || event.type != NSEventTypeFlagsChanged) return NO;
+  // The key alone dictates; with the command modifier it talks to Claude; with anything else it is a shortcut.
+  TTHold kind = tt_hold_kind(tt_key_others(self.key, event.modifierFlags), self.commandFlag);
+  if (self.held && self.pressed && kind != TTHoldPlain && self.phase != TTVoiceSubmitting) {
+    // The modifier can join until the hold begins, so pressing both at once works in either order.
+    if (kind == TTHoldCommand && (self.commanding || self.phase == TTVoiceIdle)) { self.commanding = YES; self.dictating = NO; }
+    else { self.blocked = YES; tt_taps_reset(&_taps); [self cancel]; }
+  } else if (self.locked && self.pressed && kind != TTHoldPlain) self.blocked = YES;
+  if (!changed) return NO;
+  if (pressed) {
+    tt_taps_press(&_taps, event.timestamp);
+    if (self.locked) return NO; // its release sends
+    self.held = YES;
+    NSUInteger gesture = ++self.gesture;
+    self.blocked = kind == TTHoldShortcut;
+    self.commanding = kind == TTHoldCommand;
+    if (self.phase == TTVoiceIdle) self.dictating = !self.commanding;
+    // The microphone opens before the hold begins, so the first words are not cut off; a tap or a
+    // shortcut closes it unheard. A right-hand modifier is often the start of a shortcut, so it waits a
+    // moment: opening for each one would flash the microphone indicator and switch a headset's profile.
+    if (self.key == TTKeyFn) [self openEarly];
+    else dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 120 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{ if (self.gesture == gesture) [self openEarly]; });
+    // With hands-free on, a hold begins only once it is too long to be a tap, so taps never record.
+    double wait = self.handsFree ? TT_TAP : 0.18;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(wait * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+      if (self.gesture == gesture) [self begin];
+    });
+    return NO;
+  }
+  TTTap tap = tt_taps_release(&_taps, event.timestamp);
+  BOOL blocked = self.blocked;
+  self.blocked = NO;
+  if (self.locked) {
+    if (!blocked) { tt_taps_reset(&_taps); [self send]; }
+    return NO;
+  }
+  self.held = NO;
+  NSUInteger gesture = ++self.gesture;
+  if (self.handsFree && !blocked && self.phase == TTVoiceIdle && self.enabled) {
+    if (tap == TTTapDouble) { [self lock]; return NO; }
+    // A first tap: the microphone stays open a moment, so words right after a second one are heard.
+    if (tap == TTTapSingle) {
+      dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(TT_DOUBLE_TAP * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        if (self.gesture == gesture && self.phase == TTVoiceIdle) { [self stopCapture]; self.audio = nil; }
+      });
+      return NO;
+    }
+  }
+  if (self.phase == TTVoiceIdle) { [self stopCapture]; self.audio = nil; } // the hold never began
+  [self finish];
+  return NO;
+}
+// The global shortcuts from Settings › Shortcuts. True when `event` is one of them.
+- (BOOL)chord:(NSEvent *)event {
+  for (NSString *name in self.chords) {
+    NSArray<NSNumber *> *chord = self.chords[name];
+    if (!tt_chord_matches(event.keyCode, event.modifierFlags, chord[0].unsignedShortValue, chord[1].unsignedLongLongValue)) continue;
+    if ([name isEqual:@"note"]) {
+      if (!self.enabled) dictate_ui_notice("Dictation is paused");
+      else if (self.phase == TTVoiceIdle || (self.noting && self.phase == TTVoiceListening)) [self toggleNote];
+    } else if ([name isEqual:@"meeting"]) {
+      if (!dictate_meeting("stop") && !dictate_meeting("start")) dictate_ui_notice("Couldn’t start the meeting");
+    } else {
+      dictate_paste_last();
+    }
+    return YES;
+  }
+  return NO;
 }
 - (void)monitor {
   if (self.localMonitor) [NSEvent removeMonitor:self.localMonitor];
   if (self.globalMonitor) [NSEvent removeMonitor:self.globalMonitor];
   self.trusted = AXIsProcessTrusted();
   __weak TTVoiceCommands *weak = self;
-  NSEventMask mask = self.enabled ? NSEventMaskFlagsChanged | NSEventMaskKeyDown | NSEventMaskLeftMouseDown | NSEventMaskRightMouseDown : NSEventMaskFlagsChanged;
+  // Key presses are heard only while voice is on or a chord is set; clicks only while voice is on.
+  NSEventMask mask = self.enabled ? NSEventMaskFlagsChanged | NSEventMaskKeyDown | NSEventMaskLeftMouseDown | NSEventMaskRightMouseDown
+    : self.chords.count ? NSEventMaskFlagsChanged | NSEventMaskKeyDown : NSEventMaskFlagsChanged;
   self.localMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:mask handler:^NSEvent *(NSEvent *event) {
     BOOL cancel = event.type == NSEventTypeKeyDown && event.keyCode == 53 && weak.phase != TTVoiceIdle;
-    [weak handleEvent:event]; return cancel ? nil : event;
+    return [weak handleEvent:event inApp:YES] || cancel ? nil : event;
   }];
-  self.globalMonitor = [NSEvent addGlobalMonitorForEventsMatchingMask:mask handler:^(NSEvent *event) { [weak handleEvent:event]; }];
+  self.globalMonitor = [NSEvent addGlobalMonitorForEventsMatchingMask:mask handler:^(NSEvent *event) { [weak handleEvent:event inApp:NO]; }];
+}
+// The settings, each time they change: the keys, live typing and the sounds.
+- (void)apply:(NSDictionary *)settings {
+  self.settings = settings;
+  NSDictionary *keys = TTVoiceObject(settings[@"shortcuts"]), *dictation = TTVoiceObject(settings[@"dictation"]), *claude = TTVoiceObject(settings[@"claude"]);
+  NSUInteger index = [@[@"fn", @"rightCommand", @"rightOption", @"rightControl", @"rightShift"] indexOfObject:keys[@"dictate"] ?: @"fn"];
+  TTKey key = index == NSNotFound ? TTKeyFn : (TTKey)index;
+  // The old key's release never comes: a hold of it ends, while a note, a locked session or words on
+  // their way, which no key holds, go on.
+  if (key != self.key) {
+    if (self.pressed) {
+      if (self.held && !self.noting && !self.locked && self.phase != TTVoiceFinishing && self.phase != TTVoiceSubmitting) { [self cancel]; self.held = NO; }
+      self.pressed = NO; dictate_ui_fn(false);
+    }
+    self.blocked = NO; tt_taps_reset(&_taps);
+    self.key = key;
+  }
+  NSDictionary *flags = @{@"control": @(NSEventModifierFlagControl), @"option": @(NSEventModifierFlagOption), @"command": @(NSEventModifierFlagCommand), @"shift": @(NSEventModifierFlagShift)};
+  // Until Claude is connected the modifier makes a shortcut, as any other does, not a command no one
+  // answers.
+  self.commandFlag = [claude[@"enabled"] isEqual:@YES] && ![claude[@"commands"] isEqual:@NO] ? [flags[keys[@"command"] ?: @"control"] unsignedIntegerValue] : 0;
+  self.handsFree = ![keys[@"handsFree"] isEqual:@NO];
+  self.liveTyping = ![dictation[@"liveTyping"] isEqual:@NO];
+  self.sounds = ![dictation[@"sounds"] isEqual:@NO];
+  NSMutableDictionary *chords = [NSMutableDictionary new];
+  for (NSString *name in @[@"note", @"meeting", @"pasteLast"]) {
+    NSDictionary *chord = TTVoiceObject(keys[name]);
+    if ([chord[@"keyCode"] isKindOfClass:NSNumber.class] && [chord[@"modifiers"] isKindOfClass:NSNumber.class]) chords[name] = @[chord[@"keyCode"], chord[@"modifiers"]];
+  }
+  BOOL listened = self.chords.count != 0;
+  self.chords = chords;
+  if (self.localMonitor && listened != (chords.count != 0)) [self monitor];
 }
 - (void)watchTrust {
   // A global monitor only hears other apps once Accessibility is on; reinstall it when that changes.
@@ -760,13 +986,14 @@ static BOOL TTVoiceNumbers(id row, NSUInteger count) {
 
 static TTVoiceCommands *voice;
 static TTVoiceOverlay *overlay;
+static NSWindow *TTVoiceOverlayWindow(void) { return overlay.window; }
 
 static NSDictionary *appliedSettings; // settings that arrived before the voice object
 
 void dictate_init(void) {
   if (voice) return;
   voice = [TTVoiceCommands new];
-  voice.settings = appliedSettings;
+  [voice apply:appliedSettings];
   voice.enabled = [NSUserDefaults.standardUserDefaults boolForKey:@"DictateEnabled"];
   [voice monitor];
   [voice watchTrust];
@@ -783,6 +1010,26 @@ static NSString *TTVoiceGlobeKey(void) {
   if (![value isKindOfClass:NSNumber.class]) return @"";
   switch ([value intValue]) { case 1: return @"inputSource"; case 2: return @"emoji"; case 3: return @"dictation"; default: return @""; }
 }
+// The shortcuts macOS keeps for itself (System Settings › Keyboard › Keyboard Shortcuts) that are on, as
+// [key code, NSEvent modifiers]. HIToolbox comes with AppKit, so it is looked up rather than linked.
+static NSArray<NSArray<NSNumber *> *> *TTVoiceSystemShortcuts(void) {
+  static OSStatus (*copy)(CFArrayRef *);
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{ copy = (OSStatus (*)(CFArrayRef *))dlsym(RTLD_DEFAULT, "CopySymbolicHotKeys"); });
+  CFArrayRef keys = NULL;
+  if (!copy || copy(&keys) != noErr || !keys) return @[];
+  NSMutableArray *shortcuts = [NSMutableArray new];
+  for (NSDictionary *key in (__bridge_transfer NSArray *)keys) {
+    if (![key isKindOfClass:NSDictionary.class] || ![key[@"kHISymbolicHotKeyEnabled"] isEqual:@YES]) continue;
+    NSNumber *code = key[@"kHISymbolicHotKeyCode"], *carbon = key[@"kHISymbolicHotKeyModifiers"];
+    if (![code isKindOfClass:NSNumber.class] || ![carbon isKindOfClass:NSNumber.class] || code.unsignedIntValue >= 0x80) continue;
+    NSUInteger from = carbon.unsignedIntegerValue; // Carbon's cmdKey, shiftKey, optionKey, controlKey
+    NSUInteger modifiers = (from & 0x100 ? NSEventModifierFlagCommand : 0) | (from & 0x200 ? NSEventModifierFlagShift : 0)
+      | (from & 0x800 ? NSEventModifierFlagOption : 0) | (from & 0x1000 ? NSEventModifierFlagControl : 0);
+    [shortcuts addObject:@[code, @(modifiers)]];
+  }
+  return shortcuts;
+}
 bool dictate_settings_status(char *output, size_t capacity) {
   if (!output || capacity == 0) return false;
   output[0] = 0;
@@ -794,7 +1041,7 @@ bool dictate_settings_status(char *output, size_t capacity) {
     @"modelReady": [NSNumber numberWithBool:voice.modelReady], @"modelPreparing": [NSNumber numberWithBool:voice.modelPreparing],
     @"modelMessage": voice.modelMessage ?: @"",
     @"inputs": TTVoiceInputs(), @"input": TTVoiceChosenInput() ?: NSNull.null, @"inputInUse": TTVoiceInputName(),
-    @"openAtLogin": [NSNumber numberWithBool:dictate_open_at_login(-1)]
+    @"openAtLogin": [NSNumber numberWithBool:dictate_open_at_login(-1)], @"systemShortcuts": TTVoiceSystemShortcuts()
   };
   NSData *data = [NSJSONSerialization dataWithJSONObject:snapshot options:0 error:nil];
   if (!data || data.length >= capacity) return false;
@@ -835,6 +1082,11 @@ void dictate_request(const char *kind) {
     [NSWorkspace.sharedWorkspace openURL:[NSURL URLWithString:@"x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"]];
   } else if ([what isEqual:@"note"]) {
     [voice toggleNote];
+  } else if ([what isEqual:@"send"]) { // the hands-free pill's buttons
+    [voice sendFromOverlay];
+  } else if ([what isEqual:@"cancel"]) {
+    if (voice.phase != TTVoiceSubmitting) [voice cancel];
+    voice.held = NO;
   } else if ([what isEqual:@"keyboard"]) {
     [NSWorkspace.sharedWorkspace openURL:[NSURL URLWithString:@"x-apple.systempreferences:com.apple.Keyboard-Settings.extension"]];
   }
@@ -860,7 +1112,7 @@ void dictate_model_status(const char *message, int status) {
 void dictate_draft_result(const char *request, const char *text) {
   if (![voice.request isEqual:@(request)] || voice.phase != TTVoiceListening) return;
   dictate_ui_said(text, voice.dictating, true);
-  if (!voice.dictating || !AXIsProcessTrusted()) return;
+  if (!voice.dictating || !voice.liveTyping || !AXIsProcessTrusted()) return; // without live typing the result types once
   NSString *now = @(text), *agreed = TTVoiceAgreed(voice.lastDraft, now);
   voice.lastDraft = now;
   if (agreed.length && ![voice.typed hasPrefix:[voice.lead stringByAppendingString:agreed]]) [voice retype:agreed];
@@ -886,7 +1138,7 @@ void dictate_apply_settings(const char *json) {
   id values = [NSJSONSerialization JSONObjectWithData:[NSData dataWithBytes:json length:strlen(json)] options:0 error:nil];
   if (![values isKindOfClass:NSDictionary.class]) return;
   appliedSettings = values;
-  voice.settings = values;
+  [voice apply:values];
 }
 // The name the person knows an app by, from its bundle id, while it runs.
 bool dictate_app_name(const char *bundle_id, char *output, size_t capacity) {
@@ -911,11 +1163,26 @@ void dictate_type_text(const char *text) {
   NSString *words = @(text);
   TTVoiceOnMain(^{ TTVoiceTypeText(words); });
 }
-// Claude's answer to a command: `type` puts it at the caret (over the selection); `show` is the
-// overlay's card, which the page draws from the dictate-command event.
+static void TTVoiceCopyAnswer(NSString *text) {
+  [NSPasteboard.generalPasteboard clearContents];
+  [NSPasteboard.generalPasteboard setString:text forType:NSPasteboardTypeString];
+  dictate_ui_notice("You switched apps, so Claude’s answer is copied");
+}
+// Claude's answer to a command. `type` puts it over the selection, or at the caret, in the app the command
+// was said in: a click on the overlay's card took the front, so that app comes back first, and an
+// answer for an app the person has left goes to the clipboard rather than into another app. `show` is
+// the overlay's card, which the page draws from dictate-command; its Insert asks for `type` later.
+static void TTVoiceCommandResult(NSString *request, NSString *text, NSString *action) {
+  if ([action isEqual:@"show"]) { if (overlay.shown) [overlay.window orderFrontRegardless]; return; }
+  if (![action isEqual:@"type"] || !text.length) return;
+  NSRunningApplication *target = TTVoiceCommandApp(request);
+  if (!target || target.terminated || TTVoiceFront(target)) { TTVoiceTypeText(text); return; }
+  if (!TTVoiceFront(NSRunningApplication.currentApplication)) { TTVoiceCopyAnswer(text); return; }
+  TTVoiceBringForward(target, ^(BOOL front) { if (front) TTVoiceTypeText(text); else TTVoiceCopyAnswer(text); });
+}
 void dictate_command_result(const char *request, const char *text, const char *action) {
-  if (!request || !text || !action || strcmp(action, "type") != 0) return;
-  NSString *words = @(text);
-  TTVoiceOnMain(^{ TTVoiceTypeText(words); });
+  if (!request || !text || !action) return;
+  NSString *key = @(request), *words = @(text), *how = @(action);
+  TTVoiceOnMain(^{ TTVoiceCommandResult(key, words, how); });
 }
 

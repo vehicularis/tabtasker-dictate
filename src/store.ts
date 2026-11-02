@@ -44,14 +44,14 @@ export const MODIFIERS = { control: 1 << 18, option: 1 << 19, shift: 1 << 17, co
 const FUNCTION_KEYS = [122, 120, 99, 118, 96, 97, 98, 100, 101, 109, 103, 111, 105, 107, 113, 106, 64, 79, 80, 90];
 
 /// Why the store refuses `chord`, or null when it takes it: the same rules as settings.rs (a key with ⌃,
-/// ⌥ or ⌘, or a function key alone) plus never a chord `others` already use.
-export function chordProblem(chord: Chord, others: { name: string; chord: Chord | null }[] = []): string | null {
+/// ⌥ or ⌘, or a function key alone) plus never a chord `others` already use, said with its `reason` when it has one.
+export function chordProblem(chord: Chord, others: { name: string; chord: Chord | null; reason?: string }[] = []): string | null {
   const { control, option, shift, command } = MODIFIERS;
   if (!Number.isInteger(chord.keyCode) || chord.keyCode < 0 || chord.keyCode >= 0x80 || !Number.isInteger(chord.modifiers)
     || chord.modifiers & ~(control | option | shift | command) || typeof chord.label !== 'string' || !chord.label.trim()) return 'That key can’t be a shortcut';
   if (!(chord.modifiers & (control | option | command)) && !FUNCTION_KEYS.includes(chord.keyCode)) return 'Add ⌘, ⌥ or ⌃ to it';
   const taken = others.find(other => other.chord?.keyCode === chord.keyCode && other.chord.modifiers === chord.modifiers);
-  return taken ? `Already used for “${taken.name}”` : null;
+  return taken ? taken.reason ?? `Already used for “${taken.name}”` : null;
 }
 
 type DeepPartial<T> = T extends readonly unknown[] ? T : T extends object ? { [K in keyof T]?: DeepPartial<T[K]> } : T;
