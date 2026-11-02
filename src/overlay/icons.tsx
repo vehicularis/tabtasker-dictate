@@ -18,6 +18,30 @@ const GEAR = Array.from({ length: 8 }, (_, i) => {
 export const OTTER = 'M-13 -16 C-13 -22 -7 -25 0 -25 C7 -25 13 -22 13 -16 L13 15 C13 22 7 25 0 25 C-7 25 -13 22 -13 15 Z';
 export const WHISKERS = [[-3.5, -8], [-4.6, -7], [-3.5, -6], [3.5, -8], [4.6, -7], [3.5, -6]] as const;
 export const VOICE = [[-1.73, 0.87], [-0.865, 1.44], [0, 2.02], [0.865, 1.44], [1.73, 0.87]] as const;
+/// The otter as sound (design/icon.swift draws the same): the bars of a waveform whose envelope is the otter's
+/// outline, the head's dome and the ears above, the body running off the bottom. Eight bars; each rises, with a
+/// rounded cap, to where the outline is at its centre, one on each eye, the nose between two, the ears two taller.
+const bezier = (a: number, b: number, c: number, d: number, t: number) => { const u = 1 - t; return u * u * u * a + 3 * u * u * t * b + 3 * u * t * t * c + t * t * t * d; };
+const domeTop = (x: number) => {
+  const ax = Math.abs(x);
+  if (ax > 13) return null;
+  let lo = 0, hi = 1;
+  for (let i = 0; i < 40; i++) { const t = (lo + hi) / 2; if (bezier(13, 13, 7, 0, t) > ax) lo = t; else hi = t; }
+  return bezier(-16, -22, -25, -25, (lo + hi) / 2);
+};
+const earSpan = (x: number) => { const dx = Math.abs(x) - 9; if (Math.abs(dx) > 4.5) return null; const h = Math.sqrt(4.5 * 4.5 - dx * dx); return [-22 - h, -22 + h] as const; };
+export const otterBars = (pitch = 3.25, width = 2.1) => {
+  const bars: { x: number; y: number; h: number }[] = [];
+  for (let x = pitch / 2; x <= 13.5; x += pitch) for (const side of [-1, 1]) {
+    const cx = side * x, dome = domeTop(cx), ear = earSpan(cx);
+    if (dome === null && !ear) continue;
+    const top = Math.min(dome ?? Infinity, ear?.[0] ?? Infinity);
+    const bottom = dome !== null ? 60 : ear![1];
+    bars.push({ x: cx - width / 2, y: top, h: bottom - top });
+  }
+  return bars;
+};
+const BARS = otterBars();
 export const Logo = ({ size = 18 }: { size?: number }) => {
   const id = useId();
   return <svg width={size} height={size} viewBox="0 0 28 28" aria-hidden="true">
@@ -30,12 +54,10 @@ export const Logo = ({ size = 18 }: { size?: number }) => {
     {/* The mark's tile is 64 units and this one 26; its group sits at (32 47) and is scaled 1.3, as in the SVG. The clip is on its own group:
         on a transformed one it would be read in the mark's coordinates. */}
     <g clipPath={`url(#${id}-tile)`}><g transform="translate(14 20.094) scale(.52813)">
-      <g fill="#f3f4f6"><circle cx="-9" cy="-22" r="4.5" /><circle cx="9" cy="-22" r="4.5" /><path d={OTTER} /></g>
+      <g fill="#f3f4f6">{BARS.map(bar => <rect key={bar.x} x={bar.x} y={bar.y} width="2.1" height={bar.h} rx="1.05" />)}</g>
       <g fill="#171719">
         <circle cx="-9" cy="-22" r="2" /><circle cx="9" cy="-22" r="2" /><circle cx="-5" cy="-15" r="1.6" /><circle cx="5" cy="-15" r="1.6" />
         <ellipse cx="0" cy="-10" rx="1.7" ry="1.3" />
-        {WHISKERS.map(([x, y]) => <circle key={`${x} ${y}`} cx={x} cy={y} r=".45" />)}
-        {VOICE.map(([x, h]) => <rect key={x} x={x - 0.24} y={-6.75 - h / 2} width=".48" height={h} rx=".24" />)}
       </g>
     </g></g>
   </svg>;

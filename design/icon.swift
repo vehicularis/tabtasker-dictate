@@ -1,6 +1,6 @@
-// Draws TabTasker Dictate's app icon and menu bar mark: TabTasker's otter, as Business draws it, white on
-// dark grey, a small waveform where its mouth is, filling the square (macOS rounds it); and its head alone
-// in black for the menu bar (a template image macOS tints).
+// Draws TabTasker Dictate's app icon and menu bar mark: TabTasker's otter, as Business draws it, made of
+// sound: the bars of a waveform whose envelope is the otter's outline, white on dark grey, filling the
+// square (macOS rounds it); and the same in black for the menu bar (a template image macOS tints).
 // Run from the repository root: swift design/icon.swift
 // It writes design/icon.png (1024 px) and design/tray*.png, and every icon Tauri bundles in src-tauri/icons.
 import CoreGraphics
@@ -85,24 +85,54 @@ func otterHead(_ path: CGMutablePath) {
   path.addCurve(to: CGPoint(x: -13, y: 15), control1: CGPoint(x: -7, y: 25), control2: CGPoint(x: -13, y: 22))
   path.closeSubpath()
 }
-/// Its voice: five bars of a small wave between the whiskers, where the mouth is.
-let voice: [(CGFloat, CGFloat)] = [(-1.73, 0.87), (-0.865, 1.44), (0, 2.02), (0.865, 1.44), (1.73, 0.87)]
-/// The face, cut from the white in ink: the ears' insides, eyes, nose and whisker dots as Business has them, and the voice.
-func otterFace(_ face: CGMutablePath, voice bars: [(CGFloat, CGFloat)]) {
+/// The otter as sound: the bars of a waveform whose envelope is the otter's outline, the head's dome and
+/// the ears above, the body running off the bottom. Eight bars, 2.1 units wide on a pitch of 3.25, set so
+/// one sits on each eye and the nose falls between two; each rises, with a rounded cap, to where the
+/// outline is at its centre, so the ears stand up as two taller bars.
+let barPitch: CGFloat = 3.25, barWidth: CGFloat = 2.1
+func bezier(_ a: CGFloat, _ b: CGFloat, _ c: CGFloat, _ d: CGFloat, _ t: CGFloat) -> CGFloat { let u = 1 - t; return u * u * u * a + 3 * u * u * t * b + 3 * u * t * t * c + t * t * t * d }
+/// The top of the head's dome at x: the mark's own curve from (13, -16) through (13, -22) and (7, -25) to (0, -25), found by bisection.
+func domeTop(_ x: CGFloat) -> CGFloat? {
+  let ax = abs(x)
+  guard ax <= 13 else { return nil }
+  var lo: CGFloat = 0, hi: CGFloat = 1
+  for _ in 0..<40 { let t = (lo + hi) / 2; if bezier(13, 13, 7, 0, t) > ax { lo = t } else { hi = t } }
+  return bezier(-16, -22, -25, -25, (lo + hi) / 2)
+}
+/// The ear's top and bottom at x, where the ear's circle (centre ±9, -22; radius 4.5) reaches.
+func earSpan(_ x: CGFloat) -> (CGFloat, CGFloat)? {
+  let dx = abs(x) - 9
+  guard abs(dx) <= 4.5 else { return nil }
+  let h = (4.5 * 4.5 - dx * dx).squareRoot()
+  return (-22 - h, -22 + h)
+}
+/// The bars, in the mark's units (y down, as the SVG's), for a pitch and width given.
+func otterBars(_ path: CGMutablePath, pitch: CGFloat = barPitch, width: CGFloat = barWidth) {
+  var x = pitch / 2
+  while x <= 13.5 {
+    for side in [-1, 1] as [CGFloat] {
+      let cx = side * x
+      let dome = domeTop(cx), ear = earSpan(cx)
+      guard dome != nil || ear != nil else { continue }
+      let top = min(dome ?? .infinity, ear?.0 ?? .infinity)
+      let bottom: CGFloat = dome != nil ? 60 : ear!.1 // the body runs off the tile; an ear's own bar ends with the ear
+      path.addRoundedRect(in: CGRect(x: cx - width / 2, y: top, width: width, height: bottom - top), cornerWidth: width / 2, cornerHeight: width / 2)
+    }
+    x += pitch
+  }
+}
+/// The face, cut from the bars in ink: the ears' insides, the eyes and the nose as Business has them. The whiskers and the
+/// small voice go: the whole otter is the voice now.
+func otterFace(_ face: CGMutablePath) {
   dot(face, -9, -22, 2); dot(face, 9, -22, 2)
   dot(face, -5, -15, 1.6); dot(face, 5, -15, 1.6)
   dot(face, 0, -10, 1.7, 1.3)
-  for side in [-1, 1] as [CGFloat] { for (x, y) in [(3.5, -8), (4.6, -7), (3.5, -6)] as [(CGFloat, CGFloat)] { dot(face, side * x, y, 0.45) } }
-  for (x, h) in bars { face.addRoundedRect(in: CGRect(x: x - 0.24, y: -6.75 - h / 2, width: 0.48, height: h), cornerWidth: 0.24, cornerHeight: 0.24) }
 }
-/// The white, in two fills (the head's curve and the ears' circles may wind opposite ways, and one
-/// nonzero fill would then leave the overlap empty): drawn in a layer, so the shadow and the shade
-/// fall on the union once.
+/// The white: the bars, drawn in a layer so the shadow and the shade fall on them once.
 func white(_ ctx: CGContext, origin: CGPoint = markOrigin, unit u: CGFloat = unit, shade: Bool) {
   ctx.beginTransparencyLayer(auxiliaryInfo: nil)
   ctx.setFillColor(grey(1))
-  ctx.addPath(inMark(origin: origin, unit: u) { otterHead($0) }); ctx.fillPath()
-  ctx.addPath(inMark(origin: origin, unit: u) { dot($0, -9, -22, 4.5); dot($0, 9, -22, 4.5) }); ctx.fillPath()
+  ctx.addPath(inMark(origin: origin, unit: u) { otterBars($0) }); ctx.fillPath()
   if shade { // a whisper of shade toward the top, on the white alone
     ctx.setBlendMode(.sourceAtop)
     let tone = CGGradient(colorsSpace: space, colors: [grey(0.9), grey(0.97)] as CFArray, locations: nil)!
@@ -117,7 +147,7 @@ func mark(_ ctx: CGContext, _ k: CGFloat) {
   ctx.setShadow(offset: CGSize(width: 0, height: -6 * k), blur: 18 * k, color: grey(0, 0.45)) // shadows ignore the scale
   white(ctx, shade: true)
   ctx.restoreGState()
-  ctx.addPath(inMark { otterFace($0, voice: voice) }); ctx.setFillColor(ink); ctx.fillPath()
+  ctx.addPath(inMark { otterFace($0) }); ctx.setFillColor(ink); ctx.fillPath()
 }
 
 // The app icon at any size: full bleed, as Business draws its own. macOS 26 and later mask every icon into
@@ -142,16 +172,12 @@ func trayIcon(_ size: Int) -> CGImage {
     // The same mark, 0.92 px a unit on the 36 grid, its head's top at y 29 and its body running off the bottom.
     let origin = CGPoint(x: 18, y: 6), u: CGFloat = 0.92
     ctx.setFillColor(grey(0))
-    ctx.addPath(inMark(origin: origin, unit: u) { otterHead($0) }); ctx.fillPath()
-    ctx.addPath(inMark(origin: origin, unit: u) { dot($0, -9, -22, 4.5); dot($0, 9, -22, 4.5) }); ctx.fillPath()
+    ctx.addPath(inMark(origin: origin, unit: u) { otterBars($0) }); ctx.fillPath() // the same eight bars, 2 px wide at @2x
     ctx.setBlendMode(.clear)
     ctx.addPath(inMark(origin: origin, unit: u) { face in
       dot(face, -9, -22, 2); dot(face, 9, -22, 2)
-      dot(face, -5, -15, 1.6); dot(face, 5, -15, 1.6)
-      dot(face, 0, -10, 1.7, 1.3)
-      for (x, h) in [(-1.75, 2.7), (0, 4.9), (1.75, 2.7)] as [(CGFloat, CGFloat)] { // three bars read at 18 pt; the whiskers would not
-        face.addRoundedRect(in: CGRect(x: x - 0.45, y: -5 - h / 2, width: 0.9, height: h), cornerWidth: 0.45, cornerHeight: 0.45)
-      }
+      dot(face, -5, -15, 1.7); dot(face, 5, -15, 1.7)
+      dot(face, 0, -10, 1.8, 1.4)
     }); ctx.fillPath()
   }
 }
