@@ -1,4 +1,5 @@
-//! The dictate key's taps, holds and chords (keys.m), driven with numbers: no event is ever posted.
+//! The dictate key's taps, holds, chords and session limits (keys.m), driven with numbers: no event is
+//! ever posted.
 use dictate_lib as _; // links the native code these come from
 
 #[repr(C)]
@@ -33,6 +34,8 @@ extern "C" {
   fn tt_taps_reset(taps: *mut Taps);
   fn tt_chord_matches(key_code: u16, flags: u64, chord_key: u16, chord_modifiers: u64) -> bool;
   fn tt_taps_size() -> usize;
+  fn tt_hold_limit(long_session: bool) -> usize;
+  fn tt_words_timeout(samples: usize) -> f64;
 }
 
 fn code(key: u32) -> u16 { unsafe { tt_key_code(key) } }
@@ -117,6 +120,18 @@ fn a_reset_or_a_stray_release_breaks_a_double_tap() {
     tt_taps_reset(&mut state); // a key typed in between
     tt_taps_press(&mut state, 1.2);
     assert_eq!(tt_taps_release(&mut state, 1.3), SINGLE);
+  }
+}
+
+#[test]
+fn a_locked_session_runs_ten_minutes_and_its_words_get_the_time_to_match() {
+  let minute = 60 * 16000;
+  unsafe {
+    assert_eq!(tt_hold_limit(false), minute);
+    assert_eq!(tt_hold_limit(true), 10 * minute);
+    assert_eq!(tt_words_timeout(0), 120.0);
+    assert_eq!(tt_words_timeout(minute), 120.0); // a hold keeps its two minutes
+    assert_eq!(tt_words_timeout(10 * minute), 1200.0);
   }
 }
 

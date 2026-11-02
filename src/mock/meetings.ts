@@ -1,5 +1,6 @@
 import type { Mock } from '.';
 import type { Leftover, MeetingEvent, MeetingState } from '../overlay/MeetingPill';
+import { fileStem } from './notes';
 
 // In a browser: recording, the pill and the meetings folder.
 // `?meetings=leftover` starts with two recordings kept: one a crash left unsaved, one saved with parts not
@@ -33,7 +34,8 @@ export function register(mock: Mock) {
         return;
       }
       const folder = settings.meetings.folder ?? `${mock.status.notes}/Meetings`;
-      const path = `${folder}/${stamp(since)} ${claude ? 'Planning the launch' : 'Meeting'}.md`;
+      const [date, time] = stamp(since).split(' ');
+      const path = `${folder}/${fileStem(settings.notes.fileName, claude ? 'Planning the launch' : `Meeting ${date} ${time}`, date, time)}.md`;
       if (asked === 'gaps') {
         keep({ id, sinceMs: since, seconds, saved: true });
         mock.emit('dictate-meeting', { state: 'saved', id, path, message: '2 parts not transcribed. The audio is kept.', leftover: id });

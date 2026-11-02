@@ -6,8 +6,8 @@ import { PREVIEW } from './preview';
 import './hands-free.css';
 
 const KEY: Record<DictateKey, string> = { fn: 'fn', rightCommand: 'right ⌘', rightOption: 'right ⌥', rightControl: 'right ⌃', rightShift: 'right ⇧' };
-// Speech takes a minute of audio at most, and the app sends the session as it reaches that.
-const LIMIT = 60;
+// A locked session listens for up to ten minutes, and the app sends it as it reaches that.
+const LIMIT = 10 * 60;
 
 // Locked listening after a double tap of the dictate key: it listens for dictate-hands-free itself. The
 // keys are the quick way out (a tap sends, Escape cancels); the buttons are for the pointer.
