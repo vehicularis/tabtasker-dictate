@@ -1,6 +1,6 @@
 // Draws TabTasker Dictate's app icon and menu bar mark: TabTasker's otter, as Business draws it, white on
-// dark grey with sound waves at either side of its head, filling the square (macOS rounds it); and its head
-// alone in black for the menu bar (a template image macOS tints).
+// dark grey, a small waveform where its mouth is, filling the square (macOS rounds it); and its head alone
+// in black for the menu bar (a template image macOS tints).
 // Run from the repository root: swift design/icon.swift
 // It writes design/icon.png (1024 px) and design/tray*.png, and every icon Tauri bundles in src-tauri/icons.
 import CoreGraphics
@@ -56,8 +56,8 @@ func squircle(_ rect: CGRect, radius r: CGFloat) -> CGPath {
 }
 
 // TabTasker's otter exactly as Business draws it (flat, white, looking straight at you, its body running
-// off the bottom), on a dark grey rather than Business's night blue, with its voice as sound waves at
-// either side of its head. Drawn on the 1024 grid, full bleed; CoreGraphics' y runs up.
+// off the bottom), on a dark grey rather than Business's night blue, and speaking: where its mouth and
+// whiskers are, a small waveform. Drawn on the 1024 grid, full bleed; CoreGraphics' y runs up.
 let ink = CGColor(srgbRed: 0.09, green: 0.09, blue: 0.10, alpha: 1)        // #171719, the face
 let tileTop = CGColor(srgbRed: 0.235, green: 0.239, blue: 0.255, alpha: 1)  // #3c3d41
 let tileBottom = CGColor(srgbRed: 0.094, green: 0.094, blue: 0.106, alpha: 1) // #18181b
@@ -81,25 +81,14 @@ func otterFace() -> CGPath {
   let face = CGMutablePath()
   face.addPath(circle(336, 758, 41)); face.addPath(circle(688, 758, 41))   // the ears' insides
   face.addPath(circle(418, 590, 32)); face.addPath(circle(606, 590, 32))   // eyes
-  face.addPath(ellipse(512, 490, 31, 22))                                  // nose
-  for side in [-1, 1] as [CGFloat] {                                       // three whisker dots each side
-    for (dx, dy) in [(-18, 14), (10, 0), (-8, -22)] as [(CGFloat, CGFloat)] { face.addPath(circle(512 + side * (98 + dx * side), 432 + dy, 9)) }
+  face.addPath(ellipse(512, 494, 31, 22))                                  // nose
+  for (dx, h) in [(-56, 26), (-28, 48), (0, 70), (28, 48), (56, 26)] as [(CGFloat, CGFloat)] { // the voice, where the mouth is
+    face.addPath(capsule(CGRect(x: 512 + dx - 7, y: 418 - h / 2, width: 14, height: h)))
   }
   return face
 }
-/// The voice: two arcs at either side of the head, opening outward.
-func otterVoice() -> CGPath {
-  let voice = CGMutablePath()
-  for (cx, from, to) in [(CGFloat(240), CGFloat(120), CGFloat(240)), (CGFloat(784), CGFloat(-60), CGFloat(60))] {
-    for r in [100, 168] as [CGFloat] { voice.addPath(arc(cx, 560, r, from, to)) }
-  }
-  return voice
-}
 
 func mark(_ ctx: CGContext, _ k: CGFloat) {
-  ctx.saveGState()
-  ctx.addPath(otterVoice()); ctx.setLineWidth(24); ctx.setLineCap(.round); ctx.setStrokeColor(grey(1, 0.72)); ctx.strokePath()
-  ctx.restoreGState()
   // White with a whisper of shade toward the top, and a soft shadow, so it sits on the tile.
   ctx.saveGState()
   ctx.setShadow(offset: CGSize(width: 0, height: -6 * k), blur: 18 * k, color: grey(0, 0.45)) // shadows ignore the scale
@@ -138,7 +127,8 @@ func trayIcon(_ size: Int) -> CGImage {
     let face = CGMutablePath()
     face.addPath(circle(9, 28, 2)); face.addPath(circle(27, 28, 2))
     face.addPath(circle(13, 19, 2)); face.addPath(circle(23, 19, 2))
-    face.addPath(ellipse(18, 13.5, 2.5, 1.8))
+    face.addPath(ellipse(18, 14.5, 2.5, 1.8))
+    for (dx, h) in [(-3.5, 3), (0, 6), (3.5, 3)] as [(CGFloat, CGFloat)] { face.addPath(capsule(CGRect(x: 18 + dx - 0.9, y: 7.5 - h / 2, width: 1.8, height: h))) } // three bars read at 18 pt
     ctx.setBlendMode(.clear); ctx.addPath(face); ctx.fillPath()
   }
 }

@@ -5,8 +5,11 @@
 .ui-icon { flex: none; display: block; }
 
 /* ---------- focus: a 2 px ring, 2 px out, on everything you can reach by keyboard ---------- */
-:is(button, input, select, textarea, a, [tabindex]):focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
-:is(button, input, select, textarea, a, [tabindex]):focus:not(:focus-visible) { outline: none; }
+/* A ring only for keyboard focus on a control; never on a text field, which the browser counts as keyboard-focused
+   whenever it holds the caret. A field shows focus by its well deepening instead. */
+:is(button, select, a, [tabindex]):focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+:is(button, select, a, [tabindex]):focus:not(:focus-visible) { outline: none; }
+:is(input, textarea):focus { outline: none; }
 
 /* ---------- buttons: secondary by default, primary, quiet, danger ---------- */
 .ui-button { display: inline-flex; flex: none; align-items: center; justify-content: center; gap: 6px; height: 30px; padding: 0 13px; border: 0; border-radius: var(--radius-control);
