@@ -16,32 +16,32 @@ import { Shortcuts } from './pages/Shortcuts';
 import { Vocabulary } from './pages/Vocabulary';
 
 type Page = { route: string; title: string; icon: IconName; Page: ComponentType<PageProps>; keywords: string };
-// The sidebar, in groups. Search also matches the keywords: what each page lets you change.
-const GROUPS: Page[][] = [
-  [
+// The rail, in named groups. Search also matches the keywords: what each page lets you change.
+const GROUPS: { name: string; pages: Page[] }[] = [
+  { name: 'Basics', pages: [
     { route: 'general', title: 'General', icon: 'general', Page: General, keywords: 'open at login startup microphone input pause reset set up menu bar icon tray accessibility permissions privacy' },
     { route: 'shortcuts', title: 'Shortcuts', icon: 'keyboard', Page: Shortcuts, keywords: 'fn key dictate hands-free double tap command modifier chord note meeting paste last' },
-  ],
-  [
+  ] },
+  { name: 'Speech', pages: [
     { route: 'dictation', title: 'Dictation', icon: 'waveform', Page: Dictation, keywords: 'language translate english live typing fillers um sounds whisper model turbo small' },
     { route: 'vocabulary', title: 'Vocabulary', icon: 'book', Page: Vocabulary, keywords: 'words names terms spelling replacements learn suggestions' },
     { route: 'apps', title: 'App styles', icon: 'apps', Page: AppStyles, keywords: 'style casual formal code raw polish apps' },
-  ],
-  [
+  ] },
+  { name: 'Notes & meetings', pages: [
     { route: 'notes', title: 'Notes', icon: 'note', Page: Notes, keywords: 'folder file name template front matter yaml daily note tags obsidian title action items' },
     { route: 'meetings', title: 'Meetings', icon: 'meeting', Page: Meetings, keywords: 'record system audio summary decisions speakers labels folder' },
-  ],
-  [
+  ] },
+  { name: 'Connections', pages: [
     { route: 'claude', title: 'Claude', icon: 'claude', Page: Claude, keywords: 'anthropic api key model haiku sonnet opus commands polish claude code project' },
     { route: 'agents', title: 'Agents (MCP)', icon: 'agents', Page: Agents, keywords: 'mcp server claude code desktop share notes meetings history write' },
-  ],
-  [
+  ] },
+  { name: 'App', pages: [
     { route: 'history', title: 'History & stats', icon: 'history', Page: History, keywords: 'keep words stats streak time saved' },
     { route: 'appearance', title: 'Appearance', icon: 'appearance', Page: Appearance, keywords: 'theme dark light edge size dots orb idle hidden hint' },
     { route: 'about', title: 'About', icon: 'about', Page: About, keywords: 'version licence license privacy third-party notices' },
-  ],
+  ] },
 ];
-const PAGES = GROUPS.flat();
+const PAGES = GROUPS.flatMap(group => group.pages);
 
 const routeOf = () => decodeURIComponent(location.hash.slice(1)) || 'general';
 
@@ -67,9 +67,9 @@ export function Settings() {
   const page = PAGES.find(candidate => candidate.route === route) ?? PAGES[0];
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const matches = (candidate: Page) => words.every(word => `${candidate.title} ${candidate.keywords}`.toLowerCase().includes(word));
-  const groups = GROUPS.map(group => group.filter(matches)).filter(group => group.length);
+  const groups = GROUPS.map(group => ({ ...group, pages: group.pages.filter(matches) })).filter(group => group.pages.length);
   // One link takes Tab: the open page's, or the first match while a search hides it.
-  const tabbable = groups.flat().some(candidate => candidate.route === page.route) ? page.route : groups[0]?.[0].route;
+  const tabbable = groups.some(group => group.pages.some(candidate => candidate.route === page.route)) ? page.route : groups[0]?.pages[0].route;
   const go = (to: string) => { if (to !== route) location.hash = to; };
 
   // Up and down move through the pages, as in the Mac's own sidebars.
@@ -86,20 +86,23 @@ export function Settings() {
     go(next.dataset.route!);
   };
 
-  return <div className="window">
-    <div className="titlebar" data-tauri-drag-region />
-    <nav ref={nav} className="sidebar" aria-label="Settings" onKeyDown={arrows}>
+  // The workspace shell from TabTasker Business: a rail panel and the page as a raised island on a tinted
+  // frame. The traffic lights sit in the rail's corner, beside its title; the frame and that row drag.
+  return <div className="window" data-tauri-drag-region>
+    <nav ref={nav} className="rail" aria-label="Settings" onKeyDown={arrows}>
+      <p className="rail-title" data-tauri-drag-region>Settings</p>
       <label className="search">
         <Icon name="search" size={15} />
         <input ref={search} type="search" placeholder="Search" aria-label="Search settings" value={query} spellCheck={false}
           onChange={event => setQuery(event.target.value)}
           onKeyDown={event => {
-            if (event.key === 'Enter' && groups.length) { go(groups[0][0].route); setQuery(''); }
+            if (event.key === 'Enter' && groups.length) { go(groups[0].pages[0].route); setQuery(''); }
             if (event.key === 'Escape') setQuery('');
           }} />
       </label>
-      {groups.map((group, i) => <ul key={i} className="group">
-        {group.map(candidate => <li key={candidate.route}>
+      {groups.map(group => <ul key={group.name} className="group" aria-label={group.name}>
+        <li className="group-name" aria-hidden="true">{group.name}</li>
+        {group.pages.map(candidate => <li key={candidate.route}>
           <a href={`#${candidate.route}`} data-route={candidate.route} aria-current={candidate.route === page.route ? 'page' : undefined}
             tabIndex={candidate.route === tabbable ? 0 : -1}>
             <Icon name={candidate.icon} size={17} />{candidate.title}

@@ -1,40 +1,87 @@
-/* The design tokens. Monochrome: hierarchy comes from weight, size, opacity and fills, never colour.
-   The accent is black in light and white in dark; red is only for a destructive action or an error.
+/* The design tokens, taken from TabTasker Business so Dictate reads as the same family: Source Sans 3
+   and Stack Sans Headline, a graphite surface ramp, one blue accent, and depth from light and shadow
+   instead of borders. Red is only for a destructive action or an error.
    The theme follows the Mac unless <html data-theme> pins it (Appearance, or ?theme= in a browser). */
+@font-face { font-family: 'Source Sans 3'; font-style: normal; font-weight: 200 900; font-display: swap; src: url('/fonts/source-sans-3-normal-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'Source Sans 3'; font-style: normal; font-weight: 200 900; font-display: swap; src: url('/fonts/source-sans-3-normal-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Stack Sans Headline'; font-style: normal; font-weight: 200 700; font-display: swap; src: url('/fonts/stack-sans-headline-400-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'Stack Sans Headline'; font-style: normal; font-weight: 200 700; font-display: swap; src: url('/fonts/stack-sans-headline-400-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+
 :root {
   color-scheme: light;
-  --window: #f5f5f7; --sidebar: transparent; --sidebar-plain: #e8e8ea;
-  --surface: rgb(0 0 0 / .04); --surface-2: rgb(0 0 0 / .07); --surface-3: rgb(0 0 0 / .11);
-  --ink: #1d1d1f; --ink-2: rgb(0 0 0 / .62); --ink-3: rgb(0 0 0 / .42);
-  --accent: #000000; --on-accent: #ffffff; --accent-fill: rgb(0 0 0 / .08); --danger: #d93a2b; --on-danger: #ffffff;
-  --knob: #ffffff; --shadow: 0 1px 2px rgb(0 0 0 / .18), 0 0 0 .5px rgb(0 0 0 / .06); --selection: rgb(0 0 0 / .16);
+  --shadow-ink: #171717;
+  /* Chrome recedes, content advances: a tinted frame and rail, rows white on a bright page. */
+  --window: #f7f7f7; --frame: #f4f4f4; --rail-panel: #fafafa; --section: rgb(235 235 235 / .45);
+  --card: #ffffff; --popover: #ffffff; --secondary: #e2e2e2; --input: #bdbdbd; --field: rgb(235 235 235 / .5);
+  --surface: rgb(0 0 0 / .035); --surface-2: rgb(0 0 0 / .06); --surface-3: rgb(0 0 0 / .1);
+  --ink: #202020; --ink-2: #595959; --ink-3: #707070;
+  --accent: #2563eb; --accent-button: #2563eb; --on-accent: #ffffff;
+  --accent-fill: color-mix(in srgb, var(--accent) 10%, transparent); --accent-ink: color-mix(in srgb, var(--accent) 75%, var(--ink));
+  --danger: #b91c1c; --danger-fill: #b91c1c; --on-danger: #ffffff;
+  --success: #046c4e; --success-fill: color-mix(in srgb, var(--success) 10%, transparent);
+  --knob: #ffffff; --shadow: 0 1px 2px rgb(0 0 0 / .2); --selection: color-mix(in srgb, var(--accent) 22%, transparent);
+  --ring: color-mix(in srgb, var(--ink) 60%, var(--window));
 
-  --radius-group: 14px; --radius-seam: 5px; --radius-control: 8px; --radius-pill: 999px; --radius-card: 30px;
-  --seam: 3px;
-  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
-  --ease: cubic-bezier(.2, .8, .2, 1); --spring: cubic-bezier(.34, 1.4, .64, 1);
-  --quick: 160ms; --slow: 240ms;
+  /* Raised lifts a surface off the page, well presses it in, control is a filled button, float is a
+     card over other things. Every light hairline is inset and faint: the UI is layered, not drawn. */
+  --elev-raised: inset 0 0 0 1px color-mix(in srgb, var(--shadow-ink) 7%, transparent), 0 1px 2px color-mix(in srgb, var(--shadow-ink) 9%, transparent), 0 1px 3px color-mix(in srgb, var(--shadow-ink) 6%, transparent);
+  --elev-raised-hover: inset 0 0 0 1px color-mix(in srgb, var(--shadow-ink) 9%, transparent), 0 1px 2px color-mix(in srgb, var(--shadow-ink) 10%, transparent), 0 3px 8px color-mix(in srgb, var(--shadow-ink) 11%, transparent);
+  --elev-well: inset 0 2px 4px color-mix(in srgb, var(--shadow-ink) 8%, transparent), inset 0 0 0 1px color-mix(in srgb, var(--shadow-ink) 5%, transparent), inset 0 -1px 0 rgb(255 255 255 / .85);
+  --elev-control: inset 0 1px 0 rgb(255 255 255 / .3), inset 0 -1px 0 color-mix(in srgb, var(--shadow-ink) 22%, transparent), 0 1px 2px color-mix(in srgb, var(--shadow-ink) 18%, transparent), 0 2px 6px -1px color-mix(in srgb, var(--shadow-ink) 18%, transparent);
+  --elev-control-hover: inset 0 1px 0 rgb(255 255 255 / .36), inset 0 -1px 0 color-mix(in srgb, var(--shadow-ink) 24%, transparent), 0 1px 2px color-mix(in srgb, var(--shadow-ink) 20%, transparent), 0 4px 10px -2px color-mix(in srgb, var(--shadow-ink) 22%, transparent);
+  --elev-float: inset 0 0 0 1px color-mix(in srgb, var(--shadow-ink) 6%, transparent), 0 2px 6px color-mix(in srgb, var(--shadow-ink) 8%, transparent), 0 12px 28px -8px color-mix(in srgb, var(--shadow-ink) 18%, transparent);
+
+  --radius-section: 18px; --radius-group: 14px; --radius-row: 12px; --radius-control: 10px; --radius-pill: 999px;
+  --font: 'Source Sans 3', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-display: 'Stack Sans Headline', var(--font);
+  --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+  --ease: cubic-bezier(.22, 1, .36, 1); --spring: cubic-bezier(.34, 1.4, .64, 1);
+  --quick: 150ms; --slow: 250ms;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     color-scheme: dark;
-    --window: #161618; --sidebar-plain: #232325;
-    --surface: rgb(255 255 255 / .055); --surface-2: rgb(255 255 255 / .09); --surface-3: rgb(255 255 255 / .14);
-    --ink: #f5f5f7; --ink-2: rgb(255 255 255 / .64); --ink-3: rgb(255 255 255 / .42);
-    --accent: #ffffff; --on-accent: #000000; --accent-fill: rgb(255 255 255 / .14); --danger: #ff6b5e; --on-danger: #1d1d1f;
-    --knob: #f5f5f7; --shadow: 0 1px 2px rgb(0 0 0 / .5); --selection: rgb(255 255 255 / .26);
+    --window: #101010; --frame: #171717; --rail-panel: #1e1e1e; --section: rgb(41 41 41 / .4);
+    --card: #242424; --popover: #303030; --secondary: #363636; --input: #4b4b4b; --field: rgb(75 75 75 / .3);
+    --surface: rgb(255 255 255 / .04); --surface-2: rgb(255 255 255 / .08); --surface-3: rgb(255 255 255 / .12);
+    --ink: #ededed; --ink-2: #a8a8a8; --ink-3: #8c8c8c;
+    --accent: #3b82f6; --accent-button: color-mix(in srgb, #3b82f6 80%, transparent); --on-accent: #ffffff;
+    --accent-fill: color-mix(in srgb, var(--accent) 12%, transparent); --accent-ink: color-mix(in srgb, var(--accent) 65%, var(--ink));
+    --danger: #f87171; --danger-fill: color-mix(in srgb, #f87171 60%, transparent); --on-danger: #e9ebee;
+    --success: #34d399; --success-fill: color-mix(in srgb, var(--success) 12%, transparent);
+    --knob: #ffffff; --shadow: 0 1px 2px rgb(0 0 0 / .5);
+    --elev-raised: inset 0 1px 0 rgb(255 255 255 / .06), 0 1px 2px rgb(0 0 0 / .4), 0 1px 3px rgb(0 0 0 / .3);
+    --elev-raised-hover: inset 0 1px 0 rgb(255 255 255 / .09), 0 1px 2px rgb(0 0 0 / .45), 0 3px 8px rgb(0 0 0 / .4);
+    --elev-well: inset 0 2px 4px rgb(0 0 0 / .45), inset 0 0 0 1px rgb(255 255 255 / .04), inset 0 -1px 0 rgb(255 255 255 / .05);
+    --elev-control: inset 0 1px 0 rgb(255 255 255 / .24), inset 0 -1px 0 rgb(0 0 0 / .22), 0 1px 2px rgb(0 0 0 / .45), 0 2px 6px -1px rgb(0 0 0 / .4);
+    --elev-control-hover: inset 0 1px 0 rgb(255 255 255 / .3), inset 0 -1px 0 rgb(0 0 0 / .24), 0 1px 2px rgb(0 0 0 / .5), 0 4px 10px -2px rgb(0 0 0 / .45);
+    --elev-float: inset 0 1px 0 rgb(255 255 255 / .06), 0 2px 6px rgb(0 0 0 / .4), 0 12px 28px -8px rgb(0 0 0 / .6);
   }
 }
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --window: #161618; --sidebar-plain: #232325;
-  --surface: rgb(255 255 255 / .055); --surface-2: rgb(255 255 255 / .09); --surface-3: rgb(255 255 255 / .14);
-  --ink: #f5f5f7; --ink-2: rgb(255 255 255 / .64); --ink-3: rgb(255 255 255 / .42);
-  --accent: #ffffff; --on-accent: #000000; --accent-fill: rgb(255 255 255 / .14); --danger: #ff6b5e; --on-danger: #1d1d1f;
-  --knob: #f5f5f7; --shadow: 0 1px 2px rgb(0 0 0 / .5); --selection: rgb(255 255 255 / .26);
+  --window: #101010; --frame: #171717; --rail-panel: #1e1e1e; --section: rgb(41 41 41 / .4);
+  --card: #242424; --popover: #303030; --secondary: #363636; --input: #4b4b4b; --field: rgb(75 75 75 / .3);
+  --surface: rgb(255 255 255 / .04); --surface-2: rgb(255 255 255 / .08); --surface-3: rgb(255 255 255 / .12);
+  --ink: #ededed; --ink-2: #a8a8a8; --ink-3: #8c8c8c;
+  --accent: #3b82f6; --accent-button: color-mix(in srgb, #3b82f6 80%, transparent); --on-accent: #ffffff;
+  --accent-fill: color-mix(in srgb, var(--accent) 12%, transparent); --accent-ink: color-mix(in srgb, var(--accent) 65%, var(--ink));
+  --danger: #f87171; --danger-fill: color-mix(in srgb, #f87171 60%, transparent); --on-danger: #e9ebee;
+  --success: #34d399; --success-fill: color-mix(in srgb, var(--success) 12%, transparent);
+  --knob: #ffffff; --shadow: 0 1px 2px rgb(0 0 0 / .5);
+  --elev-raised: inset 0 1px 0 rgb(255 255 255 / .06), 0 1px 2px rgb(0 0 0 / .4), 0 1px 3px rgb(0 0 0 / .3);
+  --elev-raised-hover: inset 0 1px 0 rgb(255 255 255 / .09), 0 1px 2px rgb(0 0 0 / .45), 0 3px 8px rgb(0 0 0 / .4);
+  --elev-well: inset 0 2px 4px rgb(0 0 0 / .45), inset 0 0 0 1px rgb(255 255 255 / .04), inset 0 -1px 0 rgb(255 255 255 / .05);
+  --elev-control: inset 0 1px 0 rgb(255 255 255 / .24), inset 0 -1px 0 rgb(0 0 0 / .22), 0 1px 2px rgb(0 0 0 / .45), 0 2px 6px -1px rgb(0 0 0 / .4);
+  --elev-control-hover: inset 0 1px 0 rgb(255 255 255 / .3), inset 0 -1px 0 rgb(0 0 0 / .24), 0 1px 2px rgb(0 0 0 / .5), 0 4px 10px -2px rgb(0 0 0 / .45);
+  --elev-float: inset 0 1px 0 rgb(255 255 255 / .06), 0 2px 6px rgb(0 0 0 / .4), 0 12px 28px -8px rgb(0 0 0 / .6);
 }
 
-/* Native controls and selected text take the accent too, never the system blue. */
+/* Native controls and selected text take the accent too. */
 :root { accent-color: var(--accent); }
 ::selection { background: var(--selection); }
 
