@@ -7,7 +7,8 @@ const PATHS = {
   apps: <><rect x="3" y="3" width="5.75" height="5.75" rx="1.6" /><rect x="11.25" y="3" width="5.75" height="5.75" rx="1.6" /><rect x="3" y="11.25" width="5.75" height="5.75" rx="1.6" /><rect x="11.25" y="11.25" width="5.75" height="5.75" rx="1.6" /></>,
   note: <><path d="M5.5 2.75h5.75L15.5 7v9a1.75 1.75 0 0 1-1.75 1.75h-8.25A1.75 1.75 0 0 1 3.75 16V4.5A1.75 1.75 0 0 1 5.5 2.75z" /><path d="M11 2.75V7h4.5M7 10.75h5.5M7 13.75h3.5" /></>,
   meeting: <><circle cx="7.5" cy="7" r="2.75" /><path d="M2.75 16.25a4.75 4.75 0 0 1 9.5 0" /><circle cx="14" cy="7.75" r="2.25" /><path d="M13.6 11.9a4 4 0 0 1 3.65 4.35" /></>,
-  claude: <path d="M10 2.75v14.5M2.75 10h14.5M4.9 4.9l10.2 10.2M15.1 4.9 4.9 15.1" />,
+  // Claude's starburst: twelve rays, long and short by turns.
+  claude: <path d="M10 10 10.00 2.75M10 10 12.62 5.45M10 10 16.28 6.38M10 10 15.25 10.00M10 10 16.28 13.62M10 10 12.62 14.55M10 10 10.00 17.25M10 10 7.38 14.55M10 10 3.72 13.62M10 10 4.75 10.00M10 10 3.72 6.37M10 10 7.37 5.45" />,
   agents: <><circle cx="5" cy="5" r="2.25" /><circle cx="15" cy="5" r="2.25" /><circle cx="10" cy="15" r="2.25" /><path d="M7.25 5h5.5M6.1 7 8.9 13M13.9 7l-2.8 6" /></>,
   history: <><path d="M3.75 10a6.25 6.25 0 1 0 1.83-4.42L3.75 7.4" /><path d="M3.75 3.75V7.4H7.4M10 6.75v3.5l2.5 1.5" /></>,
   appearance: <><circle cx="10" cy="10" r="7.25" /><path d="M10 2.75a7.25 7.25 0 0 1 0 14.5z" fill="currentColor" stroke="none" /></>,

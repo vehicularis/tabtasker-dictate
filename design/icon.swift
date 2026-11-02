@@ -1,5 +1,6 @@
 // Draws TabTasker Dictate's app icon and menu bar mark: TabTasker's otter with its voice on its chest, white
-// on Business's night-blue tile, and its head alone in black for the menu bar (a template image macOS tints).
+// on Business's night-blue sky, filling the square (macOS rounds it), and its head alone in black for the
+// menu bar (a template image macOS tints).
 // Run from the repository root: swift design/icon.swift
 // It writes design/icon.png (1024 px) and design/tray*.png, and every icon Tauri bundles in src-tauri/icons.
 import CoreGraphics
@@ -99,26 +100,18 @@ func mark(_ ctx: CGContext, _ k: CGFloat) {
   ctx.addPath(otterFace()); ctx.setFillColor(ink); ctx.fillPath()
 }
 
-// The app icon at any size, drawn on Apple's 1024 grid: an 824 px tile, centred, with its shadow below.
+// The app icon at any size: full bleed, as Business draws its own. macOS 26 and later mask every icon into
+// the squircle themselves (and add the glass), so a tile drawn here with margins would end up as a tile
+// inside a tile. The otter is drawn as for the 824 tile of the old grid, scaled up to fill the square.
 func appIcon(_ size: Int) -> CGImage {
   image(size) { ctx, s in
     ctx.scaleBy(x: s / 1024, y: s / 1024)
-    let tile = squircle(CGRect(x: 100, y: 100, width: 824, height: 824), radius: 185)
-    ctx.saveGState()
-    ctx.setShadow(offset: CGSize(width: 0, height: -10 * s / 1024), blur: 28 * s / 1024, color: grey(0, 0.3))
-    ctx.addPath(tile); ctx.setFillColor(ink); ctx.fillPath()
-    ctx.restoreGState()
-    ctx.saveGState(); ctx.addPath(tile); ctx.clip()
     // Business's night sky: darkest at the top right, lifting toward the bottom left.
     let fill = CGGradient(colorsSpace: space, colors: [tileTop, tileBottom] as CFArray, locations: nil)!
-    ctx.drawLinearGradient(fill, start: CGPoint(x: 924, y: 924), end: CGPoint(x: 100, y: 100), options: [])
-    // Light along the top edge only, fading out down the sides.
-    ctx.addPath(squircle(CGRect(x: 102, y: 102, width: 820, height: 820), radius: 183)); ctx.setLineWidth(4); ctx.replacePathWithStrokedPath(); ctx.clip()
-    let rim = CGGradient(colorsSpace: space, colors: [grey(1, 0.18), grey(1, 0)] as CFArray, locations: nil)!
-    ctx.drawLinearGradient(rim, start: CGPoint(x: 0, y: 924), end: CGPoint(x: 0, y: 640), options: [])
-    ctx.restoreGState()
-    ctx.saveGState(); ctx.addPath(tile); ctx.clip() // the otter's body runs off the bottom of the tile
-    mark(ctx, s / 1024)
+    ctx.drawLinearGradient(fill, start: CGPoint(x: 1024, y: 1024), end: CGPoint(x: 0, y: 0), options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
+    ctx.saveGState()
+    ctx.scaleBy(x: 1024 / 824, y: 1024 / 824); ctx.translateBy(x: -100, y: -100)
+    mark(ctx, s / 824)
     ctx.restoreGState()
   }
 }

@@ -52,6 +52,12 @@ export function About(_: PageProps) {
         <Pledge icon="check" title="No account and no analytics">Nothing to sign in to, and nothing about how you use it is sent anywhere.</Pledge>
       </TileGroup>
     </Section>
+    <Section title="Made with">
+      <TileGroup label="Made with">
+        <Pledge icon="claude" title="Claude Code">Written and polished with Claude Code, by Anthropic. The Claude page connects it to your dictation, with your own key or the Claude Code on this Mac.</Pledge>
+        <Pledge icon="waveform" title="Whisper and whisper.cpp">OpenAI’s speech model, run on this Mac by whisper.cpp, with Silero VAD finding where speech ends.</Pledge>
+      </TileGroup>
+    </Section>
     <Section title="Licence">
       <TileGroup label="Licence">
         <Tile title="Apache License 2.0" detail="TabTasker Dictate is open source.">
