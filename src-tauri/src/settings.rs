@@ -10,6 +10,7 @@ use tauri::{AppHandle, Emitter, Manager};
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
   pub version: u32,
+  pub general: General,
   pub shortcuts: Shortcuts,
   pub dictation: Dictation,
   pub vocabulary: Vocabulary,
@@ -20,6 +21,16 @@ pub struct Settings {
   pub agents: Agents,
   pub history: History,
   pub appearance: Appearance,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct General {
+  /// Hidden, the app is still reached by opening it again from Finder or Spotlight, or from the dots.
+  pub menu_bar_icon: bool,
+}
+impl Default for General {
+  fn default() -> Self { Self { menu_bar_icon: true } }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -210,7 +221,7 @@ impl Default for Appearance {
 impl Default for Settings {
   fn default() -> Self {
     Self {
-      version: VERSION, shortcuts: Shortcuts::default(), dictation: Dictation::default(), vocabulary: Vocabulary::default(),
+      version: VERSION, general: General::default(), shortcuts: Shortcuts::default(), dictation: Dictation::default(), vocabulary: Vocabulary::default(),
       apps: Apps { styles: default_styles(), default_style: Style::Default }, notes: Notes::default(), meetings: Meetings::default(),
       claude: Claude::default(), agents: Agents::default(), history: History::default(), appearance: Appearance::default(),
     }
@@ -413,6 +424,7 @@ pub fn apply(app: &AppHandle, settings: &Settings) {
     let _ = app.run_on_main_thread(move || unsafe { dictate_apply_settings(json.as_ptr()) });
   }
   let _ = app.emit("dictate-settings", settings);
+  crate::show_tray(app, settings.general.menu_bar_icon);
   crate::recent_changed(app); // the notes folder may have moved
 }
 
@@ -471,6 +483,7 @@ mod tests {
   fn defaults_are_the_documented_ones_in_camel_case() {
     let value = serde_json::to_value(Settings::default()).unwrap();
     assert_eq!(value["version"], 1);
+    assert_eq!(value["general"], json!({ "menuBarIcon": true }));
     assert_eq!(value["shortcuts"], json!({ "dictate": "fn", "handsFree": true, "command": "control", "note": null, "meeting": null, "pasteLast": null }));
     assert_eq!(value["dictation"], json!({ "language": "auto", "translateToEnglish": false, "liveTyping": true, "removeFillers": true, "sounds": true, "model": "turbo" }));
     assert_eq!(value["vocabulary"], json!({ "words": [], "replacements": [], "learn": true, "suggestions": [] }));
@@ -504,6 +517,7 @@ mod tests {
     let after = before.patched(&json!({
       "version": 7, "nonsense": true,
       "appearance": { "theme": "purple", "edge": 3, "hint": "yes", "size": "large" },
+      "general": { "menuBarIcon": "no" },
       "claude": { "model": "gpt-4" },
       "notes": { "folder": "relative/path", "fileName": "   " },
       "meetings": { "you": "" },
@@ -515,6 +529,8 @@ mod tests {
     assert_eq!(after.appearance.theme, Theme::Dark);
     assert_eq!(after.appearance.edge, Edge::Bottom);
     assert!(after.appearance.hint);
+    assert!(after.general.menu_bar_icon);
+    assert!(!after.patched(&json!({ "general": { "menuBarIcon": false } })).general.menu_bar_icon);
     assert_eq!(after.appearance.size, Size::Large); // a valid value beside invalid ones still lands
     assert_eq!(after.claude.model, ClaudeModel::Haiku);
     assert_eq!(after.notes.folder, None);

@@ -16,7 +16,7 @@ pub mod text;
 
 use std::ffi::{c_char, c_void, CStr, CString};
 use std::path::PathBuf;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{atomic::{AtomicBool, Ordering}, Mutex, OnceLock};
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::TrayIconBuilder;
 use tauri::window::{Effect, EffectState, EffectsBuilder};
@@ -27,6 +27,8 @@ const SETTINGS: &str = "settings";
 /// The Settings window's pages, by the hash it opens on.
 const ROUTES: &[&str] = &["general", "shortcuts", "dictation", "vocabulary", "apps", "notes", "meetings", "claude", "agents", "history", "appearance", "about", "setup"];
 static APP: OnceLock<AppHandle> = OnceLock::new();
+/// This launch is the first and opened the full setup, so the overlay keeps its own setup card closed.
+static FIRST_RUN: AtomicBool = AtomicBool::new(false);
 
 extern "C" {
   fn dictate_init();
@@ -121,6 +123,7 @@ async fn status(app: AppHandle) -> Result<serde_json::Value, String> {
   let mut value: serde_json::Value = serde_json::from_str(&json).map_err(|e| e.to_string())?;
   value["notes"] = serde_json::Value::String(notes::notes_dir()?.display().to_string());
   value["home"] = std::env::var("HOME").map_or(serde_json::Value::Null, serde_json::Value::String);
+  value["firstRun"] = FIRST_RUN.load(Ordering::Relaxed).into();
   show_paused(value["enabled"] == false);
   Ok(value)
 }
@@ -296,6 +299,13 @@ pub(crate) fn recent_changed(app: &AppHandle) {
   if let Err(e) = rebuilt { log::warn!("recent notes: {e}"); }
 }
 
+/// The menu bar icon, shown or hidden from General as it changes.
+pub(crate) fn show_tray(app: &AppHandle, visible: bool) {
+  if let Some(tray) = app.tray_by_id("dictate") {
+    if let Err(e) = tray.set_visible(visible) { log::warn!("menu bar icon: {e}"); }
+  }
+}
+
 fn show_paused(paused: bool) {
   if let Some(item) = PAUSED.get() { let _ = item.set_checked(paused); }
 }
@@ -322,8 +332,17 @@ fn tray(app: &AppHandle, enabled: bool) -> tauri::Result<()> {
   recent_changed(app);
   // The mark alone, in black: macOS tints a template icon for the menu bar's light or dark look.
   let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray@2x.png"))?;
-  TrayIconBuilder::with_id("dictate").menu(&menu).tooltip("TabTasker Dictate").icon(icon).icon_as_template(true).build(app)?;
-  Ok(())
+  let tray = TrayIconBuilder::with_id("dictate").menu(&menu).tooltip("TabTasker Dictate").icon(icon).icon_as_template(true).build(app)?;
+  tray.set_visible(settings::get().general.menu_bar_icon)
+}
+
+/// The very first launch. The settings file is written so this happens once, and a Mac that still needs
+/// its permissions gets the full setup window rather than the overlay's compact card.
+fn first_run(app: &AppHandle, status: &serde_json::Value) {
+  if let Err(e) = settings::update(app, &serde_json::json!({})) { log::warn!("settings: {e}"); }
+  if status["microphone"] == "allowed" && status["accessibility"] == true { return; }
+  FIRST_RUN.store(true, Ordering::Relaxed);
+  if let Err(e) = show_settings(app, Some("setup")) { log::warn!("setup: {e}"); }
 }
 
 /// The tray's and the app menu's items, by id. Tauri hands every menu's events to one handler.
@@ -335,7 +354,7 @@ fn menu_event(app: &AppHandle, id: &str) {
     "notes" => { let _ = notes::show_notes(None); }
     "settings" => { let _ = show_settings(app, None); }
     "about" => { let _ = show_settings(app, Some("about")); }
-    "setup" => { let _ = app.emit_to(OVERLAY, "dictate-setup", ()); }
+    "setup" => { let _ = show_settings(app, Some("setup")); }
     // The item has already flipped its own check.
     "pause" => {
       let paused = PAUSED.get().and_then(|item| item.is_checked().ok()).unwrap_or(false);
@@ -366,6 +385,7 @@ pub fn run() {
       app.set_activation_policy(ActivationPolicy::Accessory); // a menu bar app: no Dock icon
       let handle = app.handle().clone();
       APP.get_or_init(|| handle.clone());
+      let first = handle.path().app_data_dir().is_ok_and(|dir| !dir.join("settings.json").exists());
       settings::init(&handle)?;
       history::init(&handle)?;
       ai::init(&handle);
@@ -375,9 +395,10 @@ pub fn run() {
       settings::apply(&handle, &settings::get());
       overlay(&handle)?;
       handle.set_menu(app_menu(&handle)?)?;
-      let enabled = status_json().and_then(|json| serde_json::from_str::<serde_json::Value>(&json).ok()).is_some_and(|status| status["enabled"] == true);
-      tray(&handle, enabled)?;
+      let status = status_json().and_then(|json| serde_json::from_str::<serde_json::Value>(&json).ok()).unwrap_or_default();
+      tray(&handle, status["enabled"] == true)?;
       notes::watch(&handle);
+      if first { first_run(&handle, &status); }
       Ok(())
     })
     .on_menu_event(|app, event| menu_event(app, event.id().as_ref()))
@@ -388,5 +409,10 @@ pub fn run() {
     })
     .build(tauri::generate_context!())
     .expect("TabTasker Dictate failed to start")
-    .run(|app, event| if let RunEvent::Exit = event { speech::shutdown(app) });
+    .run(|app, event| match event {
+      RunEvent::Exit => speech::shutdown(app),
+      // Opening the app again from Finder, Spotlight or the Dock: the way back with the menu bar icon hidden.
+      RunEvent::Reopen { .. } => { if let Err(e) = show_settings(app, None) { log::warn!("settings: {e}"); } }
+      _ => {}
+    });
 }
