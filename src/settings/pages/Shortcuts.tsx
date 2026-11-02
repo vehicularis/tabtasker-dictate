@@ -42,14 +42,19 @@ const MACOS: [number, number, string][] = [
 const APPS: [number, number, string][] = [
   [0, CMD, 'Select All'], [8, CMD, 'Copy'], [9, CMD, 'Paste'], [7, CMD, 'Cut'], [6, CMD, 'Undo'], [6, CMD | SHIFT, 'Redo'], [12, CMD, 'Quit'], [13, CMD, 'Close'],
   [4, CMD, 'Hide'], [4, CMD | OPT, 'Hide Others'], [46, CMD, 'Minimize'], [45, CMD, 'New'], [31, CMD, 'Open'], [35, CMD, 'Print'], [1, CMD, 'Save'],
-  [17, CMD, 'New Tab'], [3, CMD, 'Find'], [5, CMD, 'Find Next'], [43, CMD, 'Settings'], [3, CTRL | CMD, 'Full screen'],
+  [17, CMD, 'New Tab'], [17, CMD | SHIFT, 'Reopen Closed Tab'], [15, CMD, 'Reload'], [37, CMD, 'Open Location'], [3, CMD, 'Find'], [5, CMD, 'Find Next'],
+  [11, CMD, 'Bold'], [34, CMD, 'Italic'], [40, CMD, 'Add Link'], [43, CMD, 'Settings'], [3, CTRL | CMD, 'Full screen'],
 ];
-type Taken = { name: string; chord: Chord };
+type Taken = { name: string; chord: Chord; reason?: string };
 const taken = ([keyCode, modifiers, name]: [number, number, string]): Taken => ({ name, chord: { keyCode, modifiers, label: name } });
 function reserved(status: Status | null): Taken[] {
   const live = (status as (Status & { systemShortcuts?: [number, number][] }) | null)?.systemShortcuts;
-  const named = ([keyCode, modifiers]: [number, number]) => MACOS.find(([k, m]) => k === keyCode && m === modifiers)?.[2] ?? 'a macOS shortcut';
-  const macos = live ? live.map(pair => taken([pair[0], pair[1], named(pair)])) : MACOS.map(taken);
+  // One the person added in System Settings has no name here.
+  const system = ([keyCode, modifiers]: [number, number]): Taken => {
+    const name = MACOS.find(([k, m]) => k === keyCode && m === modifiers)?.[2];
+    return name ? taken([keyCode, modifiers, name]) : { ...taken([keyCode, modifiers, 'macOS']), reason: 'macOS already uses this shortcut' };
+  };
+  const macos = live ? live.map(system) : MACOS.map(taken);
   return [...macos, ...APPS.map(taken)];
 }
 
@@ -60,10 +65,10 @@ export function Shortcuts({ settings, update }: PageProps) {
   const down = useKeyDown();
   const system = reserved(status);
   const record = (name: ChordName) => async (chord: Chord | null) => (await update({ shortcuts: { [name]: chord } }))?.shortcuts[name];
-  const claude = !settings.claude.enabled ? <>Needs Claude. <a className="link" href="#claude">Connect Claude</a></>
+  const claude = keys.command === 'off' ? null : !settings.claude.enabled ? <>Needs Claude. <a className="link" href="#claude">Connect Claude</a></>
     : !settings.claude.commands ? <>Commands are off. <a className="link" href="#claude">Claude settings</a></> : null;
   const aside = keys.dictate === 'fn' ? 'Pressed with another key, fn still does what it always did.'
-    : keys.dictate === 'rightControl' ? 'Most Mac laptops have no right Control key, so this one needs an external keyboard.'
+    : keys.dictate === 'rightControl' ? 'Mac laptops have no right Control key, so this one needs an external keyboard.'
     : 'Typing with it still works: pressed with another key, it is a shortcut, not dictation.';
   return <>
     <PageHeader icon="keyboard" title="Shortcuts">The key you hold to talk, and shortcuts for everything else.</PageHeader>
@@ -72,10 +77,11 @@ export function Shortcuts({ settings, update }: PageProps) {
         <Tile stack title="Key to hold" detail={<>Hold <Kbd>{key.glyph}</Kbd> and speak: your words type where the cursor is. {aside}</>}>
           <KeyPicker value={keys.dictate} down={down} onChange={dictate => void update({ shortcuts: { dictate } })} />
         </Tile>
-        <Tile title="Hands-free" detail={<>Double-tap <Kbd>{key.glyph}</Kbd> to keep listening without holding it, for up to 10 minutes. Tap it again to send, or press Escape to cancel.</>}>
+        <Tile title="Hands-free" detail={<>Double-tap <Kbd>{key.glyph}</Kbd> to keep listening without holding it, for up to a minute. Tap it again to send, or press Escape to cancel.</>}>
           <Toggle label="Hands-free" checked={keys.handsFree} onChange={handsFree => void update({ shortcuts: { handsFree } })} />
         </Tile>
-        <Tile title="Talk to Claude" detail={<>Hold this with <Kbd>{key.glyph}</Kbd> and say what to do with the selected text, or ask a question. {claude}</>}>
+        <Tile title="Talk to Claude" detail={keys.command === 'off' ? <>Off. Choose a key to hold with <Kbd>{key.glyph}</Kbd> to talk to Claude.</>
+          : <>Hold this with <Kbd>{key.glyph}</Kbd> and say what to do with the selected text, or ask a question. {claude}</>}>
           <Select label="Talk to Claude" value={keys.command} options={COMMAND_KEYS} onChange={command => void update({ shortcuts: { command } })} />
         </Tile>
       </TileGroup>
@@ -90,8 +96,8 @@ export function Shortcuts({ settings, update }: PageProps) {
         </Tile>)}
       </TileGroup>
     </Section>
-    <Section title="Try it" note="Press any of them now: each lights up as TabTasker Dictate hears it.">
-      <Tester settings={settings} down={down} />
+    <Section title="Try it" note="Press any of them now to see it light up. Holding the key here dictates for real.">
+      <Tester settings={settings} status={status} down={down} />
     </Section>
   </>;
 }
@@ -158,8 +164,9 @@ function useCodes() {
 }
 
 /// Each way in, lit while it is pressed and ticked once heard. The hold and the double tap come from the
-/// app's own key monitor; the command modifier and the chords from this window.
-function Tester({ settings, down }: { settings: Settings; down: boolean }) {
+/// app's own key monitor; the command modifier and the chords from this window, since the app leaves
+/// chords pressed in Settings to the page.
+function Tester({ settings, status, down }: { settings: Settings; status: Status | null; down: boolean }) {
   const keys = settings.shortcuts;
   const key = keyOf(keys.dictate);
   const codes = useCodes();
@@ -182,23 +189,25 @@ function Tester({ settings, down }: { settings: Settings; down: boolean }) {
   }, [down]);
 
   const modifier = keys.command === 'off' ? null : MODIFIER[keys.command];
-  const command = !!modifier && down && modifier.codes.some(code => code !== key.code && codes.has(code));
+  const commandOff = !modifier ? 'Off' : !settings.claude.enabled ? 'Needs Claude' : !settings.claude.commands ? 'Off' : undefined;
+  const command = !commandOff && !!modifier && down && modifier.codes.some(code => code !== key.code && codes.has(code));
+  const chordOff = status && !status.accessibility ? 'Needs Accessibility' : undefined;
   useEffect(() => { if (command) hear('command', 'Talk to Claude'); }, [command]);
   useEffect(() => {
     const press = (event: KeyboardEvent) => {
       const chord = chordOf(event as unknown as ReactKeyboardEvent);
       const match = chord && !event.repeat && CHORDS.find(([name]) => keys[name]?.keyCode === chord.keyCode && keys[name]?.modifiers === chord.modifiers);
-      if (match) light(match[0], match[1]);
+      if (match && !chordOff) light(match[0], match[1]);
     };
     addEventListener('keydown', press);
     return () => removeEventListener('keydown', press);
-  }, [keys]);
+  }, [keys, chordOff]);
 
   const rows: { id: string; title: string; keys: string[]; on: boolean; off?: string }[] = [
     { id: 'hold', title: 'Hold to talk', keys: [key.glyph], on: down },
     { id: 'double', title: 'Hands-free', keys: [key.glyph, key.glyph], on: flash === 'double', off: keys.handsFree ? undefined : 'Off' },
-    { id: 'command', title: 'Talk to Claude', keys: modifier ? [modifier.glyph, key.glyph] : [key.glyph], on: command, off: modifier ? undefined : 'Off' },
-    ...CHORDS.map(([name, title]) => ({ id: name, title, keys: keys[name] ? [keys[name]!.label] : [], on: flash === name, off: keys[name] ? undefined : 'Not set' })),
+    { id: 'command', title: 'Talk to Claude', keys: modifier ? [modifier.glyph, key.glyph] : [key.glyph], on: command, off: commandOff },
+    ...CHORDS.map(([name, title]) => ({ id: name, title, keys: keys[name] ? [keys[name]!.label] : [], on: flash === name, off: keys[name] ? chordOff : 'Not set' })),
   ];
   return <>
     <TileGroup label="Shortcut tester">

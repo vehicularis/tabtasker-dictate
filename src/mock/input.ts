@@ -6,10 +6,17 @@ const CODES: Partial<Record<DictateKey, string>> = { rightCommand: 'MetaRight', 
 
 // In a browser: the chosen dictate key, pressed in the page, stands in for the app's key monitor. It
 // sends dictate-fn, and a double tap locks hands-free listening the way the app does (each press under
-// 0.25 s, the presses within 0.35 s) until the next tap or Escape.
+// 0.25 s, the presses within 0.35 s) until the next tap, Escape, the pill's buttons or the minute is up.
 export function register(mock: Mock) {
-  let down = false, downAt = 0, tapAt = -1, locked = false;
-  const lock = (on: boolean) => { if (on !== locked) { locked = on; mock.emit('dictate-hands-free', { locked }); } };
+  let down = false, downAt = 0, tapAt = -1, locked = false, limit = 0;
+  const lock = (on: boolean) => {
+    if (on === locked) return;
+    locked = on;
+    clearTimeout(limit);
+    if (on) limit = window.setTimeout(() => { mock.emit('dictate-notice', { message: 'Stopped at one minute' }); lock(false); }, 59_500);
+    mock.emit('dictate-state', { phase: on ? 'listening' : 'idle', level: 0, dictating: on });
+    mock.emit('dictate-hands-free', { locked });
+  };
   const key = (event: KeyboardEvent) => {
     const pressed = event.type === 'keydown';
     if (pressed && event.code === 'Escape') { lock(false); return; }
@@ -27,4 +34,10 @@ export function register(mock: Mock) {
   addEventListener('keydown', key);
   addEventListener('keyup', key);
   addEventListener('blur', () => { if (down) { down = false; mock.emit('dictate-fn', { down }); } });
+  // This replaces the shared `request` handler, so it keeps the permission answers too.
+  mock.handle('request', ({ kind }) => {
+    if (kind === 'send' || kind === 'cancel') lock(false);
+    else if (kind === 'microphone') mock.status.microphone = 'allowed';
+    else if (kind === 'accessibility') mock.status.accessibility = true;
+  });
 }
