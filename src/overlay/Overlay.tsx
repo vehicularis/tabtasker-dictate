@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
 import { invoke, listen } from '../bridge';
 import { needsSetup, setupDone, updateSettings, useSettings, type Edge, type Status } from '../store';
 import { applyTheme, isDark } from '../ui/theme';
 import { CommandCard, SendToClaudeCode } from './CommandCard';
 import { Dock } from './Dock';
 import { HandsFree } from './HandsFree';
+import { AskCard } from './AskCard';
 import { LibraryCard } from './LibraryCard';
 import { Learned } from './Learned';
 import { MeetingPill, useMeetingState } from './MeetingPill';
@@ -43,6 +44,7 @@ export function Overlay() {
   // The gear's card: the quick settings, or ('steps') the setup steps even once set up.
   const [setup, setSetup] = useState<false | 'quick' | 'steps'>(PREVIEW && PREVIEW in SETUP ? 'quick' : false);
   const [library, setLibrary] = useState(PREVIEW === 'library'); // the Library card, from the pill
+  const [asking, setAsking] = useState(PREVIEW === 'ask'); // a typed question for Claude
   const [hover, setHover] = useState(PREVIEW === 'hover' || PREVIEW === 'menu' || PREVIEW === 'mics');
   const [menu, setMenu] = useState(PREVIEW === 'menu' || PREVIEW === 'mics');
   const [mics, setMics] = useState(PREVIEW === 'mics');
@@ -224,7 +226,16 @@ export function Overlay() {
   const discard = () => { if (sending.current) return; setDraft(null); setReviewing(false); setDiscarding(false); };
   const openSetup = (what: 'quick' | 'steps' = 'quick') => { setMenu(false); refresh(); setSetup(what); };
   const openSettings = useCallback(() => { setMenu(false); void invoke('open_settings', {}).catch(() => setToast('Couldn’t open Settings')); }, []);
-  const openLibrary = useCallback(() => { setMenu(false); setHover(false); setSetup(false); setLibrary(true); }, []);
+  const openLibrary = useCallback(() => { setMenu(false); setHover(false); setSetup(false); setAsking(false); setLibrary(true); }, []);
+  // A note to type: the note card, empty (or the note waiting at the dots), with the keyboard in it.
+  const writeNote = useCallback(() => {
+    setMenu(false); setHover(false); setSetup(false); setLibrary(false); setAsking(false);
+    setDraft(current => current ?? { title: '', text: '' }); setReviewing(true); setDiscarding(false);
+  }, []);
+  const askClaude = useCallback(() => { setMenu(false); setHover(false); setSetup(false); setLibrary(false); setAsking(true); }, []);
+  const newSticky = useCallback(() => { setMenu(false); void invoke('sticky_new', {}).catch(error => setToast(typeof error === 'string' ? error : 'Couldn’t make a sticky')); }, []);
+  // The global shortcuts for a typed note and a question, which the native side hears and hands here.
+  useEffect(() => listen<{ what: 'writeNote' | 'ask' }>('dictate-open', ({ what }) => { if (what === 'writeNote') writeNote(); else if (what === 'ask') askClaude(); }), [writeNote, askClaude]);
   const startMeeting = () => {
     setMenu(false);
     const action = meetings?.recording ? 'stop' : 'start';
@@ -244,12 +255,12 @@ export function Overlay() {
     const key = (event: KeyboardEvent) => {
       if (event.key === ',' && event.metaKey) { event.preventDefault(); openSettings(); return; }
       if (event.key !== 'Escape') return;
-      if (menu) setMenu(false); else if (library) setLibrary(false); else if (setup) setSetup(false); else if (reviewing) setReviewing(false);
+      if (menu) setMenu(false); else if (asking) setAsking(false); else if (library) setLibrary(false); else if (setup) setSetup(false); else if (reviewing) setReviewing(false);
     };
     const away = (event: PointerEvent) => { if (menu && !(event.target as Element).closest('[role="menu"]')) setMenu(false); };
     addEventListener('keydown', key); addEventListener('pointerdown', away);
     return () => { removeEventListener('keydown', key); removeEventListener('pointerdown', away); };
-  }, [setup, library, reviewing, menu, openSettings]);
+  }, [setup, library, asking, reviewing, menu, openSettings]);
 
   // Nothing is drawn until the settings say which edge the dots are on. Hidden for an hour, the dots go but
   // an answer from Claude, a meeting or a hands-free session still shows, or its words would be lost.
@@ -258,14 +269,16 @@ export function Overlay() {
     <div ref={dock} className="dock"><CommandCard /><MeetingPill /><HandsFree /></div>
   </div>;
   const mode = phase === 'listening' ? 'listening' : phase !== 'idle' ? 'thinking' : hover || menu ? 'hover' : 'idle';
-  const card = setup || library || (draft && reviewing);
+  const card = setup || library || asking || (draft && reviewing);
   const pending = !!draft && !reviewing;
   const quiet = settings.appearance.idle === 'hidden' && mode === 'idle' && !card && !pending && !saved && !toast;
   return <div ref={root} className="layer" data-edge={edge} data-mode={mode} data-size={settings.appearance.size} data-quiet={quiet || undefined} data-loading={loading || undefined}
+    style={{ '--margin': `${settings.appearance.margin}px` } as CSSProperties}
     data-card={card || undefined} data-pending={pending || undefined} data-dragging={dragging || undefined}>
     <div ref={dock} className="dock">
       {setup && <Setup status={status} fnDown={fnDown} fnTested={fnTested} steps={setup === 'steps'} onClose={() => setSetup(false)} />}
-      {library && !setup && <LibraryCard claudeCode={!!settings.claude.claudeCode} onClose={() => setLibrary(false)} onError={setToast} />}
+      {library && !setup && <LibraryCard claudeCode={!!settings.claude.claudeCode} onClose={() => setLibrary(false)} onError={setToast} onWriteNote={writeNote} />}
+      {asking && !setup && <AskCard onClose={() => setAsking(false)} onError={setToast} />}
       {!setup && draft && reviewing && <NoteCard draft={draft} onChange={setDraft} more={noting ? live : null} canTalk={phase === 'idle'} saving={saving}
         discarding={discarding} onDiscarding={setDiscarding} onSave={save} onDiscard={discard} onHide={() => setReviewing(false)} onTalk={takeNote} onGrab={grab} />}
       {noting && phase === 'listening' && !card && <p className="glass said" data-glass data-live role="status">
@@ -283,7 +296,7 @@ export function Overlay() {
       <Dock mode={mode} dots={dots} label={pending ? 'Open the note' : 'TabTasker Dictate'} hint={settings.appearance.hint} quiet={quiet} level={level} typing={dictating} words={noting ? '' : live ?? ''}
         onHover={setHover} onGrab={grab} onDots={clickDots} onNote={takeNote} onLibrary={openLibrary} onSetup={() => openSetup('quick')} onOrb={() => { if (noting) takeNote(); }}
         onMenu={() => { if (phase === 'idle') { setMenu(true); refresh(); lookMeetings(); } }}
-        menu={menu && <Menu status={status} mics={mics} meeting={!!meetings?.recording} onMics={setMics} onNote={() => { setMenu(false); takeNote(); }} onMeeting={startMeeting}
+        menu={menu && <Menu status={status} mics={mics} meeting={!!meetings?.recording} onMics={setMics} onNote={() => { setMenu(false); takeNote(); }} onWriteNote={writeNote} onSticky={newSticky} onAsk={askClaude} onMeeting={startMeeting}
           onLibrary={openLibrary}
           onShowNotes={() => { setMenu(false); void invoke('show_notes', {}).catch(() => {}); }} onPasteLast={() => { setMenu(false); void invoke('paste_last').catch(() => {}); }} onPickMic={pickMic} onLogin={login}
           onHide={hideForAnHour} onSettings={openSettings} onSetup={() => openSetup('steps')} />} />

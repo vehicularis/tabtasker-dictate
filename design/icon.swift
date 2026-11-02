@@ -72,18 +72,22 @@ func arc(_ cx: CGFloat, _ cy: CGFloat, _ r: CGFloat, _ from: CGFloat, _ to: CGFl
 /// The white: the head and body as one rounded shape, with an ear on each side (Business's 512 grid, doubled).
 func otterBody() -> CGPath {
   let body = CGMutablePath()
-  body.addPath(CGPath(roundedRect: CGRect(x: 262, y: -300, width: 500, height: 1114), cornerWidth: 250, cornerHeight: 250, transform: nil))
-  body.addPath(circle(336, 758, 90)); body.addPath(circle(688, 758, 90))
+  // A tall rounded rectangle, its top corners at r 68, never a dome (a dome is what reads as a bear).
+  body.addPath(CGPath(roundedRect: CGRect(x: 241, y: -300, width: 540, height: 1122), cornerWidth: 68, cornerHeight: 68, transform: nil))
+  body.addPath(circle(324, 730, 92)); body.addPath(circle(698, 730, 92))
   return body
 }
 /// The face, cut from the white in ink.
 func otterFace() -> CGPath {
   let face = CGMutablePath()
-  face.addPath(circle(336, 758, 41)); face.addPath(circle(688, 758, 41))   // the ears' insides
-  face.addPath(circle(418, 590, 32)); face.addPath(circle(606, 590, 32))   // eyes
-  face.addPath(ellipse(512, 494, 31, 22))                                  // nose
-  for (dx, h) in [(-56, 26), (-28, 48), (0, 70), (28, 48), (56, 26)] as [(CGFloat, CGFloat)] { // the voice, where the mouth is
-    face.addPath(capsule(CGRect(x: 512 + dx - 7, y: 418 - h / 2, width: 14, height: h)))
+  face.addPath(circle(324, 730, 41)); face.addPath(circle(698, 730, 41))   // the ears' insides
+  face.addPath(circle(407, 585, 32)); face.addPath(circle(615, 585, 32))   // eyes
+  face.addPath(ellipse(511, 481, 34, 26))                                  // nose
+  for side in [-1, 1] as [CGFloat] {                                       // three whisker dots each side, as Business has them
+    for (dx, dy) in [(-73, 439), (-96, 419), (-73, 398)] as [(CGFloat, CGFloat)] { face.addPath(circle(511 + side * dx, dy, 9)) }
+  }
+  for (dx, h) in [(-36, 18), (-18, 30), (0, 42), (18, 30), (36, 18)] as [(CGFloat, CGFloat)] { // its voice, a small wave where the mouth is
+    face.addPath(capsule(CGRect(x: 511 + dx - 5, y: 412 - h / 2, width: 10, height: h)))
   }
   return face
 }
@@ -96,7 +100,7 @@ func mark(_ ctx: CGContext, _ k: CGFloat) {
   ctx.restoreGState()
   ctx.saveGState(); ctx.addPath(otterBody()); ctx.clip()
   let shade = CGGradient(colorsSpace: space, colors: [grey(0.9), grey(0.97)] as CFArray, locations: nil)!
-  ctx.drawLinearGradient(shade, start: CGPoint(x: 0, y: 850), end: CGPoint(x: 0, y: 300), options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
+  ctx.drawLinearGradient(shade, start: CGPoint(x: 0, y: 822), end: CGPoint(x: 0, y: 300), options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
   ctx.restoreGState()
   ctx.addPath(otterFace()); ctx.setFillColor(ink); ctx.fillPath()
 }
@@ -121,14 +125,14 @@ func trayIcon(_ size: Int) -> CGImage {
   image(size) { ctx, s in
     ctx.scaleBy(x: s / 36, y: s / 36)
     let head = CGMutablePath()
-    head.addPath(CGPath(roundedRect: CGRect(x: 6, y: -12, width: 24, height: 42), cornerWidth: 12, cornerHeight: 12, transform: nil))
-    head.addPath(circle(9, 28, 5)); head.addPath(circle(27, 28, 5))
+    head.addPath(CGPath(roundedRect: CGRect(x: 6, y: -12, width: 24, height: 42), cornerWidth: 3.5, cornerHeight: 3.5, transform: nil))
+    head.addPath(circle(9.5, 26, 4)); head.addPath(circle(26.5, 26, 4))
     ctx.addPath(head); ctx.setFillColor(grey(0)); ctx.fillPath()
     let face = CGMutablePath()
-    face.addPath(circle(9, 28, 2)); face.addPath(circle(27, 28, 2))
-    face.addPath(circle(13, 19, 2)); face.addPath(circle(23, 19, 2))
-    face.addPath(ellipse(18, 14.5, 2.5, 1.8))
-    for (dx, h) in [(-3.5, 3), (0, 6), (3.5, 3)] as [(CGFloat, CGFloat)] { face.addPath(capsule(CGRect(x: 18 + dx - 0.9, y: 7.5 - h / 2, width: 1.8, height: h))) } // three bars read at 18 pt
+    face.addPath(circle(9.5, 26, 1.8)); face.addPath(circle(26.5, 26, 1.8))
+    face.addPath(circle(13.5, 20, 1.6)); face.addPath(circle(22.5, 20, 1.6))
+    face.addPath(ellipse(18, 15.5, 2, 1.5))
+    for (dx, h) in [(-3, 2.5), (0, 4.5), (3, 2.5)] as [(CGFloat, CGFloat)] { face.addPath(capsule(CGRect(x: 18 + dx - 0.8, y: 10 - h / 2, width: 1.6, height: h))) } // three bars read at 18 pt
     ctx.setBlendMode(.clear); ctx.addPath(face); ctx.fillPath()
   }
 }

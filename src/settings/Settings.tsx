@@ -21,7 +21,7 @@ type Page = { route: string; title: string; icon: IconName; Page: ComponentType<
 const GROUPS: { name: string; pages: Page[] }[] = [
   { name: 'Basics', pages: [
     { route: 'general', title: 'General', icon: 'general', Page: General, keywords: 'open at login startup microphone input pause reset set up menu bar icon tray accessibility permissions privacy' },
-    { route: 'shortcuts', title: 'Shortcuts', icon: 'keyboard', Page: Shortcuts, keywords: 'fn key dictate hands-free double tap command modifier chord note meeting paste last' },
+    { route: 'shortcuts', title: 'Shortcuts', icon: 'keyboard', Page: Shortcuts, keywords: 'fn key dictate hands-free double tap command modifier chord note meeting paste last write sticky ask claude' },
   ] },
   { name: 'Speech', pages: [
     { route: 'dictation', title: 'Dictation', icon: 'waveform', Page: Dictation, keywords: 'language translate english live typing fillers um sounds volume start stop cue chime whisper model turbo small' },
@@ -39,7 +39,7 @@ const GROUPS: { name: string; pages: Page[] }[] = [
   ] },
   { name: 'App', pages: [
     { route: 'history', title: 'History & stats', icon: 'history', Page: History, keywords: 'keep words stats streak time saved' },
-    { route: 'appearance', title: 'Appearance', icon: 'appearance', Page: Appearance, keywords: 'theme dark light edge size dots orb idle hidden hint' },
+    { route: 'appearance', title: 'Appearance', icon: 'appearance', Page: Appearance, keywords: 'theme dark light edge size dots orb idle hidden hint margin distance position dock' },
     { route: 'about', title: 'About', icon: 'about', Page: About, keywords: 'version licence license privacy third-party notices' },
   ] },
 ];

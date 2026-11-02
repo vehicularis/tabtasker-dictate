@@ -26,7 +26,7 @@ const SAMPLE: LibraryItem[] = [
 
 // The Library, from the dots: your notes and meetings, newest first, in the overlay's glass. A click opens
 // one in your Markdown app; the whole Library, with search across everything, is a page in Settings.
-export function LibraryCard({ claudeCode, onClose, onError }: { claudeCode: boolean; onClose: () => void; onError: (message: string) => void }) {
+export function LibraryCard({ claudeCode, onClose, onError, onWriteNote }: { claudeCode: boolean; onClose: () => void; onError: (message: string) => void; onWriteNote: () => void }) {
   const [items, setItems] = useState<LibraryItem[] | null>(PREVIEW ? SAMPLE : null);
   const [query, setQuery] = useState('');
   const field = useRef<HTMLInputElement>(null);
@@ -59,6 +59,7 @@ export function LibraryCard({ claudeCode, onClose, onError }: { claudeCode: bool
       </li>)}
     </ul>
     <footer className="actions">
+      <button type="button" className="btn" onClick={onWriteNote}><NoteGlyph size={16} />Write a note</button>
       <span className="ask">{items ? `${items.filter(item => item.kind === 'note').length} notes, ${items.filter(item => item.kind === 'meeting').length} meetings` : ''}</span>
       <button type="button" className="btn" onClick={all}><LibraryGlyph size={16} />All of it</button>
     </footer>

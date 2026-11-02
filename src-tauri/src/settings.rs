@@ -72,9 +72,19 @@ pub struct Shortcuts {
   pub note: Option<Chord>,
   pub meeting: Option<Chord>,
   pub paste_last: Option<Chord>,
+  /// A note to type, a sticky on the screen, and a typed question for Claude.
+  pub write_note: Option<Chord>,
+  pub sticky: Option<Chord>,
+  pub ask: Option<Chord>,
 }
 impl Default for Shortcuts {
-  fn default() -> Self { Self { dictate: DictateKey::Fn, hands_free: true, command: CommandKey::Control, note: None, meeting: None, paste_last: None } }
+  fn default() -> Self {
+    Self { dictate: DictateKey::Fn, hands_free: true, command: CommandKey::Control, note: None, meeting: None, paste_last: None, write_note: None, sticky: None, ask: None }
+  }
+}
+impl Shortcuts {
+  /// Every global chord, set or not, in the order the Shortcuts page lists them.
+  pub fn chords(&self) -> [&Option<Chord>; 6] { [&self.note, &self.meeting, &self.paste_last, &self.write_note, &self.sticky, &self.ask] }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -251,9 +261,15 @@ pub enum Idle { #[default] Dots, Hidden }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
-pub struct Appearance { pub theme: Theme, pub edge: Edge, pub size: Size, pub idle: Idle, pub hint: bool }
+pub struct Appearance {
+  pub theme: Theme, pub edge: Edge, pub size: Size, pub idle: Idle, pub hint: bool,
+  /// How far the dots sit from the screen's edge, in points (0 to 120).
+  pub margin: u32,
+  /// Keep clear of the Dock and the menu bar (the screen's visible area), rather than the whole screen.
+  pub avoid_dock: bool,
+}
 impl Default for Appearance {
-  fn default() -> Self { Self { theme: Theme::System, edge: Edge::Bottom, size: Size::Medium, idle: Idle::Dots, hint: true } }
+  fn default() -> Self { Self { theme: Theme::System, edge: Edge::Bottom, size: Size::Medium, idle: Idle::Dots, hint: true, margin: 8, avoid_dock: true } }
 }
 
 impl Default for Settings {
@@ -300,7 +316,7 @@ impl Settings {
   fn valid(&self) -> bool {
     let folder = |path: &Option<String>| path.as_deref().is_none_or(|path| Path::new(path).is_absolute() && !path.contains('\0'));
     let shortcuts = &self.shortcuts;
-    let chords: Vec<&Chord> = [&shortcuts.note, &shortcuts.meeting, &shortcuts.paste_last].into_iter().flatten().collect();
+    let chords: Vec<&Chord> = shortcuts.chords().into_iter().flatten().collect();
     let distinct = chords.iter().enumerate().all(|(i, a)| chords[..i].iter().all(|b| (a.key_code, a.modifiers) != (b.key_code, b.modifiers)));
     let file_name = &self.notes.file_name;
     let language = &self.dictation.language;
@@ -316,6 +332,7 @@ impl Settings {
     self.version = VERSION;
     let volume = &mut self.dictation.sound_volume;
     *volume = if volume.is_finite() { volume.clamp(0.0, 1.0) } else { DEFAULT_VOLUME };
+    self.appearance.margin = self.appearance.margin.min(120);
     let vocabulary = &mut self.vocabulary;
     clip_list(&mut vocabulary.words, MAX_LIST, MAX_WORD);
     clip_list(&mut vocabulary.suggestions, MAX_LIST, MAX_WORD);
@@ -334,7 +351,7 @@ impl Settings {
     self.meetings.others = clip(&self.meetings.others, MAX_WORD);
     if self.meetings.you.is_empty() { self.meetings.you = Meetings::default().you; }
     if self.meetings.others.is_empty() { self.meetings.others = Meetings::default().others; }
-    for chord in [&mut self.shortcuts.note, &mut self.shortcuts.meeting, &mut self.shortcuts.paste_last].into_iter().flatten() { chord.label = clip(&chord.label, 16); }
+    for chord in [&mut self.shortcuts.note, &mut self.shortcuts.meeting, &mut self.shortcuts.paste_last, &mut self.shortcuts.write_note, &mut self.shortcuts.sticky, &mut self.shortcuts.ask].into_iter().flatten() { chord.label = clip(&chord.label, 16); }
   }
 
   /// `patch` merged into these settings, one value at a time: a value of the wrong type, an unknown
@@ -566,7 +583,7 @@ mod tests {
     let value = serde_json::to_value(Settings::default()).unwrap();
     assert_eq!(value["version"], 1);
     assert_eq!(value["general"], json!({ "menuBarIcon": true, "showInDock": false }));
-    assert_eq!(value["shortcuts"], json!({ "dictate": "fn", "handsFree": true, "command": "control", "note": null, "meeting": null, "pasteLast": null }));
+    assert_eq!(value["shortcuts"], json!({ "dictate": "fn", "handsFree": true, "command": "control", "note": null, "meeting": null, "pasteLast": null, "writeNote": null, "sticky": null, "ask": null }));
     assert_eq!(value["dictation"], json!({ "language": "auto", "translateToEnglish": false, "liveTyping": true, "removeFillers": true, "sounds": true, "soundVolume": 0.3, "startSound": "Tink", "stopSound": "Pop", "model": "turbo" }));
     assert_eq!(value["vocabulary"], json!({ "words": [], "replacements": [], "learn": true, "suggestions": [] }));
     assert_eq!(value["apps"]["defaultStyle"], "default");
@@ -576,7 +593,7 @@ mod tests {
     assert_eq!(value["claude"], json!({ "enabled": false, "via": "api", "model": "claude-haiku-5-5", "commands": true, "claudeCode": null, "projectFolder": null }));
     assert_eq!(value["agents"], json!({ "mcp": true, "shareHistory": false, "shareNotes": true, "shareMeetings": true, "allowWrite": false }));
     assert_eq!(value["history"], json!({ "keep": "week" }));
-    assert_eq!(value["appearance"], json!({ "theme": "system", "edge": "bottom", "size": "medium", "idle": "dots", "hint": true }));
+    assert_eq!(value["appearance"], json!({ "theme": "system", "edge": "bottom", "size": "medium", "idle": "dots", "hint": true, "margin": 8, "avoidDock": true }));
   }
 
   #[test]

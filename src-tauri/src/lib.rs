@@ -12,6 +12,7 @@ pub mod meeting;
 pub mod notes;
 pub mod settings;
 pub mod speech;
+pub mod stickies;
 pub mod text;
 
 use std::ffi::{c_char, c_void, CStr, CString};
@@ -77,6 +78,17 @@ extern "C" fn dictate_ui_fn(down: bool) {
 #[no_mangle]
 extern "C" fn dictate_ui_said(words: *const c_char, dictated: bool, live: bool) {
   if let Some(words) = text(words) { emit("dictate-said", serde_json::json!({ "text": words, "dictated": dictated, "live": live })); }
+}
+/// A global shortcut for something drawn by a page: a note to type or a question for Claude (the overlay
+/// opens its card), or a sticky, which is a window of its own.
+#[no_mangle]
+extern "C" fn dictate_ui_open(what: *const c_char) {
+  let Some(what) = text(what) else { return };
+  if what == "sticky" {
+    if let Some(app) = APP.get() { if let Err(e) = stickies::create(app, None, None) { emit("dictate-notice", serde_json::json!({ "message": e })); } }
+    return;
+  }
+  emit("dictate-open", serde_json::json!({ "what": what }));
 }
 /// Hands-free listening locked by a double tap of the dictate key, or over.
 #[no_mangle]
@@ -390,11 +402,12 @@ pub fn run() {
   tauri::Builder::default()
     .invoke_handler(tauri::generate_handler![
       status, set_enabled, set_input, set_open_at_login, request, layout, meeting, open_settings, paste_last, play_sound,
-      notes::save_note, notes::show_notes, notes::notes_folder, notes::preview_note, notes::choose_folder, notes::library_list, notes::library_open, settings::get_settings, settings::update_settings, settings::reset_settings,
+      notes::save_note, notes::show_notes, notes::notes_folder, notes::preview_note, notes::choose_folder, notes::library_list, notes::library_open,
+      stickies::sticky_list, stickies::sticky_get, stickies::sticky_new, stickies::sticky_update, stickies::sticky_remove, stickies::sticky_to_note, settings::get_settings, settings::update_settings, settings::reset_settings,
       speech::speech_models, speech::prepare_model, speech::vocabulary_fit, text::list_apps,
       history::history_list, history::history_stats, history::history_delete, history::history_clear, history::history_type,
       ai::claude_save_key, ai::claude_test, ai::claude_remove_key, ai::claude_open_console, ai::claude_insert, ai::claude_dismiss,
-      ai::claude_code_find, ai::claude_code_set, ai::send_to_claude_code, ai::claude_connect_code, ai::claude_disconnect_code,
+      ai::claude_code_find, ai::claude_code_set, ai::send_to_claude_code, ai::claude_connect_code, ai::claude_disconnect_code, ai::claude_ask,
       mcp::agents_status, mcp::agents_add,
       meeting::meeting_state, meeting::meeting_recover, meeting::meeting_reveal, meeting::meeting_privacy,
     ])
@@ -415,6 +428,7 @@ pub fn run() {
       let status = status_json().and_then(|json| serde_json::from_str::<serde_json::Value>(&json).ok()).unwrap_or_default();
       tray(&handle, status["enabled"] == true)?;
       notes::watch(&handle);
+      stickies::show_all(&handle);
       if first { first_run(&handle, &status); }
       Ok(())
     })
@@ -424,6 +438,8 @@ pub fn run() {
       if window.label() == SETTINGS && matches!(event, WindowEvent::Destroyed) && !settings::get().general.show_in_dock {
         let _ = window.app_handle().set_activation_policy(ActivationPolicy::Accessory);
       }
+      // A sticky moved or resized comes back where it was left.
+      if window.label().starts_with("sticky-") && matches!(event, WindowEvent::Moved(_) | WindowEvent::Resized(_)) { stickies::frame_changed(window.app_handle(), window.label()); }
     })
     .build(tauri::generate_context!())
     .expect("TabTasker Dictate failed to start")

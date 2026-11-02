@@ -16,7 +16,8 @@ const GEAR = Array.from({ length: 8 }, (_, i) => {
 // coordinates (y up) under one transform, so the two never drift apart.
 export const Logo = ({ size = 18 }: { size?: number }) => {
   const id = useId();
-  const voice = [[-56, 26], [-28, 48], [0, 70], [28, 48], [56, 26]] as const;
+  const voice = [[-36, 18], [-18, 30], [0, 42], [18, 30], [36, 18]] as const;
+  const dots = [[-73, 439], [-96, 419], [-73, 398]] as const;
   return <svg width={size} height={size} viewBox="0 0 28 28" aria-hidden="true">
     <defs>
       <linearGradient id={`${id}-grey`} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#3c3d41" /><stop offset="1" stopColor="#18181b" /></linearGradient>
@@ -27,12 +28,14 @@ export const Logo = ({ size = 18 }: { size?: number }) => {
     {/* The clip is on its own group: on a transformed one it would be read in the icon's coordinates. */}
     <g clipPath={`url(#${id}-tile)`}><g transform="translate(1 27) scale(.025391 -.025391)">
       <g fill="#f3f4f6">
-        <rect x="262" y="-300" width="500" height="1114" rx="250" /><circle cx="336" cy="758" r="90" /><circle cx="688" cy="758" r="90" />
+        <rect x="241" y="-300" width="540" height="1122" rx="68" /><circle cx="324" cy="730" r="92" /><circle cx="698" cy="730" r="92" />
       </g>
       <g fill="#171719">
-        <circle cx="336" cy="758" r="41" /><circle cx="688" cy="758" r="41" /><circle cx="418" cy="590" r="32" /><circle cx="606" cy="590" r="32" />
-        <ellipse cx="512" cy="494" rx="31" ry="22" />
-        {voice.map(([dx, h]) => <rect key={dx} x={512 + dx - 7} y={418 - h / 2} width="14" height={h} rx="7" />)}
+        <circle cx="324" cy="730" r="41" /><circle cx="698" cy="730" r="41" /><circle cx="407" cy="585" r="32" /><circle cx="615" cy="585" r="32" />
+        <ellipse cx="511" cy="481" rx="34" ry="26" />
+        {dots.map(([dx, y]) => <circle key={`l${y}`} cx={511 + dx} cy={y} r="9" />)}
+        {dots.map(([dx, y]) => <circle key={`r${y}`} cx={511 - dx} cy={y} r="9" />)}
+        {voice.map(([dx, h]) => <rect key={dx} x={511 + dx - 5} y={412 - h / 2} width="10" height={h} rx="5" />)}
       </g>
     </g></g>
   </svg>;

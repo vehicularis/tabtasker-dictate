@@ -12,6 +12,7 @@
 extern void dictate_ui_state(const char *phase, double level, bool dictating);
 extern void dictate_ui_error(const char *message);
 extern void dictate_ui_fn(bool down);
+extern void dictate_ui_open(const char *what);
 extern void dictate_ui_note(const char *text);
 extern void dictate_ui_pointer(bool over, double x, double y);
 extern void dictate_ui_said(const char *text, bool dictated, bool live);
@@ -236,6 +237,10 @@ static NSUInteger TTVoiceVisible(NSString *text, NSUInteger from) {
 }
 // Marks our own keystrokes, so the fn monitor never takes them for an fn shortcut.
 static const int64_t TTVoiceMark = 0x74747663;
+// Appearance › Stay clear of the Dock: the overlay window covers the screen's visible area (above the Dock,
+// below the menu bar), else the whole screen, so the dots can sit behind an auto-hidden Dock's edge.
+static BOOL TTOverlayAvoidsDock = YES;
+static void TTOverlayFit(void); // the overlay window, defined with it below
 static void TTVoicePostKey(CGKeyCode key, NSString *text) {
   CGEventRef events[] = { CGEventCreateKeyboardEvent(NULL, key, true), CGEventCreateKeyboardEvent(NULL, key, false) };
   UniChar units[32]; NSUInteger count = MIN(text.length, 32);
@@ -768,8 +773,10 @@ static void TTVoicePlaySound(NSString *name, double volume) {
       else if (self.phase == TTVoiceIdle || (self.noting && self.phase == TTVoiceListening)) [self toggleNote];
     } else if ([name isEqual:@"meeting"]) {
       if (!dictate_meeting("stop") && !dictate_meeting("start")) dictate_meeting_unstarted(); // says why, unless the microphone card does
-    } else {
+    } else if ([name isEqual:@"pasteLast"]) {
       dictate_paste_last();
+    } else {
+      dictate_ui_open(name.UTF8String); // a note to type, a sticky, or a question for Claude
     }
     return YES;
   }
@@ -812,11 +819,14 @@ static void TTVoicePlaySound(NSString *name, double volume) {
   self.handsFree = ![keys[@"handsFree"] isEqual:@NO];
   self.liveTyping = ![dictation[@"liveTyping"] isEqual:@NO];
   self.sounds = ![dictation[@"sounds"] isEqual:@NO];
+  NSDictionary *appearance = TTVoiceObject(settings[@"appearance"]);
+  BOOL avoidDock = ![appearance[@"avoidDock"] isEqual:@NO];
+  if (avoidDock != TTOverlayAvoidsDock) { TTOverlayAvoidsDock = avoidDock; TTOverlayFit(); }
   self.soundVolume = [dictation[@"soundVolume"] isKindOfClass:NSNumber.class] ? [dictation[@"soundVolume"] doubleValue] : 0.3;
   if ([dictation[@"startSound"] isKindOfClass:NSString.class]) self.startSound = dictation[@"startSound"];
   if ([dictation[@"stopSound"] isKindOfClass:NSString.class]) self.stopSound = dictation[@"stopSound"];
   NSMutableDictionary *chords = [NSMutableDictionary new];
-  for (NSString *name in @[@"note", @"meeting", @"pasteLast"]) {
+  for (NSString *name in @[@"note", @"meeting", @"pasteLast", @"writeNote", @"sticky", @"ask"]) {
     NSDictionary *chord = TTVoiceObject(keys[name]);
     if ([chord[@"keyCode"] isKindOfClass:NSNumber.class] && [chord[@"modifiers"] isKindOfClass:NSNumber.class]) chords[name] = @[chord[@"keyCode"], chord[@"modifiers"]];
   }
@@ -882,7 +892,7 @@ static void TTVoicePlaySound(NSString *name, double volume) {
 }
 - (void)fitScreen {
   NSScreen *screen = NSScreen.mainScreen ?: NSScreen.screens.firstObject;
-  if (screen) [self.window setFrame:screen.visibleFrame display:YES];
+  if (screen) [self.window setFrame:TTOverlayAvoidsDock ? screen.visibleFrame : screen.frame display:YES];
 }
 - (void)attach:(NSWindow *)window {
   self.window = window;
@@ -1006,6 +1016,7 @@ static BOOL TTVoiceNumbers(id row, NSUInteger count) {
 
 static TTVoiceCommands *voice;
 static TTVoiceOverlay *overlay;
+static void TTOverlayFit(void) { [overlay fitScreen]; }
 static NSWindow *TTVoiceOverlayWindow(void) { return overlay.window; }
 
 static NSDictionary *appliedSettings; // settings that arrived before the voice object

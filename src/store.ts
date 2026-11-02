@@ -22,7 +22,7 @@ export const sendsByDefault = (bundleId: string) => CHAT_APPS.some(chat => chat.
 export type Settings = {
   version: 1;
   general: { menuBarIcon: boolean; showInDock: boolean };
-  shortcuts: { dictate: DictateKey; handsFree: boolean; command: CommandKey; note: Chord | null; meeting: Chord | null; pasteLast: Chord | null };
+  shortcuts: { dictate: DictateKey; handsFree: boolean; command: CommandKey; note: Chord | null; meeting: Chord | null; pasteLast: Chord | null; writeNote: Chord | null; sticky: Chord | null; ask: Chord | null };
   dictation: { language: string; translateToEnglish: boolean; liveTyping: boolean; removeFillers: boolean; sounds: boolean; soundVolume: number; startSound: string; stopSound: string; model: 'turbo' | 'small' };
   vocabulary: { words: string[]; replacements: { from: string; to: string }[]; learn: boolean; suggestions: string[] };
   apps: { styles: AppStyle[]; defaultStyle: Style };
@@ -31,17 +31,23 @@ export type Settings = {
   claude: { enabled: boolean; via: ClaudeVia; model: ClaudeModel; commands: boolean; claudeCode: string | null; projectFolder: string | null };
   agents: { mcp: boolean; shareHistory: boolean; shareNotes: boolean; shareMeetings: boolean; allowWrite: boolean };
   history: { keep: Keep };
-  appearance: { theme: Theme; edge: Edge; size: Size; idle: 'dots' | 'hidden'; hint: boolean };
+  appearance: { theme: Theme; edge: Edge; size: Size; idle: 'dots' | 'hidden'; hint: boolean; margin: number; avoidDock: boolean };
 };
 
 // The events pages hear, besides the native voice code's own, with what each carries.
 export type HoldMode = 'dictate' | 'note' | 'command' | 'handsfree';
 export type HistoryEntry = { atMs: number; mode: HoldMode; bundleId: string; appName: string; words: number; seconds: number; text: string };
+/// A sticky on the screen (stickies.rs), in one of the whiteboard's hues (boardColor.ts in TabTasker Business).
+export const STICKY_HUES = { amber: '#E0A23C', coral: '#DE7468', sage: '#5AA57A', sky: '#4A8CD2', violet: '#8878DC', slate: '#79838F', teal: '#3FA4A0', plum: '#B4629C' } as const;
+export type StickyHue = keyof typeof STICKY_HUES;
+export type Sticky = { id: string; text: string; hue: StickyHue; x: number; y: number; width: number; height: number; createdMs: number; updatedMs: number };
 /// A note or meeting file as the Library lists it (notes.rs LibraryItem).
 export type LibraryItem = { path: string; title: string; kind: 'note' | 'meeting'; modifiedMs: number; words: number; excerpt: string };
 export type Events = {
   'dictate-settings': Settings;
-  'dictate-command': { request: string; phase: 'thinking' | 'answer' | 'done' | 'error'; text?: string; instruction?: string };
+  'dictate-command': { request: string; phase: 'thinking' | 'answer' | 'done' | 'error'; text?: string; instruction?: string; typed?: boolean };
+  'dictate-open': { what: 'writeNote' | 'ask' };
+  'dictate-stickies': { count: number };
   'dictate-meeting': { state: 'recording' | 'saving' | 'saved' | 'error'; since?: number; path?: string; message?: string };
   'dictate-hands-free': { locked: boolean };
   'dictate-history': { entry: HistoryEntry };

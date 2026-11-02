@@ -25,8 +25,8 @@ const COMMAND_KEYS: { value: CommandKey; label: string }[] = [
   { value: 'control', label: '⌃ Control' }, { value: 'option', label: '⌥ Option' }, { value: 'command', label: '⌘ Command' }, { value: 'shift', label: '⇧ Shift' }, { value: 'off', label: 'Off' },
 ];
 
-type ChordName = 'note' | 'meeting' | 'pasteLast';
-const CHORDS: [ChordName, string][] = [['note', 'Start or stop a note'], ['meeting', 'Start or stop a meeting'], ['pasteLast', 'Paste last transcript']];
+type ChordName = 'note' | 'meeting' | 'pasteLast' | 'writeNote' | 'sticky' | 'ask';
+const CHORDS: [ChordName, string][] = [['note', 'Start or stop a note'], ['meeting', 'Start or stop a meeting'], ['pasteLast', 'Paste last transcript'], ['writeNote', 'Write a note'], ['sticky', 'New sticky'], ['ask', 'Ask Claude']];
 
 // Shortcuts a chord must not take: macOS's own, by the names System Settings gives them, then the ones
 // nearly every app has. The app reports which of macOS's are on, with any the person added; a browser

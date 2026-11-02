@@ -62,4 +62,12 @@ export function register(mock: Mock) {
     return mock.update({ claude: { claudeCode: next } });
   });
   mock.handle('send_to_claude_code', async () => { await later(400); return true; });
+  // A typed question: answered as a spoken command is, on the same card.
+  mock.handle('claude_ask', async ({ question }) => {
+    if (!mock.settings().claude.enabled) throw 'Connect Claude in Settings first.';
+    const request = `ask-${Date.now()}`;
+    mock.emit('dictate-command', { request, phase: 'thinking', instruction: question, typed: true });
+    setTimeout(() => mock.emit('dictate-command', { request, phase: 'answer', instruction: question, typed: true, text: 'From your notes: the design review is Thursday at 10, and Maria has the big room booked. The floor plan still has to go to her before lunch.' }), 1800);
+    return request;
+  });
 }

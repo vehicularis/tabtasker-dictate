@@ -7,6 +7,13 @@ Talk instead of typing, on your Mac. Speech is transcribed on the Mac by Whisper
 - **Take long notes.** Click the note button on the dots at the bottom of the screen and talk for as long
   as you like. The note is transcribed while you talk, a sentence at a time, so it is ready the moment you
   stop. Review the title and words, then save it as a Markdown file in `~/Documents/TabTasker Dictate`.
+  Or write one: the dots' menu has Write a note, and a shortcut can open it.
+- **Keep stickies on the screen.** New sticky puts a small coloured note on top of everything; type into it
+  or hold fn and talk. It stays where you leave it, and can become a note.
+- **Find everything in the Library.** The middle button on the dots lists every note and meeting, newest
+  first, to open, show in Finder or hand to Claude Code; Settings has the full page.
+- **Ask Claude about your notes.** Ask Claude… from the dots' menu, or a spoken command, and with Claude
+  connected through Claude Code it can read and search your notes and meetings to answer.
 
 It runs from the menu bar, with no account and nothing to sign in to. Claude is optional: connect it in
 Settings with your own Anthropic key, or through the Claude Code on your Mac with the Claude account you

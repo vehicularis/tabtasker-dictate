@@ -1,6 +1,8 @@
 // A monochrome line set on a 20 grid at 1.5 stroke, drawn in the current text colour.
 const PATHS = {
   // A stack of saved pages, a speaker, and an eraser over a line.
+  // A sticky: a square note with a turned corner.
+  sticky: <><path d="M3.75 4.25A1.5 1.5 0 0 1 5.25 2.75h9.5a1.5 1.5 0 0 1 1.5 1.5v6.6L11.1 16H5.25a1.5 1.5 0 0 1-1.5-1.5z" /><path d="M16.25 10.85h-3.65a1.5 1.5 0 0 0-1.5 1.5V16" /></>,
   library: <><path d="M3.25 7.75v8.5A1.75 1.75 0 0 0 5 18h8.5" /><rect x="6.25" y="2.75" width="10.5" height="12.5" rx="1.75" /><path d="M9 6.5h5M9 9.5h5" /></>,
   speaker: <><path d="M3 7.75h2.75L10 4.25v11.5l-4.25-3.5H3z" /><path d="M13 7.25a3.75 3.75 0 0 1 0 5.5M15.25 5a7 7 0 0 1 0 10" /></>,
   eraser: <><path d="m9.5 15.5-4.4-4.4a1.5 1.5 0 0 1 0-2.1l5.3-5.3a1.5 1.5 0 0 1 2.1 0l3.6 3.6a1.5 1.5 0 0 1 0 2.1L10.6 15" /><path d="M3.5 17h13M7.3 8.3l5.2 5.2" /></>,

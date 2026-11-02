@@ -78,7 +78,7 @@ export function CommandCard() {
   };
   const copy = () => { setProblem(null); void copyText(text).then(() => setCopied(true), () => setProblem('Couldn’t copy the answer.')); };
   const keys = (event: KeyboardEvent) => {
-    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); insert(); } else escape(event);
+    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); if (command.typed) copy(); else insert(); } else escape(event);
   };
   return <article className="glass card claude-card" data-glass data-hit aria-label="Claude’s answer" onKeyDown={keys}>
     <header className="head"><span className="name"><Icon name="claude" size={16} />Claude</span></header>
@@ -87,8 +87,9 @@ export function CommandCard() {
     <footer className="actions">
       <span className="ask" role={problem ? 'alert' : 'status'} data-error={problem ? true : undefined}>{problem ?? (copied ? 'Copied' : '')}</span>
       <button type="button" className="btn" onClick={close}>Close</button>
-      <button type="button" className="btn" onClick={copy}>Copy</button>
-      <button type="button" className="btn primary" title="Type it in the app you asked in (⌘↩)" aria-busy={inserting} onClick={insert}>{inserting ? 'Inserting…' : 'Insert'}</button>
+      <button type="button" className={`btn${command.typed ? ' primary' : ''}`} onClick={copy}>Copy</button>
+      {/* A typed question has no app to go back to: Copy is the way to take the answer. */}
+      {!command.typed && <button type="button" className="btn primary" title="Type it in the app you asked in (⌘↩)" aria-busy={inserting} onClick={insert}>{inserting ? 'Inserting…' : 'Insert'}</button>}
     </footer>
   </article>;
 }

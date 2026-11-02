@@ -1,0 +1,17 @@
+/* A sticky: paper in one of the whiteboard's hues, filling its transparent window, with a darker bar to drag it by. */
+html, body, #root { height: 100%; margin: 0; background: transparent; overflow: hidden; }
+body { font: 14px/1.45 var(--font); -webkit-font-smoothing: antialiased; }
+.sticky { --paper: color-mix(in srgb, var(--hue) 30%, #fffcf4); --ink: #17181b; display: flex; flex-direction: column; box-sizing: border-box; height: 100%; border-radius: 12px; color: var(--ink); background: linear-gradient(180deg, color-mix(in srgb, var(--paper), white 10%), var(--paper) 40%, color-mix(in srgb, var(--paper), var(--hue) 10%)); box-shadow: inset 0 0 0 .5px rgb(0 0 0 / .14), inset 0 1px 0 rgb(255 255 255 / .55); }
+.sticky-bar { display: flex; flex: none; align-items: center; justify-content: space-between; height: 28px; padding: 0 5px 0 9px; border-radius: 12px 12px 0 0; background: color-mix(in srgb, var(--hue) 46%, #fffcf4); cursor: grab; user-select: none; -webkit-user-select: none; }
+.sticky-bar:active { cursor: grabbing; }
+.sticky-hues { display: flex; gap: 5px; }
+.sticky-hue { width: 12px; height: 12px; padding: 0; border: 0; border-radius: 50%; background: var(--hue); box-shadow: inset 0 0 0 .5px rgb(0 0 0 / .22); cursor: pointer; }
+.sticky-hue[aria-checked='true'] { box-shadow: 0 0 0 2px var(--paper), 0 0 0 3px var(--hue); }
+.sticky-tools { display: flex; gap: 2px; }
+.sticky-tool { display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 6px; color: rgb(0 0 0 / .62); background: none; cursor: pointer; }
+.sticky-tool:hover { color: var(--ink); background: rgb(0 0 0 / .08); }
+.sticky-tool:disabled { opacity: .35; cursor: default; }
+.sticky-text { flex: 1; min-height: 0; margin: 0; padding: 10px 12px 12px; border: 0; outline: 0; resize: none; color: inherit; background: none; font: 500 15px/1.45 var(--font); }
+.sticky-text::placeholder { color: rgb(0 0 0 / .4); }
+.sticky-problem { margin: 0; padding: 4px 12px 8px; font-size: 12px; color: #a3261e; }
+:is(button, [tabindex]):focus-visible { outline: 2px solid rgb(0 0 0 / .5); outline-offset: 1px; }
