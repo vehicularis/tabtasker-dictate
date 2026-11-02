@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { invoke, listen } from '../bridge';
-import { setupDone, updateSettings, useSettings, type Edge, type Status } from '../store';
+import { needsSetup, setupDone, updateSettings, useSettings, type Edge, type Status } from '../store';
 import { applyTheme, isDark } from '../ui/theme';
 import { CommandCard, SendToClaudeCode } from './CommandCard';
 import { Dock } from './Dock';
@@ -60,7 +60,12 @@ export function Overlay() {
   // Setup follows macOS live: permissions and the model download change while it is open.
   useEffect(() => { if (!setup) return; const timer = setInterval(refresh, 1000); return () => clearInterval(timer); }, [setup, refresh]);
   const launched = useRef(false);
-  useEffect(() => { if (status && !launched.current) { launched.current = true; if (!setupDone(status) && !status.firstRun) setSetup('steps'); } }, [status]); // once, at launch, unless Settings shows the full setup
+  // Once, at launch: the setup steps only for something the person has to do, never for a model that is
+  // still loading (the dots pulse for that), and not while Settings shows the full setup.
+  useEffect(() => { if (status && !launched.current) { launched.current = true; if (needsSetup(status) && !status.firstRun) setSetup('steps'); } }, [status]);
+  // While the model loads at launch the status is asked again every second, so the dots stop pulsing as it is ready.
+  const loading = !!status && status.enabled && status.modelPreparing && !status.modelReady;
+  useEffect(() => { if (!loading || setup) return; const timer = setInterval(refresh, 1000); return () => clearInterval(timer); }, [loading, setup, refresh]);
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(null), 2400); return () => clearTimeout(timer); }, [toast]);
   useEffect(() => { if (!saved || PREVIEW) return; const timer = setTimeout(() => setSaved(null), 8000); return () => clearTimeout(timer); }, [saved]);
   useEffect(() => { if (!PREVIEW) store(DRAFT, draft); }, [draft]);
@@ -253,7 +258,7 @@ export function Overlay() {
   const card = setup || (draft && reviewing);
   const pending = !!draft && !reviewing;
   const quiet = settings.appearance.idle === 'hidden' && mode === 'idle' && !card && !pending && !saved && !toast;
-  return <div ref={root} className="layer" data-edge={edge} data-mode={mode} data-size={settings.appearance.size} data-quiet={quiet || undefined}
+  return <div ref={root} className="layer" data-edge={edge} data-mode={mode} data-size={settings.appearance.size} data-quiet={quiet || undefined} data-loading={loading || undefined}
     data-card={card || undefined} data-pending={pending || undefined} data-dragging={dragging || undefined}>
     <div ref={dock} className="dock">
       {setup && <Setup status={status} fnDown={fnDown} fnTested={fnTested} steps={setup === 'steps'} onClose={() => setSetup(false)} />}

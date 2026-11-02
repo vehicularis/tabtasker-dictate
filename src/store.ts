@@ -75,6 +75,10 @@ export type Status = {
   home?: string; // the home folder, for paths written with ~
   firstRun?: boolean; // this launch is the first and opened the full setup in Settings
 };
+/// Something only the person can do: a permission to give, or a model never downloaded or whose last try
+/// failed. A model that is merely loading or downloading is not it: that passes on its own.
+export const needsSetup = (status: Status) =>
+  status.microphone !== 'allowed' || !status.accessibility || !status.enabled || (!status.modelReady && !status.modelPreparing);
 export const setupDone = (status: Status | null) =>
   !!status && status.enabled && status.microphone === 'allowed' && status.accessibility && status.modelReady;
 
