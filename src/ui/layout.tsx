@@ -3,8 +3,8 @@ import { Icon, type IconName } from './Icon';
 
 export function PageHeader({ icon, title, children }: { icon: IconName; title: string; children?: ReactNode }) {
   return <header className="ui-page-header">
-    <span className="ui-page-icon"><Icon name={icon} size={22} /></span>
-    <div><h1>{title}</h1>{children && <p>{children}</p>}</div>
+    <h1><Icon name={icon} size={20} />{title}</h1>
+    {children && <p>{children}</p>}
   </header>;
 }
 

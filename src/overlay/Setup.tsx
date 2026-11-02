@@ -36,9 +36,9 @@ export function Setup({ status, fnDown, fnTested, onClose }: { status: Status | 
       <Step index={1} status={mic} name="Microphone" line={`Only on while you hold ${name} or take a note.`}
         action={mic === 'active' && <button type="button" className="btn primary" onClick={() => ask('microphone')}>{status?.microphone === 'denied' ? 'Open Settings' : 'Allow'}</button>} />
       <Step index={2} status={keys} name={chosen === 'fn' ? 'fn key' : 'Your key'}
-        line={globe ? <>Your 🌐 key {globe}, which gets in the way of <kbd>fn</kbd>. Open Settings, set “Press 🌐 key to” to Do Nothing, then hold fn here.</>
+        line={globe ? <>Your <Globe /> key {globe}, which gets in the way of <kbd>fn</kbd>. Open Settings, set “Press <Globe /> key to” to Do Nothing, then hold fn here.</>
           : keys === 'test' ? chosen === 'fn'
-            ? <>Now hold <kbd>fn</kbd> to test it. If emoji open instead, set “Press 🌐 key to” to Do Nothing in <button type="button" className="link" onClick={() => ask('keyboard')}>Keyboard settings</button>.</>
+            ? <>Now hold <kbd>fn</kbd> to test it. If emoji open instead, set “Press <Globe /> key to” to Do Nothing in <button type="button" className="link" onClick={() => ask('keyboard')}>Keyboard settings</button>.</>
             : <>Now hold <kbd>{name}</kbd> to test it.</>
           : asked ? 'If macOS asks, choose Open System Settings, then turn TabTasker Dictate on. Already on? Remove it with −, then turn it on again.'
           : `Accessibility lets Dictate notice ${name} and type into any app.`}

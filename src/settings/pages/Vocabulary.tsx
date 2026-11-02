@@ -79,7 +79,7 @@ export function Vocabulary({ settings, update }: PageProps) {
           <Button variant="quiet" small aria-label={`Dismiss ${word}`} onClick={() => update({ vocabulary: { suggestions: vocabulary.suggestions.filter(other => other !== word) } })}>Dismiss</Button>
           <Button variant="primary" small aria-label={`Add ${word}`} onClick={() => accept([word])}>Add</Button>
         </Tile>)}
-        {!vocabulary.suggestions.length && vocabulary.learn && <EmptyState icon="sparkle" title="No suggestions yet">Fix a word right after you dictate it, and it shows up here.</EmptyState>}
+        {!vocabulary.suggestions.length && vocabulary.learn && <EmptyState icon="book" title="No suggestions yet">Fix a word right after you dictate it, and it shows up here.</EmptyState>}
       </TileGroup>
     </Section>
   </>;

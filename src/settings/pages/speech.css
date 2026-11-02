@@ -19,13 +19,13 @@
 .app-picker .head { display: flex; gap: 6px; }
 .app-picker ul { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; max-height: 280px; margin: 0; padding: 4px; overflow-y: auto; list-style: none; } /* room for the focus ring */
 .app-picker li button { display: flex; align-items: center; gap: 10px; width: 100%; height: 40px; padding: 0 10px; border: 0; border-radius: var(--radius-control);
-  font: 13px/1.2 var(--font); color: var(--ink); text-align: left; background: none; cursor: pointer; transition: background var(--quick) var(--ease); }
-.app-picker li button:hover, .app-picker li button:focus-visible { background: var(--surface-2); }
+  font: 14px/1.2 var(--font); color: var(--ink); text-align: left; background: none; cursor: pointer; transition: background var(--quick) var(--ease); }
+.app-picker li button:hover, .app-picker li button:focus-visible { background: var(--card); box-shadow: var(--elev-raised); }
 .app-picker li button .ui-icon { margin-left: auto; color: var(--ink-3); }
 .app-picker .tag { flex: none; margin-left: auto; font-size: 11px; color: var(--ink-3); }
 .app-picker .quiet { margin: 2px 4px; font-size: 12.5px; color: var(--ink-2); }
 
-.style-example { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; font: 12px/1.4 ui-monospace, 'SF Mono', Menlo, monospace; color: var(--ink-2); white-space: nowrap; }
+.style-example { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; font: 12px/1.4 var(--font-mono); color: var(--ink-2); white-space: nowrap; }
 .style-example .ui-icon { color: var(--ink-3); }
 .style-example b { font-weight: 500; color: var(--ink); }
 

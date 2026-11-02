@@ -31,6 +31,7 @@ extern bool dictate_command(const char *request, const char *instruction, const 
 extern void dictate_ui_hands_free(bool locked);
 extern void dictate_paste_last(void);
 extern bool dictate_meeting(const char *action);
+extern void dictate_meeting_unstarted(void);
 bool dictate_open_at_login(int set);
 static NSWindow *TTVoiceOverlayWindow(void);
 
@@ -52,8 +53,7 @@ static NSWindow *TTVoiceOverlayWindow(void);
 - (NSUInteger)count;
 - (void)append:(AVAudioPCMBuffer *)buffer;
 - (NSData *)freeze;
-- (NSData *)snapshot;
-- (NSData *)snapshotFrom:(NSUInteger *)base;
+- (void)lend:(void (^)(NSUInteger base, const float *samples, NSUInteger count))use;
 - (void)dropTo:(NSUInteger)transcribed;
 - (NSString *)channelLevels;
 @end
@@ -142,8 +142,11 @@ static NSWindow *TTVoiceOverlayWindow(void);
 }
 - (void)resetLevel { @synchronized (self) { self.rms = 0; } }
 - (NSUInteger)count { @synchronized (self) { return self.samples.length / sizeof(float); } }
-- (NSData *)snapshot { @synchronized (self) { return [self.samples copy]; } }
-- (NSData *)snapshotFrom:(NSUInteger *)base { @synchronized (self) { *base = self.dropped; return [self.samples copy]; } }
+// What it holds, from `base` samples in, without a copy: ten minutes are 38 MB, and speech copies only
+// what it has not heard yet. Nothing changes the buffer until `use` returns.
+- (void)lend:(void (^)(NSUInteger base, const float *samples, NSUInteger count))use {
+  @synchronized (self) { use(self.dropped, self.samples.bytes, self.samples.length / sizeof(float)); }
+}
 // A note's audio up to `transcribed` samples into it is in its words: let it go.
 - (void)dropTo:(NSUInteger)transcribed {
   @synchronized (self) {
@@ -373,14 +376,13 @@ static void TTVoiceBringForward(NSRunningApplication *app, void (^then)(BOOL fro
 }
 - (void)draft {
   if (self.phase != TTVoiceListening || !self.request) return;
-  if (self.noting) {
-    NSUInteger base = 0;
-    NSData *held = [self.audio snapshotFrom:&base];
-    if (held.length) dictate_note_step(self.request.UTF8String, base, held.bytes, held.length / sizeof(float));
-    return;
-  }
-  NSData *pcm = [self.audio snapshot];
-  if (pcm.length) dictate_draft(self.request.UTF8String, pcm.bytes, pcm.length / sizeof(float));
+  const char *request = self.request.UTF8String;
+  BOOL noting = self.noting;
+  [self.audio lend:^(NSUInteger base, const float *samples, NSUInteger count) {
+    if (!count) return;
+    if (noting) dictate_note_step(request, base, samples, count);
+    else dictate_draft(request, samples, count);
+  }];
 }
 - (void)tick {
   double target = self.audio.level;
@@ -391,7 +393,7 @@ static void TTVoiceBringForward(NSRunningApplication *app, void (^then)(BOOL fro
     // Half a second short of what the buffer holds, so the end of what was said is sent, not dropped.
     TTVoiceAudio *audio = self.audio;
     if (!audio || audio.count + 8000 < audio.limit) return;
-    dictate_ui_notice("Stopped at one minute");
+    dictate_ui_notice(self.locked ? "Stopped at 10 minutes" : "Stopped at one minute");
     self.held = NO; [self finish];
     return;
   }
@@ -447,9 +449,9 @@ static void TTVoiceBringForward(NSRunningApplication *app, void (^then)(BOOL fro
   if (!self.engine) [self startCapture]; // otherwise the microphone opened when the key went down
   if (self.phase != TTVoiceListening) return;
   [self chime:@"Tink"];
-  // A note keeps only what is not yet transcribed; the others go to speech whole, which takes a minute
-  // of audio at most, so tick sends them as they reach it.
-  self.audio.limit = (self.noting ? 10 : 1) * 60 * 16000;
+  // A hold goes to speech whole, a minute at most, and a locked session runs to ten, transcribed as it is
+  // said: tick sends them as they reach it. A note keeps only what is not yet transcribed.
+  self.audio.limit = tt_hold_limit(self.noting || self.locked);
   if (self.noting) self.lastSpoke = self.listeningSince;
 }
 // A soft cue as listening starts and stops, from the Mac's own sounds.
@@ -553,8 +555,9 @@ static void TTVoiceBringForward(NSRunningApplication *app, void (^then)(BOOL fro
   [self stopCapture];
   [self chime:@"Pop"];
   NSUInteger generation = self.generation;
+  double patience = tt_words_timeout(self.audio.count);
   [self transcribe];
-  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 120 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(patience * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
     if (self.generation == generation && self.phase == TTVoiceFinishing) [self fail:@"Took too long, try again"];
   });
 }
@@ -632,7 +635,7 @@ static void TTVoiceBringForward(NSRunningApplication *app, void (^then)(BOOL fro
   [self begin];
   if (self.phase != TTVoiceListening) self.held = NO;
 }
-// Locked listening, from a double tap: no key to hold, up to a minute. A tap sends; Escape cancels.
+// Locked listening, from a double tap: no key to hold, up to ten minutes. A tap sends; Escape cancels.
 - (void)lock {
   self.locked = YES; self.commanding = NO; self.dictating = YES;
   [self begin];
@@ -750,7 +753,7 @@ static void TTVoiceBringForward(NSRunningApplication *app, void (^then)(BOOL fro
       if (!self.enabled) dictate_ui_notice("Dictation is paused");
       else if (self.phase == TTVoiceIdle || (self.noting && self.phase == TTVoiceListening)) [self toggleNote];
     } else if ([name isEqual:@"meeting"]) {
-      if (!dictate_meeting("stop") && !dictate_meeting("start")) dictate_ui_notice("Couldn’t start the meeting");
+      if (!dictate_meeting("stop") && !dictate_meeting("start")) dictate_meeting_unstarted(); // says why, unless the microphone card does
     } else {
       dictate_paste_last();
     }
