@@ -77,7 +77,7 @@ export function Dictation({ settings, update }: PageProps) {
         <Tile title="Live typing" detail="Words appear as you speak. Off, they arrive all at once when you let go.">
           <Toggle label="Live typing" checked={dictation.liveTyping} onChange={liveTyping => update({ dictation: { liveTyping } })} />
         </Tile>
-        <Tile title="Remove filler words" detail="Leaves out um, uh, er and hmm. A “like” you mean stays.">
+        <Tile title="Remove filler words" detail="Leaves out um, uh, er, ah and hmm. “Like” always stays.">
           <Toggle label="Remove filler words" checked={dictation.removeFillers} onChange={removeFillers => update({ dictation: { removeFillers } })} />
         </Tile>
         <Tile title="Sounds" detail="A soft sound when listening starts and stops.">
@@ -87,7 +87,7 @@ export function Dictation({ settings, update }: PageProps) {
     </Section>
     <Section title="Speech model" note={models && !models.enabled
       ? 'Dictation is paused. The chosen model downloads when you turn it back on.'
-      : 'Each model is downloaded once and kept, so switching back is instant.'}>
+      : 'Each model is downloaded once and kept, so switching back needs no download.'}>
       <TileGroup label="Speech model">
         {(['turbo', 'small'] as const).map(model => {
           const file = models?.models.find(one => one.model === model);
@@ -95,10 +95,10 @@ export function Dictation({ settings, update }: PageProps) {
           return <Tile key={model} title={MODELS[model].name} detail={`${MODELS[model].detail}${file ? ` ${megabytes(file.bytes)}.` : ''}`}>
             {dictation.model === model
               ? <span className="state" data-on={inUse || undefined}>{inUse ? 'In use' : step && !step.failed ? 'Getting ready' : 'Chosen'}</span>
-              : <>
-                {inUse && <span className="state">In use</span>}
-                <Button small aria-label={`Use ${MODELS[model].name}`} onClick={() => update({ dictation: { model } })}>{file?.downloaded || inUse ? 'Use' : 'Download'}</Button>
-              </>}
+              : inUse
+                // Still answering while the chosen one gets ready: the card below offers to keep it.
+                ? <span className="state">In use</span>
+                : <Button small aria-label={`Use ${MODELS[model].name}`} onClick={() => update({ dictation: { model } })}>{file?.downloaded ? 'Use' : 'Download'}</Button>}
           </Tile>;
         })}
         {step && <Tile title={step.failed ? `${chosen.name} isn’t ready` : `Getting ${chosen.name} ready`} stack>

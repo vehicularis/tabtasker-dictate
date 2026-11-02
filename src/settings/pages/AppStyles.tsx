@@ -5,9 +5,9 @@ import { Button, Icon, PageHeader, Section, Select, Tile, TileGroup, Toggle } fr
 import './speech.css';
 
 const STYLES: { value: Style; label: string; detail: string; said?: string; typed?: string }[] = [
-  { value: 'default', label: 'Default', detail: 'As Whisper writes it, with your replacements and no fillers.' },
+  { value: 'default', label: 'Default', detail: 'As Whisper writes it, with your replacements and filler setting.' },
   { value: 'casual', label: 'Casual', detail: 'No full stop at the end of a single sentence.', said: 'Sounds good.', typed: 'Sounds good' },
-  { value: 'formal', label: 'Formal', detail: 'A capital to start and a full stop to end.', said: 'thanks for the update', typed: 'Thanks for the update.' },
+  { value: 'formal', label: 'Formal', detail: 'A capital to start and a full stop to end.', said: 'see you then', typed: 'See you then.' },
   { value: 'code', label: 'Code', detail: 'Symbols and casing by name, and no capital to start.', said: 'camel case user name', typed: 'userName' },
   { value: 'raw', label: 'Raw', detail: 'Exactly what Whisper heard: no replacements, fillers left in.' },
 ];
@@ -21,31 +21,37 @@ let cache: App[] | null = null;
 function AppName({ name, icon }: { name: string; icon?: string | null }) {
   return <span className="app-name">
     {icon ? <img src={icon} alt="" /> : <span className="app-glyph" aria-hidden>{[...name][0]?.toUpperCase()}</span>}
-    <span className="label">{name}</span>
+    <span className="label" title={name}>{name}</span>
   </span>;
 }
 
 /// Running and recent apps without a style yet, to search and pick from, or any app by its bundle ID.
-function Picker({ apps, failed, taken, onPick, onClose }: { apps: App[] | null; failed: boolean; taken: (bundleId: string) => boolean; onPick: (app: Pick<App, 'bundleId' | 'name'>) => void; onClose: () => void }) {
+function Picker({ apps, failed, styled, onPick, onClose }: { apps: App[] | null; failed: boolean; styled: AppStyle[]; onPick: (app: Pick<App, 'bundleId' | 'name'>) => void; onClose: () => void }) {
   const [query, setQuery] = useState('');
+  const field = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLUListElement>(null);
   const words = query.trim().toLowerCase();
-  const candidates = (apps ?? []).filter(app => !taken(app.bundleId) && (app.running || app.recent))
-    .filter(app => !words || app.name.toLowerCase().includes(words) || app.bundleId.toLowerCase().includes(words));
+  const matches = (app: Pick<App, 'bundleId' | 'name'>) => !words || app.name.toLowerCase().includes(words) || app.bundleId.toLowerCase().includes(words);
+  const taken = (bundleId: string) => styled.some(app => same(app.bundleId, bundleId));
+  const candidates = (apps ?? []).filter(app => !taken(app.bundleId) && (app.running || app.recent)).filter(matches);
   const typed = /^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/.test(query.trim()) && !taken(query.trim()) && !candidates.some(app => same(app.bundleId, query.trim())) ? query.trim() : null;
+  const already = words ? styled.find(matches) : undefined;
   const buttons = () => [...(list.current?.querySelectorAll('button') ?? [])];
+  // Up and down move by rows of the grid, left and right along it; up from the first row goes back to the search.
   const keys = (event: KeyboardEvent) => {
     if (event.key === 'Escape') { event.preventDefault(); onClose(); return; }
-    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
     const all = buttons();
-    if (!all.length) return;
-    event.preventDefault();
     const at = all.indexOf(document.activeElement as HTMLButtonElement);
-    all[Math.max(0, Math.min(all.length - 1, at + (event.key === 'ArrowDown' ? 1 : -1)))].focus();
+    const columns = list.current ? getComputedStyle(list.current).gridTemplateColumns.split(' ').length : 1;
+    const step = ({ ArrowDown: columns, ArrowUp: -columns, ArrowRight: 1, ArrowLeft: -1 } as Record<string, number>)[event.key];
+    if (!step || !all.length || (at < 0 && event.key !== 'ArrowDown')) return;
+    event.preventDefault();
+    const next = at < 0 ? 0 : at + step;
+    if (next < 0) field.current?.focus(); else all[Math.min(all.length - 1, next)].focus();
   };
   return <div className="app-picker" onKeyDown={keys}>
     <div className="head">
-      <input className="ui-field wide" autoFocus aria-label="Search apps" placeholder="Search apps, or type a bundle ID" value={query} spellCheck={false}
+      <input ref={field} className="ui-field wide" autoFocus aria-label="Search apps" placeholder="Search apps, or type a bundle ID" value={query} spellCheck={false}
         onChange={event => setQuery(event.target.value)}
         onKeyDown={event => {
           if (event.key !== 'Enter') return;
@@ -64,7 +70,8 @@ function Picker({ apps, failed, taken, onPick, onClose }: { apps: App[] | null; 
       </li>)}
     </ul>}
     {typed && <span><Button small icon="plus" onClick={() => onPick({ bundleId: typed, name: typed })}>Add {typed}</Button></span>}
-    {apps !== null && !candidates.length && !typed && <p className="quiet">{words ? 'No open or recent app matches. Type its bundle ID, like com.example.app.' : 'Every app you have used lately has a style already.'}</p>}
+    {apps !== null && !candidates.length && !typed && <p className="quiet">{already ? `${already.name} already has a style.`
+      : words ? 'No open or recent app matches. Type its bundle ID, like com.example.app.' : 'Every app you have used lately has a style already.'}</p>}
   </div>;
 }
 
@@ -82,7 +89,6 @@ export function AppStyles({ settings, update }: PageProps) {
     return () => { live = false; };
   }, []);
   const icon = (bundleId: string) => found?.find(app => same(app.bundleId, bundleId))?.icon;
-  const taken = (bundleId: string) => apps.styles.some(app => same(app.bundleId, bundleId));
   const set = (bundleId: string, change: Partial<AppStyle>) => update({ apps: { styles: apps.styles.map(app => app.bundleId === bundleId ? { ...app, ...change } : app) } });
   const close = () => { setPicking(false); requestAnimationFrame(() => document.querySelector<HTMLElement>('[data-add-app]')?.focus()); };
   const pick = (app: Pick<App, 'bundleId' | 'name'>) => {
@@ -106,7 +112,7 @@ export function AppStyles({ settings, update }: PageProps) {
       <TileGroup label="Apps">
         <Tile title={picking ? 'Add an app' : `${apps.styles.length} ${apps.styles.length === 1 ? 'app' : 'apps'}`} stack={picking}>
           {picking
-            ? <Picker apps={found} failed={failed} taken={taken} onPick={pick} onClose={close} />
+            ? <Picker apps={found} failed={failed} styled={apps.styles} onPick={pick} onClose={close} />
             : <Button data-add-app icon="plus" small onClick={() => setPicking(true)}>Add an app</Button>}
         </Tile>
         {apps.styles.map(app => <Tile key={app.bundleId} title={<AppName name={app.name} icon={icon(app.bundleId)} />}>

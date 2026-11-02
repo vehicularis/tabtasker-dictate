@@ -6,16 +6,22 @@
 // what counts as a correction, and nothing is added without a yes.
 extern int dictate_correction(const char *before, const char *after, size_t start, size_t length, char *word, size_t capacity);
 extern void dictate_learned(const char *word);
+extern bool dictate_learn_typing(const char *before, const char *after, size_t caret);
 
 // A longer field (a terminal's scrollback, a whole document) costs too much to read twice a second.
 static const NSUInteger TTVoiceLearnLongest = 50000;
 static const NSTimeInterval TTVoiceLearnFor = 30, TTVoiceLearnArrive = 3, TTVoiceLearnSettle = 1.5;
+// The reads run on the main thread beside the key monitors: an app that stops answering costs at most
+// this per read, and the first read it fails ends the watch, instead of the system's 6 s each.
+static const float TTVoiceLearnPatience = 0.2;
 
 static NSString *TTVoiceLearnValue(id field) {
   if (!field) return nil;
   AXUIElementRef element = (__bridge AXUIElementRef)field;
   CFTypeRef count = NULL;
-  if (AXUIElementCopyAttributeValue(element, kAXNumberOfCharactersAttribute, &count) == kAXErrorSuccess) {
+  AXError error = AXUIElementCopyAttributeValue(element, kAXNumberOfCharactersAttribute, &count);
+  if (error == kAXErrorCannotComplete) return nil;
+  if (error == kAXErrorSuccess) {
     NSNumber *length = (__bridge_transfer NSNumber *)count;
     if ([length isKindOfClass:NSNumber.class] && length.unsignedIntegerValue > TTVoiceLearnLongest) return nil;
   }
@@ -49,7 +55,9 @@ static BOOL TTVoiceLearnUnknown(NSString *word) {
 }
 
 @interface TTVoiceLearn : NSObject
-@property (copy) NSString *text, *before, *latest;
+// `pending` is a settled edit whose caret is still in its word: it counts once the field changes some
+// other way (sent, cleared) or the watch ends, and not if the word is typed on.
+@property (copy) NSString *text, *before, *latest, *pending;
 @property (strong) id field;
 @property NSRange dictated;
 @property NSTimeInterval since, changed;
@@ -67,18 +75,30 @@ static BOOL TTVoiceLearnUnknown(NSString *word) {
   self.text = text; self.field = nil; self.since = NSProcessInfo.processInfo.systemUptime;
   [self every:0.25 run:^(TTVoiceLearn *learn) { [learn find]; }];
 }
-- (void)stop { [self.timer invalidate]; self.timer = nil; self.field = nil; self.before = self.latest = nil; }
+- (void)stop { [self.timer invalidate]; self.timer = nil; self.field = nil; self.before = self.latest = self.pending = nil; }
+// The watch ends early (a new hold, the field gone): an edit waiting on its caret is as done as it gets.
+- (void)finish {
+  if (self.pending) [self check:self.pending];
+  [self stop];
+}
 // Our keystrokes land in the field a moment after they are sent: the dictated words are the ones
-// that end at the caret.
+// that end at the caret. The front app's element is asked rather than the system-wide one, whose
+// timeout would apply to every element in this process.
 - (void)find {
   NSTimeInterval now = NSProcessInfo.processInfo.systemUptime;
   if (now - self.since > TTVoiceLearnArrive) { [self stop]; return; }
+  pid_t pid = NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier;
+  if (pid <= 0 || pid == NSProcessInfo.processInfo.processIdentifier) return;
+  AXUIElementRef app = AXUIElementCreateApplication(pid);
+  AXUIElementSetMessagingTimeout(app, TTVoiceLearnPatience);
   CFTypeRef focused = NULL;
-  AXUIElementRef everything = AXUIElementCreateSystemWide();
-  AXUIElementCopyAttributeValue(everything, kAXFocusedUIElementAttribute, &focused);
-  CFRelease(everything);
+  AXError error = AXUIElementCopyAttributeValue(app, kAXFocusedUIElementAttribute, &focused);
+  CFRelease(app);
+  if (error == kAXErrorCannotComplete) { [self stop]; return; }
   id field = (__bridge_transfer id)focused;
-  if (!field || TTVoiceLearnSecure(field)) return;
+  if (!field) return;
+  AXUIElementSetMessagingTimeout((__bridge AXUIElementRef)field, TTVoiceLearnPatience);
+  if (TTVoiceLearnSecure(field)) return;
   NSString *value = TTVoiceLearnValue(field);
   if (!value) return;
   NSUInteger end = MIN(TTVoiceLearnCaret(field, value.length), value.length);
@@ -88,23 +108,38 @@ static BOOL TTVoiceLearnUnknown(NSString *word) {
   self.since = self.changed = now;
   [self every:0.5 run:^(TTVoiceLearn *learn) { [learn poll]; }];
 }
+- (BOOL)corrects:(NSString *)value {
+  char word[256];
+  return dictate_correction(self.before.UTF8String, value.UTF8String, self.dictated.location, self.dictated.length, word, sizeof word) != 0;
+}
 - (void)poll {
   NSTimeInterval now = NSProcessInfo.processInfo.systemUptime;
   NSString *value = TTVoiceLearnValue(self.field);
-  if (!value) { [self stop]; return; } // the field is gone, or too long now
-  if (![value isEqualToString:self.latest]) { self.latest = value; self.changed = now; }
+  if (!value) { [self finish]; return; } // the field is gone, too long now, or its app stopped answering
+  if (![value isEqualToString:self.latest]) {
+    // Typing on in the word makes a waiting edit stale; any other change means it was finished.
+    if (self.pending && ![self corrects:value]) [self check:self.pending];
+    self.pending = nil;
+    self.latest = value; self.changed = now;
+  }
   BOOL over = now - self.since >= TTVoiceLearnFor;
-  // An edit counts once the person stops typing for a moment, or when the time is up.
-  if ((now - self.changed >= TTVoiceLearnSettle || over) && ![self.latest isEqualToString:self.before]) [self check];
+  // An edit counts once the person stops typing for a moment with the caret out of its word, or when
+  // the time is up.
+  if ((now - self.changed >= TTVoiceLearnSettle || over) && ![self.latest isEqualToString:self.before]) {
+    NSUInteger caret = TTVoiceLearnCaret(self.field, NSNotFound);
+    if (!over && caret != NSNotFound && dictate_learn_typing(self.before.UTF8String, self.latest.UTF8String, caret)) self.pending = self.latest;
+    else [self check:self.latest];
+  }
   if (over) [self stop];
 }
-- (void)check {
+- (void)check:(NSString *)value {
   char word[256];
-  int found = dictate_correction(self.before.UTF8String, self.latest.UTF8String, self.dictated.location, self.dictated.length, word, sizeof word);
+  int found = dictate_correction(self.before.UTF8String, value.UTF8String, self.dictated.location, self.dictated.length, word, sizeof word);
   NSString *learned = found ? [NSString stringWithUTF8String:word] : nil;
   if (learned && (found == 2 || TTVoiceLearnUnknown(learned))) dictate_learned(word);
+  self.pending = nil;
   // Later edits are read against the field as it is now, with the dictated words where they moved.
-  NSString *before = self.before, *after = self.latest;
+  NSString *before = self.before, *after = value;
   NSUInteger prefix = 0, suffix = 0, shorter = MIN(before.length, after.length);
   while (prefix < shorter && [before characterAtIndex:prefix] == [after characterAtIndex:prefix]) prefix++;
   while (suffix < shorter - prefix && [before characterAtIndex:before.length - 1 - suffix] == [after characterAtIndex:after.length - 1 - suffix]) suffix++;
@@ -129,4 +164,4 @@ void dictate_learn_watch(const char *text) {
 }
 
 // On the main thread, as a new hold begins: our own typing is not a correction.
-void dictate_learn_stop(void) { [learner stop]; }
+void dictate_learn_stop(void) { [learner finish]; }

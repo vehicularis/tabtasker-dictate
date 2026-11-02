@@ -44,6 +44,8 @@ struct LocalSpeech {
   preparing: Mutex<Option<(settings::Model, Arc<AtomicBool>)>>,
   /// The model the engine holds.
   loaded: Mutex<Option<settings::Model>>,
+  /// Held while a model loads, so quitting waits for it instead of exiting while it holds GPU buffers.
+  loading: Mutex<()>,
   /// What Settings shows of the newest download or load: under way, or the error that stopped it.
   step: Mutex<Option<Step>>,
   /// The model, language and translation Settings last asked for, so only a change of them acts.
@@ -82,7 +84,7 @@ extern "C" {
 impl LocalSpeech {
   fn new(root: PathBuf) -> Self {
     Self {
-      root, enabled: AtomicBool::new(false), preparing: Mutex::default(), loaded: Mutex::default(), step: Mutex::default(), seen: Mutex::default(),
+      root, enabled: AtomicBool::new(false), preparing: Mutex::default(), loaded: Mutex::default(), loading: Mutex::default(), step: Mutex::default(), seen: Mutex::default(),
       job: Mutex::default(), engine: Mutex::default(), vad: Mutex::default(), draft: Mutex::default(), hold: Mutex::default(), note: Mutex::default(),
       releases: AtomicUsize::new(0),
     }
@@ -204,7 +206,8 @@ extern "C" fn dictate_prepare_models() {
 /// Settings; with none in use, the overlay hears it too, since dictation is waiting for it.
 fn prepare(app: &AppHandle) {
   let state = app.state::<LocalSpeech>();
-  let want = settings::get().dictation.model;
+  let chosen = settings::get().dictation.model;
+  let want = first_load(&state.root, chosen, state.loaded.lock().unwrap().is_some());
   let cancel = {
     let mut preparing = state.preparing.lock().unwrap();
     if let Some((model, cancel)) = preparing.as_ref() {
@@ -252,7 +255,11 @@ fn prepare(app: &AppHandle) {
     if !state.enabled.load(Ordering::Relaxed) { step(&app, None); return; }
     if cancelled() { prepare(&app); return; } // the choice changed, or voice went off and on again
     match result {
-      Ok(()) => { step(&app, None); status(&app, &ready(&state), 1); }
+      Ok(()) => {
+        step(&app, None);
+        status(&app, &ready(&state), 1);
+        if want != chosen { prepare(&app); } // dictation works now; the chosen model comes as a swap
+      }
       Err(error) => {
         step(&app, Some(Step { model: want, message: error.clone(), percent: None, failed: true }));
         if !swapping { status(&app, &error, -1); }
@@ -261,9 +268,20 @@ fn prepare(app: &AppHandle) {
   });
 }
 
+/// What to load for `chosen`. With no model loaded yet, a chosen one still missing from this Mac (its
+/// download failed, or the app quit during it) waits behind the other one when that is here, so
+/// dictation works meanwhile.
+fn first_load(root: &Path, chosen: settings::Model, loaded: bool) -> settings::Model {
+  let here = |model| files(model).iter().all(|file| std::fs::metadata(root.join(file.name)).is_ok_and(|meta| meta.len() == file.bytes));
+  let other = match chosen { settings::Model::Turbo => settings::Model::Small, settings::Model::Small => settings::Model::Turbo };
+  if !loaded && !here(chosen) && here(other) { other } else { chosen }
+}
+
 /// Loads `model` beside the engine in use, then swaps it in.
 fn load(app: &AppHandle, root: &Path, model: settings::Model, cancel: &AtomicBool) -> Result<(), String> {
   let state = app.state::<LocalSpeech>();
+  // Declared first, so the new model is dropped before it is let go.
+  let _loading = state.loading.lock().unwrap_or_else(|e| e.into_inner());
   if !state.enabled.load(Ordering::Relaxed) { return Err("Voice commands are off.".into()); }
   let whisper = Engine::load(root, model)?;
   let vad = if state.vad.lock().unwrap().is_none() { Some(load_vad(root)?) } else { None };
@@ -353,8 +371,11 @@ extern "C" fn dictate_disable_models() {
 pub fn shutdown(app: &AppHandle) {
   let Some(state) = app.try_state::<LocalSpeech>() else { return };
   state.enabled.store(false, Ordering::Relaxed); // a load that hasn't started yet gives up
+  if let Some((_, cancel)) = state.preparing.lock().unwrap_or_else(|e| e.into_inner()).as_ref() { cancel.store(true, Ordering::Relaxed); }
   if let Some((_, cancel)) = state.job.lock().unwrap_or_else(|e| e.into_inner()).as_ref() { cancel.store(true, Ordering::Relaxed); }
   if let Some(draft) = state.draft.lock().unwrap_or_else(|e| e.into_inner()).as_ref() { draft.cancelled.store(true, Ordering::Relaxed); }
+  // A load under way finishes and frees its model first; one after this sees voice is off.
+  drop(state.loading.lock().unwrap_or_else(|e| e.into_inner()));
   state.engine.lock().unwrap_or_else(|e| e.into_inner()).take();
   state.vad.lock().unwrap_or_else(|e| e.into_inner()).take();
   state.loaded.lock().unwrap_or_else(|e| e.into_inner()).take();
@@ -623,7 +644,7 @@ impl LocalSpeech {
   /// one still running that will is worth waiting for; only speech past the newest live pass needs a
   /// pass of its own. A long hands-free session is mostly in its words already: only its tail is left.
   fn finish(&self, id: &str, pcm: &[f32], cancelled: Arc<AtomicBool>) -> Result<String, String> {
-    if hands_free(id) && (pcm.len() > note::PIECE || self.note(id, |note| note.committed) > 0) {
+    if self.long(id, pcm.len()) {
       let mut engine = self.engine_now();
       return self.note_finish(engine.as_mut().ok_or("Voice is still loading")?, id, 0, pcm, cancelled);
     }
@@ -636,6 +657,18 @@ impl LocalSpeech {
     let mut engine = self.engine_now();
     if let Some(text) = heard() { return Ok(text); }
     self.pass(engine.as_mut().ok_or("Voice is still loading")?, id, pcm, cancelled, false)
+  }
+
+  /// Whether a hold of `samples` finishes as a long session, piece by piece: a hands-free one that is
+  /// past one piece or has words in already.
+  fn long(&self, id: &str, samples: usize) -> bool {
+    hands_free(id) && (samples > note::PIECE || self.note(id, |note| note.committed) > 0)
+  }
+
+  /// Where the audio of a live pass over `count` samples starts: past what a hands-free session has in
+  /// its words already, which is neither copied nor heard again.
+  fn unheard(&self, id: &str, count: usize) -> usize {
+    if hands_free(id) { self.note(id, |note| note.committed).min(count) } else { 0 }
   }
 
   /// One live pass. Its words are kept while it still holds the engine, so a release waiting on it finds them.
@@ -700,8 +733,7 @@ extern "C" fn dictate_draft(id: *const c_char, samples: *const f32, count: usize
   if !state.enabled.load(Ordering::Relaxed) || state.job.lock().unwrap().is_some() { return false; }
   let mut draft = state.draft.lock().unwrap();
   if draft.is_some() { return false; }
-  // What a hands-free session has in its words already is neither copied nor heard again.
-  let skip = if long { state.note(&id, |note| note.committed).min(count) } else { 0 };
+  let skip = state.unheard(&id, count);
   // AppKit owns the bounded audio buffer until this synchronous copy returns.
   let pcm = unsafe { std::slice::from_raw_parts(samples.add(skip), count - skip) }.to_vec();
   let cancelled = Arc::new(AtomicBool::new(false));

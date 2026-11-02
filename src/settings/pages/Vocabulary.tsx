@@ -60,7 +60,7 @@ export function Vocabulary({ settings, update }: PageProps) {
           </span>
         </Tile>
         {vocabulary.replacements.map(pair => <Tile key={pair.from} title={<span className="replacement">
-          <span>{pair.from}</span><Icon name="chevronRight" size={14} /><span className="to">{pair.to || 'nothing'}</span>
+          <span className="from">{pair.from}</span><Icon name="chevronRight" size={14} />{pair.to ? <span className="to">{pair.to}</span> : <span className="to" data-dropped>Dropped</span>}
         </span>}>
           <Button variant="quiet" small icon="trash" aria-label={`Remove ${pair.from}`} onClick={() => update({ vocabulary: { replacements: vocabulary.replacements.filter(other => other !== pair) } })} />
         </Tile>)}
@@ -76,7 +76,7 @@ export function Vocabulary({ settings, update }: PageProps) {
           <Button small onClick={() => accept(vocabulary.suggestions)}>Add all</Button>
         </Tile>}
         {vocabulary.suggestions.map(word => <Tile key={word} title={word} detail="From a correction">
-          <Button variant="quiet" small aria-label={`Not now: ${word}`} onClick={() => update({ vocabulary: { suggestions: vocabulary.suggestions.filter(other => other !== word) } })}>Not now</Button>
+          <Button variant="quiet" small aria-label={`Dismiss ${word}`} onClick={() => update({ vocabulary: { suggestions: vocabulary.suggestions.filter(other => other !== word) } })}>Dismiss</Button>
           <Button variant="primary" small aria-label={`Add ${word}`} onClick={() => accept([word])}>Add</Button>
         </Tile>)}
         {!vocabulary.suggestions.length && vocabulary.learn && <EmptyState icon="sparkle" title="No suggestions yet">Fix a word right after you dictate it, and it shows up here.</EmptyState>}

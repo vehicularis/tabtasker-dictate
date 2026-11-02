@@ -235,3 +235,54 @@ fn small_sees_the_whole_window_and_turbo_only_the_speech() {
   assert_eq!(encoder_ctx(settings::Model::Small, 16000), 0);
   assert_eq!(encoder_ctx(settings::Model::Small, MAX_SAMPLES), 0);
 }
+
+#[test]
+fn a_hands_free_session_may_send_ten_minutes_and_a_hold_one() {
+  context::remember(context::HoldContext::new("free", context::Mode::HandsFree, "", ""));
+  context::remember(context::HoldContext::new("held", context::Mode::Dictate, "", ""));
+  assert_eq!(max_samples("free"), HANDS_FREE_SAMPLES);
+  assert!(max_samples("free") > MAX_SAMPLES);
+  assert_eq!(max_samples("held"), MAX_SAMPLES);
+  assert_eq!(max_samples("never announced"), MAX_SAMPLES);
+  context::forget("free"); context::forget("held");
+}
+
+#[test]
+fn a_hands_free_session_is_heard_past_its_words_and_finished_piece_by_piece() {
+  context::remember(context::HoldContext::new("long", context::Mode::HandsFree, "", ""));
+  let speech = LocalSpeech::new(PathBuf::new());
+  // Nothing in yet: a draft hears it all, and a short session finishes like a hold.
+  assert_eq!(speech.unheard("long", 16000), 0);
+  assert!(!speech.long("long", note::PIECE));
+  assert!(speech.long("long", note::PIECE + 1));
+  // With words in, only the audio past them, never past its end; and it finishes piece by piece.
+  speech.note("long", |note| note.committed = 6 * 16000);
+  assert_eq!(speech.unheard("long", 10 * 16000), 6 * 16000);
+  assert_eq!(speech.unheard("long", 6 * 16000), 6 * 16000);
+  assert_eq!(speech.unheard("long", 4 * 16000), 4 * 16000);
+  assert!(speech.long("long", 16000));
+  // A plain hold is always heard whole and finished at once.
+  speech.note("held", |note| note.committed = 6 * 16000);
+  assert_eq!(speech.unheard("held", 10 * 16000), 0);
+  assert!(!speech.long("held", MAX_SAMPLES));
+  context::forget("long");
+}
+
+#[test]
+fn with_no_model_loaded_one_on_this_mac_answers_while_the_chosen_one_downloads() {
+  let root = std::env::temp_dir().join(format!("tabtasker-speech-fallback-{}", std::process::id()));
+  std::fs::create_dir_all(&root).unwrap();
+  // Sparse files of the pinned sizes: what Settings counts as downloaded.
+  let put = |model: settings::Model| for file in files(model) { File::create(root.join(file.name)).unwrap().set_len(file.bytes).unwrap(); };
+  use settings::Model::{Small, Turbo};
+  assert_eq!(first_load(&root, Small, false), Small); // nothing here: the chosen one downloads
+  put(Turbo);
+  assert_eq!(first_load(&root, Small, false), Turbo);
+  assert_eq!(first_load(&root, Small, true), Small); // a model in use answers while Small comes as a swap
+  assert_eq!(first_load(&root, Turbo, false), Turbo);
+  put(Small);
+  assert_eq!(first_load(&root, Small, false), Small);
+  std::fs::remove_file(root.join(TURBO.name)).unwrap();
+  assert_eq!(first_load(&root, Turbo, false), Small);
+  std::fs::remove_dir_all(root).unwrap();
+}

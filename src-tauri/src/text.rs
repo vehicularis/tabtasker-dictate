@@ -120,6 +120,8 @@ fn replace(text: &str, pairs: &[Replacement], turkish: bool) -> String {
   let folded: Vec<char> = chars.iter().map(|&c| fold(c, turkish)).collect();
   let word = |c: char| c.is_alphanumeric() || "_'’-@".contains(c);
   let mut out = String::with_capacity(text.len());
+  // Where a dropped phrase began a sentence, in `out`: the word after it takes the capital.
+  let mut capitals = Vec::new();
   let mut at = 0;
   'scan: while at < chars.len() {
     let open = at == 0 || !joins(&chars, at - 1, turkish);
@@ -127,12 +129,11 @@ fn replace(text: &str, pairs: &[Replacement], turkish: bool) -> String {
       if word(from[0]) && !open { continue; }
       let Some(end) = matches_at(&folded, at, from) else { continue };
       if word(from[from.len() - 1]) && end < chars.len() && joins(&chars, end, turkish) { continue; }
+      let capital = chars[at].is_uppercase();
       at = end;
       if to.is_empty() {
-        // A phrase replaced by nothing takes one side's space with it, and one of a pair of commas.
-        out.truncate(out.trim_end().len());
-        if out.is_empty() { while chars.get(at).is_some_and(|c| c.is_whitespace()) { at += 1; } }
-        if chars.get(at).is_some_and(|c| ",;".contains(*c) && out.ends_with(*c)) { at += 1; }
+        at = drop_phrase(&mut out, &chars, at);
+        if capital && starts_sentence(&out) { capitals.push(out.len()); }
       } else {
         out.push_str(to);
       }
@@ -141,7 +142,38 @@ fn replace(text: &str, pairs: &[Replacement], turkish: bool) -> String {
     out.push(chars[at]);
     at += 1;
   }
+  for &mark in capitals.iter().rev() {
+    if mark > out.len() || !out.is_char_boundary(mark) { continue; }
+    let start = mark + out[mark..].len() - out[mark..].trim_start().len();
+    let end = out[start..].find(char::is_whitespace).map_or(out.len(), |end| start + end);
+    let word = capitalize(&out[start..end], turkish);
+    out.replace_range(start..end, &word);
+  }
   out
+}
+
+/// Whether the next word in `out` starts a sentence: nothing before it, a line break or a full stop.
+fn starts_sentence(out: &str) -> bool {
+  out.is_empty() || out.ends_with('\n') || ends_sentence(out)
+}
+
+/// Mends what a phrase replaced by nothing leaves, as dropping a filler does: `at` is just past it in
+/// `chars`, and the answer is where the text goes on. Its space goes with it, and the commas around it;
+/// a full stop it ended stays; at the start of the text or of a line, so does the space after it.
+fn drop_phrase(out: &mut String, chars: &[char], mut at: usize) -> usize {
+  out.truncate(out.trim_end_matches([' ', '\t']).len());
+  let close = chars[at..].iter().take_while(|c| ",;:.?!…".contains(**c)).count();
+  let end: String = chars[at..at + close].iter().filter(|c| ".?!…".contains(**c)).collect();
+  at += close;
+  if !end.is_empty() {
+    out.truncate(out.trim_end_matches([',', ';', ':']).len());
+    if !starts_sentence(out) { out.push_str(&end); }
+  } else if close > 0 && out.ends_with([',', ';', ':']) {
+    out.pop();
+  }
+  if out.is_empty() { while chars.get(at).is_some_and(|c| c.is_whitespace()) { at += 1; } }
+  else if out.ends_with('\n') { while chars.get(at).is_some_and(|c| *c == ' ' || *c == '\t') { at += 1; } }
+  at
 }
 
 // ---------- fillers ----------
@@ -366,11 +398,9 @@ fn code(text: &str, turkish: bool) -> String {
 /// capital where no sentence starts.
 fn correction(before: &str, after: &str, dictated: std::ops::Range<usize>) -> Option<(String, bool)> {
   let (b, a): (Vec<char>, Vec<char>) = (before.chars().collect(), after.chars().collect());
-  let prefix = b.iter().zip(&a).take_while(|(x, y)| x == y).count();
-  let suffix = b[prefix..].iter().rev().zip(a[prefix..].iter().rev()).take_while(|(x, y)| x == y).count();
+  let (prefix, suffix) = unchanged(&b, &a);
   let (b_end, a_end) = (b.len() - suffix, a.len() - suffix);
   if b_end < dictated.start || prefix > dictated.end { return None; } // an edit somewhere else
-  let word = |c: &char| c.is_alphanumeric() || "'’-_".contains(*c);
   let mut start = prefix;
   while start > 0 && word(&b[start - 1]) { start -= 1; }
   let (mut b_stop, mut a_stop) = (b_end, a_end);
@@ -390,6 +420,26 @@ fn correction(before: &str, after: &str, dictated: std::ops::Range<usize>) -> Op
   // A change of case alone is worth learning only as a name: "can" to "Can".
   if old.to_lowercase() == new.to_lowercase() && !named { return None; }
   Some((new, named))
+}
+
+/// A char of a word as corrections see it: a name may hold an apostrophe, a hyphen or an underscore.
+fn word(c: &char) -> bool { c.is_alphanumeric() || "'’-_".contains(*c) }
+
+/// How many chars `before` and `after` share at the start, and then at the end.
+fn unchanged(b: &[char], a: &[char]) -> (usize, usize) {
+  let prefix = b.iter().zip(a).take_while(|(x, y)| x == y).count();
+  (prefix, b[prefix..].iter().rev().zip(a[prefix..].iter().rev()).take_while(|(x, y)| x == y).count())
+}
+
+/// Whether the caret, at char `caret` of `after`, is still in a word of the edit: the person may be
+/// typing it yet, so a pause there is not the end of the correction.
+fn typing(before: &str, after: &str, caret: usize) -> bool {
+  let (b, a): (Vec<char>, Vec<char>) = (before.chars().collect(), after.chars().collect());
+  let (prefix, suffix) = unchanged(&b, &a);
+  let (mut start, mut end) = (prefix, a.len() - suffix);
+  while start > 0 && word(&a[start - 1]) { start -= 1; }
+  while end < a.len() && word(&a[end]) { end += 1; }
+  (start + 1..=end).contains(&caret) && word(&a[caret - 1])
 }
 
 fn read(text: *const c_char) -> Option<String> {
@@ -421,6 +471,14 @@ extern "C" fn dictate_correction(before: *const c_char, after: *const c_char, st
   // The word and its NUL fit in the caller's `capacity` bytes.
   unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), word.cast(), bytes.len()); *word.add(bytes.len()) = 0; }
   if named { 2 } else { 1 }
+}
+
+/// learn.m's question before it learns from a pause: whether the caret, at UTF-16 offset `caret` of
+/// `after`, is still in the word being typed over the dictated ones.
+#[no_mangle]
+extern "C" fn dictate_learn_typing(before: *const c_char, after: *const c_char, caret: usize) -> bool {
+  let (Some(before), Some(after)) = (read(before), read(after)) else { return false };
+  typing(&before, &after, chars_at(&after, caret, 0).start)
 }
 
 /// A word learned from a correction: it waits in Settings › Vocabulary and the overlay offers it. It is
@@ -490,11 +548,23 @@ mod tests {
     // What a replacement typed is not replaced again, and the longest phrase wins.
     let chain = [pair("a", "b"), pair("b", "c"), pair("a b", "x")];
     assert_eq!(run("a b a", Style::Default, "en", &chain), "x b");
-    // A phrase replaced by nothing leaves no double space or comma.
+    // A phrase replaced by nothing is mended like a filler: no stray space, comma or lost capital.
     let gone = [pair("you know", "")];
-    assert_eq!(run("It is, you know, fine", Style::Default, "en", &gone), "It is, fine");
-    assert_eq!(run("you know it works", Style::Default, "en", &gone), "it works");
-    assert_eq!(run("it works you know.", Style::Default, "en", &gone), "it works.");
+    let drop = |text: &str| run(text, Style::Default, "en", &gone);
+    assert_eq!(drop("It is, you know, fine"), "It is fine");
+    assert_eq!(drop("It is you know, fine"), "It is fine");
+    assert_eq!(drop("you know it works"), "it works");
+    assert_eq!(drop("it works you know."), "it works.");
+    assert_eq!(drop("It works, you know."), "It works.");
+    assert_eq!(drop("You know, it works."), "It works.");
+    assert_eq!(drop("It works. You know, it does."), "It works. It does.");
+    assert_eq!(drop("Well, you know..."), "Well...");
+    assert_eq!(drop("Line one.\nyou know it works"), "Line one.\nit works");
+    assert_eq!(drop("Line one.\nYou know, it works"), "Line one.\nIt works");
+    assert_eq!(drop("You know."), "");
+    // The word after keeps its own case when it is a name, an address or another replacement's.
+    assert_eq!(run("You know, my email works", Style::Default, "en", &[pair("you know", ""), pair("my email", "can@example.com")]), "can@example.com works");
+    assert_eq!(drop("You know, iPhone sales"), "iPhone sales");
   }
 
   #[test]
@@ -635,6 +705,29 @@ mod tests {
     let range = chars_at(field, 3, 17);
     assert_eq!(range, 2..19);
     assert_eq!(correction(field, "🙂 gittik İstanbul'a", range), Some(("İstanbul".into(), true)));
+  }
+
+  #[test]
+  fn a_pause_inside_the_word_being_typed_is_not_the_end_of_it() {
+    let field = "deploy to Cooper Nettis today";
+    // Typing over the last words: half a word, then all of it, with the caret after it.
+    assert!(typing("deploy to Cooper Nettis", "deploy to Kube", 14));
+    assert!(typing("deploy to Cooper Nettis", "deploy to Kubernetes", 20));
+    // Typed over a word in the middle, the caret still in or after it, even where the new word ends
+    // like the old one did.
+    assert!(typing(field, "deploy to Kubernetes today", 20));
+    assert!(typing(field, "deploy to Kubernetes today", 15));
+    // The caret moved on: to the end, to the start, or past a space typed after the word.
+    assert!(!typing(field, "deploy to Kubernetes today", 26));
+    assert!(!typing(field, "deploy to Kubernetes today", 0));
+    assert!(!typing("deploy to Cooper Nettis", "deploy to Kubernetes ", 21));
+    // Out of range, or no edit at all.
+    assert!(!typing(field, "deploy to Kubernetes today", 99));
+    assert!(!typing(field, field, 20));
+    // The native side counts in UTF-16.
+    let (before, after) = (CString::new("🙂 to Cooper").unwrap(), CString::new("🙂 to Kube").unwrap());
+    assert!(dictate_learn_typing(before.as_ptr(), after.as_ptr(), 10));
+    assert!(!dictate_learn_typing(before.as_ptr(), after.as_ptr(), 2));
   }
 
   #[test]
