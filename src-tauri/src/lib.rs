@@ -7,6 +7,7 @@
 pub mod ai;
 pub mod context;
 pub mod history;
+pub mod meeting;
 pub mod notes;
 pub mod settings;
 pub mod speech;
@@ -179,10 +180,11 @@ fn paste_last(app: AppHandle) {
   }
 }
 
+/// The tray's meeting item starts one, or stops the one recording.
 fn start_meeting(app: &AppHandle) {
   let app = app.clone();
   let _ = app.clone().run_on_main_thread(move || {
-    if !unsafe { dictate_meeting(c"start".as_ptr()) } { let _ = app.emit_to(OVERLAY, "dictate-notice", serde_json::json!({ "message": "Couldn’t start the meeting" })); }
+    if !unsafe { dictate_meeting(c"toggle".as_ptr()) } { let _ = app.emit_to(OVERLAY, "dictate-notice", serde_json::json!({ "message": "Couldn’t start the meeting" })); }
   });
 }
 
@@ -248,6 +250,12 @@ fn app_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
 /// The tray's Recent Notes, and the files its items open.
 static RECENT: OnceLock<(Submenu<Wry>, Mutex<Vec<PathBuf>>)> = OnceLock::new();
 static PAUSED: OnceLock<CheckMenuItem<Wry>> = OnceLock::new();
+static MEETING: OnceLock<MenuItem<Wry>> = OnceLock::new();
+
+/// The tray's meeting item says what it will do.
+pub(crate) fn meeting_changed(recording: bool) {
+  if let Some(item) = MEETING.get() { let _ = item.set_text(if recording { "Stop Meeting" } else { "Start Meeting" }); }
+}
 
 /// Rebuilds Recent Notes from the notes folder: after a save, or when the folder changes.
 pub(crate) fn recent_changed(app: &AppHandle) {
@@ -271,9 +279,10 @@ fn tray(app: &AppHandle, enabled: bool) -> tauri::Result<()> {
   let separator = || PredefinedMenuItem::separator(app);
   let recent = Submenu::with_id(app, "recent", "Recent Notes", true)?;
   let paused = CheckMenuItem::with_id(app, "pause", "Pause Dictation", true, !enabled, None::<&str>)?;
+  let meeting = MenuItem::with_id(app, "meeting", "Start Meeting", true, None::<&str>)?;
   let menu = Menu::with_items(app, &[
     &MenuItem::with_id(app, "note", "New Note", true, None::<&str>)?,
-    &MenuItem::with_id(app, "meeting", "Start Meeting", true, None::<&str>)?,
+    &meeting,
     &MenuItem::with_id(app, "paste-last", "Paste Last Transcript", true, None::<&str>)?,
     &recent, &separator()?,
     &MenuItem::with_id(app, "settings", "Settings…", true, Some("CmdOrCtrl+,"))?,
@@ -284,6 +293,7 @@ fn tray(app: &AppHandle, enabled: bool) -> tauri::Result<()> {
   ])?;
   let _ = RECENT.set((recent, Mutex::default()));
   let _ = PAUSED.set(paused);
+  let _ = MEETING.set(meeting);
   recent_changed(app);
   // The mark alone, in black: macOS tints a template icon for the menu bar's light or dark look.
   let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray@2x.png"))?;
@@ -320,6 +330,7 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![
       status, set_enabled, set_input, set_open_at_login, request, layout, meeting, open_settings, paste_last,
       notes::save_note, notes::show_notes, settings::get_settings, settings::update_settings, settings::reset_settings,
+      meeting::meeting_state, meeting::meeting_recover, meeting::meeting_reveal, meeting::meeting_privacy,
     ])
     .setup(|app| {
       app.set_activation_policy(ActivationPolicy::Accessory); // a menu bar app: no Dock icon
@@ -327,6 +338,7 @@ pub fn run() {
       APP.get_or_init(|| handle.clone());
       settings::init(&handle)?;
       speech::init(&handle)?;
+      meeting::init(&handle)?;
       unsafe { dictate_init() };
       settings::apply(&handle, &settings::get());
       overlay(&handle)?;

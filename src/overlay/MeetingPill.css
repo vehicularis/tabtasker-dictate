@@ -1,0 +1,15 @@
+/* The meeting pill near the dots: a recording dot in the accent, the time and Stop; then saving, saved,
+   and a recording left unsaved. */
+.meeting-pill { display: flex; margin: 0; align-items: center; gap: 10px; box-sizing: border-box; max-width: 380px; min-height: 40px; padding: 6px 6px 6px 14px; border-radius: 20px; font-size: 13px; animation: pop .25s var(--ease) both; }
+.meeting-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: meeting-beat 1.6s ease-in-out infinite; }
+.meeting-pill[data-state='saving'] .meeting-dot { background: var(--ink-3); }
+@keyframes meeting-beat { 50% { opacity: .3; } }
+.meeting-text { display: flex; flex-direction: column; min-width: 0; margin-right: auto; line-height: 1.35; }
+.meeting-text small { font-size: 11.5px; color: var(--ink-2); }
+.meeting-pill .meeting-text { padding-right: 6px; }
+.meeting-line { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+.meeting-line b { overflow: hidden; font-weight: 600; text-overflow: ellipsis; }
+.meeting-line time { font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.meeting-line .only { color: var(--ink-3); }
+.meeting-pill .link { font-size: 11.5px; color: var(--ink-2); }
+.meeting-pill .close { flex: none; margin-left: 0; }

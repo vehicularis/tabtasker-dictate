@@ -4,6 +4,8 @@
 <dict>
   <key>NSMicrophoneUsageDescription</key>
   <string>TabTasker Dictate listens while you hold fn or take a note. Speech is transcribed on this Mac and never leaves it.</string>
+  <key>NSAudioCaptureUsageDescription</key>
+  <string>TabTasker Dictate records the sound of a call during a meeting, so the transcript has everyone in it. Audio is transcribed on this Mac and never leaves it.</string>
   <key>LSUIElement</key>
   <true/>
 </dict>
