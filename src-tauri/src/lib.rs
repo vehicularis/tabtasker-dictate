@@ -154,12 +154,14 @@ fn layout(app: AppHandle, glass: Vec<[f64; 6]>, hit: Vec<[f64; 4]>, dark: Option
   app.run_on_main_thread(move || unsafe { dictate_overlay_layout(json.as_ptr()) }).map_err(|e| e.to_string())
 }
 
-/// A meeting from the menu or the dots: `start` or `stop`. False when nothing changed.
+/// A meeting from the menu or the dots: `start` or `stop`. False when nothing changed; an error says
+/// why a meeting couldn't start.
 #[tauri::command]
 async fn meeting(app: AppHandle, action: String) -> Result<bool, String> {
   if !matches!(action.as_str(), "start" | "stop") { return Err("Unknown action".into()); }
   let action = CString::new(action).map_err(|e| e.to_string())?;
-  on_main(&app, move || unsafe { dictate_meeting(action.as_ptr()) }).await
+  let changed = on_main(&app, move || unsafe { dictate_meeting(action.as_ptr()) }).await?;
+  match meeting::start_problem() { Some(why) if !changed => Err(why), _ => Ok(changed) }
 }
 
 /// Opens the Settings window on `route`, or brings it forward on the page it shows when there is none.
@@ -184,7 +186,10 @@ fn paste_last(app: AppHandle) {
 fn start_meeting(app: &AppHandle) {
   let app = app.clone();
   let _ = app.clone().run_on_main_thread(move || {
-    if !unsafe { dictate_meeting(c"toggle".as_ptr()) } { let _ = app.emit_to(OVERLAY, "dictate-notice", serde_json::json!({ "message": "Couldn’t start the meeting" })); }
+    if !unsafe { dictate_meeting(c"toggle".as_ptr()) } {
+      let why = meeting::start_problem().unwrap_or_else(|| "Couldn’t start the meeting".into());
+      let _ = app.emit_to(OVERLAY, "dictate-notice", serde_json::json!({ "message": why }));
+    }
   });
 }
 

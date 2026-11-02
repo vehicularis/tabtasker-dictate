@@ -2,14 +2,14 @@ import type { Status } from '../store';
 import { AlarmIcon, Caret, Check, FolderIcon, GearIcon, MeetingIcon, MicIcon, NoteIcon, SetupIcon } from './icons';
 
 // The dots' right-click menu.
-export function Menu({ status, mics, onMics, onNote, onMeeting, onShowNotes, onPickMic, onLogin, onHide, onSettings, onSetup }: {
-  status: Status | null; mics: boolean; onMics: (open: boolean) => void; onNote: () => void; onMeeting: () => void; onShowNotes: () => void;
+export function Menu({ status, mics, meeting, onMics, onNote, onMeeting, onShowNotes, onPickMic, onLogin, onHide, onSettings, onSetup }: {
+  status: Status | null; mics: boolean; meeting: boolean; onMics: (open: boolean) => void; onNote: () => void; onMeeting: () => void; onShowNotes: () => void;
   onPickMic: (id: string | null) => void; onLogin: () => void; onHide: () => void; onSettings: () => void; onSetup: () => void;
 }) {
   return <div className="glass menu" data-glass data-hit role="menu"
     onPointerMove={event => { const row = (event.target as Element).closest('[role="menuitem"]'); if (row) onMics(row.hasAttribute('aria-haspopup')); }}>
     <button type="button" role="menuitem" onClick={onNote}><NoteIcon />New note</button>
-    <button type="button" role="menuitem" onClick={onMeeting}><MeetingIcon />Start meeting</button>
+    <button type="button" role="menuitem" onClick={onMeeting}><MeetingIcon />{meeting ? 'Stop meeting' : 'Start meeting'}</button>
     <button type="button" role="menuitem" onClick={onShowNotes}><FolderIcon />Show notes in Finder</button>
     <i className="rule" />
     {status && status.inputs.length > 0 && <div className="sub">

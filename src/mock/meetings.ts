@@ -2,21 +2,24 @@ import type { Mock } from '.';
 import type { Leftover, MeetingEvent, MeetingState } from '../overlay/MeetingPill';
 
 // In a browser: recording, the pill and the meetings folder.
-// `?meetings=leftover` starts with recordings a crash left unsaved; `?meetings=denied|allowed|unsupported`
-// is what macOS says about recording the Mac's sound (unasked by default, and a meeting then asks).
+// `?meetings=leftover` starts with two recordings kept: one a crash left unsaved, one saved with parts not
+// transcribed. `?meetings=gaps` saves every meeting with parts Whisper couldn't read, and `?meetings=fail`
+// can't write any. `?meetings=denied|allowed|unsupported` is what macOS says about recording the Mac's
+// sound (unasked by default, and a meeting then asks).
 export function register(mock: Mock) {
   const asked = new URLSearchParams(location.search).get('meetings');
   let permission: MeetingState['systemAudio'] = asked === 'denied' || asked === 'allowed' || asked === 'unsupported' ? asked : 'notDetermined';
   let recording: MeetingEvent | null = null;
   const saving = new Set<string>();
   const hours = (n: number) => Date.now() - n * 3600_000;
-  let leftovers: Leftover[] = asked === 'leftover' ? [{ id: '2', sinceMs: hours(2), seconds: 1394 }, { id: '1', sinceMs: hours(50), seconds: 3925 }] : [];
+  let leftovers: Leftover[] = asked === 'leftover' ? [{ id: '2', sinceMs: hours(2), seconds: 1394, saved: false }, { id: '1', sinceMs: hours(50), seconds: 3925, saved: true }] : [];
 
   const stamp = (at: number) => {
     const date = new Date(at), two = (n: number) => String(n).padStart(2, '0');
     return `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())} ${two(date.getHours())}.${two(date.getMinutes())}`;
   };
-  const finish = (id: string, since: number) => {
+  const keep = (leftover: Leftover) => { leftovers = [...leftovers.filter(one => one.id !== leftover.id), leftover].sort((a, b) => b.sinceMs - a.sinceMs); };
+  const finish = (id: string, since: number, seconds: number) => {
     const settings = mock.settings();
     saving.add(id);
     mock.emit('dictate-meeting', { state: 'saving', id, since, message: 'Finishing the transcript' });
@@ -24,8 +27,19 @@ export function register(mock: Mock) {
     if (claude) setTimeout(() => mock.emit('dictate-meeting', { state: 'saving', id, since, message: 'Writing the summary' }), 900);
     setTimeout(() => {
       saving.delete(id);
+      if (asked === 'fail') {
+        keep({ id, sinceMs: since, seconds, saved: false });
+        mock.emit('dictate-meeting', { state: 'error', id, message: 'Couldn’t write to the meetings folder.', leftover: id });
+        return;
+      }
       const folder = settings.meetings.folder ?? `${mock.status.notes}/Meetings`;
-      mock.emit('dictate-meeting', { state: 'saved', id, path: `${folder}/${stamp(since)} ${claude ? 'Planning the launch' : `Meeting ${stamp(since)}`}.md` });
+      const path = `${folder}/${stamp(since)} ${claude ? 'Planning the launch' : 'Meeting'}.md`;
+      if (asked === 'gaps') {
+        keep({ id, sinceMs: since, seconds, saved: true });
+        mock.emit('dictate-meeting', { state: 'saved', id, path, message: '2 parts not transcribed. The audio is kept.', leftover: id });
+        return;
+      }
+      mock.emit('dictate-meeting', { state: 'saved', id, path });
     }, claude ? 2200 : 1200);
   };
 
@@ -34,7 +48,7 @@ export function register(mock: Mock) {
       if (!recording) return false;
       const { id, since } = recording;
       recording = null;
-      finish(id!, since!);
+      finish(id!, since!, Math.round((Date.now() - since!) / 1000));
       return true;
     }
     if (recording) return true;
@@ -57,7 +71,7 @@ export function register(mock: Mock) {
     const leftover = leftovers.find(one => one.id === id);
     if (!leftover) throw 'That recording is gone';
     leftovers = leftovers.filter(one => one !== leftover);
-    if (save) finish(leftover.id, leftover.sinceMs);
+    if (save) finish(leftover.id, leftover.sinceMs, leftover.seconds);
   });
   mock.handle('meeting_reveal', () => {});
   mock.handle('meeting_privacy', () => {});

@@ -4,15 +4,21 @@
 #import <CoreAudio/AudioHardwareTapping.h>
 #import <CoreAudio/CATapDescription.h>
 #include <dlfcn.h>
+#include <mach/mach_time.h>
 
 // Meetings: the microphone and the Mac's own sound, recorded together. Each arrives in its hardware's
 // rate and channels and leaves as 16 kHz mono for meeting.rs, which spools and transcribes it.
 
 // 1 when the meeting should record the Mac's sound too, 0 for the microphone only, -1 when it can't start.
 extern int dictate_meeting_begin(const char *stamp);
-extern void dictate_meeting_audio(int source, const float *samples, size_t count);
+// `age` is how many seconds ago the first sample was captured.
+extern void dictate_meeting_audio(int source, const float *samples, size_t count, double age);
 // What the Mac's own sound is doing: on, off, unsupported, denied or failed.
 extern void dictate_meeting_sources(const char *system);
+// The moment a meeting is told to stop, before its devices close.
+extern void dictate_meeting_stopping(void);
+// A meeting asked for while the last one closed couldn't start: meeting.rs says why.
+extern void dictate_meeting_unstarted(void);
 // Called once every buffer is in; `problem` is why the meeting stopped early, or NULL.
 extern void dictate_meeting_end(const char *problem);
 extern void dictate_ui_error(const char *message);
@@ -43,6 +49,11 @@ static dispatch_queue_t TTMeetingIO(void) {
 }
 
 // ---------- mono, then 16 kHz ----------
+
+static double TTMeetingAge(uint64_t host) {
+  uint64_t now = mach_absolute_time();
+  return now > host ? [AVAudioTime secondsForHostTime:now - host] : 0;
+}
 
 // `channels` point at each channel's first sample, `stride` floats apart. The voice-processed
 // microphone can report its whole array's channel count: its voice is the first channel, so that is
@@ -96,7 +107,7 @@ static NSData *TTMeetingMonoList(const AudioBufferList *list, AudioStreamBasicDe
 // queue only.
 @interface TTMeetingStream : NSObject
 - (instancetype)initWithSource:(int)source;
-- (void)append:(NSData *)mono rate:(double)rate;
+- (void)append:(NSData *)mono rate:(double)rate host:(uint64_t)host;
 @end
 @implementation TTMeetingStream {
   int _source;
@@ -110,10 +121,11 @@ static NSData *TTMeetingMonoList(const AudioBufferList *list, AudioStreamBasicDe
   }
   return self;
 }
-- (void)append:(NSData *)mono rate:(double)rate {
+// `host` is when the first frame was captured, in host time.
+- (void)append:(NSData *)mono rate:(double)rate host:(uint64_t)host {
   AVAudioFrameCount frames = (AVAudioFrameCount)(mono.length / sizeof(float));
   if (!frames || rate <= 0) return;
-  if (rate == 16000) { dictate_meeting_audio(_source, mono.bytes, frames); return; }
+  if (rate == 16000) { dictate_meeting_audio(_source, mono.bytes, frames, TTMeetingAge(host)); return; }
   // A device can change rate mid-meeting (a headset's microphone opening): a new converter follows it.
   if (_converter.inputFormat.sampleRate != rate) {
     AVAudioFormat *format = [[AVAudioFormat alloc] initWithCommonFormat:AVAudioPCMFormatFloat32 sampleRate:rate channels:1 interleaved:NO];
@@ -133,7 +145,7 @@ static NSData *TTMeetingMonoList(const AudioBufferList *list, AudioStreamBasicDe
     supplied = YES; return input;
   }];
   if (status == AVAudioConverterOutputStatus_Error || error) { _converter = nil; return; }
-  if (output.frameLength) dictate_meeting_audio(_source, output.floatChannelData[0], output.frameLength);
+  if (output.frameLength) dictate_meeting_audio(_source, output.floatChannelData[0], output.frameLength, TTMeetingAge(host));
 }
 @end
 
@@ -192,11 +204,24 @@ static double TTMeetingRate(AudioObjectID device) {
 @end
 
 static TTMeetingRecorder *recorder;
+// A stopped meeting is closing until meeting.rs has its last buffer; one asked for meanwhile starts
+// right after. Main thread only.
+static BOOL closing, startWhenClosed;
+static bool TTMeetingStart(void);
 
 static void TTMeetingStop(NSString *problem) {
   TTMeetingRecorder *stopping = recorder;
   recorder = nil;
+  closing = YES;
+  dictate_meeting_stopping();
   [stopping stop:problem];
+}
+
+static void TTMeetingClosed(void) {
+  closing = NO;
+  if (!startWhenClosed) return;
+  startWhenClosed = NO;
+  if (!TTMeetingStart()) dictate_meeting_unstarted();
 }
 
 @implementation TTMeetingRecorder {
@@ -275,10 +300,10 @@ static void TTMeetingStop(NSString *problem) {
     TTMeetingStream *mic = self.mic;
     dispatch_queue_t audio = TTMeetingAudio();
     AVAudioNodeTapBlock append = ^(AVAudioPCMBuffer *buffer, AVAudioTime *when) {
-      (void)when;
+      uint64_t host = when.hostTimeValid ? when.hostTime : mach_absolute_time();
       NSData *mono = TTMeetingMonoBuffer(buffer);
       double rate = buffer.format.sampleRate;
-      if (mono) dispatch_async(audio, ^{ [mic append:mono rate:rate]; });
+      if (mono) dispatch_async(audio, ^{ [mic append:mono rate:rate host:host]; });
     };
     AVAudioFrameCount frames = (AVAudioFrameCount)ceil(format.sampleRate * 0.1);
     NSError *error;
@@ -364,9 +389,10 @@ static void TTMeetingStop(NSString *problem) {
   TTMeetingStream *stream = self.system;
   dispatch_queue_t audio = TTMeetingAudio();
   status = AudioDeviceCreateIOProcIDWithBlock(&_proc, _aggregate, TTMeetingIO(), ^(const AudioTimeStamp *now, const AudioBufferList *input, const AudioTimeStamp *inputTime, AudioBufferList *outputData, const AudioTimeStamp *outputTime) {
-    (void)now; (void)inputTime; (void)outputData; (void)outputTime;
+    (void)now; (void)outputData; (void)outputTime;
+    uint64_t host = inputTime && (inputTime->mFlags & kAudioTimeStampHostTimeValid) ? inputTime->mHostTime : mach_absolute_time();
     NSData *mono = TTMeetingMonoList(input, format);
-    if (mono) dispatch_async(audio, ^{ [stream append:mono rate:rate]; });
+    if (mono) dispatch_async(audio, ^{ [stream append:mono rate:rate host:host]; });
   });
   if (status != noErr) { _proc = NULL; return [self systemFailed:"add the IO block" status:status]; }
   status = AudioDeviceStart(_aggregate, _proc);
@@ -405,33 +431,29 @@ static void TTMeetingStop(NSString *problem) {
     }
     [self closeSystem];
     // Behind every buffer still on its way, so the meeting ends with all of its audio.
-    dispatch_async(TTMeetingAudio(), ^{ dictate_meeting_end(problem.UTF8String); });
+    dispatch_async(TTMeetingAudio(), ^{
+      dictate_meeting_end(problem.UTF8String);
+      dispatch_async(dispatch_get_main_queue(), ^{ TTMeetingClosed(); });
+    });
   });
 }
 @end
 
-// `action` is "start", "stop" or "toggle" (the meeting shortcut); on the main thread. False when
-// nothing changed. Starting while a meeting records answers true: the meeting asked for is recording.
-bool dictate_meeting(const char *action) {
-  if (!action) return false;
-  NSString *what = @(action);
-  if ([what isEqual:@"toggle"]) what = recorder ? @"stop" : @"start";
-  if ([what isEqual:@"stop"]) {
-    if (!recorder) return false;
-    TTMeetingStop(nil);
-    return true;
-  }
-  if (![what isEqual:@"start"]) return false;
-  if (recorder) return true;
-  if ([AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio] != AVAuthorizationStatusAuthorized) {
-    dictate_ui_error("microphone"); // the overlay shows its microphone card for this one
-    return false;
-  }
+static bool TTMeetingMicAllowed(void) {
+  if ([AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio] == AVAuthorizationStatusAuthorized) return true;
+  dictate_ui_error("microphone"); // the overlay shows its microphone card for this one
+  return false;
+}
+
+// False with the reason in meeting.rs, or the microphone card shown.
+static bool TTMeetingStart(void) {
+  if (!TTMeetingMicAllowed()) return false;
   static dispatch_once_t once;
   dispatch_once(&once, ^{
     // A closed lid ends the meeting: it is saved rather than left open across the sleep.
     [NSWorkspace.sharedWorkspace.notificationCenter addObserverForName:NSWorkspaceWillSleepNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note) {
       (void)note;
+      startWhenClosed = NO;
       if (recorder) TTMeetingStop(nil);
     }];
   });
@@ -443,4 +465,36 @@ bool dictate_meeting(const char *action) {
   recorder = [TTMeetingRecorder new];
   [recorder start:system == 1];
   return true;
+}
+
+// `action` is "start", "stop" or "toggle" (the meeting shortcut); on the main thread. False when
+// nothing changed. Starting while a meeting records answers true: the meeting asked for is recording.
+// Starting while the last one closes answers true too: it starts once that one is in.
+bool dictate_meeting(const char *action) {
+  if (!action) return false;
+  NSString *what = @(action);
+  if ([what isEqual:@"toggle"]) what = recorder || startWhenClosed ? @"stop" : @"start";
+  if ([what isEqual:@"stop"]) {
+    if (startWhenClosed) { startWhenClosed = NO; return true; }
+    if (!recorder) return false;
+    TTMeetingStop(nil);
+    return true;
+  }
+  if (![what isEqual:@"start"]) return false;
+  if (recorder || startWhenClosed) return true;
+  if (!closing) return TTMeetingStart();
+  if (!TTMeetingMicAllowed()) return false;
+  startWhenClosed = YES;
+  return true;
+}
+
+// Bytes free on the volume that holds `path`, counting what macOS would clear to make room; -1 when
+// it can't tell. From any thread.
+int64_t dictate_meeting_free_space(const char *path) {
+  if (!path) return -1;
+  @autoreleasepool {
+    NSNumber *free;
+    if (![[NSURL fileURLWithPath:@(path)] getResourceValue:&free forKey:NSURLVolumeAvailableCapacityForImportantUsageKey error:nil] || !free) return -1;
+    return free.longLongValue;
+  }
 }
