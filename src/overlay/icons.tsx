@@ -18,30 +18,31 @@ const GEAR = Array.from({ length: 8 }, (_, i) => {
 export const OTTER = 'M-13 -16 C-13 -22 -7 -25 0 -25 C7 -25 13 -22 13 -16 L13 15 C13 22 7 25 0 25 C-7 25 -13 22 -13 15 Z';
 export const WHISKERS = [[-3.5, -8], [-4.6, -7], [-3.5, -6], [3.5, -8], [4.6, -7], [3.5, -6]] as const;
 export const VOICE = [[-1.73, 0.87], [-0.865, 1.44], [0, 2.02], [0.865, 1.44], [1.73, 0.87]] as const;
-/// The otter as sound (design/icon.swift draws the same): the bars of a waveform whose envelope is the otter's
-/// outline, the head's dome and the ears above, the body running off the bottom. Eight bars; each rises, with a
-/// rounded cap, to where the outline is at its centre, one on each eye, the nose between two, the ears two taller.
+/// The otter as sound (design/icon.swift draws the same): a waveform in the otter's shape. Bars with rounded caps,
+/// each as tall as the otter is where it stands: the head's dome and the ears above (lifted a little), the body's
+/// round below; tall in the middle, short at the sides, the ears two taller bars, the whole the otter. No face.
+const EAR_LIFT = 2.5;
 const bezier = (a: number, b: number, c: number, d: number, t: number) => { const u = 1 - t; return u * u * u * a + 3 * u * u * t * b + 3 * u * t * t * c + t * t * t * d; };
-const domeTop = (x: number) => {
+const bodySpan = (x: number) => {
   const ax = Math.abs(x);
   if (ax > 13) return null;
   let lo = 0, hi = 1;
   for (let i = 0; i < 40; i++) { const t = (lo + hi) / 2; if (bezier(13, 13, 7, 0, t) > ax) lo = t; else hi = t; }
-  return bezier(-16, -22, -25, -25, (lo + hi) / 2);
+  const t = (lo + hi) / 2;
+  return [bezier(-16, -22, -25, -25, t), bezier(15, 22, 25, 25, t)] as const;
 };
-const earSpan = (x: number) => { const dx = Math.abs(x) - 9; if (Math.abs(dx) > 4.5) return null; const h = Math.sqrt(4.5 * 4.5 - dx * dx); return [-22 - h, -22 + h] as const; };
-export const otterBars = (pitch = 3.25, width = 2.1) => {
+const earSpan = (x: number) => { const dx = Math.abs(x) - 9; if (Math.abs(dx) > 4.5) return null; const h = Math.sqrt(4.5 * 4.5 - dx * dx); return [-22 - EAR_LIFT - h, -22 - EAR_LIFT + h] as const; };
+export const otterBars = (pitch = 2, width = 1.3) => {
   const bars: { x: number; y: number; h: number }[] = [];
   for (let x = pitch / 2; x <= 13.5; x += pitch) for (const side of [-1, 1]) {
-    const cx = side * x, dome = domeTop(cx), ear = earSpan(cx);
-    if (dome === null && !ear) continue;
-    const top = Math.min(dome ?? Infinity, ear?.[0] ?? Infinity);
-    const bottom = dome !== null ? 60 : ear![1];
+    const cx = side * x, body = bodySpan(cx), ear = earSpan(cx);
+    if (!body && !ear) continue;
+    const top = Math.min(body?.[0] ?? Infinity, ear?.[0] ?? Infinity), bottom = Math.max(body?.[1] ?? -Infinity, ear?.[1] ?? -Infinity);
     bars.push({ x: cx - width / 2, y: top, h: bottom - top });
   }
   return bars;
 };
-const BARS = otterBars();
+const BARS = otterBars(3.25, 2.1); // eight bars: enough at 28 points
 export const Logo = ({ size = 18 }: { size?: number }) => {
   const id = useId();
   return <svg width={size} height={size} viewBox="0 0 28 28" aria-hidden="true">
@@ -51,14 +52,10 @@ export const Logo = ({ size = 18 }: { size?: number }) => {
     </defs>
     <rect x="1" y="1" width="26" height="26" rx="6.2" fill={`url(#${id}-grey)`} />
     <rect x="1.25" y="1.25" width="25.5" height="25.5" rx="5.95" fill="none" stroke="#fff" strokeOpacity=".12" strokeWidth=".5" />
-    {/* The mark's tile is 64 units and this one 26; its group sits at (32 47) and is scaled 1.3, as in the SVG. The clip is on its own group:
+    {/* The whole otter, 50 units tall, at 21 of the tile's 26 and centred, as the app icon. The clip is on its own group:
         on a transformed one it would be read in the mark's coordinates. */}
-    <g clipPath={`url(#${id}-tile)`}><g transform="translate(14 20.094) scale(.52813)">
+    <g clipPath={`url(#${id}-tile)`}><g transform="translate(14 14) scale(.42)">
       <g fill="#f3f4f6">{BARS.map(bar => <rect key={bar.x} x={bar.x} y={bar.y} width="2.1" height={bar.h} rx="1.05" />)}</g>
-      <g fill="#171719">
-        <circle cx="-9" cy="-22" r="2" /><circle cx="9" cy="-22" r="2" /><circle cx="-5" cy="-15" r="1.6" /><circle cx="5" cy="-15" r="1.6" />
-        <ellipse cx="0" cy="-10" rx="1.7" ry="1.3" />
-      </g>
     </g></g>
   </svg>;
 };

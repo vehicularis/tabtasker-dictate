@@ -251,7 +251,8 @@ button, input, select { font-family: var(--font); }
 .sticky-card-tool.wide { padding: 0 8px; }
 .sticky-card-tool:hover { color: var(--sticker-ink); background: color-mix(in srgb, var(--sticker-ink) 10%, transparent); }
 .sticky-card-tool:disabled { opacity: .35; cursor: default; background: none; }
-.sticky-face { flex: 1; min-height: 90px; padding: 10px 12px; border: 0; background: none; color: inherit; text-align: left; font: 500 14px/1.45 var(--font); white-space: pre-wrap; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-box-pack: start; -webkit-box-align: start; -webkit-line-clamp: 6; appearance: none; -webkit-appearance: none; cursor: pointer; }
+.sticky-face { display: flex; align-items: flex-start; flex: 1; min-height: 90px; padding: 10px 12px; border: 0; background: none; color: inherit; text-align: left; font: 500 14px/1.45 var(--font); cursor: pointer; }
+.sticky-words { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 5; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
 .sticky-empty { color: var(--dim); }
 .sticky-card footer { display: flex; justify-content: space-between; padding: 2px 4px 5px; }
 

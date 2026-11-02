@@ -138,7 +138,7 @@ export function MeetingPill() {
             {onlyMic && <span className="only" title={system && ONLY_MIC[system]}>Mic only</span>}</span>
           {explain && system && ONLY_MIC[system] && <small>{ONLY_MIC[system]}{system === 'denied' && <> <button type="button" className="link" onClick={() => void invoke('meeting_privacy').catch(() => {})}>Allow it</button></>}</small>}
         </span>
-        <button type="button" className="btn primary" onClick={stop}>Stop</button>
+        <button type="button" className="meeting-stop" aria-label="Stop the meeting" title="Stop the meeting" onClick={stop}><i /></button>
       </div>;
     }
     if (outcome || !leftover) return null;

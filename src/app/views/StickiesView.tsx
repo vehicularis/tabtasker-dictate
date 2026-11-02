@@ -26,7 +26,7 @@ export function StickiesView({ onError }: { onError: (message: string) => void }
           <button type="button" className="sticky-card-tool" title="Close this sticky" aria-label="Close this sticky" onClick={() => act(invoke('sticky_remove', { id: sticky.id }), 'Couldn’t close that sticky.')}><Icon name="close" size={12} /></button>
         </header>
         <button type="button" className="sticky-face" title="Bring it forward" onClick={() => act(invoke('sticky_show', { id: sticky.id }), 'Couldn’t show that sticky.')}>
-          {glance(sticky.text) || <span className="sticky-empty">Empty</span>}
+          <span className="sticky-words">{glance(sticky.text) || <span className="sticky-empty">Empty</span>}</span>
         </button>
         <footer>
           <button type="button" className="sticky-card-tool wide" disabled={!sticky.text.trim()} onClick={() => act(invoke('sticky_to_note', { id: sticky.id, stamp: stamp() }), 'Couldn’t save it as a note.')}><Icon name="note" size={14} />Make a note</button>

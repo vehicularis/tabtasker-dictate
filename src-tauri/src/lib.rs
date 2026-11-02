@@ -276,6 +276,10 @@ fn show_main(app: &AppHandle, route: Option<&str>) -> tauri::Result<()> {
   window.set_focus()
 }
 
+/// Quit, from the dots' menu (the tray and the app menu have their own item).
+#[tauri::command]
+fn quit(app: AppHandle) { app.exit(0); }
+
 /// A note or meeting, opened in the app's window on its own page.
 #[tauri::command]
 fn note_open(app: AppHandle, path: String) -> Result<(), String> { show_note(&app, &path) }
@@ -492,6 +496,7 @@ pub fn run() {
   log::info!("TabTasker Dictate {} starting", env!("CARGO_PKG_VERSION"));
   tauri::Builder::default()
     .invoke_handler(tauri::generate_handler![
+      quit,
       status, set_enabled, set_input, set_open_at_login, request, layout, meeting, open_app, paste_last, play_sound,
       notes::save_note, notes::show_notes, notes::notes_folder, notes::preview_note, notes::choose_folder, notes::library_list, notes::library_open,
       notes::note_read, notes::note_write, notes::note_new, notes::note_delete, notes::note_attach, note_open,

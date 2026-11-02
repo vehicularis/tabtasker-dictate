@@ -43,6 +43,9 @@
 .sticky-menu button[role^='menuitem']:hover { background: color-mix(in srgb, var(--ink-menu) 8%, transparent); }
 .sticky-menu button:disabled { opacity: .4; cursor: default; }
 .sticky-menu .tick { display: inline-block; width: 14px; font-size: 12px; }
+/* The colours in the menu are the dots they are, not rows. */
+.sticky-menu .sticky-hue, .sticky-menu .sticky-hue:hover { display: block; width: 14px; height: 14px; padding: 0; border-radius: 50%; background: var(--hue); }
+.sticky-menu .sticky-hue:hover { transform: scale(1.1); }
 .sticky-menu-hues { display: flex; gap: 7px; padding: 6px 8px 8px; }
 .sticky-menu-rule { display: block; height: 1px; margin: 3px 6px; background: color-mix(in srgb, var(--ink-menu) 12%, transparent); }
 .sticky :is(button, [tabindex]):focus-visible { outline: 2px solid var(--dim); outline-offset: 1px; }

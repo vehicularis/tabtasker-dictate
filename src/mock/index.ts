@@ -197,6 +197,7 @@ mock.handle('layout', () => {});
 mock.handle('meeting', () => false);
 mock.handle('open_app', ({ route }) => { open(`/app.html${location.search}#${typeof route === 'string' ? route : 'notes'}`, '_blank'); });
 mock.handle('paste_last', () => emit('dictate-notice', { message: 'Nothing to paste yet' }));
+mock.handle('quit', () => emit('dictate-notice', { message: 'Quit (in the app, it would)' }));
 mock.handle('save_note', ({ title, stamp }) => `${status.notes}/${stamp} ${title || 'Note'}.md`);
 mock.handle('show_notes', () => {});
 mock.handle('plugin:app|version', () => '0.1.0');

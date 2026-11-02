@@ -268,7 +268,7 @@ export function Overlay() {
         onMenu={() => { if (phase === 'idle') { setMenu(true); refresh(); lookMeetings(); } }}
         menu={menu && <Menu status={status} mics={mics} meeting={!!meetings?.recording} onMics={setMics} onNote={() => { setMenu(false); takeNote(); }} onWriteNote={writeNote} onSticky={newSticky} onMeeting={startMeeting}
           onOpen={() => openApp()} onPasteLast={() => { setMenu(false); void invoke('paste_last').catch(() => {}); }} onPickMic={pickMic} onLogin={login}
-          onHide={hideForAnHour} onSettings={openSettings} onSetup={openSetup} />} />
+          onHide={hideForAnHour} onSettings={openSettings} onSetup={openSetup} onQuit={() => { setMenu(false); void invoke('quit').catch(() => {}); }} />} />
     </div>
   </div>;
 }
