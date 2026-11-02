@@ -48,7 +48,7 @@ export function About(_: PageProps) {
       <TileGroup label="Privacy">
         <Pledge icon="shield" title="Your voice stays on this Mac">Whisper transcribes it here. Audio is never uploaded or shared, and isn’t kept once it’s transcribed.</Pledge>
         <Pledge icon="claude" title="Claude only if you connect it">It gets text, never audio: your commands, plus the dictations it polishes, notes it titles and meetings it summarizes while those are on. Your key stays in the Keychain.</Pledge>
-        <Pledge icon="folder" title="Your words are yours">Notes, meetings and history are kept on this Mac. Agents see only what you share on the Agents page.</Pledge>
+        <Pledge icon="folder" title="Your words are yours">Notes, meetings and history are kept on this Mac. Claude Code and Claude Desktop read only what Claude & AI lets them.</Pledge>
         <Pledge icon="check" title="No account and no analytics">Nothing to sign in to, and nothing about how you use it is sent anywhere.</Pledge>
       </TileGroup>
     </Section>

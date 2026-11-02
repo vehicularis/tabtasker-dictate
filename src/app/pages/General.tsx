@@ -18,7 +18,7 @@ export function General({ settings, update }: PageProps) {
   const icon = settings.general.menuBarIcon;
   const mic = status?.microphone;
   return <>
-    <PageHeader icon="general" title="General">How TabTasker Dictate starts and listens.</PageHeader>
+    <PageHeader icon="general" title="General">How TabTasker Dictate starts, and which microphone it listens with.</PageHeader>
     <Section title="Startup">
       <TileGroup>
         <Tile title="Open at Login" detail="Starts in the menu bar when you log in.">
@@ -28,6 +28,9 @@ export function General({ settings, update }: PageProps) {
         <Tile title="Menu bar icon" detail={icon ? 'New notes, meetings and recent notes from the menu bar.'
           : `Hidden. To come back here, open TabTasker Dictate again from Finder or Spotlight${settings.appearance.idle === 'dots' ? ', or right-click the dots' : ''}.`}>
           <Toggle label="Menu bar icon" checked={icon} onChange={menuBarIcon => void update({ general: { menuBarIcon } })} />
+        </Tile>
+        <Tile title="Show in the Dock" detail={settings.general.showInDock ? 'Always in the Dock; clicking the icon opens TabTasker Dictate.' : 'In the Dock only while the window is open.'}>
+          <Toggle label="Show in the Dock" checked={settings.general.showInDock} onChange={showInDock => void update({ general: { showInDock } })} />
         </Tile>
       </TileGroup>
     </Section>

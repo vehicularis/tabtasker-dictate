@@ -72,12 +72,12 @@ export function KeyRecorder({ value, onChange, label, taken = [] }: {
   const clearable = value && !recording;
   return <span className="ui-recorder">
     {refused && <span className="ui-recorder-refused" role="alert">{refused}</span>}
+    {/* Before the key, so the key's right edge lines up with every other control whether or not it holds a chord. */}
+    {clearable && <button type="button" className="ui-recorder-clear" aria-label={`Clear ${label}`} onClick={() => save(null)}><Icon name="close" size={12} /></button>}
     <button type="button" className="ui-recorder-key" data-recording={recording || undefined} aria-label={`${label}: ${value?.label ?? 'none'}`}
       onClick={() => { setRefused(null); setRecording(!recording); }} onBlur={stop} onKeyDown={key} onKeyUp={event => { if (recording) setPartial(glyphs(held(event))); }}>
       {recording ? (partial ? <span className="ui-kbd-text">{partial}</span> : <span className="hint">Type shortcut</span>)
         : value ? <span className="ui-kbd-text">{value.label}</span> : <span className="hint">Record shortcut</span>}
     </button>
-    {/* Always in place, so recorders in a column line up whether or not they hold a chord. */}
-    <button type="button" className="ui-recorder-clear" aria-label={`Clear ${label}`} hidden={!clearable} onClick={() => save(null)}><Icon name="close" size={12} /></button>
   </span>;
 }

@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "sticky",
+  "description": "A sticky's window: the app's commands, dragging by its colour bar and closing itself.",
+  "windows": ["sticky-*"],
+  "permissions": ["core:default", "core:window:allow-start-dragging", "core:window:allow-close", "core:window:allow-set-focus"]
+}

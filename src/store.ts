@@ -7,36 +7,54 @@ export type Style = 'default' | 'casual' | 'formal' | 'code' | 'raw';
 export type DictateKey = 'fn' | 'rightCommand' | 'rightOption' | 'rightControl' | 'rightShift';
 export type CommandKey = 'control' | 'option' | 'command' | 'shift' | 'off';
 export type ClaudeModel = 'claude-haiku-5-5' | 'claude-sonnet-5-5' | 'claude-opus-5-5';
+/// Anthropic's API with your own key, the Claude Code on this Mac with your Claude account, or a model on this Mac behind Ollama.
+export type ClaudeVia = 'api' | 'claudeCode' | 'local';
+/// The Mac's own alert sounds, which the cues are chosen from (settings.rs SOUNDS).
+export const SOUNDS = ['Basso', 'Blow', 'Bottle', 'Frog', 'Funk', 'Glass', 'Hero', 'Morse', 'Ping', 'Pop', 'Purr', 'Sosumi', 'Submarine', 'Tink'] as const;
 export type Keep = 'off' | 'day' | 'week' | 'month' | 'forever';
 export type Theme = 'system' | 'light' | 'dark';
 export type Edge = 'bottom' | 'left' | 'right';
 export type Size = 'small' | 'medium' | 'large';
-export type AppStyle = { bundleId: string; name: string; style: Style; polish: boolean };
+export type AppStyle = { bundleId: string; name: string; style: Style; polish: boolean; send?: boolean | null };
+/// Apps where Return follows the words unless the app's style says otherwise (settings.rs CHAT_APPS).
+export const CHAT_APPS = ['com.tinyspeck.slackmacgap', 'com.apple.MobileSMS', 'net.whatsapp.WhatsApp', 'com.microsoft.teams2', 'com.microsoft.teams', 'ru.keepcoder.Telegram', 'com.tdesktop.Telegram', 'com.hnc.Discord', 'com.facebook.archon', 'com.signal.desktop'];
+export const sendsByDefault = (bundleId: string) => CHAT_APPS.some(chat => chat.toLowerCase() === bundleId.toLowerCase());
 export type Settings = {
   version: 1;
-  general: { menuBarIcon: boolean };
-  shortcuts: { dictate: DictateKey; handsFree: boolean; command: CommandKey; note: Chord | null; meeting: Chord | null; pasteLast: Chord | null };
-  dictation: { language: string; translateToEnglish: boolean; liveTyping: boolean; removeFillers: boolean; sounds: boolean; model: 'turbo' | 'small' };
+  general: { menuBarIcon: boolean; showInDock: boolean };
+  shortcuts: { dictate: DictateKey; handsFree: boolean; command: CommandKey; note: Chord | null; meeting: Chord | null; pasteLast: Chord | null; writeNote: Chord | null; sticky: Chord | null; ask: Chord | null };
+  dictation: { language: string; translateToEnglish: boolean; liveTyping: boolean; removeFillers: boolean; sounds: boolean; soundVolume: number; startSound: string; stopSound: string; model: 'turbo' | 'small' };
   vocabulary: { words: string[]; replacements: { from: string; to: string }[]; learn: boolean; suggestions: string[] };
   apps: { styles: AppStyle[]; defaultStyle: Style };
   notes: { folder: string | null; fileName: string; frontmatter: boolean; dailyNote: boolean; tags: string[]; claudeTitle: boolean; claudeActions: boolean };
-  meetings: { folder: string | null; systemAudio: boolean; summarize: boolean; you: string; others: string };
-  claude: { enabled: boolean; model: ClaudeModel; commands: boolean; claudeCode: string | null; projectFolder: string | null };
+  meetings: { folder: string | null; systemAudio: boolean; summarize: boolean; you: string; others: string; speakers: boolean; decisions: boolean; actionItems: boolean };
+  claude: { enabled: boolean; via: ClaudeVia; model: ClaudeModel; effort: 'low' | 'medium' | 'high'; commands: boolean; claudeCode: string | null; localEndpoint: string; localModel: string };
   agents: { mcp: boolean; shareHistory: boolean; shareNotes: boolean; shareMeetings: boolean; allowWrite: boolean };
   history: { keep: Keep };
-  appearance: { theme: Theme; edge: Edge; size: Size; idle: 'dots' | 'hidden'; hint: boolean };
+  appearance: { theme: Theme; edge: Edge; size: Size; idle: 'dots' | 'hidden'; hint: boolean; margin: number; avoidDock: boolean };
 };
 
 // The events pages hear, besides the native voice code's own, with what each carries.
 export type HoldMode = 'dictate' | 'note' | 'command' | 'handsfree';
 export type HistoryEntry = { atMs: number; mode: HoldMode; bundleId: string; appName: string; words: number; seconds: number; text: string };
+/// A sticky on the screen (stickies.rs), in one of the whiteboard's hues (boardColor.ts in TabTasker Business).
+export const STICKY_HUES = { amber: '#E0A23C', coral: '#DE7468', sage: '#5AA57A', sky: '#4A8CD2', violet: '#8878DC', slate: '#79838F', teal: '#3FA4A0', plum: '#B4629C' } as const;
+export type StickyHue = keyof typeof STICKY_HUES;
+export type Sticky = { id: string; text: string; hue: StickyHue; x: number; y: number; width: number; height: number; pinned: boolean; folded: boolean; createdMs: number; updatedMs: number };
+/// A note or meeting file as the Library lists it (notes.rs LibraryItem).
+export type LibraryItem = { path: string; title: string; kind: 'note' | 'meeting'; modifiedMs: number; words: number; excerpt: string };
+/// A note or meeting in the editor (notes.rs NoteDoc): its title apart, its body as Markdown with no front matter or heading.
+export type NoteDoc = { path: string; title: string; body: string; kind: 'note' | 'meeting'; modifiedMs: number };
 export type Events = {
   'dictate-settings': Settings;
-  'dictate-command': { request: string; phase: 'thinking' | 'answer' | 'done' | 'error'; text?: string; instruction?: string };
+  'dictate-command': { request: string; phase: 'thinking' | 'answer' | 'done' | 'error'; text?: string; instruction?: string; typed?: boolean };
+  'dictate-open': { what: 'writeNote' | 'ask' };
+  'dictate-stickies': { count: number };
   'dictate-meeting': { state: 'recording' | 'saving' | 'saved' | 'error'; since?: number; path?: string; message?: string };
   'dictate-hands-free': { locked: boolean };
   'dictate-history': { entry: HistoryEntry };
   'dictate-learned': { word: string };
+  'dictate-dock': { shown: boolean; strip: number; edge: 'bottom' | 'left' | 'right' };
 };
 
 // NSEvent modifier flags, as the native side matches them.
@@ -69,6 +87,10 @@ export type Status = {
   home?: string; // the home folder, for paths written with ~
   firstRun?: boolean; // this launch is the first and opened the full setup in Settings
 };
+/// Something only the person can do: a permission to give, or a model never downloaded or whose last try
+/// failed. A model that is merely loading or downloading is not it: that passes on its own.
+export const needsSetup = (status: Status) =>
+  status.microphone !== 'allowed' || !status.accessibility || !status.enabled || (!status.modelReady && !status.modelPreparing);
 export const setupDone = (status: Status | null) =>
   !!status && status.enabled && status.microphone === 'allowed' && status.accessibility && status.modelReady;
 

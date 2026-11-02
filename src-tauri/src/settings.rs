@@ -28,9 +28,11 @@ pub struct Settings {
 pub struct General {
   /// Hidden, the app is still reached by opening it again from Finder or Spotlight, or from the dots.
   pub menu_bar_icon: bool,
+  /// An icon in the Dock as well, which opens Settings; otherwise only while Settings is open.
+  pub show_in_dock: bool,
 }
 impl Default for General {
-  fn default() -> Self { Self { menu_bar_icon: true } }
+  fn default() -> Self { Self { menu_bar_icon: true, show_in_dock: false } }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -70,14 +72,28 @@ pub struct Shortcuts {
   pub note: Option<Chord>,
   pub meeting: Option<Chord>,
   pub paste_last: Option<Chord>,
+  /// A note to type, a sticky on the screen, and a typed question for Claude.
+  pub write_note: Option<Chord>,
+  pub sticky: Option<Chord>,
+  pub ask: Option<Chord>,
 }
 impl Default for Shortcuts {
-  fn default() -> Self { Self { dictate: DictateKey::Fn, hands_free: true, command: CommandKey::Control, note: None, meeting: None, paste_last: None } }
+  fn default() -> Self {
+    Self { dictate: DictateKey::Fn, hands_free: true, command: CommandKey::Control, note: None, meeting: None, paste_last: None, write_note: None, sticky: None, ask: None }
+  }
+}
+impl Shortcuts {
+  /// Every global chord, set or not, in the order the Shortcuts page lists them.
+  pub fn chords(&self) -> [&Option<Chord>; 6] { [&self.note, &self.meeting, &self.paste_last, &self.write_note, &self.sticky, &self.ask] }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Model { Turbo, Small }
+
+/// The Mac's own alert sounds, in /System/Library/Sounds, which the cues are chosen from.
+pub const SOUNDS: [&str; 14] = ["Basso", "Blow", "Bottle", "Frog", "Funk", "Glass", "Hero", "Morse", "Ping", "Pop", "Purr", "Sosumi", "Submarine", "Tink"];
+const DEFAULT_VOLUME: f64 = 0.3;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -88,10 +104,17 @@ pub struct Dictation {
   pub live_typing: bool,
   pub remove_fillers: bool,
   pub sounds: bool,
+  /// 0 to 1, for both cues.
+  pub sound_volume: f64,
+  /// The cues as listening starts and stops, by name in `SOUNDS`.
+  pub start_sound: String,
+  pub stop_sound: String,
   pub model: Model,
 }
 impl Default for Dictation {
-  fn default() -> Self { Self { language: "auto".into(), translate_to_english: false, live_typing: true, remove_fillers: true, sounds: true, model: Model::Turbo } }
+  fn default() -> Self {
+    Self { language: "auto".into(), translate_to_english: false, live_typing: true, remove_fillers: true, sounds: true, sound_volume: DEFAULT_VOLUME, start_sound: "Tink".into(), stop_sound: "Pop".into(), model: Model::Turbo }
+  }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -116,7 +139,19 @@ pub enum Style { #[default] Default, Casual, Formal, Code, Raw }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AppStyle { pub bundle_id: String, pub name: String, pub style: Style, #[serde(default)] pub polish: bool }
+pub struct AppStyle {
+  pub bundle_id: String, pub name: String, pub style: Style, #[serde(default)] pub polish: bool,
+  /// Press Return once the words are typed, as sending a message. None is the app's own default: on in
+  /// chat apps (`CHAT_APPS`), off elsewhere.
+  #[serde(default)] pub send: Option<bool>,
+}
+
+/// Apps where what you dictate is a message to send, so Return follows the words unless the app's style
+/// says otherwise.
+pub const CHAT_APPS: [&str; 10] = [
+  "com.tinyspeck.slackmacgap", "com.apple.MobileSMS", "net.whatsapp.WhatsApp", "com.microsoft.teams2", "com.microsoft.teams",
+  "ru.keepcoder.Telegram", "com.tdesktop.Telegram", "com.hnc.Discord", "com.facebook.archon", "com.signal.desktop",
+];
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -125,6 +160,11 @@ impl Apps {
   /// The style for the app with `bundle_id`, and whether Claude polishes there.
   pub fn style_for(&self, bundle_id: &str) -> (Style, bool) {
     self.styles.iter().find(|app| app.bundle_id.eq_ignore_ascii_case(bundle_id)).map_or((self.default_style, false), |app| (app.style, app.polish))
+  }
+  /// Whether Return follows the words in the app with `bundle_id`: its own setting, else on for chat apps.
+  pub fn send_for(&self, bundle_id: &str) -> bool {
+    let chosen = self.styles.iter().find(|app| app.bundle_id.eq_ignore_ascii_case(bundle_id)).and_then(|app| app.send);
+    chosen.unwrap_or_else(|| CHAT_APPS.iter().any(|chat| chat.eq_ignore_ascii_case(bundle_id)))
   }
 }
 
@@ -153,9 +193,21 @@ pub struct Meetings {
   pub summarize: bool,
   pub you: String,
   pub others: String,
+  /// Each voice gets its own label (speaker diarization, two small models downloaded at the first meeting).
+  pub speakers: bool,
+  /// What the summary holds besides the summary itself.
+  pub decisions: bool,
+  pub action_items: bool,
 }
 impl Default for Meetings {
-  fn default() -> Self { Self { folder: None, system_audio: true, summarize: true, you: "You".into(), others: "Others".into() } }
+  fn default() -> Self { Self { folder: None, system_audio: true, summarize: true, you: "You".into(), others: "Others".into(), speakers: true, decisions: true, action_items: true } }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Effort { Low, Medium, High }
+impl Effort {
+  pub fn as_str(self) -> &'static str { match self { Self::Low => "low", Self::Medium => "medium", Self::High => "high" } }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -168,17 +220,29 @@ pub enum ClaudeModel {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Claude {
-  /// On only once a key is saved in the Keychain and tested. Pages can't set it and a loaded file
-  /// never turns it on: only Rust does, through `update`, after testing the key or finding it at launch.
+  /// On only once the way to Claude works: a key saved in the Keychain and tested, or Claude Code signed
+  /// in and tested. Pages can't set it and a loaded file never turns it on: only Rust does, through
+  /// `update`, after a test or finding the key at launch.
   pub enabled: bool,
+  /// Anthropic's API with the person's own key, or the Claude Code on this Mac with their Claude account.
+  /// Set by Rust with `enabled`, as a connection is made; pages can't set it.
+  pub via: ClaudeVia,
   pub model: ClaudeModel,
+  /// How long Claude may think on each request: low is quickest (polish while typing), high the most careful.
+  pub effort: Effort,
   pub commands: bool,
   pub claude_code: Option<String>,
-  pub project_folder: Option<String>,
+  /// A model on this Mac behind Ollama's API (LM Studio speaks it too): where, and which.
+  pub local_endpoint: String,
+  pub local_model: String,
 }
 impl Default for Claude {
-  fn default() -> Self { Self { enabled: false, model: ClaudeModel::Haiku, commands: true, claude_code: None, project_folder: None } }
+  fn default() -> Self { Self { enabled: false, via: ClaudeVia::Api, model: ClaudeModel::Haiku, effort: Effort::Medium, commands: true, claude_code: None, local_endpoint: "http://localhost:11434".into(), local_model: "llama3.2".into() } }
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ClaudeVia { Api, ClaudeCode, Local }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -213,9 +277,15 @@ pub enum Idle { #[default] Dots, Hidden }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
-pub struct Appearance { pub theme: Theme, pub edge: Edge, pub size: Size, pub idle: Idle, pub hint: bool }
+pub struct Appearance {
+  pub theme: Theme, pub edge: Edge, pub size: Size, pub idle: Idle, pub hint: bool,
+  /// How far the dots sit from the screen's edge, in points (0 to 120).
+  pub margin: u32,
+  /// Keep clear of the Dock and the menu bar (the screen's visible area), rather than the whole screen.
+  pub avoid_dock: bool,
+}
 impl Default for Appearance {
-  fn default() -> Self { Self { theme: Theme::System, edge: Edge::Bottom, size: Size::Medium, idle: Idle::Dots, hint: true } }
+  fn default() -> Self { Self { theme: Theme::System, edge: Edge::Bottom, size: Size::Medium, idle: Idle::Dots, hint: true, margin: 8, avoid_dock: true } }
 }
 
 impl Default for Settings {
@@ -234,7 +304,7 @@ const MAX_WORD: usize = 64;
 const MAX_TEXT: usize = 200;
 
 fn default_styles() -> Vec<AppStyle> {
-  let app = |bundle_id: &str, name: &str, style| AppStyle { bundle_id: bundle_id.into(), name: name.into(), style, polish: false };
+  let app = |bundle_id: &str, name: &str, style| AppStyle { bundle_id: bundle_id.into(), name: name.into(), style, polish: false, send: None };
   vec![
     app("com.apple.Terminal", "Terminal", Style::Code), app("com.googlecode.iterm2", "iTerm", Style::Code),
     app("com.mitchellh.ghostty", "Ghostty", Style::Code), app("dev.warp.Warp-Stable", "Warp", Style::Code),
@@ -262,19 +332,26 @@ impl Settings {
   fn valid(&self) -> bool {
     let folder = |path: &Option<String>| path.as_deref().is_none_or(|path| Path::new(path).is_absolute() && !path.contains('\0'));
     let shortcuts = &self.shortcuts;
-    let chords: Vec<&Chord> = [&shortcuts.note, &shortcuts.meeting, &shortcuts.paste_last].into_iter().flatten().collect();
+    let chords: Vec<&Chord> = shortcuts.chords().into_iter().flatten().collect();
     let distinct = chords.iter().enumerate().all(|(i, a)| chords[..i].iter().all(|b| (a.key_code, a.modifiers) != (b.key_code, b.modifiers)));
     let file_name = &self.notes.file_name;
     let language = &self.dictation.language;
-    folder(&self.notes.folder) && folder(&self.meetings.folder) && folder(&self.claude.claude_code) && folder(&self.claude.project_folder)
+    let local = &self.claude;
+    folder(&self.notes.folder) && folder(&self.meetings.folder) && folder(&self.claude.claude_code)
+      && (local.local_endpoint.starts_with("http://") || local.local_endpoint.starts_with("https://")) && local.local_endpoint.len() <= 200 && !local.local_endpoint.contains(char::is_whitespace)
+      && !local.local_model.trim().is_empty() && local.local_model.len() <= 80
       && chords.iter().all(|chord| chord.valid()) && distinct
       && !file_name.contains(['/', ':', '\0']) && !file_name.trim_start().starts_with('.')
+      && SOUNDS.contains(&self.dictation.start_sound.as_str()) && SOUNDS.contains(&self.dictation.stop_sound.as_str())
       && (language == "auto" || (0..=whisper_rs::get_lang_max_id()).any(|id| whisper_rs::get_lang_str(id) == Some(language.as_str())))
   }
 
   /// Lengths and lists cut to what the app handles; empty names back to their defaults.
   fn clamp(&mut self) {
     self.version = VERSION;
+    let volume = &mut self.dictation.sound_volume;
+    *volume = if volume.is_finite() { volume.clamp(0.0, 1.0) } else { DEFAULT_VOLUME };
+    self.appearance.margin = self.appearance.margin.min(120);
     let vocabulary = &mut self.vocabulary;
     clip_list(&mut vocabulary.words, MAX_LIST, MAX_WORD);
     clip_list(&mut vocabulary.suggestions, MAX_LIST, MAX_WORD);
@@ -293,7 +370,7 @@ impl Settings {
     self.meetings.others = clip(&self.meetings.others, MAX_WORD);
     if self.meetings.you.is_empty() { self.meetings.you = Meetings::default().you; }
     if self.meetings.others.is_empty() { self.meetings.others = Meetings::default().others; }
-    for chord in [&mut self.shortcuts.note, &mut self.shortcuts.meeting, &mut self.shortcuts.paste_last].into_iter().flatten() { chord.label = clip(&chord.label, 16); }
+    for chord in [&mut self.shortcuts.note, &mut self.shortcuts.meeting, &mut self.shortcuts.paste_last, &mut self.shortcuts.write_note, &mut self.shortcuts.sticky, &mut self.shortcuts.ask].into_iter().flatten() { chord.label = clip(&chord.label, 16); }
   }
 
   /// `patch` merged into these settings, one value at a time: a value of the wrong type, an unknown
@@ -427,6 +504,7 @@ pub fn apply(app: &AppHandle, settings: &Settings) {
   app.set_theme(match settings.appearance.theme { Theme::System => None, Theme::Light => Some(tauri::Theme::Light), Theme::Dark => Some(tauri::Theme::Dark) });
   let _ = app.emit("dictate-settings", settings);
   crate::show_tray(app, settings.general.menu_bar_icon);
+  crate::show_in_dock(app, settings.general.show_in_dock);
   crate::recent_changed(app); // the notes folder may have moved
 }
 
@@ -454,7 +532,7 @@ pub fn get_settings() -> Settings { get() }
 #[tauri::command]
 pub fn update_settings(app: AppHandle, mut patch: Value) -> Result<Settings, String> {
   if !patch.is_object() { return Err("Invalid settings".into()); }
-  if let Some(claude) = patch.get_mut("claude").and_then(Value::as_object_mut) { claude.remove("enabled"); }
+  if let Some(claude) = patch.get_mut("claude").and_then(Value::as_object_mut) { claude.remove("enabled"); claude.remove("via"); }
   update(&app, &patch)
 }
 
@@ -482,21 +560,59 @@ mod tests {
   }
 
   #[test]
+  fn the_cues_are_the_macs_own_sounds_at_a_volume_between_silent_and_full() {
+    let base = Settings::default();
+    let chosen = base.patched(&json!({ "dictation": { "startSound": "Glass", "stopSound": "Submarine", "soundVolume": 0.75 } }));
+    assert_eq!((chosen.dictation.start_sound.as_str(), chosen.dictation.stop_sound.as_str(), chosen.dictation.sound_volume), ("Glass", "Submarine", 0.75));
+    // A name that isn't one of the Mac's sounds keeps the old one; a volume past the ends is brought back.
+    let refused = chosen.patched(&json!({ "dictation": { "startSound": "../Evil", "stopSound": "", "soundVolume": 4.5 } }));
+    assert_eq!((refused.dictation.start_sound.as_str(), refused.dictation.stop_sound.as_str(), refused.dictation.sound_volume), ("Glass", "Submarine", 1.0));
+    assert_eq!(chosen.patched(&json!({ "dictation": { "soundVolume": -2 } })).dictation.sound_volume, 0.0);
+    assert_eq!(chosen.patched(&json!({ "dictation": { "soundVolume": "loud" } })).dictation.sound_volume, 0.75);
+    for name in SOUNDS { assert!(Path::new(&format!("/System/Library/Sounds/{name}.aiff")).is_file(), "{name}"); }
+  }
+
+  #[test]
+  fn return_follows_the_words_in_chat_apps_unless_the_app_says_otherwise() {
+    let base = Settings::default();
+    assert!(base.apps.send_for("com.tinyspeck.slackmacgap") && base.apps.send_for("COM.APPLE.MobileSMS"));
+    assert!(!base.apps.send_for("com.apple.mail") && !base.apps.send_for(""));
+    let chosen = base.patched(&json!({ "apps": { "styles": [
+      { "bundleId": "com.tinyspeck.slackmacgap", "name": "Slack", "style": "casual", "polish": false, "send": false },
+      { "bundleId": "com.apple.mail", "name": "Mail", "style": "formal", "polish": false, "send": true },
+      { "bundleId": "com.apple.Notes", "name": "Notes", "style": "default", "polish": false },
+    ] } }));
+    assert!(!chosen.apps.send_for("com.tinyspeck.slackmacgap") && chosen.apps.send_for("com.apple.mail") && !chosen.apps.send_for("com.apple.Notes"));
+    assert_eq!(serde_json::to_value(&chosen.apps.styles[2]).unwrap()["send"], Value::Null); // an older file's entry keeps the default
+  }
+
+  #[test]
+  fn only_rust_chooses_how_claude_is_reached() {
+    let base = Settings::default();
+    assert_eq!(base.patched(&json!({ "claude": { "via": "claudeCode" } })).claude.via, ClaudeVia::ClaudeCode);
+    assert_eq!(base.patched(&json!({ "claude": { "via": "carrier pigeon" } })).claude.via, ClaudeVia::Api);
+    // What a page sends loses `enabled` and `via` before it is applied (update_settings), as the mock does too.
+    let mut page = json!({ "claude": { "enabled": true, "via": "claudeCode", "model": "claude-opus-5-5" } });
+    if let Some(claude) = page.get_mut("claude").and_then(Value::as_object_mut) { claude.remove("enabled"); claude.remove("via"); }
+    assert_eq!(page, json!({ "claude": { "model": "claude-opus-5-5" } }));
+  }
+
+  #[test]
   fn defaults_are_the_documented_ones_in_camel_case() {
     let value = serde_json::to_value(Settings::default()).unwrap();
     assert_eq!(value["version"], 1);
-    assert_eq!(value["general"], json!({ "menuBarIcon": true }));
-    assert_eq!(value["shortcuts"], json!({ "dictate": "fn", "handsFree": true, "command": "control", "note": null, "meeting": null, "pasteLast": null }));
-    assert_eq!(value["dictation"], json!({ "language": "auto", "translateToEnglish": false, "liveTyping": true, "removeFillers": true, "sounds": true, "model": "turbo" }));
+    assert_eq!(value["general"], json!({ "menuBarIcon": true, "showInDock": false }));
+    assert_eq!(value["shortcuts"], json!({ "dictate": "fn", "handsFree": true, "command": "control", "note": null, "meeting": null, "pasteLast": null, "writeNote": null, "sticky": null, "ask": null }));
+    assert_eq!(value["dictation"], json!({ "language": "auto", "translateToEnglish": false, "liveTyping": true, "removeFillers": true, "sounds": true, "soundVolume": 0.3, "startSound": "Tink", "stopSound": "Pop", "model": "turbo" }));
     assert_eq!(value["vocabulary"], json!({ "words": [], "replacements": [], "learn": true, "suggestions": [] }));
     assert_eq!(value["apps"]["defaultStyle"], "default");
     assert!(value["apps"]["styles"].as_array().unwrap().iter().any(|app| app["bundleId"] == "com.apple.Terminal" && app["style"] == "code" && app["polish"] == false));
     assert_eq!(value["notes"], json!({ "folder": null, "fileName": "{date} {title}", "frontmatter": true, "dailyNote": false, "tags": [], "claudeTitle": true, "claudeActions": false }));
-    assert_eq!(value["meetings"], json!({ "folder": null, "systemAudio": true, "summarize": true, "you": "You", "others": "Others" }));
-    assert_eq!(value["claude"], json!({ "enabled": false, "model": "claude-haiku-5-5", "commands": true, "claudeCode": null, "projectFolder": null }));
+    assert_eq!(value["meetings"], json!({ "folder": null, "systemAudio": true, "summarize": true, "you": "You", "others": "Others", "speakers": true, "decisions": true, "actionItems": true }));
+    assert_eq!(value["claude"], json!({ "enabled": false, "via": "api", "model": "claude-haiku-5-5", "effort": "medium", "commands": true, "claudeCode": null, "localEndpoint": "http://localhost:11434", "localModel": "llama3.2" }));
     assert_eq!(value["agents"], json!({ "mcp": true, "shareHistory": false, "shareNotes": true, "shareMeetings": true, "allowWrite": false }));
     assert_eq!(value["history"], json!({ "keep": "week" }));
-    assert_eq!(value["appearance"], json!({ "theme": "system", "edge": "bottom", "size": "medium", "idle": "dots", "hint": true }));
+    assert_eq!(value["appearance"], json!({ "theme": "system", "edge": "bottom", "size": "medium", "idle": "dots", "hint": true, "margin": 8, "avoidDock": true }));
   }
 
   #[test]

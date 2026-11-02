@@ -1,6 +1,6 @@
 import { useEffect, useState, type KeyboardEvent } from 'react';
 import { invoke, listen } from '../bridge';
-import { useSettings, type Events } from '../store';
+import type { Events } from '../store';
 import { Icon } from '../ui/Icon';
 import { X } from './icons';
 import { PREVIEW } from './preview';
@@ -78,7 +78,7 @@ export function CommandCard() {
   };
   const copy = () => { setProblem(null); void copyText(text).then(() => setCopied(true), () => setProblem('Couldn’t copy the answer.')); };
   const keys = (event: KeyboardEvent) => {
-    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); insert(); } else escape(event);
+    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); if (command.typed) copy(); else insert(); } else escape(event);
   };
   return <article className="glass card claude-card" data-glass data-hit aria-label="Claude’s answer" onKeyDown={keys}>
     <header className="head"><span className="name"><Icon name="claude" size={16} />Claude</span></header>
@@ -87,24 +87,9 @@ export function CommandCard() {
     <footer className="actions">
       <span className="ask" role={problem ? 'alert' : 'status'} data-error={problem ? true : undefined}>{problem ?? (copied ? 'Copied' : '')}</span>
       <button type="button" className="btn" onClick={close}>Close</button>
-      <button type="button" className="btn" onClick={copy}>Copy</button>
-      <button type="button" className="btn primary" title="Type it in the app you asked in (⌘↩)" aria-busy={inserting} onClick={insert}>{inserting ? 'Inserting…' : 'Insert'}</button>
+      <button type="button" className={`btn${command.typed ? ' primary' : ''}`} onClick={copy}>Copy</button>
+      {/* A typed question has no app to go back to: Copy is the way to take the answer. */}
+      {!command.typed && <button type="button" className="btn primary" title="Type it in the app you asked in (⌘↩)" aria-busy={inserting} onClick={insert}>{inserting ? 'Inserting…' : 'Insert'}</button>}
     </footer>
   </article>;
-}
-
-// Below the "Saved" bubble: opens Terminal in the project with the saved note as Claude Code's first
-// message. Shown once Claude Code is found on this Mac.
-export function SendToClaudeCode({ path, onSent, onError }: { path: string; onSent: () => void; onError: (message: string) => void }) {
-  const settings = useSettings();
-  const [sending, setSending] = useState(false);
-  if (!settings?.claude.claudeCode) return null;
-  const send = () => {
-    setSending(true);
-    void invoke<boolean>('send_to_claude_code', { path }).then(sent => { if (sent) onSent(); },
-      error => onError(failed(error, 'Couldn’t open Claude Code'))).finally(() => setSending(false));
-  };
-  return <button type="button" className="glass claude-send" data-glass data-hit disabled={sending} onClick={send}>
-    <Icon name="claude" size={15} />{sending ? 'Opening Claude Code…' : 'Send to Claude Code'}
-  </button>;
 }

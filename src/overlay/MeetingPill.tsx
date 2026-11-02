@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { invoke, listen } from '../bridge';
 import type { Events } from '../store';
-import { SendToClaudeCode } from './CommandCard';
 import { X } from './icons';
 import { PREVIEW } from './preview';
 import './MeetingPill.css';
@@ -139,7 +138,7 @@ export function MeetingPill() {
             {onlyMic && <span className="only" title={system && ONLY_MIC[system]}>Mic only</span>}</span>
           {explain && system && ONLY_MIC[system] && <small>{ONLY_MIC[system]}{system === 'denied' && <> <button type="button" className="link" onClick={() => void invoke('meeting_privacy').catch(() => {})}>Allow it</button></>}</small>}
         </span>
-        <button type="button" className="btn primary" onClick={stop}>Stop</button>
+        <button type="button" className="meeting-stop" aria-label="Stop the meeting" title="Stop the meeting" onClick={stop}><i /></button>
       </div>;
     }
     if (outcome || !leftover) return null;
@@ -163,12 +162,9 @@ export function MeetingPill() {
     if (outcome?.state === 'saved' && outcome.path) {
       const path = outcome.path, kept = outcome.leftover;
       if (!outcome.message && !kept) {
-        return <>
-          <button type="button" className="glass said saved meeting-card" data-glass data-hit onClick={() => { reveal(path); setOutcome(null); }}>
-            <small>Meeting saved · Show in Finder</small><span>{path.split('/').pop()?.replace(/\.md$/, '')}</span>
-          </button>
-          <SendToClaudeCode path={path} onSent={() => setOutcome(null)} onError={message => setOutcome({ state: 'saved', path, message })} />
-        </>;
+        return <button type="button" className="glass said saved meeting-card" data-glass data-hit onClick={() => { void invoke('note_open', { path }).catch(() => reveal(path)); setOutcome(null); }}>
+          <small>Meeting saved · Open</small><span>{path.split('/').pop()?.replace(/\.md$/, '')}</span>
+        </button>;
       }
       // Saved, with something to say: it stopped early, or parts are still audio.
       return <div className="glass meeting-pill meeting-card" data-glass data-hit role="status">

@@ -1,9 +1,9 @@
 // The Tauri global (withGlobalTauri): the app's commands and the native voice code's events. In a plain
 // browser (the Vite server, for design checks) an in-memory mock answers instead.
 type Tauri = {
-  core: { invoke: (command: string, args?: Record<string, unknown>) => Promise<unknown> };
+  core: { invoke: (command: string, args?: Record<string, unknown>) => Promise<unknown>; convertFileSrc: (path: string) => string };
   event: { listen: (name: string, handler: (event: { payload: unknown }) => void) => Promise<() => void> };
-  window: { getCurrentWindow: () => { close: () => Promise<void> } };
+  window: { getCurrentWindow: () => { close: () => Promise<void>; setTitle: (title: string) => Promise<void> } };
 };
 const tauri = () => (window as unknown as { __TAURI__?: Tauri }).__TAURI__;
 export const inApp = () => !!tauri();
@@ -27,3 +27,8 @@ export function listen<T>(name: string, handler: (payload: T) => void): () => vo
 
 // Closes the window this page is in; a browser tab has none to close.
 export const closeWindow = () => { void tauri()?.window.getCurrentWindow().close(); };
+// Names the window this page is in, as the Mac shows it in Mission Control and the Window menu; a browser tab names itself.
+export const setWindowTitle = (title: string) => { const app = tauri(); if (app) void app.window.getCurrentWindow().setTitle(title).catch(() => {}); else document.title = title; };
+
+/// A file on this Mac as a URL the page may show (a picture kept beside a note); in a browser, the path itself.
+export const fileSrc = (path: string) => tauri()?.core.convertFileSrc(path) ?? path;

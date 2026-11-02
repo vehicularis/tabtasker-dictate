@@ -1,19 +1,17 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
 import { invoke, listen } from '../bridge';
-import { setupDone, updateSettings, useSettings, type Edge, type Status } from '../store';
+import { needsSetup, setupDone, updateSettings, useSettings, type Edge, type Events, type Status } from '../store';
 import { applyTheme, isDark } from '../ui/theme';
-import { CommandCard, SendToClaudeCode } from './CommandCard';
+import { CommandCard } from './CommandCard';
 import { Dock } from './Dock';
 import { HandsFree } from './HandsFree';
 import { Learned } from './Learned';
 import { MeetingPill, useMeetingState } from './MeetingPill';
 import { Menu } from './Menu';
-import { NoteCard, type Draft } from './NoteCard';
 import { PREVIEW, PREVIEW_EDGE, SAMPLE, SETUP } from './preview';
 import { Setup } from './Setup';
 
 type Phase = 'idle' | 'listening' | 'transcribing' | 'sending';
-const DRAFT = 'tabtasker-dictate:note'; // kept on this Mac until saved or discarded, across a restart
 const EDGE = 'tabtasker-dictate:edge'; // where the dots sat before the edge moved into settings
 
 const stored = <T,>(key: string, fallback: T): T => { try { return (JSON.parse(localStorage.getItem(key) ?? 'null') as T) ?? fallback; } catch { return fallback; } };
@@ -29,16 +27,14 @@ export function Overlay() {
   const heard = useRef<Phase>('idle');
   const [dictating, setDictating] = useState(PREVIEW === 'typing');
   const level = useRef(PREVIEW === 'listening' ? 0.05 : 0);
-  const [live, setLive] = useState<string | null>(PREVIEW === 'listening' ? 'Call the venue about Thursday and ask for the bigger room' : null);
+  const [live, setLive] = useState<string | null>(PREVIEW === 'listening' || PREVIEW === 'typing' ? 'Call the venue about Thursday and ask for the bigger room' : null);
   const [noting, setNoting] = useState(PREVIEW === 'listening');
   const noteRequested = useRef(false);
   const [since, setSince] = useState(() => PREVIEW === 'listening' ? Date.now() - 83_000 : 0); // when the note's recording began
   const [, setClock] = useState(0);
-  const [draft, setDraft] = useState<Draft | null>(() => PREVIEW === 'note' ? { title: 'Call the venue about Thursday', text: 'Call the venue about Thursday and ask for the bigger room. Then send Maria the new floor plan before lunch.' } : PREVIEW ? null : stored<Draft | null>(DRAFT, null));
-  const [reviewing, setReviewing] = useState(PREVIEW === 'note');
-  const [discarding, setDiscarding] = useState(false);
   const [saved, setSaved] = useState<string | null>(PREVIEW === 'saved' ? '/Users/you/Documents/TabTasker Dictate/2026-11-01 21.40 Call the venue about Thursday.md' : null);
   const [toast, setToast] = useState<string | null>(null);
+  // The setup steps, as a card by the dots: for something only the person can do, or when asked for.
   const [setup, setSetup] = useState(!!PREVIEW && PREVIEW in SETUP);
   const [hover, setHover] = useState(PREVIEW === 'hover' || PREVIEW === 'menu' || PREVIEW === 'mics');
   const [menu, setMenu] = useState(PREVIEW === 'menu' || PREVIEW === 'mics');
@@ -59,10 +55,14 @@ export function Overlay() {
   // Setup follows macOS live: permissions and the model download change while it is open.
   useEffect(() => { if (!setup) return; const timer = setInterval(refresh, 1000); return () => clearInterval(timer); }, [setup, refresh]);
   const launched = useRef(false);
-  useEffect(() => { if (status && !launched.current) { launched.current = true; if (!setupDone(status) && !status.firstRun) setSetup(true); } }, [status]); // once, at launch, unless Settings shows the full setup
+  // Once, at launch: the setup steps only for something the person has to do, never for a model that is
+  // still loading (the dots pulse for that), and not while Settings shows the full setup.
+  useEffect(() => { if (status && !launched.current) { launched.current = true; if (needsSetup(status) && !status.firstRun) setSetup(true); } }, [status]);
+  // While the model loads at launch the status is asked again every second, so the dots stop pulsing as it is ready.
+  const loading = !!status && status.enabled && status.modelPreparing && !status.modelReady;
+  useEffect(() => { if (!loading || setup) return; const timer = setInterval(refresh, 1000); return () => clearInterval(timer); }, [loading, setup, refresh]);
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(null), 2400); return () => clearTimeout(timer); }, [toast]);
-  useEffect(() => { if (!saved || PREVIEW) return; const timer = setTimeout(() => setSaved(null), 8000); return () => clearTimeout(timer); }, [saved]);
-  useEffect(() => { if (!PREVIEW) store(DRAFT, draft); }, [draft]);
+  useEffect(() => { if (!saved || PREVIEW) return; const timer = setTimeout(() => setSaved(null), 6000); return () => clearTimeout(timer); }, [saved]);
   useEffect(() => { // a note can run long: its bubble counts the time
     if (!noting || phase !== 'listening') return;
     const timer = setInterval(() => setClock(tick => tick + 1), 1000);
@@ -98,9 +98,13 @@ export function Overlay() {
         level.current = next.phase === 'listening' ? next.level : 0;
       }),
       listen<{ text: string; live: boolean }>('dictate-said', said => { if (said.live) setLive(said.text); }),
+      // A spoken note is done: it is saved as it is (the model names it, or its first words do) and opened
+      // in the window, where it can be read and changed. Nothing to confirm.
       listen<{ text: string }>('dictate-note', note => {
-        setDraft(current => current ? { ...current, text: `${current.text.trimEnd()} ${note.text}` } : { title: titleOf(note.text), text: note.text });
-        setLive(null); setReviewing(true); setDiscarding(false);
+        setLive(null);
+        void invoke<string>('save_note', { title: '', text: note.text, stamp: stamp(new Date()), named: false })
+          .then(path => { setSaved(path); return invoke('note_open', { path }); })
+          .catch(error => setToast(typeof error === 'string' ? error : 'Couldn’t save the note'));
       }),
       listen<{ message: string }>('dictate-error', ({ message }) => {
         if (message === 'microphone') setSetup(true);
@@ -191,31 +195,22 @@ export function Overlay() {
     setHover(false); setMenu(false);
     void invoke('request', { kind: 'note' }).catch(() => { noteRequested.current = false; });
   };
-  // The draft save_note is writing. Claude may take seconds to name it, and the card can be hidden and
-  // opened again meanwhile: one save at a time, and the note stays as it is until it is written.
-  const sending = useRef<Draft | null>(null);
-  const [saving, setSaving] = useState(false);
-  const save = async () => {
-    const sent = draft;
-    if (!sent?.text.trim() || sending.current) return;
-    sending.current = sent; setSaving(true); setDiscarding(false);
-    try {
-      const path = await invoke<string>('save_note', { title: sent.title.trim(), text: sent.text, stamp: stamp(new Date()), named: !!sent.named });
-      // A note dictated during the save was added after the saved words: it stays, as a new note.
-      setDraft(current => {
-        const rest = current && current !== sent ? current.text.slice(sent.text.trimEnd().length).trim() : '';
-        return rest ? { title: titleOf(rest), text: rest } : null;
-      });
-      setSaved(path);
-    } catch (error) {
-      setToast(typeof error === 'string' ? error : 'Couldn’t save the note');
-    } finally {
-      sending.current = null; setSaving(false);
-    }
-  };
-  const discard = () => { if (sending.current) return; setDraft(null); setReviewing(false); setDiscarding(false); };
   const openSetup = () => { setMenu(false); refresh(); setSetup(true); };
-  const openSettings = useCallback(() => { setMenu(false); void invoke('open_settings', {}).catch(() => setToast('Couldn’t open Settings')); }, []);
+  /// The window, at a place: your notes, a note, the settings…
+  const openApp = useCallback((route?: string) => { setMenu(false); setHover(false); void invoke('open_app', route ? { route } : {}).catch(() => setToast('Couldn’t open TabTasker Dictate')); }, []);
+  const openSettings = useCallback(() => openApp('settings'), [openApp]);
+  // A note to type: a new file at once, open in the window with the keyboard in it (hold the key to talk into it).
+  const writeNote = useCallback(() => {
+    setMenu(false); setHover(false);
+    void invoke<string>('note_new', { title: '', text: '', stamp: stamp(new Date()) }).then(path => invoke('note_open', { path }))
+      .catch(error => setToast(typeof error === 'string' ? error : 'Couldn’t make a note'));
+  }, []);
+  const newSticky = useCallback(() => { setMenu(false); void invoke('sticky_new', {}).catch(error => setToast(typeof error === 'string' ? error : 'Couldn’t make a sticky')); }, []);
+  // The global shortcut for a typed note, which the native side hears and hands here.
+  useEffect(() => listen<{ what: string }>('dictate-open', ({ what }) => { if (what === 'writeNote') writeNote(); }), [writeNote]);
+  // The Dock that hides itself, sliding out over the dots' edge: the dots step aside by its strip until it goes.
+  const [dockInset, setDockInset] = useState(0);
+  useEffect(() => listen<Events['dictate-dock']>('dictate-dock', dock => setDockInset(dock.shown && dock.edge === edge ? dock.strip : 0)), [edge]);
   const startMeeting = () => {
     setMenu(false);
     const action = meetings?.recording ? 'stop' : 'start';
@@ -225,70 +220,61 @@ export function Overlay() {
   const hideForAnHour = () => { setMenu(false); setHidden(true); setTimeout(() => setHidden(false), 60 * 60 * 1000); };
   const pickMic = (id: string | null) => { setMenu(false); void invoke('set_input', { id }).then(refresh).catch(() => setToast('Couldn’t change the microphone')); };
   const login = () => { const on = !status?.openAtLogin; void invoke<boolean>('set_open_at_login', { enabled: on }).then(refresh).catch(() => setToast('Couldn’t change Open at Login')); };
+  // A click on the dots: stops a note being taken, finishes setup, or opens the window.
   const clickDots = () => {
     if (dragged.current) return;
-    if (draft && !reviewing) setReviewing(true);
-    else if (phase === 'listening' && noting) takeNote();
+    if (phase === 'listening' && noting) takeNote();
     else if (!setupDone(status)) setSetup(true);
+    else openApp();
   };
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (event.key === ',' && event.metaKey) { event.preventDefault(); openSettings(); return; }
       if (event.key !== 'Escape') return;
-      if (menu) setMenu(false); else if (setup) setSetup(false); else if (reviewing) setReviewing(false);
+      if (menu) setMenu(false); else if (setup) setSetup(false);
     };
     const away = (event: PointerEvent) => { if (menu && !(event.target as Element).closest('[role="menu"]')) setMenu(false); };
     addEventListener('keydown', key); addEventListener('pointerdown', away);
     return () => { removeEventListener('keydown', key); removeEventListener('pointerdown', away); };
-  }, [setup, reviewing, menu, openSettings]);
+  }, [setup, menu, openSettings]);
 
   // Nothing is drawn until the settings say which edge the dots are on. Hidden for an hour, the dots go but
   // an answer from Claude, a meeting or a hands-free session still shows, or its words would be lost.
   if (!settings) return <div ref={root} className="layer" data-edge={edge} />;
-  if (hidden) return <div ref={root} className="layer" data-edge={edge} data-size={settings.appearance.size}>
+  if (hidden) return <div ref={root} className="layer" data-edge={edge} data-size={settings.appearance.size} style={{ '--dock-inset': `${dockInset}px` } as CSSProperties}>
     <div ref={dock} className="dock"><CommandCard /><MeetingPill /><HandsFree /></div>
   </div>;
   const mode = phase === 'listening' ? 'listening' : phase !== 'idle' ? 'thinking' : hover || menu ? 'hover' : 'idle';
-  const card = setup || (draft && reviewing);
-  const pending = !!draft && !reviewing;
-  const quiet = settings.appearance.idle === 'hidden' && mode === 'idle' && !card && !pending && !saved && !toast;
-  return <div ref={root} className="layer" data-edge={edge} data-mode={mode} data-size={settings.appearance.size} data-quiet={quiet || undefined}
-    data-card={card || undefined} data-pending={pending || undefined} data-dragging={dragging || undefined}>
+  const card = setup;
+  const quiet = settings.appearance.idle === 'hidden' && mode === 'idle' && !card && !saved && !toast;
+  return <div ref={root} className="layer" data-edge={edge} data-mode={mode} data-size={settings.appearance.size} data-quiet={quiet || undefined} data-loading={loading || undefined}
+    style={{ '--margin': `${settings.appearance.margin}px`, '--dock-inset': `${dockInset}px` } as CSSProperties}
+    data-card={card || undefined} data-dragging={dragging || undefined}>
     <div ref={dock} className="dock">
       {setup && <Setup status={status} fnDown={fnDown} fnTested={fnTested} onClose={() => setSetup(false)} />}
-      {!setup && draft && reviewing && <NoteCard draft={draft} onChange={setDraft} more={noting ? live : null} canTalk={phase === 'idle'} saving={saving}
-        discarding={discarding} onDiscarding={setDiscarding} onSave={save} onDiscard={discard} onHide={() => setReviewing(false)} onTalk={takeNote} onGrab={grab} />}
-      {noting && phase === 'listening' && !card && <p className="glass said" data-glass role="status">
+      {noting && phase === 'listening' && !card && <p className="glass said" data-glass data-live role="status">
         <small>Note · {clockOf(since)}</small><span>{live ?? 'Listening…'}</span>
       </p>}
-      {saved && !card && <button type="button" className="glass said saved" data-glass data-hit onClick={() => { void invoke('show_notes', { file: saved }).catch(() => {}); setSaved(null); }}>
-        <small>Saved · Show in Finder</small><span>{saved.split('/').pop()?.replace(/\.md$/, '')}</span>
+      {saved && !card && <button type="button" className="glass said saved" data-glass data-hit onClick={() => { void invoke('note_open', { path: saved }).catch(() => {}); setSaved(null); }}>
+        <small>Saved · Open</small><span>{saved.split('/').pop()?.replace(/\.md$/, '')}</span>
       </button>}
-      {saved && !card && <SendToClaudeCode path={saved} onSent={() => setSaved(null)} onError={setToast} />}
       <CommandCard />
       <MeetingPill />
       <HandsFree />
       <Learned />
       {toast && <p className="glass toast" data-glass role="status">{toast}</p>}
-      <Dock mode={mode} dots={dots} label={pending ? 'Open the note' : 'TabTasker Dictate'} hint={settings.appearance.hint} quiet={quiet} level={level} typing={dictating}
-        onHover={setHover} onGrab={grab} onDots={clickDots} onNote={takeNote} onSetup={openSetup} onOrb={() => { if (noting) takeNote(); }}
+      <Dock mode={mode} dots={dots} label="TabTasker Dictate" hint={settings.appearance.hint} quiet={quiet} level={level} typing={dictating} words={noting ? '' : live ?? ''}
+        onHover={setHover} onGrab={grab} onDots={clickDots} onNote={takeNote} onMeeting={startMeeting} recording={!!meetings?.recording} onOpen={() => openApp('notes')} onSettings={openSettings} onOrb={() => { if (noting) takeNote(); }}
         onMenu={() => { if (phase === 'idle') { setMenu(true); refresh(); lookMeetings(); } }}
-        menu={menu && <Menu status={status} mics={mics} meeting={!!meetings?.recording} onMics={setMics} onNote={() => { setMenu(false); takeNote(); }} onMeeting={startMeeting}
-          onShowNotes={() => { setMenu(false); void invoke('show_notes', {}).catch(() => {}); }} onPasteLast={() => { setMenu(false); void invoke('paste_last').catch(() => {}); }} onPickMic={pickMic} onLogin={login}
-          onHide={hideForAnHour} onSettings={openSettings} onSetup={openSetup} />} />
+        menu={menu && <Menu status={status} mics={mics} meeting={!!meetings?.recording} onMics={setMics} onNote={() => { setMenu(false); takeNote(); }} onWriteNote={writeNote} onSticky={newSticky} onMeeting={startMeeting}
+          onOpen={() => openApp()} onPasteLast={() => { setMenu(false); void invoke('paste_last').catch(() => {}); }} onPickMic={pickMic} onLogin={login}
+          onHide={hideForAnHour} onSettings={openSettings} onSetup={openSetup} onQuit={() => { setMenu(false); void invoke('quit').catch(() => {}); }} />} />
     </div>
   </div>;
 }
 
 // ---------- helpers ----------
 
-// A note's file and heading: its first sentence, cut at a word to fit.
-const titleOf = (text: string) => {
-  const first = text.trim().split(/(?<=[.!?…])\s/)[0].replace(/[.!?…]+$/, '');
-  if (first.length <= 60) return first || 'Voice note';
-  const cut = first.slice(0, 60), space = cut.lastIndexOf(' ');
-  return `${space > 20 ? cut.slice(0, space) : cut}…`;
-};
 const clockOf = (start: number) => {
   const seconds = start ? Math.max(0, Math.floor((Date.now() - start) / 1000)) : 0;
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;

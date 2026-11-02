@@ -7,6 +7,10 @@ fn main() {
   let sources = native.iter().filter(|path| path.extension().is_some_and(|ext| ext == "m"));
   cc::Build::new().files(sources).flag("-fobjc-arc").flag("-mmacosx-version-min=13.0").compile("dictate_native");
   for file in &native { println!("cargo:rerun-if-changed={}", file.display()); }
+  // `@available` compiles to ___isPlatformVersionAtLeast from clang's runtime library, which rustc's link
+  // step (-nodefaultlibs) leaves out; clang says where the library for this Xcode is.
+  let runtime = std::process::Command::new("xcrun").args(["clang", "--print-libgcc-file-name", "-mmacosx-version-min=13.0"]).output().expect("xcrun clang");
+  println!("cargo:rustc-link-arg={}", String::from_utf8_lossy(&runtime.stdout).trim());
   for framework in ["AppKit", "ApplicationServices", "AVFoundation", "CoreAudio", "AudioToolbox", "ServiceManagement", "Security", "CoreMedia", "ScreenCaptureKit"] {
     println!("cargo:rustc-link-lib=framework={framework}");
   }
