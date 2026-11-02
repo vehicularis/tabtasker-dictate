@@ -66,12 +66,16 @@ fn write(path: &Path, text: &str) {
   std::fs::write(path, text).unwrap();
 }
 
-fn settings(home: &Path, agents: Value) {
-  write(&home.join("Library/Application Support/com.tabtasker.dictate/settings.json"), &json!({ "version": 1, "agents": agents, "history": { "keep": "week" } }).to_string());
+fn settings(home: &Path, agents: Value) { settings_with(home, json!({ "agents": agents })); }
+
+fn settings_with(home: &Path, mut more: Value) {
+  more["version"] = json!(1);
+  more["history"] = json!({ "keep": "week" });
+  write(&home.join("Library/Application Support/com.tabtasker.dictate/settings.json"), &more.to_string());
 }
 
-fn home() -> PathBuf {
-  let home = std::env::temp_dir().join(format!("dictate-mcp-server-{}", std::process::id()));
+fn home(name: &str) -> PathBuf {
+  let home = std::env::temp_dir().join(format!("dictate-mcp-server-{name}-{}", std::process::id()));
   let _ = std::fs::remove_dir_all(&home);
   std::fs::create_dir_all(&home).unwrap();
   let home = home.canonicalize().unwrap();
@@ -89,7 +93,7 @@ fn home() -> PathBuf {
 
 #[test]
 fn an_agent_can_reach_only_what_settings_share() {
-  let home = home();
+  let home = home("shares");
   let mut server = Server::start(&home);
 
   // Malformed input is answered, and the server keeps going.
@@ -182,6 +186,41 @@ fn an_agent_can_reach_only_what_settings_share() {
   assert_eq!(last["lastCall"]["ok"], false);
 
   // Closing stdin ends the server.
+  drop(server.input);
+  assert!(server.child.wait().unwrap().success());
+  std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn a_folder_that_holds_meetings_or_that_macos_refuses_is_told_apart() {
+  use std::os::unix::fs::PermissionsExt;
+  let home = home("folders");
+  let notes = home.join("Documents/TabTasker Dictate");
+  let mut server = Server::start(&home);
+  server.ask("initialize", json!({ "protocolVersion": "2025-06-18", "clientInfo": { "name": "cursor-vscode", "title": "Cursor" } }));
+
+  // Meetings saved in the notes folder itself stay with meetings when only notes are shared.
+  settings_with(&home, json!({ "agents": { "shareMeetings": false }, "meetings": { "folder": notes } }));
+  let (refused, error) = server.call("list_notes", json!({}));
+  assert!(error && refused["content"][0]["text"].as_str().unwrap().contains("separate meetings folder"), "{refused}");
+  assert!(server.call("read_note", json!({ "path": "Projects/Launch.md" })).1);
+  assert!(server.call("search_notes", json!({ "query": "Thursday" })).1);
+  settings_with(&home, json!({ "agents": { "shareMeetings": true }, "meetings": { "folder": notes } }));
+  assert_eq!(server.call("list_notes", json!({})).0["structuredContent"]["total"], 3);
+
+  // A notes folder macOS won't open says so, instead of looking empty.
+  settings(&home, json!({}));
+  std::fs::set_permissions(&notes, std::fs::Permissions::from_mode(0o000)).unwrap();
+  let listed = server.call("list_notes", json!({}));
+  let read = server.call("read_note", json!({ "path": "Projects/Launch.md" }));
+  std::fs::set_permissions(&notes, std::fs::Permissions::from_mode(0o755)).unwrap();
+  for (result, error) in [listed, read] {
+    assert!(error && result["content"][0]["text"].as_str().unwrap().contains("Privacy & Security"), "{result}");
+  }
+
+  let last: Value = serde_json::from_slice(&std::fs::read(home.join("Library/Application Support/com.tabtasker.dictate/agents.json")).unwrap()).unwrap();
+  assert_eq!(last["lastCall"]["client"], "cursor-vscode");
+  assert_eq!(last["lastCall"]["clientTitle"], "Cursor");
   drop(server.input);
   assert!(server.child.wait().unwrap().success());
   std::fs::remove_dir_all(home).unwrap();

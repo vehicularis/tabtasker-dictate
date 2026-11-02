@@ -132,10 +132,11 @@ fn run_tool(name: &str, args: &Value, settings: &Settings) -> Result<Value, Stri
   let (notes_dir, meetings_dir) = (real(notes::notes_dir()?), real(notes::meetings_dir()?));
   // Meetings saved inside the notes folder are not notes, so turning meetings off keeps them out of the note tools too.
   let skip = (meetings_dir != notes_dir && meetings_dir.starts_with(&notes_dir)).then_some(meetings_dir.as_path());
+  if meetings_dir == notes_dir { one_folder(name, &settings.agents)?; }
   match name {
     "list_notes" | "list_meetings" => {
       let limit = limit_arg(args, 50, 500)?;
-      let found = if name == "list_notes" { list(&notes_dir, skip, true) } else { list(&meetings_dir, None, false) };
+      let found = if name == "list_notes" { list(&notes_dir, skip, true)? } else { list(&meetings_dir, None, false)? };
       let key = if name == "list_notes" { "notes" } else { "meetings" };
       Ok(structured(json!({ "total": found.len(), key: found.iter().take(limit).map(Doc::json).collect::<Vec<_>>() })))
     }
@@ -146,7 +147,7 @@ fn run_tool(name: &str, args: &Value, settings: &Settings) -> Result<Value, Stri
       let limit = limit_arg(args, 20, 100)?;
       let words: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
       if words.is_empty() || query.chars().count() > 200 { return Err("Give a few words to look for.".into()); }
-      Ok(structured(json!({ "query": query, "results": search(&notes_dir, skip, &words, limit) })))
+      Ok(structured(json!({ "query": query, "results": search(&notes_dir, skip, &words, limit)? })))
     }
     "recent_dictations" => {
       let limit = limit_arg(args, 20, 200)?;
@@ -173,6 +174,26 @@ fn run_tool(name: &str, args: &Value, settings: &Settings) -> Result<Value, Stri
   }
 }
 
+/// With meetings saved in the notes folder itself, a file there can be either, so the folder goes to
+/// agents only when both notes and meetings are shared.
+fn one_folder(name: &str, agents: &Agents) -> Result<(), String> {
+  let (off, setting) = match name {
+    "list_notes" | "read_note" | "search_notes" | "append_to_note" => (!agents.share_meetings, "Meetings"),
+    "list_meetings" | "read_meeting" => (!agents.share_notes, "Notes"),
+    _ => (false, ""),
+  };
+  if !off { return Ok(()); }
+  Err(format!("Meetings are saved in the notes folder, and sharing {} is off, so that folder isn’t shared. The person can turn on {setting} in TabTasker Dictate, Settings, Agents, or choose a separate meetings folder in Settings, Meetings.", setting.to_lowercase()))
+}
+
+/// What an agent can tell the person when macOS refuses a folder or file. Privacy controls charge the
+/// access to the app that started this server, not to TabTasker Dictate.
+const DENIED: &str = "macOS doesn’t let this agent open that folder. The person can allow the app the agent runs in (such as Claude, Terminal or their editor) in System Settings, Privacy & Security, Files and Folders.";
+
+fn unreadable(e: &std::io::Error, otherwise: impl FnOnce() -> String) -> String {
+  if e.kind() == std::io::ErrorKind::PermissionDenied { DENIED.into() } else { otherwise() }
+}
+
 // ---------- files, confined to their folder ----------
 
 #[derive(Debug)]
@@ -190,13 +211,18 @@ fn relative(root: &Path, path: &Path) -> String {
 }
 
 /// The Markdown files in `root` (and its folders when `deep`), newest first. Hidden files and folders,
-/// symlinks and the `skip` folder are left out.
-fn list(root: &Path, skip: Option<&Path>, deep: bool) -> Vec<Doc> {
+/// symlinks and the `skip` folder are left out. A missing `root` has none; one macOS refuses is an error,
+/// so a folder the agent can't open never reads as an empty one.
+fn list(root: &Path, skip: Option<&Path>, deep: bool) -> Result<Vec<Doc>, String> {
   let mut found = Vec::new();
   let mut folders = vec![(root.to_path_buf(), 0)];
   let mut seen = 0;
   while let Some((folder, depth)) = folders.pop() {
-    let Ok(entries) = std::fs::read_dir(&folder) else { continue };
+    let entries = match std::fs::read_dir(&folder) {
+      Ok(entries) => entries,
+      Err(e) if folder == root && e.kind() != std::io::ErrorKind::NotFound => return Err(unreadable(&e, || format!("Couldn’t open the folder: {e}"))),
+      Err(_) => continue,
+    };
     for entry in entries.flatten() {
       seen += 1;
       if seen > 20_000 { break; }
@@ -214,7 +240,7 @@ fn list(root: &Path, skip: Option<&Path>, deep: bool) -> Vec<Doc> {
     }
   }
   found.sort_by(|a, b| b.modified_ms.cmp(&a.modified_ms).then_with(|| a.path.cmp(&b.path)));
-  found
+  Ok(found)
 }
 
 /// The file `path` names inside `root`, resolved through every `..` and symlink first, so nothing
@@ -222,8 +248,15 @@ fn list(root: &Path, skip: Option<&Path>, deep: bool) -> Vec<Doc> {
 fn resolve(root: &Path, path: &str, skip: Option<&Path>, flat: bool) -> Result<PathBuf, String> {
   let path = path.trim();
   if path.is_empty() || path.contains('\0') { return Err("Give a path, as the list shows it.".into()); }
-  let root = root.canonicalize().map_err(|_| "There are none yet: the folder doesn’t exist.".to_string())?;
-  let file = root.join(path).canonicalize().map_err(|_| format!("There is nothing at “{path}”."))?;
+  use std::io::ErrorKind::{NotADirectory, NotFound};
+  let root = root.canonicalize().map_err(|e| match e.kind() {
+    NotFound => "There are none yet: the folder doesn’t exist.".into(),
+    _ => unreadable(&e, || format!("Couldn’t open the folder: {e}")),
+  })?;
+  let file = root.join(path).canonicalize().map_err(|e| match e.kind() {
+    NotFound | NotADirectory => format!("There is nothing at “{path}”."),
+    _ => unreadable(&e, || format!("Couldn’t open “{path}”: {e}")),
+  })?;
   let inside = file.strip_prefix(&root).ok().filter(|rest| !rest.as_os_str().is_empty());
   let Some(rest) = inside else { return Err(format!("“{path}” is outside the folder agents can read.")) };
   if flat && rest.components().count() != 1 { return Err(format!("“{path}” is outside the folder agents can read.")); }
@@ -234,16 +267,17 @@ fn resolve(root: &Path, path: &str, skip: Option<&Path>, flat: bool) -> Result<P
 }
 
 fn read(file: &Path) -> Result<String, String> {
-  let size = std::fs::metadata(file).map_err(|e| e.to_string())?.len();
+  let failed = |e: std::io::Error| unreadable(&e, || format!("Couldn’t read it: {e}"));
+  let size = std::fs::metadata(file).map_err(failed)?.len();
   if size > MAX_FILE { return Err("That file is too large to read.".into()); }
-  let bytes = std::fs::read(file).map_err(|e| format!("Couldn’t read it: {e}"))?;
+  let bytes = std::fs::read(file).map_err(failed)?;
   Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
 /// Every word in the title or the text; up to three matching lines from each note.
-fn search(root: &Path, skip: Option<&Path>, words: &[String], limit: usize) -> Vec<Value> {
+fn search(root: &Path, skip: Option<&Path>, words: &[String], limit: usize) -> Result<Vec<Value>, String> {
   let mut results = Vec::new();
-  for file in list(root, skip, true) {
+  for file in list(root, skip, true)? {
     if results.len() == limit { break; }
     if file.bytes > MAX_FILE { continue; }
     let Ok(bytes) = std::fs::read(root.join(&file.path)) else { continue };
@@ -259,18 +293,24 @@ fn search(root: &Path, skip: Option<&Path>, words: &[String], limit: usize) -> V
     found["matches"] = Value::Array(lines);
     results.push(found);
   }
-  results
+  Ok(results)
 }
 
 /// O_NOFOLLOW from <fcntl.h> on macOS: the file is opened only if it is still not a symlink.
 const NO_FOLLOW: i32 = 0x0100;
 
-/// Adds `text` after a blank line, through an append-only handle, so what is there can't be lost.
+/// Adds `text` after a blank line, through an append-only handle, so what is there can't be lost. Only
+/// the note's last byte is read, however long it is.
 fn append(file: &Path, text: &str) -> Result<(), String> {
+  use std::io::{Seek, SeekFrom};
   use std::os::unix::fs::OpenOptionsExt;
-  let ends_open = std::fs::read(file).map(|bytes| bytes.is_empty() || bytes.ends_with(b"\n")).unwrap_or(true);
-  let addition = format!("{}\n{}\n", if ends_open { "" } else { "\n" }, text.trim_end());
-  let mut handle = std::fs::OpenOptions::new().append(true).custom_flags(NO_FOLLOW).open(file).map_err(|e| format!("Couldn’t open the note: {e}"))?;
+  let mut handle = std::fs::OpenOptions::new().read(true).append(true).custom_flags(NO_FOLLOW).open(file)
+    .map_err(|e| unreadable(&e, || format!("Couldn’t open the note: {e}")))?;
+  let mut last = [0];
+  let empty = handle.metadata().map_err(|e| e.to_string())?.len() == 0;
+  if !empty { handle.seek(SeekFrom::End(-1)).and_then(|_| handle.read_exact(&mut last)).map_err(|e| format!("Couldn’t read the note: {e}"))?; }
+  let gap = if empty { "" } else if last[0] == b'\n' { "\n" } else { "\n\n" };
+  let addition = format!("{gap}{}\n", text.trim_end());
   handle.write_all(addition.as_bytes()).and_then(|_| handle.sync_all()).map_err(|e| format!("Couldn’t add to the note: {e}"))
 }
 
@@ -327,10 +367,10 @@ fn stamp(secs: u64) -> String {
 // ---------- the protocol ----------
 
 /// The last tool call, for the Agents page.
-fn remember_call(tool: &str, client: &str, ok: bool) {
+fn remember_call(tool: &str, client: &Client, ok: bool) {
   let Ok(home) = home() else { return };
   let dir = data_dir(&home);
-  let call = json!({ "lastCall": { "atMs": now_ms(), "tool": tool, "client": client, "ok": ok } });
+  let call = json!({ "lastCall": { "atMs": now_ms(), "tool": tool, "client": client.name, "clientTitle": client.title, "ok": ok } });
   let _ = std::fs::create_dir_all(&dir).and_then(|_| write_atomic(&dir.join("agents.json"), &serde_json::to_vec_pretty(&call).unwrap_or_default()));
 }
 
@@ -338,7 +378,11 @@ fn error(id: Value, code: i64, message: &str) -> Value {
   json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } })
 }
 
-struct Session { client: String, ready: Arc<AtomicBool> }
+/// Who is asking, as the client's `clientInfo` says: its id, and the name it shows people when it gives one.
+#[derive(Default)]
+struct Client { name: String, title: Option<String> }
+
+struct Session { client: Client, ready: Arc<AtomicBool> }
 
 impl Session {
   /// The answer to one line from the client, or none for a notification.
@@ -373,7 +417,8 @@ impl Session {
   fn initialize(&mut self, params: &Value) -> Value {
     let asked = params["protocolVersion"].as_str().unwrap_or(PROTOCOL);
     let version = PROTOCOLS.iter().find(|known| **known == asked).copied().unwrap_or(PROTOCOL);
-    self.client = params["clientInfo"]["name"].as_str().unwrap_or("").chars().filter(|c| !c.is_control()).take(64).collect();
+    let clean = |text: &Value| text.as_str().map(|text| text.chars().filter(|c| !c.is_control()).take(64).collect::<String>().trim().to_owned());
+    self.client = Client { name: clean(&params["clientInfo"]["name"]).unwrap_or_default(), title: clean(&params["clientInfo"]["title"]).filter(|title| !title.is_empty()) };
     json!({
       "protocolVersion": version,
       "capabilities": { "tools": { "listChanged": true } },
@@ -408,7 +453,7 @@ fn send(output: &Mutex<impl Write>, message: &Value) -> std::io::Result<()> {
 pub fn serve(mut input: impl BufRead, output: impl Write + Send + 'static) {
   let output = Arc::new(Mutex::new(output));
   let ready = Arc::new(AtomicBool::new(false));
-  let mut session = Session { client: String::new(), ready: ready.clone() };
+  let mut session = Session { client: Client::default(), ready: ready.clone() };
   {
     // A change in Settings that adds or removes tools is told to the client, which then lists them again.
     let output = output.clone();
@@ -467,10 +512,30 @@ pub struct AgentsStatus {
 
 fn exe() -> Result<PathBuf, String> { std::env::current_exe().map_err(|e| format!("Couldn’t find the app: {e}")) }
 
+/// macOS's struct statvfs, whose block and file counts are 32-bit.
+#[repr(C)]
+struct StatVfs { bsize: u64, frsize: u64, blocks: [u32; 3], files: [u32; 3], fsid: u64, flag: u64, namemax: u64 }
+
+extern "C" {
+  fn statvfs(path: *const std::ffi::c_char, result: *mut StatVfs) -> i32;
+  fn kill(pid: i32, signal: i32) -> i32;
+}
+
+/// Whether `path` is on a volume mounted read-only, as a disk image is. An app on any other volume,
+/// such as an external drive, stays where it is.
+fn read_only(path: &Path) -> bool {
+  const ST_RDONLY: u64 = 1;
+  let Ok(path) = std::ffi::CString::new(path.as_os_str().as_encoded_bytes()) else { return false };
+  // SAFETY: `path` is NUL-terminated and StatVfs matches the struct statvfs only writes into.
+  unsafe {
+    let mut volume: StatVfs = std::mem::zeroed();
+    statvfs(path.as_ptr(), &mut volume) == 0 && volume.flag & ST_RDONLY != 0
+  }
+}
+
 /// A copy run from its disk image, or moved aside by Gatekeeper, is gone once that ends.
 fn problem(exe: &Path) -> Option<String> {
-  let path = exe.to_string_lossy();
-  (path.starts_with("/Volumes/") || path.contains("/AppTranslocation/")).then(|| "Move TabTasker Dictate to Applications first, so agents can always find it.".into())
+  (exe.to_string_lossy().contains("/AppTranslocation/") || read_only(exe)).then(|| "Move TabTasker Dictate to Applications first, so agents can always find it.".into())
 }
 
 /// How an agent's config names this server: absent, this binary, or another copy of the app.
@@ -495,11 +560,33 @@ fn find_claude(home: &Path, configured: Option<&str>) -> Option<PathBuf> {
   which.or_else(|| [home.join(".local/bin/claude"), "/opt/homebrew/bin/claude".into(), "/usr/local/bin/claude".into()].into_iter().find(|path| path.is_file()))
 }
 
-/// Runs `program` and gives what it printed, or a sentence from its error output when it fails.
+/// An unnamed file for a child's output. Unlike a pipe, nothing waits for whoever still holds it, such as
+/// a background job a login shell started.
+fn spool() -> std::io::Result<std::fs::File> {
+  use std::os::unix::fs::OpenOptionsExt;
+  static COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+  let path = std::env::temp_dir().join(format!("tabtasker-dictate-{}-{}", std::process::id(), COUNT.fetch_add(1, Ordering::Relaxed)));
+  let file = std::fs::OpenOptions::new().read(true).write(true).create_new(true).mode(0o600).open(&path)?;
+  std::fs::remove_file(&path)?;
+  Ok(file)
+}
+
+fn spooled(mut file: std::fs::File) -> String {
+  use std::io::{Seek, SeekFrom};
+  let mut text = String::new();
+  let _ = file.seek(SeekFrom::Start(0)).and_then(|_| file.take(1 << 20).read_to_string(&mut text));
+  text
+}
+
+/// Runs `program` and gives what it printed, or a sentence from its error output when it fails. It
+/// never takes longer than `limit`: the program and everything it started are stopped then.
 fn run_for(program: &Path, args: &[&str], path: &[&Path], limit: Duration) -> Result<String, String> {
+  use std::os::unix::process::CommandExt;
   use std::process::{Command, Stdio};
+  let (out, err) = spool().and_then(|out| Ok((out, spool()?))).map_err(|e| format!("Couldn’t start {}: {e}", program.display()))?;
   let mut command = Command::new(program);
-  command.args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+  let pipe = |file: &std::fs::File| file.try_clone().map(Stdio::from).map_err(|e| e.to_string());
+  command.args(args).stdin(Stdio::null()).stdout(pipe(&out)?).stderr(pipe(&err)?).process_group(0);
   if !path.is_empty() {
     // An app started from the Dock has a bare PATH; a CLI written in Node needs its own folder on it.
     let mut dirs: Vec<PathBuf> = path.iter().map(|dir| dir.to_path_buf()).collect();
@@ -508,16 +595,19 @@ fn run_for(program: &Path, args: &[&str], path: &[&Path], limit: Duration) -> Re
     command.env("PATH", std::env::join_paths(dirs).map_err(|e| e.to_string())?);
   }
   let mut child = command.spawn().map_err(|e| format!("Couldn’t start {}: {e}", program.display()))?;
-  let drain = |pipe: Option<Box<dyn Read + Send>>| std::thread::spawn(move || { let mut text = String::new(); if let Some(mut pipe) = pipe { let _ = pipe.read_to_string(&mut text); } text });
-  let out = drain(child.stdout.take().map(|pipe| Box::new(pipe) as Box<dyn Read + Send>));
-  let err = drain(child.stderr.take().map(|pipe| Box::new(pipe) as Box<dyn Read + Send>));
   let started = std::time::Instant::now();
   let status = loop {
     if let Some(status) = child.try_wait().map_err(|e| e.to_string())? { break status; }
-    if started.elapsed() > limit { let _ = child.kill(); let _ = child.wait(); return Err("It took too long to answer.".into()); }
+    if started.elapsed() > limit {
+      const SIGKILL: i32 = 9;
+      // SAFETY: a plain syscall. The child leads its own process group, so this reaches only what it started.
+      unsafe { kill(-(child.id() as i32), SIGKILL); }
+      let _ = child.wait();
+      return Err("It took too long to answer.".into());
+    }
     std::thread::sleep(Duration::from_millis(50));
   };
-  let (out, err) = (out.join().unwrap_or_default(), err.join().unwrap_or_default());
+  let (out, err) = (spooled(out), spooled(err));
   if status.success() { return Ok(out); }
   let said = err.lines().chain(out.lines()).map(str::trim).rfind(|line| !line.is_empty()).map(|line| line.chars().take(200).collect::<String>());
   Err(said.unwrap_or_else(|| format!("It stopped with code {}.", status.code().unwrap_or(-1))))
@@ -537,11 +627,17 @@ fn add_to_claude_code(cli: &Path, exe: &Path, now: Added) -> Result<(), String> 
   run_for(cli, &["mcp", "add", "--scope", "user", NAME, "--", exe, "--mcp"], &[&dir], limit).map(|_| ()).map_err(failed)
 }
 
-/// Written beside `path` and renamed over it, so a crash leaves the old file or the new one.
+/// Written beside `path` and renamed over it, so a crash leaves the old file or the new one. A symlink
+/// stays a link: the file it points at is the one replaced, and it keeps its permissions, since a
+/// config can hold secrets.
 fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+  let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+  let mode = std::fs::metadata(&path).ok().map(|meta| meta.permissions());
   let name = path.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
   let temp = path.with_file_name(format!(".{name}.tabtasker-{}", std::process::id()));
-  let written = std::fs::File::create(&temp).and_then(|mut file| { file.write_all(bytes)?; file.sync_all() }).and_then(|_| std::fs::rename(&temp, path));
+  let written = std::fs::File::create(&temp)
+    .and_then(|mut file| { if let Some(mode) = mode { file.set_permissions(mode)?; } file.write_all(bytes)?; file.sync_all() })
+    .and_then(|_| std::fs::rename(&temp, &path));
   if written.is_err() { let _ = std::fs::remove_file(&temp); }
   written
 }
@@ -680,12 +776,51 @@ mod tests {
     write(&notes.join("photo.png"), "p");
     std::os::unix::fs::symlink(notes.join("old.md"), notes.join("link.md")).unwrap();
     std::os::unix::fs::symlink(&dir, notes.join("loop")).unwrap();
-    let paths: Vec<String> = list(&notes, Some(&notes.join("Meetings")), true).into_iter().map(|file| file.path).collect();
+    let paths: Vec<String> = list(&notes, Some(&notes.join("Meetings")), true).unwrap().into_iter().map(|file| file.path).collect();
     assert_eq!(paths, ["Projects/new.MD", "old.md"]);
-    let flat: Vec<String> = list(&notes, None, false).into_iter().map(|file| file.path).collect();
+    let flat: Vec<String> = list(&notes, None, false).unwrap().into_iter().map(|file| file.path).collect();
     assert_eq!(flat, ["old.md"]);
-    assert!(list(&dir.join("missing"), None, true).is_empty());
+    assert!(list(&dir.join("missing"), None, true).unwrap().is_empty());
     std::fs::remove_dir_all(dir).unwrap();
+  }
+
+  #[test]
+  fn a_folder_macos_refuses_is_never_an_empty_one() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = temp("denied");
+    let notes = dir.join("notes");
+    write(&notes.join("a.md"), "a");
+    std::fs::set_permissions(&notes, std::fs::Permissions::from_mode(0o000)).unwrap();
+    let listed = list(&notes, None, true);
+    let read = resolve(&notes, "a.md", None, false);
+    let searched = search(&notes, None, &["a".into()], 5);
+    std::fs::set_permissions(&notes, std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert_eq!(listed.unwrap_err(), DENIED);
+    assert_eq!(read.unwrap_err(), DENIED);
+    assert_eq!(searched.unwrap_err(), DENIED);
+    assert_eq!(resolve(&dir.join("missing"), "a.md", None, false).unwrap_err(), "There are none yet: the folder doesn’t exist.");
+    assert_eq!(resolve(&notes, "b.md", None, false).unwrap_err(), "There is nothing at “b.md”.");
+    assert_eq!(resolve(&notes, "a.md/b.md", None, false).unwrap_err(), "There is nothing at “a.md/b.md”.");
+    std::fs::remove_dir_all(dir).unwrap();
+  }
+
+  #[test]
+  fn one_folder_for_notes_and_meetings_is_shared_only_with_both() {
+    let both = Agents::default();
+    let no_meetings = Agents { share_meetings: false, ..Agents::default() };
+    let no_notes = Agents { share_notes: false, ..Agents::default() };
+    for tool in ["list_notes", "read_note", "search_notes", "append_to_note", "list_meetings", "read_meeting", "create_note", "recent_dictations"] {
+      assert!(one_folder(tool, &both).is_ok(), "{tool}");
+    }
+    for tool in ["list_notes", "read_note", "search_notes", "append_to_note"] {
+      assert!(one_folder(tool, &no_meetings).unwrap_err().contains("turn on Meetings"), "{tool}");
+      assert!(one_folder(tool, &no_notes).is_ok(), "{tool}");
+    }
+    for tool in ["list_meetings", "read_meeting"] {
+      assert!(one_folder(tool, &no_notes).unwrap_err().contains("turn on Notes"), "{tool}");
+      assert!(one_folder(tool, &no_meetings).is_ok(), "{tool}");
+    }
+    assert!(one_folder("create_note", &no_meetings).is_ok());
   }
 
   #[test]
@@ -693,12 +828,12 @@ mod tests {
     let dir = temp("search");
     write(&dir.join("Venue.md"), "# Venue\n\nCall the venue about Thursday.\nBook the band.\n");
     write(&dir.join("Other.md"), "Thursday lunch");
-    let found = search(&dir, None, &["venue".into(), "thursday".into()], 10);
+    let found = search(&dir, None, &["venue".into(), "thursday".into()], 10).unwrap();
     assert_eq!(found.len(), 1);
     assert_eq!(found[0]["path"], "Venue.md");
     assert_eq!(found[0]["matches"][0], json!({ "line": 1, "text": "# Venue" }));
     assert_eq!(found[0]["matches"][1], json!({ "line": 3, "text": "Call the venue about Thursday." }));
-    assert_eq!(search(&dir, None, &["thursday".into()], 1).len(), 1);
+    assert_eq!(search(&dir, None, &["thursday".into()], 1).unwrap().len(), 1);
     std::fs::remove_dir_all(dir).unwrap();
   }
 
@@ -709,6 +844,9 @@ mod tests {
     append(&dir.join("a.md"), "Two\n\n").unwrap();
     append(&dir.join("a.md"), "Three").unwrap();
     assert_eq!(std::fs::read_to_string(dir.join("a.md")).unwrap(), "# Plan\n\nOne\n\nTwo\n\nThree\n");
+    write(&dir.join("empty.md"), "");
+    append(&dir.join("empty.md"), "First").unwrap();
+    assert_eq!(std::fs::read_to_string(dir.join("empty.md")).unwrap(), "First\n");
     std::fs::write(dir.join("outside.md"), "x").unwrap();
     std::os::unix::fs::symlink(dir.join("outside.md"), dir.join("link.md")).unwrap();
     assert!(append(&dir.join("link.md"), "no").is_err());
@@ -769,6 +907,48 @@ mod tests {
   }
 
   #[test]
+  fn a_linked_claude_desktop_config_stays_linked_and_private() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = temp("desktop-link");
+    let (real, config) = (dir.join("dotfiles/claude_desktop_config.json"), dir.join("Claude/claude_desktop_config.json"));
+    write(&real, r#"{ "mcpServers": {} }"#);
+    std::fs::set_permissions(&real, std::fs::Permissions::from_mode(0o600)).unwrap();
+    std::fs::create_dir_all(config.parent().unwrap()).unwrap();
+    std::os::unix::fs::symlink(&real, &config).unwrap();
+    add_to_desktop(&config, Path::new("/Applications/TabTasker Dictate.app/Contents/MacOS/tabtasker-dictate")).unwrap();
+    assert!(config.symlink_metadata().unwrap().file_type().is_symlink());
+    assert_eq!(added(read_json(&real).unwrap()["mcpServers"].get(NAME), Path::new("/Applications/TabTasker Dictate.app/Contents/MacOS/tabtasker-dictate")), Added::Yes);
+    assert_eq!(std::fs::metadata(&real).unwrap().permissions().mode() & 0o777, 0o600);
+    assert_eq!(std::fs::read_dir(dir.join("dotfiles")).unwrap().count(), 1, "no temp file left behind");
+    std::fs::remove_dir_all(dir).unwrap();
+  }
+
+  #[test]
+  fn a_program_is_never_waited_on_past_its_limit() {
+    // A background job holding the output open, as a login profile can start, doesn't hold up the answer.
+    let started = std::time::Instant::now();
+    assert_eq!(run_for(Path::new("/bin/sh"), &["-c", "sleep 3 & echo /usr/bin/true"], &[], Duration::from_secs(2)).unwrap(), "/usr/bin/true\n");
+    assert!(started.elapsed() < Duration::from_secs(2), "{:?}", started.elapsed());
+
+    // Past the limit, the program and what it started are stopped.
+    let dir = temp("run");
+    let pid = dir.join("pid");
+    let script = format!("sleep 30 & echo $! > '{}'; sleep 30", pid.display());
+    let started = std::time::Instant::now();
+    assert_eq!(run_for(Path::new("/bin/sh"), &["-c", &script], &[], Duration::from_millis(500)).unwrap_err(), "It took too long to answer.");
+    assert!(started.elapsed() < Duration::from_secs(2), "{:?}", started.elapsed());
+    let job: i32 = std::fs::read_to_string(&pid).unwrap().trim().parse().unwrap();
+    // SAFETY: signal 0 only asks whether the process is there.
+    let alive = || unsafe { kill(job, 0) == 0 };
+    let gone = std::time::Instant::now();
+    while alive() && gone.elapsed() < Duration::from_secs(2) { std::thread::sleep(Duration::from_millis(20)); }
+    assert!(!alive(), "the background job outlived the limit");
+
+    assert_eq!(run_for(Path::new("/bin/sh"), &["-c", "echo nope >&2; exit 3"], &[], Duration::from_secs(5)).unwrap_err(), "nope");
+    std::fs::remove_dir_all(dir).unwrap();
+  }
+
+  #[test]
   fn claude_code_is_told_once_and_an_old_entry_is_replaced() {
     use std::os::unix::fs::PermissionsExt;
     let dir = temp("cli");
@@ -806,7 +986,10 @@ mod tests {
     assert_eq!(status.last_call.unwrap()["tool"], "read_note");
     assert_eq!(status.command, [exe.to_str().unwrap(), "--mcp"]);
     assert!(status.problem.is_none());
-    assert!(problem(Path::new("/Volumes/TabTasker Dictate/TabTasker Dictate.app/Contents/MacOS/tabtasker-dictate")).is_some());
+    // A read-only volume, as a disk image is mounted; the system volume is one too.
+    assert!(problem(Path::new("/usr/bin/true")).is_some());
+    assert!(problem(Path::new("/Volumes/External/Applications/TabTasker Dictate.app/Contents/MacOS/tabtasker-dictate")).is_none());
+    assert!(problem(&home).is_none());
     assert!(problem(Path::new("/private/var/folders/x/AppTranslocation/y/d/TabTasker Dictate.app/Contents/MacOS/tabtasker-dictate")).is_some());
     std::fs::remove_dir_all(home).unwrap();
   }
