@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { invoke, listen } from '../bridge';
 import type { Events } from '../store';
+import { SendToClaudeCode } from './CommandCard';
 import { X } from './icons';
 import { PREVIEW } from './preview';
 import './MeetingPill.css';
@@ -162,9 +163,12 @@ export function MeetingPill() {
     if (outcome?.state === 'saved' && outcome.path) {
       const path = outcome.path, kept = outcome.leftover;
       if (!outcome.message && !kept) {
-        return <button type="button" className="glass said saved meeting-card" data-glass data-hit onClick={() => { reveal(path); setOutcome(null); }}>
-          <small>Meeting saved · Show in Finder</small><span>{path.split('/').pop()?.replace(/\.md$/, '')}</span>
-        </button>;
+        return <>
+          <button type="button" className="glass said saved meeting-card" data-glass data-hit onClick={() => { reveal(path); setOutcome(null); }}>
+            <small>Meeting saved · Show in Finder</small><span>{path.split('/').pop()?.replace(/\.md$/, '')}</span>
+          </button>
+          <SendToClaudeCode path={path} onSent={() => setOutcome(null)} onError={message => setOutcome({ state: 'saved', path, message })} />
+        </>;
       }
       // Saved, with something to say: it stopped early, or parts are still audio.
       return <div className="glass meeting-pill meeting-card" data-glass data-hit role="status">

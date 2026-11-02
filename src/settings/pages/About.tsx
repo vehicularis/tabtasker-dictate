@@ -60,7 +60,7 @@ export function About(_: PageProps) {
         {reading && <div className="ui-tile stack"><Notices label="Apache License 2.0" text={LICENCE} /></div>}
       </TileGroup>
     </Section>
-    <Section title="Third-party notices" note="The voice models and whisper.cpp inside TabTasker Dictate, with their licences.">
+    <Section title="Third-party notices" note="The voice models, libraries and fonts inside TabTasker Dictate, with their licences.">
       <TileGroup label="Third-party notices">
         <div className="ui-tile stack"><Notices label="Third-party notices" text={NOTICES} /></div>
       </TileGroup>

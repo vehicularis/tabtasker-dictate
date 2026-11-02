@@ -67,7 +67,7 @@ export function Claude({ settings, update }: PageProps) {
       </TileGroup>
     </Section>
     <Seen settings={settings} />
-    <Section title="Claude Code" note={problem ?? 'Send to Claude Code, on a saved note, opens Terminal in your project and starts Claude Code with the note as its first message.'}>
+    <Section title="Claude Code" note={problem ?? 'Send to Claude Code, on a saved note or meeting, opens Terminal in your project and starts Claude Code with it as the first message.'}>
       <TileGroup>
         <Tile title="Claude Code" detail={claude.claudeCode ? 'Found on this Mac.' : 'Not found yet. It is looked for each time the app opens.'}>
           <TextField key={refused} label="Claude Code path" monospace value={tilde(claude.claudeCode ?? '', status?.home)} placeholder="~/.local/bin/claude" onCommit={path('claudeCode')} />

@@ -26,7 +26,7 @@ export function General({ settings, update }: PageProps) {
             onChange={on => run(invoke('set_open_at_login', { enabled: on }), 'Couldn’t change Open at Login')} />
         </Tile>
         <Tile title="Menu bar icon" detail={icon ? 'New notes, meetings and recent notes from the menu bar.'
-          : 'Hidden. To come back here, open TabTasker Dictate again from Finder or Spotlight, or right-click the dots.'}>
+          : `Hidden. To come back here, open TabTasker Dictate again from Finder or Spotlight${settings.appearance.idle === 'dots' ? ', or right-click the dots' : ''}.`}>
           <Toggle label="Menu bar icon" checked={icon} onChange={menuBarIcon => void update({ general: { menuBarIcon } })} />
         </Tile>
       </TileGroup>

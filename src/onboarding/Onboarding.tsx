@@ -16,7 +16,7 @@ type StepId = 'welcome' | 'microphone' | 'accessibility' | 'key' | 'model' | 'tr
 const STEPS: { id: StepId; name: string; icon: Glyph }[] = [
   { id: 'welcome', name: 'Welcome', icon: 'waveform' }, { id: 'microphone', name: 'Microphone', icon: 'mic' },
   { id: 'accessibility', name: 'Accessibility', icon: 'access' }, { id: 'key', name: 'Your key', icon: 'keyboard' },
-  { id: 'model', name: 'Speech model', icon: 'download' }, { id: 'try', name: 'Try it', icon: 'sparkle' },
+  { id: 'model', name: 'Speech model', icon: 'download' }, { id: 'try', name: 'Try it', icon: 'note' },
   { id: 'extras', name: 'Extras', icon: 'plus' }, { id: 'done', name: 'Done', icon: 'check' },
 ];
 // A hold this long is a hold, not a tap: the same as the overlay's key test.
@@ -322,15 +322,17 @@ const COMMAND_GLYPHS: Record<Exclude<CommandKey, 'off'>, string> = { control: 'â
 
 function Done({ status, settings, go }: Step) {
   const { shortcuts, claude, general } = settings;
+  // With the dots hidden until the key is held, there is nothing to right-click.
+  const menu = settings.appearance.idle === 'dots' ? 'right-click the dots' : 'open TabTasker Dictate from Spotlight';
   const name = KEY_NAMES[shortcuts.dictate];
   const needs = missing(status);
   const ways: [string, ReactNode][] = [['Type where your cursor is', <>hold <Kbd>{name}</Kbd></>]];
   if (shortcuts.handsFree) ways.push(['Keep listening, hands-free', <>double-tap <Kbd>{name}</Kbd></>]);
   if (claude.enabled && claude.commands && shortcuts.command !== 'off') ways.push(['Talk to Claude', <>hold <Kbd>{name}</Kbd> with <Kbd>{COMMAND_GLYPHS[shortcuts.command]}</Kbd></>]);
   ways.push(['Take a spoken note', shortcuts.note ? <Kbd>{shortcuts.note.label}</Kbd> : 'the note button on the dots']);
-  ways.push(['Record a meeting', shortcuts.meeting ? <Kbd>{shortcuts.meeting.label}</Kbd> : general.menuBarIcon ? 'the menu bar icon' : 'right-click the dots']);
+  ways.push(['Record a meeting', shortcuts.meeting ? <Kbd>{shortcuts.meeting.label}</Kbd> : general.menuBarIcon ? 'the menu bar icon' : menu]);
   if (shortcuts.pasteLast) ways.push(['Paste the last transcript', <Kbd>{shortcuts.pasteLast.label}</Kbd>]);
-  ways.push(['Settings and more', 'right-click the dots']);
+  ways.push(['Settings and more', general.menuBarIcon ? 'the menu bar icon' : menu]);
   return <>
     {needs.length ? <>
       <p className="lead">A few things are left before your words can type. Finish them now, or later from Settings.</p>

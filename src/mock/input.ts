@@ -34,10 +34,6 @@ export function register(mock: Mock) {
   addEventListener('keydown', key);
   addEventListener('keyup', key);
   addEventListener('blur', () => { if (down) { down = false; mock.emit('dictate-fn', { down }); } });
-  // This replaces the shared `request` handler, so it keeps the permission answers too.
-  mock.handle('request', ({ kind }) => {
-    if (kind === 'send' || kind === 'cancel') lock(false);
-    else if (kind === 'microphone') mock.status.microphone = 'allowed';
-    else if (kind === 'accessibility') mock.status.accessibility = true;
-  });
+  const permissions = mock.handled('request');
+  mock.handle('request', args => args.kind === 'send' || args.kind === 'cancel' ? lock(false) : permissions?.(args));
 }

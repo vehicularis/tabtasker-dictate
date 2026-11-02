@@ -23,6 +23,7 @@ export const Logo = ({ size = 18 }: { size?: number }) => <svg width={size} heig
 export const NoteIcon = () => <Icon name="note" size={17} />;
 export const MicIcon = () => <Icon name="mic" size={17} />;
 export const FolderIcon = () => <Icon name="folder" size={17} />;
+export const PasteIcon = () => <Icon name="copy" size={17} />;
 export const MeetingIcon = () => <Icon name="meeting" size={17} />;
 export const GearIcon = () => <Line><path d={GEAR} /><circle cx="10" cy="10" r="2.4" /></Line>;
 // A clock with its bells: away for a while.
