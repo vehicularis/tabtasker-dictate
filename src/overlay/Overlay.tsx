@@ -112,7 +112,6 @@ export function Overlay() {
         if (down) fnDownAt.current = performance.now();
         else if (fnDownAt.current && performance.now() - fnDownAt.current > 350) setFnTested(true);
       }),
-      listen('dictate-hide', () => setHidden(true)),
       // An overlay behind another app gets no hover from WebKit: the native side reports the pointer.
       listen<{ x: number; y: number } | null>('dictate-pointer', at => {
         const spot = root.current?.querySelector('[data-spot]');
@@ -243,8 +242,12 @@ export function Overlay() {
     return () => { removeEventListener('keydown', key); removeEventListener('pointerdown', away); };
   }, [setup, reviewing, menu, openSettings]);
 
-  // Nothing is drawn until the settings say which edge the dots are on.
-  if (hidden || !settings) return <div ref={root} className="layer" data-edge={edge} />;
+  // Nothing is drawn until the settings say which edge the dots are on. Hidden for an hour, the dots go but
+  // an answer from Claude, a meeting or a hands-free session still shows, or its words would be lost.
+  if (!settings) return <div ref={root} className="layer" data-edge={edge} />;
+  if (hidden) return <div ref={root} className="layer" data-edge={edge} data-size={settings.appearance.size}>
+    <div ref={dock} className="dock"><CommandCard /><MeetingPill /><HandsFree /></div>
+  </div>;
   const mode = phase === 'listening' ? 'listening' : phase !== 'idle' ? 'thinking' : hover || menu ? 'hover' : 'idle';
   const card = setup || (draft && reviewing);
   const pending = !!draft && !reviewing;
@@ -271,7 +274,7 @@ export function Overlay() {
         onHover={setHover} onGrab={grab} onDots={clickDots} onNote={takeNote} onSetup={openSetup} onOrb={() => { if (noting) takeNote(); }}
         onMenu={() => { if (phase === 'idle') { setMenu(true); refresh(); lookMeetings(); } }}
         menu={menu && <Menu status={status} mics={mics} meeting={!!meetings?.recording} onMics={setMics} onNote={() => { setMenu(false); takeNote(); }} onMeeting={startMeeting}
-          onShowNotes={() => { setMenu(false); void invoke('show_notes', {}).catch(() => {}); }} onPickMic={pickMic} onLogin={login}
+          onShowNotes={() => { setMenu(false); void invoke('show_notes', {}).catch(() => {}); }} onPasteLast={() => { setMenu(false); void invoke('paste_last').catch(() => {}); }} onPickMic={pickMic} onLogin={login}
           onHide={hideForAnHour} onSettings={openSettings} onSetup={openSetup} />} />
     </div>
   </div>;

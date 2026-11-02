@@ -15,7 +15,7 @@ const cut = (text: string, bytes: number) => {
   for (const char of text) { if (new TextEncoder().encode(out + char).length > bytes) break; out += char; }
   return out.trimEnd();
 };
-const fileStem = (template: string, title: string, date: string, time: string) => {
+export const fileStem = (template: string, title: string, date: string, time: string) => {
   const name = template.replaceAll('{date}', date).replaceAll('{time}', time).replaceAll('{title}', cut(clean(title), 120) || 'Note');
   return cut(clean(name), 200) || 'Note';
 };

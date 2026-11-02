@@ -59,6 +59,7 @@ export function Meetings({ settings, update }: PageProps) {
     if (shown?.state === 'saved' && shown.path) {
       const path = shown.path;
       return <Tile title={<span role="status">Meeting saved</span>} detail={<>{path.split('/').pop()?.replace(/\.md$/, '')}{shown.message && <><br />{shown.message}</>}</>}>
+        {settings.claude.claudeCode && <Button onClick={() => void invoke('send_to_claude_code', { path }).catch(() => setStartProblem('Couldn’t open Claude Code.'))}>Send to Claude Code</Button>}
         <Button onClick={() => reveal(path)}>Show in Finder</Button>
       </Tile>;
     }

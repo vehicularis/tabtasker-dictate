@@ -1,26 +1,26 @@
 /* Settings › Shortcuts: the keyboard's corner that is also the key picker, and the tester. */
 .key-picker { flex: 1; min-width: 0; }
-.keyboard { display: flex; flex-direction: column; gap: 5px; padding: 12px; border-radius: 10px; background: var(--surface); }
+.keyboard { display: flex; flex-direction: column; gap: 5px; padding: 12px; border-radius: var(--radius-row); background: var(--surface); box-shadow: var(--elev-well); }
 .keyboard .row { display: flex; gap: 5px; }
-.cap { position: relative; flex: 1 1 0; min-width: 0; height: 38px; box-sizing: border-box; padding: 0; border: 0; border-radius: 6px; font: 500 11px/1 var(--font); color: var(--ink-3); background: var(--surface-2); opacity: .6; }
+.cap { position: relative; flex: 1 1 0; min-width: 0; height: 38px; box-sizing: border-box; padding: 0; border: 0; border-radius: 6px; font: 500 11px/1 var(--font); color: var(--ink-3); background: var(--card); box-shadow: var(--elev-raised); opacity: .55; }
 .cap.plain { display: grid; place-items: center; }
 .cap .glyph { position: absolute; top: 5px; right: 6px; }
 .cap .name { position: absolute; bottom: 5px; left: 5px; font-size: 9px; }
 .cap .name svg { display: block; }
 button.cap { color: var(--ink); opacity: 1; cursor: pointer; transition: background var(--quick) var(--ease), color var(--quick) var(--ease), transform var(--quick) var(--ease), box-shadow var(--quick) var(--ease); }
-button.cap:hover { background: var(--surface-3); }
-button.cap[aria-checked='true'] { color: var(--on-accent); background: var(--accent); }
+button.cap:hover { box-shadow: var(--elev-raised-hover); }
+button.cap[aria-checked='true'] { color: var(--on-accent); background: var(--accent-button); box-shadow: var(--elev-control); }
 button.cap[aria-checked='true'] .glyph { font-weight: 700; }
 /* Held: pressed in, with a halo, so it reads apart from merely chosen. */
 button.cap[data-down] { transform: translateY(1px) scale(.95); box-shadow: 0 0 0 4px var(--accent-fill); }
-.key-caption { display: flex; align-items: center; justify-content: space-between; margin: 8px 2px 0; font-size: 12px; color: var(--ink-2); }
+.key-caption { display: flex; align-items: center; justify-content: space-between; margin: 8px 2px 0; font-size: 13px; color: var(--ink-2); }
 
 .ui-tile.tester { min-height: 42px; transition: background var(--quick) var(--ease); }
 .ui-tile.tester[data-on] { background: var(--accent-fill); }
 .ui-tile.tester[data-off] .what, .ui-tile.tester[data-off] .chips { opacity: .45; }
 .tester .chips { display: inline-flex; align-items: center; gap: 3px; }
 .tester .ui-kbd { transition: background var(--quick) var(--ease), color var(--quick) var(--ease); }
-.tester[data-on] .ui-kbd { color: var(--on-accent); background: var(--accent); }
+.tester[data-on] .ui-kbd { color: var(--on-accent); background: var(--accent-button); box-shadow: var(--elev-control); }
 .tester .heard { display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px; min-width: 72px; font-size: 12px; color: var(--ink-3); }
 .tester .heard .ui-icon { color: var(--ink); }
 .tester .heard:has(.ui-icon) { color: var(--ink); }

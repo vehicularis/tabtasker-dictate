@@ -15,6 +15,8 @@ export type Handler = (args: Record<string, unknown>) => unknown;
 export type Mock = {
   /// Answers `command` in the browser. A later handler replaces an earlier one.
   handle: (command: string, handler: Handler) => void;
+  /// The handler `command` has now, for a later one that adds to it rather than replacing it.
+  handled: (command: string) => Handler | undefined;
   emit: (event: string, payload: unknown) => void;
   settings: () => Settings;
   /// A change from a feature's own mock, as settings.rs's `update`: the store's rules, and it can turn Claude on.
@@ -142,7 +144,7 @@ const handlers = new Map<string, Handler>();
 const listeners = new Map<string, Set<(payload: unknown) => void>>();
 const emit = (event: string, payload: unknown) => listeners.get(event)?.forEach(handler => handler(copy(payload)));
 const changed = () => { emit('dictate-settings', settings); return copy(settings); };
-const mock: Mock = { handle: (command, handler) => handlers.set(command, handler), emit, settings: () => copy(settings), status, update: patch => { settings = patched(settings, patch); return changed(); } };
+const mock: Mock = { handle: (command, handler) => handlers.set(command, handler), handled: command => handlers.get(command), emit, settings: () => copy(settings), status, update: patch => { settings = patched(settings, patch); return changed(); } };
 
 mock.handle('get_settings', () => copy(settings));
 mock.handle('update_settings', ({ patch }) => {
@@ -179,7 +181,8 @@ mock.handle('save_note', ({ title, stamp }) => `${status.notes}/${stamp} ${title
 mock.handle('show_notes', () => {});
 mock.handle('plugin:app|version', () => '0.1.0');
 
-for (const register of [input, speech, notes, meetings, claude, agents, stats, setup, design]) register(mock);
+// Input goes last: its `request` adds Send and Cancel to the permission answers setup gives.
+for (const register of [speech, notes, meetings, claude, agents, stats, setup, design, input]) register(mock);
 
 export async function invoke(command: string, args: Record<string, unknown>): Promise<unknown> {
   const handler = handlers.get(command);
