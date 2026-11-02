@@ -14,6 +14,7 @@ export type Size = 'small' | 'medium' | 'large';
 export type AppStyle = { bundleId: string; name: string; style: Style; polish: boolean };
 export type Settings = {
   version: 1;
+  general: { menuBarIcon: boolean };
   shortcuts: { dictate: DictateKey; handsFree: boolean; command: CommandKey; note: Chord | null; meeting: Chord | null; pasteLast: Chord | null };
   dictation: { language: string; translateToEnglish: boolean; liveTyping: boolean; removeFillers: boolean; sounds: boolean; model: 'turbo' | 'small' };
   vocabulary: { words: string[]; replacements: { from: string; to: string }[]; learn: boolean; suggestions: string[] };
@@ -66,6 +67,7 @@ export type Status = {
   globeKey: '' | 'inputSource' | 'emoji' | 'dictation';
   inputs: { id: string; name: string }[]; input: string | null; inputInUse: string;
   home?: string; // the home folder, for paths written with ~
+  firstRun?: boolean; // this launch is the first and opened the full setup in Settings
 };
 export const setupDone = (status: Status | null) =>
   !!status && status.enabled && status.microphone === 'allowed' && status.accessibility && status.modelReady;
