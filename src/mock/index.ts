@@ -149,7 +149,7 @@ mock.handle('update_settings', ({ patch }) => {
   if (object(request.claude)) delete request.claude.enabled; // only the app turns Claude on, once a key is tested
   return mock.update(request);
 });
-mock.handle('reset_settings', () => { settings = copy(DEFAULTS); return changed(); });
+mock.handle('reset_settings', () => { settings = { ...copy(DEFAULTS), claude: { ...copy(DEFAULTS.claude), enabled: settings.claude.enabled } }; return changed(); });
 mock.handle('status', () => copy(status));
 mock.handle('set_enabled', ({ enabled }) => {
   status.enabled = !!enabled;

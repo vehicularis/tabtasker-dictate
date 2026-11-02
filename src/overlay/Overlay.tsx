@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPoi
 import { invoke, listen } from '../bridge';
 import { setupDone, updateSettings, useSettings, type Edge, type Status } from '../store';
 import { applyTheme, isDark } from '../ui/theme';
-import { CommandCard } from './CommandCard';
+import { CommandCard, SendToClaudeCode } from './CommandCard';
 import { Dock } from './Dock';
 import { HandsFree } from './HandsFree';
 import { Learned } from './Learned';
@@ -259,6 +259,7 @@ export function Overlay() {
       {saved && !card && <button type="button" className="glass said saved" data-glass data-hit onClick={() => { void invoke('show_notes', { file: saved }).catch(() => {}); setSaved(null); }}>
         <small>Saved · Show in Finder</small><span>{saved.split('/').pop()?.replace(/\.md$/, '')}</span>
       </button>}
+      {saved && !card && <SendToClaudeCode path={saved} onSent={() => setSaved(null)} onError={setToast} />}
       <CommandCard />
       <MeetingPill />
       <HandsFree />
