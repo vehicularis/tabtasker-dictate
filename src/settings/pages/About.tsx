@@ -1,44 +1,49 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { invoke } from '../../bridge';
 import type { PageProps } from '../../store';
-import { Button, Icon, Section, Tile, TileGroup } from '../../ui';
+import { Button, Icon, Section, Tile, TileGroup, type IconName } from '../../ui';
+import icon from '../../../src-tauri/icons/128x128@2x.png';
+import licence from '../../../LICENSE?raw';
 import notices from '../../../THIRD_PARTY_NOTICES.txt?raw';
+
+// A promise with its icon in front, as macOS lists privacy.
+const Pledge = ({ icon, title, children }: { icon: IconName; title: string; children: ReactNode }) => <div className="ui-tile pledge">
+  <span className="pledge-icon"><Icon name={icon} size={18} /></span>
+  <div className="what"><span className="title">{title}</span><span className="detail">{children}</span></div>
+</div>;
 
 export function About(_: PageProps) {
   const [version, setVersion] = useState<string | null>(null);
-  const [open, setOpen] = useState(false);
+  const [reading, setReading] = useState(false);
   useEffect(() => { void invoke<string>('plugin:app|version').then(setVersion).catch(() => {}); }, []);
   return <>
     <header className="about">
-      <svg width="72" height="72" viewBox="0 0 28 28" aria-hidden="true">
-        <rect x="1" y="1" width="26" height="26" rx="7" fill="#000" />
-        {[[7, 5.6], [10.4, 9.6], [17.6, 9.6], [21, 5.6]].map(([x, h]) => <rect key={x} x={x - 1} y={14 - h / 2} width="2" height={h} rx="1" fill="#fff" />)}
-        <path d="M14 7v14M12.6 7h2.8M12.6 21h2.8" stroke="#fff" strokeWidth="1.3" strokeLinecap="round" />
-      </svg>
+      <img src={icon} width="112" height="112" alt="" draggable={false} />
       <h1>TabTasker Dictate</h1>
-      <p>{version ? `Version ${version}` : ' '}</p>
+      <p className="version">{version ? `Version ${version}` : ' '}</p>
+      <p>Talk instead of typing, on your Mac.</p>
     </header>
     <Section title="Privacy">
-      <TileGroup>
-        <Tile title="Your voice stays on this Mac" detail="Whisper transcribes on this Mac. Audio is never uploaded, stored or shared.">
-          <Icon name="shield" size={18} />
-        </Tile>
-        <Tile title="Claude is your choice" detail="Only when you connect it, and only text: what you dictated, never the audio.">
-          <Icon name="claude" size={18} />
-        </Tile>
-        <Tile title="No account" detail="Nothing to sign in to, and no analytics.">
-          <Icon name="check" size={18} />
-        </Tile>
+      <TileGroup label="Privacy">
+        <Pledge icon="shield" title="Your voice stays on this Mac">Whisper transcribes it here. Audio is never uploaded or shared, and isn’t kept once it’s transcribed.</Pledge>
+        <Pledge icon="claude" title="Claude only if you connect it">It gets text, never audio, and only for what you ask of it. Your key stays in the Keychain.</Pledge>
+        <Pledge icon="folder" title="Your words are yours">Notes, meetings and history are kept on this Mac. Agents see only what you share on the Agents page.</Pledge>
+        <Pledge icon="check" title="No account and no analytics">Nothing to sign in to, and nothing about how you use it is sent anywhere.</Pledge>
       </TileGroup>
     </Section>
-    <Section title="Licence" note="© 2026 Vehicularis Limited">
-      <TileGroup>
-        <Tile title="Apache License 2.0" detail="TabTasker Dictate is open source." />
-        <Tile title="Third-party notices" detail="The models and libraries it uses, with their licences.">
-          <Button small icon={open ? 'chevronDown' : 'chevronRight'} aria-expanded={open} onClick={() => setOpen(!open)}>{open ? 'Hide' : 'Show'}</Button>
+    <Section title="Licence">
+      <TileGroup label="Licence">
+        <Tile title="Apache License 2.0" detail="TabTasker Dictate is open source.">
+          <Button small aria-expanded={reading} onClick={() => setReading(!reading)}>{reading ? 'Hide licence' : 'Read licence'}</Button>
         </Tile>
-        {open && <div className="ui-tile stack"><pre className="notices" tabIndex={0}>{notices}</pre></div>}
+        {reading && <div className="ui-tile stack"><pre className="notices" tabIndex={0} aria-label="Apache License 2.0">{licence.replace(/^\n+/, '').trimEnd()}</pre></div>}
       </TileGroup>
     </Section>
+    <Section title="Third-party notices" note="The speech model and the libraries inside TabTasker Dictate, with their licences.">
+      <TileGroup label="Third-party notices">
+        <div className="ui-tile stack"><pre className="notices" tabIndex={0} aria-label="Third-party notices">{notices.trimEnd()}</pre></div>
+      </TileGroup>
+    </Section>
+    <p className="about-foot">© 2026 Vehicularis Limited</p>
   </>;
 }

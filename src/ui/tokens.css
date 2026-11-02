@@ -7,7 +7,7 @@
   --surface: rgb(0 0 0 / .04); --surface-2: rgb(0 0 0 / .07); --surface-3: rgb(0 0 0 / .11);
   --ink: #1d1d1f; --ink-2: rgb(0 0 0 / .62); --ink-3: rgb(0 0 0 / .42);
   --accent: #000000; --on-accent: #ffffff; --accent-fill: rgb(0 0 0 / .08); --danger: #d93a2b; --on-danger: #ffffff;
-  --knob: #ffffff; --shadow: 0 1px 2px rgb(0 0 0 / .18), 0 0 0 .5px rgb(0 0 0 / .06);
+  --knob: #ffffff; --shadow: 0 1px 2px rgb(0 0 0 / .18), 0 0 0 .5px rgb(0 0 0 / .06); --selection: rgb(0 0 0 / .16);
 
   --radius-group: 14px; --radius-seam: 5px; --radius-control: 8px; --radius-pill: 999px; --radius-card: 30px;
   --seam: 3px;
@@ -22,7 +22,7 @@
     --surface: rgb(255 255 255 / .055); --surface-2: rgb(255 255 255 / .09); --surface-3: rgb(255 255 255 / .14);
     --ink: #f5f5f7; --ink-2: rgb(255 255 255 / .64); --ink-3: rgb(255 255 255 / .42);
     --accent: #ffffff; --on-accent: #000000; --accent-fill: rgb(255 255 255 / .14); --danger: #ff6b5e; --on-danger: #1d1d1f;
-    --knob: #f5f5f7; --shadow: 0 1px 2px rgb(0 0 0 / .5);
+    --knob: #f5f5f7; --shadow: 0 1px 2px rgb(0 0 0 / .5); --selection: rgb(255 255 255 / .26);
   }
 }
 :root[data-theme='dark'] {
@@ -31,8 +31,12 @@
   --surface: rgb(255 255 255 / .055); --surface-2: rgb(255 255 255 / .09); --surface-3: rgb(255 255 255 / .14);
   --ink: #f5f5f7; --ink-2: rgb(255 255 255 / .64); --ink-3: rgb(255 255 255 / .42);
   --accent: #ffffff; --on-accent: #000000; --accent-fill: rgb(255 255 255 / .14); --danger: #ff6b5e; --on-danger: #1d1d1f;
-  --knob: #f5f5f7; --shadow: 0 1px 2px rgb(0 0 0 / .5);
+  --knob: #f5f5f7; --shadow: 0 1px 2px rgb(0 0 0 / .5); --selection: rgb(255 255 255 / .26);
 }
+
+/* Native controls and selected text take the accent too, never the system blue. */
+:root { accent-color: var(--accent); }
+::selection { background: var(--selection); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }

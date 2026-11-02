@@ -21,7 +21,7 @@ export function Orb({ mode, level, typing, onClick }: { mode: string; level: { c
     frame = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(frame);
   }, [mode, typing, level]);
-  return <button type="button" className="orb" data-hit tabIndex={-1} aria-label={typing ? 'Typing' : 'Recording'} onClick={onClick}>
+  return <button type="button" className="orb" data-hit tabIndex={-1} aria-label={mode === 'thinking' ? 'Transcribing' : typing ? 'Typing' : 'Recording'} onClick={onClick}>
     {typing ? <span className="caret" /> : <span className="bars" ref={bars}><i /><i /><i /><i /><i /></span>}
   </button>;
 }
