@@ -4,11 +4,30 @@ Talk instead of typing, on your Mac. Speech is transcribed on the Mac by Whisper
 
 - **Hold fn and talk.** Your words type into whatever field has the cursor, in any app, while you speak.
   Let go and the last words are settled.
-- **Take long notes.** Click the note button on the dots at the bottom of the screen and talk for as long
-  as you like. The note is transcribed while you talk, a sentence at a time, so it is ready the moment you
-  stop. Review the title and words, then save it as a Markdown file in `~/Documents/TabTasker Dictate`.
+- **Take notes, spoken or typed.** Click the note on the dots and talk for as long as you like: when you
+  stop, the note is saved as a Markdown file in `~/Documents/TabTasker Dictate` and opens in the window,
+  named by the model if one is connected. Or press the plus in the window and type. Either way the note
+  is yours to change in the Text editor from TabTasker Business: headings, lists, to-dos, quotes, code
+  with colours, tables, pictures pasted in, links and highlights, from the bar, from “/”, or from the bar
+  that comes up over a selection; dragged about by the handle; still a plain file underneath.
+- **Keep stickies on the screen.** A small coloured note on top of everything: from the window, the dots’
+  menu, a shortcut, or by voice, saying “sticky: call Thomas” while you dictate. It stays where you leave
+  it; fold it to its bar or let other windows cover it when it is in the way; right-click it for its
+  colours and everything else; it can become a note.
+- **Record meetings with who said what.** Start one from the dots (the meeting button on their pill), the
+  window or the menu bar. The room and, on a call, the other side are transcribed on this Mac as it goes.
+  When you stop, every voice gets its own label: yours keeps your name, the others are Person 1, Person 2
+  and on, each renamable in one go in the window. A summary, decisions and action items are written if a
+  model is connected, each part a switch. No length limit beyond free disk space.
+- **One window.** Notes, Meetings and Stickies in a sidebar, the one you pick open beside the list, and
+  four settings pages: General, Notes & meetings, Claude & AI, Appearance. A model, once connected, works
+  under the hood on titles, summaries, polish and spoken commands; there is nothing to chat with.
 
-It runs from the menu bar, with no account and nothing to sign in to.
+It runs from the menu bar, with no account and nothing to sign in to. A model is optional and works under
+the hood, never opening anything: connect Claude in Settings through the Claude Code on your Mac with the
+Claude account you signed in to there, with your own Anthropic key, or use a model running on this Mac
+through Ollama, and it polishes what you dictate, answers spoken commands and summarises notes and
+meetings. Only text ever goes to Claude, never audio.
 
 ## How it works
 
@@ -19,11 +38,11 @@ It runs from the menu bar, with no account and nothing to sign in to.
 | `src-tauri/src/speech_note.rs` | Long notes: the audio is cut where you pause and each piece is transcribed once, while you are still talking. |
 | `src-tauri/src/settings.rs` | Settings in one JSON file in the app data folder, saved atomically and sent to every window. |
 | `src/overlay/` | The dots, the orb, the note's review card and setup, in a transparent window. |
-| `src/settings/` | The Settings window, one page per area, built from the shared design system in `src/ui/`. |
+| `src/app/` | The app's window in TabTasker Business's Mac shell (tabs, an icon spine, a column, the page): your notes, meetings and stickies, the settings pages and Help, built from the shared design system in `src/ui/`. |
 
 Without the app around it, `npm run dev` serves both pages to a browser with a mock of the app:
-`http://localhost:1420/?preview=menu` for an overlay state, `http://localhost:1420/settings.html#notes` for a Settings
-page, and `?theme=light` or `?theme=dark` on either.
+`http://localhost:1420/?preview=menu` for an overlay state, `http://localhost:1420/app.html#notes` for the
+window, and `?theme=light` or `?theme=dark` on either.
 
 The first launch downloads the model once (about 875 MB) from
 [vehicularis-edge-models](https://github.com/vehicularis/vehicularis-edge-models/releases), checking its size

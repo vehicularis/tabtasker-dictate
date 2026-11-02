@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { invoke, listen } from '../../bridge';
-import type { PageProps } from '../../store';
-import { Button, PageHeader, ProgressBar, Section, Select, Tile, TileGroup, Toggle } from '../../ui';
+import { SOUNDS, type PageProps } from '../../store';
+import { Button, PageHeader, ProgressBar, Section, Select, Slider, Tile, TileGroup, Toggle } from '../../ui';
 import './speech.css';
 
 // The languages Whisper knows best, by name; any of its codes works in settings.json.
@@ -28,6 +28,8 @@ const MODELS: Record<Model, { name: string; detail: string }> = {
   small: { name: 'Small', detail: 'Faster and lighter, a little less accurate. Better at translating.' },
 };
 const megabytes = (bytes: number) => `${Math.round(bytes / 1e6)} MB`;
+const SOUND_OPTIONS = SOUNDS.map(name => ({ value: name, label: name }));
+const percent = (value: number) => `${Math.round(value * 100)}%`;
 
 /// The models, kept current by dictate-model, and asked for again when the choice changes.
 function useModels(choice: Model) {
@@ -56,9 +58,11 @@ export function Dictation({ settings, update }: PageProps) {
   const keep = () => { if (active) void update({ dictation: { model: active } }); };
   const chosen = MODELS[dictation.model];
   const retry = () => { setRetrying(true); void invoke('prepare_model').catch(() => {}).finally(() => setRetrying(false)); };
+  // A cue heard at the volume being chosen, so a choice is made by ear.
+  const play = (name: string) => invoke('play_sound', { name, volume: dictation.soundVolume }).catch(() => {});
 
   return <>
-    <PageHeader icon="waveform" title="Dictation">How your speech becomes text. Whisper runs on this Mac.</PageHeader>
+    <PageHeader icon="waveform" title="Speech">How your speech becomes text. Whisper runs on this Mac.</PageHeader>
     <Section title="Language">
       <TileGroup>
         <Tile title="Language" detail={dictation.language === 'auto' ? 'Whisper works out the language each time. Pick yours to get the first words right.' : `Whisper always hears ${language}.`}>
@@ -80,8 +84,24 @@ export function Dictation({ settings, update }: PageProps) {
         <Tile title="Remove filler words" detail="Leaves out um, uh, er, ah and hmm. “Like” always stays.">
           <Toggle label="Remove filler words" checked={dictation.removeFillers} onChange={removeFillers => update({ dictation: { removeFillers } })} />
         </Tile>
-        <Tile title="Sounds" detail="A soft sound when listening starts and stops.">
+      </TileGroup>
+    </Section>
+    <Section title="Sounds" note="The Mac’s own sounds, played as listening starts and stops.">
+      <TileGroup>
+        <Tile title="Sounds" detail="A cue when listening starts and another when it stops.">
           <Toggle label="Sounds" checked={dictation.sounds} onChange={sounds => update({ dictation: { sounds } })} />
+        </Tile>
+        <Tile title="Volume" detail="For both cues." dim={!dictation.sounds}>
+          <Slider label="Volume" min={0} max={1} step={0.05} value={dictation.soundVolume} format={percent}
+            onChange={soundVolume => { void update({ dictation: { soundVolume } }); }} />
+        </Tile>
+        <Tile title="Start" detail="As listening begins." dim={!dictation.sounds}>
+          <Select label="Start sound" value={dictation.startSound} options={SOUND_OPTIONS} onChange={startSound => { void update({ dictation: { startSound } }); void play(startSound); }} />
+          <Button small aria-label="Play the start sound" onClick={() => play(dictation.startSound)}>Play</Button>
+        </Tile>
+        <Tile title="Stop" detail="As you let go." dim={!dictation.sounds}>
+          <Select label="Stop sound" value={dictation.stopSound} options={SOUND_OPTIONS} onChange={stopSound => { void update({ dictation: { stopSound } }); void play(stopSound); }} />
+          <Button small aria-label="Play the stop sound" onClick={() => play(dictation.stopSound)}>Play</Button>
         </Tile>
       </TileGroup>
     </Section>

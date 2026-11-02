@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 import { Icon } from '../ui/Icon';
 
 // The overlay's icons: the same monochrome line set as Settings (a 20 grid, 1.5 stroke, the text colour),
@@ -11,16 +11,56 @@ const GEAR = Array.from({ length: 8 }, (_, i) => {
   return `${i ? 'L' : 'M'}${at(-14, 5.9)}L${at(-8, 7.6)}L${at(8, 7.6)}L${at(14, 5.9)}A5.9 5.9 0 0 1 ${at(31, 5.9)}`;
 }).join('') + 'Z';
 
-// The app icon, as design/icon.swift draws it: the 824 tile of its 1024 grid scaled to 26.
-export const Logo = ({ size = 18 }: { size?: number }) => <svg width={size} height={size} viewBox="0 0 28 28" aria-hidden="true">
-  <rect x="1" y="1" width="26" height="26" rx="6.2" fill="#0b0b0c" />
-  <rect x="1.25" y="1.25" width="25.5" height="25.5" rx="5.95" fill="none" stroke="#fff" strokeOpacity=".14" strokeWidth=".5" />
-  <g fill="#fff">
-    {[[-7.38, 6.47], [-3.69, 10.98], [3.69, 10.98], [7.38, 6.47]].map(([dx, h]) => <rect key={dx} x={14 + dx - 1.01} y={14 - h / 2} width="2.02" height={h} rx="1.01" />)}
-    <rect x="13.45" y="5.92" width="1.1" height="16.16" rx=".55" /><rect x="12.4" y="5.92" width="3.2" height="1.1" rx=".55" /><rect x="12.4" y="20.98" width="3.2" height="1.1" rx=".55" />
-  </g>
-</svg>;
+// The app icon, as design/icon.swift draws it: TabTasker's otter on dark grey, speaking (a small waveform
+// where its mouth is). The 1024 grid is scaled to the 26 tile here, and the otter is drawn in the icon's own
+// coordinates (y up) under one transform, so the two never drift apart.
+/// Business's mark (apps/web/public/tabtasker-mark.svg), in its own units: the head's path, the whisker dots, and Dictate's voice at the mouth.
+export const OTTER = 'M-13 -16 C-13 -22 -7 -25 0 -25 C7 -25 13 -22 13 -16 L13 15 C13 22 7 25 0 25 C-7 25 -13 22 -13 15 Z';
+export const WHISKERS = [[-3.5, -8], [-4.6, -7], [-3.5, -6], [3.5, -8], [4.6, -7], [3.5, -6]] as const;
+export const VOICE = [[-1.73, 0.87], [-0.865, 1.44], [0, 2.02], [0.865, 1.44], [1.73, 0.87]] as const;
+/// The otter as sound (design/icon.swift draws the same): a waveform in the otter's shape. Bars with rounded caps,
+/// each as tall as the otter is where it stands: the head's dome and the ears above (lifted a little), the body's
+/// round below; tall in the middle, short at the sides, the ears two taller bars, the whole the otter. No face.
+const EAR_LIFT = 2.5;
+const bezier = (a: number, b: number, c: number, d: number, t: number) => { const u = 1 - t; return u * u * u * a + 3 * u * u * t * b + 3 * u * t * t * c + t * t * t * d; };
+const bodySpan = (x: number) => {
+  const ax = Math.abs(x);
+  if (ax > 13) return null;
+  let lo = 0, hi = 1;
+  for (let i = 0; i < 40; i++) { const t = (lo + hi) / 2; if (bezier(13, 13, 7, 0, t) > ax) lo = t; else hi = t; }
+  const t = (lo + hi) / 2;
+  return [bezier(-16, -22, -25, -25, t), bezier(15, 22, 25, 25, t)] as const;
+};
+const earSpan = (x: number) => { const dx = Math.abs(x) - 9; if (Math.abs(dx) > 4.5) return null; const h = Math.sqrt(4.5 * 4.5 - dx * dx); return [-22 - EAR_LIFT - h, -22 - EAR_LIFT + h] as const; };
+export const otterBars = (pitch = 2, width = 1.3) => {
+  const bars: { x: number; y: number; h: number }[] = [];
+  for (let x = pitch / 2; x <= 13.5; x += pitch) for (const side of [-1, 1]) {
+    const cx = side * x, body = bodySpan(cx), ear = earSpan(cx);
+    if (!body && !ear) continue;
+    const top = Math.min(body?.[0] ?? Infinity, ear?.[0] ?? Infinity), bottom = Math.max(body?.[1] ?? -Infinity, ear?.[1] ?? -Infinity);
+    bars.push({ x: cx - width / 2, y: top, h: bottom - top });
+  }
+  return bars;
+};
+const BARS = otterBars(3.25, 2.1); // eight bars: enough at 28 points
+export const Logo = ({ size = 18 }: { size?: number }) => {
+  const id = useId();
+  return <svg width={size} height={size} viewBox="0 0 28 28" aria-hidden="true">
+    <defs>
+      <linearGradient id={`${id}-grey`} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#3c3d41" /><stop offset="1" stopColor="#18181b" /></linearGradient>
+      <clipPath id={`${id}-tile`}><rect x="1" y="1" width="26" height="26" rx="6.2" /></clipPath>
+    </defs>
+    <rect x="1" y="1" width="26" height="26" rx="6.2" fill={`url(#${id}-grey)`} />
+    <rect x="1.25" y="1.25" width="25.5" height="25.5" rx="5.95" fill="none" stroke="#fff" strokeOpacity=".12" strokeWidth=".5" />
+    {/* Placed as Business places its mark: its tile is 64 units and this one 26; the group sits at (32 47) scaled 1.3, the body running off
+        the bottom. The clip is on its own group: on a transformed one it would be read in the mark's coordinates. */}
+    <g clipPath={`url(#${id}-tile)`}><g transform="translate(14 20.094) scale(.52813)">
+      <g fill="#f3f4f6">{BARS.map(bar => <rect key={bar.x} x={bar.x} y={bar.y} width="2.1" height={bar.h} rx="1.05" />)}</g>
+    </g></g>
+  </svg>;
+};
 export const NoteIcon = () => <Icon name="note" size={17} />;
+export const LibraryIcon = () => <Icon name="library" size={17} />;
 export const MicIcon = () => <Icon name="mic" size={17} />;
 export const FolderIcon = () => <Icon name="folder" size={17} />;
 export const PasteIcon = () => <Icon name="copy" size={17} />;

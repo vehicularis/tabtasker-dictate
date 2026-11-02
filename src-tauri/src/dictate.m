@@ -12,8 +12,10 @@
 extern void dictate_ui_state(const char *phase, double level, bool dictating);
 extern void dictate_ui_error(const char *message);
 extern void dictate_ui_fn(bool down);
+extern void dictate_ui_open(const char *what);
 extern void dictate_ui_note(const char *text);
 extern void dictate_ui_pointer(bool over, double x, double y);
+extern void dictate_ui_dock(bool shown, double strip, const char *edge);
 extern void dictate_ui_said(const char *text, bool dictated, bool live);
 extern void dictate_ui_notice(const char *message);
 extern void dictate_log(const char *line);
@@ -194,6 +196,9 @@ typedef NS_ENUM(NSUInteger, TTVoicePhase) { TTVoiceIdle, TTVoiceListening, TTVoi
 @property NSEventModifierFlags commandFlag;
 @property (copy) NSDictionary<NSString *, NSArray<NSNumber *> *> *chords;
 @property BOOL handsFree, liveTyping, sounds;
+@property BOOL sendAfter; // Return once this hold's words are typed (a chat app, or a spoken "send")
+@property double soundVolume; // 0 to 1
+@property (copy) NSString *startSound, *stopSound; // names in /System/Library/Sounds
 // A hold that speaks to Claude, and a session a double tap keeps listening without the key.
 @property BOOL commanding, locked;
 @property (strong) NSRunningApplication *app; // in front as the hold began: where its words go
@@ -233,6 +238,10 @@ static NSUInteger TTVoiceVisible(NSString *text, NSUInteger from) {
 }
 // Marks our own keystrokes, so the fn monitor never takes them for an fn shortcut.
 static const int64_t TTVoiceMark = 0x74747663;
+// Appearance › Stay clear of the Dock: the overlay window covers the screen's visible area (above the Dock,
+// below the menu bar), else the whole screen, so the dots can sit behind an auto-hidden Dock's edge.
+static BOOL TTOverlayAvoidsDock = YES;
+static void TTOverlayFit(void); // the overlay window, defined with it below
 static void TTVoicePostKey(CGKeyCode key, NSString *text) {
   CGEventRef events[] = { CGEventCreateKeyboardEvent(NULL, key, true), CGEventCreateKeyboardEvent(NULL, key, false) };
   UniChar units[32]; NSUInteger count = MIN(text.length, 32);
@@ -345,7 +354,7 @@ static void TTVoiceBringForward(NSRunningApplication *app, void (^then)(BOOL fro
 }
 @synthesize phase = _phase;
 - (instancetype)init {
-  if ((self = [super init])) { _key = TTKeyFn; _handsFree = _liveTyping = _sounds = YES; }
+  if ((self = [super init])) { _key = TTKeyFn; _handsFree = _liveTyping = _sounds = YES; _soundVolume = 0.3; _startSound = @"Tink"; _stopSound = @"Pop"; }
   return self;
 }
 - (const char *)phaseName {
@@ -420,7 +429,7 @@ static void TTVoiceBringForward(NSRunningApplication *app, void (^then)(BOOL fro
   self.audio = nil;
   if (self.request) dictate_cancel(self.request.UTF8String);
   [self settleTyped];
-  self.request = nil; self.dictating = NO; self.noting = NO; self.commanding = NO; self.selection = nil; self.app = nil;
+  self.request = nil; self.dictating = NO; self.noting = NO; self.commanding = NO; self.selection = nil; self.app = nil; self.sendAfter = NO;
   self.phase = TTVoiceIdle;
 }
 // What this hold typed is in the field now, finished or not; unless the person moved on, the next hold
@@ -448,19 +457,23 @@ static void TTVoiceBringForward(NSRunningApplication *app, void (^then)(BOOL fro
   self.listeningSince = NSProcessInfo.processInfo.systemUptime;
   if (!self.engine) [self startCapture]; // otherwise the microphone opened when the key went down
   if (self.phase != TTVoiceListening) return;
-  [self chime:@"Tink"];
+  [self chime:YES];
   // A hold goes to speech whole, a minute at most, and a locked session runs to ten, transcribed as it is
   // said: tick sends them as they reach it. A note keeps only what is not yet transcribed.
   self.audio.limit = tt_hold_limit(self.noting || self.locked);
   if (self.noting) self.lastSpoke = self.listeningSince;
 }
-// A soft cue as listening starts and stops, from the Mac's own sounds.
-- (void)chime:(NSString *)name {
-  if (!self.sounds) return;
+// A soft cue as listening starts and stops, from the Mac's own sounds, as Dictation › Sounds chooses them.
+static void TTVoicePlaySound(NSString *name, double volume) {
   NSSound *sound = [NSSound soundNamed:name];
+  if (!sound) return;
   [sound stop];
-  sound.volume = 0.2;
+  sound.volume = (float)MAX(0, MIN(1, volume));
   [sound play];
+}
+- (void)chime:(BOOL)starting {
+  if (!self.sounds) return;
+  TTVoicePlaySound(starting ? self.startSound : self.stopSound, self.soundVolume);
 }
 - (void)startCapture {
   if ([AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio] != AVAuthorizationStatusAuthorized) {
@@ -495,9 +508,13 @@ static void TTVoiceBringForward(NSRunningApplication *app, void (^then)(BOOL fro
       AVAudioNodeTapBlock append = ^(AVAudioPCMBuffer *buffer, AVAudioTime *when) { (void)when; [audio append:buffer]; };
       AVAudioFrameCount frames = (AVAudioFrameCount)ceil(format.sampleRate * 0.1);
       NSError *error;
+#if defined(__MAC_27_0)
       if (@available(macOS 27.0, *)) {
         if (![input installTapOnBus:0 bufferSize:frames format:nil error:&error block:append]) problem = @"Couldn’t start the mic";
       } else { [input installTapOnBus:0 bufferSize:frames format:nil block:append]; }
+#else // built with an SDK before macOS 27, which has no error-returning tap
+      [input installTapOnBus:0 bufferSize:frames format:nil block:append];
+#endif
       if (!problem) {
         [engine prepare];
         if (![engine startAndReturnError:&error]) problem = @"Couldn’t start the mic";
@@ -553,7 +570,7 @@ static void TTVoiceBringForward(NSRunningApplication *app, void (^then)(BOOL fro
   if (self.phase != TTVoiceListening) return;
   self.phase = TTVoiceFinishing;
   [self stopCapture];
-  [self chime:@"Pop"];
+  [self chime:NO];
   NSUInteger generation = self.generation;
   double patience = tt_words_timeout(self.audio.count);
   [self transcribe];
@@ -572,8 +589,11 @@ static void TTVoiceBringForward(NSRunningApplication *app, void (^then)(BOOL fro
   if (!AXIsProcessTrusted()) { [self fail:@"Turn on Accessibility to type"]; return; }
   [self retype:body];
   // A click elsewhere stops the typing for good; what was said is still the last transcript.
+  BOOL whole = self.typed.length && [self.typed isEqualToString:[self.lead stringByAppendingString:body]];
   if (!self.typed.length) dictate_ui_notice("Nothing to type into here. Paste last transcript has your words.");
-  else if (![self.typed isEqualToString:[self.lead stringByAppendingString:body]]) dictate_ui_notice("Stopped typing when you moved on. Paste last transcript has it all.");
+  else if (!whole) dictate_ui_notice("Stopped typing when you moved on. Paste last transcript has it all.");
+  // Sending: Return, after every word went in and only where they went.
+  if (whole && self.sendAfter) TTVoicePostKey(36, nil);
   [self cancel];
 }
 // A spoken command, with the selection and the app it was said over, for Claude. Its answer comes back
@@ -754,8 +774,10 @@ static void TTVoiceBringForward(NSRunningApplication *app, void (^then)(BOOL fro
       else if (self.phase == TTVoiceIdle || (self.noting && self.phase == TTVoiceListening)) [self toggleNote];
     } else if ([name isEqual:@"meeting"]) {
       if (!dictate_meeting("stop") && !dictate_meeting("start")) dictate_meeting_unstarted(); // says why, unless the microphone card does
-    } else {
+    } else if ([name isEqual:@"pasteLast"]) {
       dictate_paste_last();
+    } else {
+      dictate_ui_open(name.UTF8String); // a note to type, a sticky, or a question for Claude
     }
     return YES;
   }
@@ -798,8 +820,14 @@ static void TTVoiceBringForward(NSRunningApplication *app, void (^then)(BOOL fro
   self.handsFree = ![keys[@"handsFree"] isEqual:@NO];
   self.liveTyping = ![dictation[@"liveTyping"] isEqual:@NO];
   self.sounds = ![dictation[@"sounds"] isEqual:@NO];
+  NSDictionary *appearance = TTVoiceObject(settings[@"appearance"]);
+  BOOL avoidDock = ![appearance[@"avoidDock"] isEqual:@NO];
+  if (avoidDock != TTOverlayAvoidsDock) { TTOverlayAvoidsDock = avoidDock; TTOverlayFit(); }
+  self.soundVolume = [dictation[@"soundVolume"] isKindOfClass:NSNumber.class] ? [dictation[@"soundVolume"] doubleValue] : 0.3;
+  if ([dictation[@"startSound"] isKindOfClass:NSString.class]) self.startSound = dictation[@"startSound"];
+  if ([dictation[@"stopSound"] isKindOfClass:NSString.class]) self.stopSound = dictation[@"stopSound"];
   NSMutableDictionary *chords = [NSMutableDictionary new];
-  for (NSString *name in @[@"note", @"meeting", @"pasteLast"]) {
+  for (NSString *name in @[@"note", @"meeting", @"pasteLast", @"writeNote", @"sticky", @"ask"]) {
     NSDictionary *chord = TTVoiceObject(keys[name]);
     if ([chord[@"keyCode"] isKindOfClass:NSNumber.class] && [chord[@"modifiers"] isKindOfClass:NSNumber.class]) chords[name] = @[chord[@"keyCode"], chord[@"modifiers"]];
   }
@@ -847,6 +875,11 @@ static void TTVoiceBringForward(NSRunningApplication *app, void (^then)(BOOL fro
 @property (strong) NSMutableDictionary<NSNumber *, NSImage *> *masks;
 @property (strong) NSTimer *mouseTimer;
 @property BOOL shown, pointerOver;
+// The Dock that hides itself: its strip and edge (read every few seconds), whether it is out right now, and the clocks behind that.
+@property CGFloat dockStrip;
+@property NSRectEdge dockEdge;
+@property BOOL dockShown, dockPushed;
+@property CFAbsoluteTime dockRead, dockLeft, dockPolled;
 @property NSPoint pointer;
 @end
 
@@ -863,9 +896,131 @@ static void TTVoiceBringForward(NSRunningApplication *app, void (^then)(BOOL fro
   }
   return nil;
 }
+static const char *TTEdgeName(NSRectEdge edge) { return edge == NSRectEdgeMinX ? "left" : edge == NSRectEdgeMaxX ? "right" : "bottom"; }
+/// Which edge the Dock's own preference puts it on.
+static NSRectEdge TTDockEdgeFromPreferences(void) {
+  NSString *side = (__bridge_transfer NSString *)CFPreferencesCopyAppValue(CFSTR("orientation"), CFSTR("com.apple.dock"));
+  return [side isEqualToString:@"left"] ? NSRectEdgeMinX : [side isEqualToString:@"right"] ? NSRectEdgeMaxX : NSRectEdgeMinY;
+}
+/// Without leave to read the Dock, its own preferences say enough: a Dock that hides itself, on which edge,
+/// and how big its tiles are; its strip is the tile plus the padding around it (47 points at a tile of 26).
+static CGFloat TTDockStripFromPreferences(NSRectEdge *edge) {
+  NSNumber *hides = (__bridge_transfer NSNumber *)CFPreferencesCopyAppValue(CFSTR("autohide"), CFSTR("com.apple.dock"));
+  if (![hides respondsToSelector:@selector(boolValue)] || !hides.boolValue) return 0; // a Dock that stays reserves its space itself
+  NSNumber *tile = (__bridge_transfer NSNumber *)CFPreferencesCopyAppValue(CFSTR("tilesize"), CFSTR("com.apple.dock"));
+  CGFloat size = [tile respondsToSelector:@selector(doubleValue)] ? MAX(16.0, MIN(128.0, tile.doubleValue)) : 48.0;
+  *edge = TTDockEdgeFromPreferences();
+  return size + 21.0;
+}
+/// The Dock's one list in its accessibility tree (the Dock itself), or NULL without leave to ask. The caller releases it.
+static AXUIElementRef TTDockList(void) {
+  NSRunningApplication *dock = [NSRunningApplication runningApplicationsWithBundleIdentifier:@"com.apple.dock"].firstObject;
+  if (!dock || !AXIsProcessTrusted()) return NULL;
+  AXUIElementRef app = AXUIElementCreateApplication(dock.processIdentifier);
+  CFArrayRef children = NULL; AXUIElementRef list = NULL;
+  if (AXUIElementCopyAttributeValue(app, kAXChildrenAttribute, (CFTypeRef *)&children) == kAXErrorSuccess && children) {
+    for (CFIndex i = 0; i < CFArrayGetCount(children) && !list; i++) {
+      AXUIElementRef child = (AXUIElementRef)CFArrayGetValueAtIndex(children, i);
+      CFTypeRef role = NULL;
+      if (AXUIElementCopyAttributeValue(child, kAXRoleAttribute, &role) == kAXErrorSuccess && role) {
+        if (CFEqual(role, kAXListRole)) list = (AXUIElementRef)CFRetain(child);
+        CFRelease(role);
+      }
+    }
+    CFRelease(children);
+  }
+  CFRelease(app);
+  return list;
+}
+/// Where the Dock's list is right now, in screen points from the bottom left of the main screen: on the
+/// screen while it is out, mostly past its edge while it hides. Empty when it cannot be read.
+static NSRect TTDockListFrame(void) {
+  AXUIElementRef list = TTDockList();
+  if (!list) return NSZeroRect;
+  CFTypeRef position = NULL, size = NULL;
+  NSRect frame = NSZeroRect;
+  if (AXUIElementCopyAttributeValue(list, kAXPositionAttribute, &position) == kAXErrorSuccess && position
+      && AXUIElementCopyAttributeValue(list, kAXSizeAttribute, &size) == kAXErrorSuccess && size) {
+    CGPoint origin = CGPointZero; CGSize box = CGSizeZero;
+    AXValueGetValue((AXValueRef)position, kAXValueTypeCGPoint, &origin);
+    AXValueGetValue((AXValueRef)size, kAXValueTypeCGSize, &box);
+    CGFloat height = NSHeight(NSScreen.screens.firstObject.frame); // accessibility measures down from the top left of the main screen
+    frame = NSMakeRect(origin.x, height - origin.y - box.height, box.width, box.height);
+  }
+  if (position) CFRelease(position);
+  if (size) CFRelease(size);
+  CFRelease(list);
+  return frame;
+}
+/// The Dock's strip on the screen that has it: its edge and thickness, from the Dock's own accessibility
+/// tree, which reports its size while it is hidden too; from its preferences without leave to ask. Zero
+/// when there is no Dock.
+static CGFloat TTDockStrip(NSRectEdge *edge) {
+  if (![NSRunningApplication runningApplicationsWithBundleIdentifier:@"com.apple.dock"].firstObject) return 0;
+  if (!AXIsProcessTrusted()) return TTDockStripFromPreferences(edge);
+  NSRect list = TTDockListFrame();
+  if (NSIsEmptyRect(list)) return 0;
+  // Along the bottom it is wide; at a side it is tall. Which side, the Dock's own preference says.
+  if (NSWidth(list) >= NSHeight(list)) { *edge = NSRectEdgeMinY; return NSHeight(list); }
+  *edge = TTDockEdgeFromPreferences();
+  return NSWidth(list);
+}
 - (void)fitScreen {
   NSScreen *screen = NSScreen.mainScreen ?: NSScreen.screens.firstObject;
-  if (screen) [self.window setFrame:screen.visibleFrame display:YES];
+  if (!screen) return;
+  // The visible frame stops at a Dock that stays. A Dock that hides itself reserves nothing, so the dots sit
+  // at the edge and step aside while it is out (readDock, track), rather than keeping its strip empty all day.
+  NSRect fit = TTOverlayAvoidsDock ? screen.visibleFrame : screen.frame;
+  dictate_log([NSString stringWithFormat:@"overlay: fitted to %.0f × %.0f at %.0f, %.0f (clear of the Dock: %@)", fit.size.width, fit.size.height, fit.origin.x, fit.origin.y, TTOverlayAvoidsDock ? @"yes" : @"no"].UTF8String);
+  [self.window setFrame:fit display:YES];
+  [self readDock];
+}
+/// The Dock that hides itself, on the screen with the menu bar: its edge and strip, kept fresh every few
+/// seconds and on every screen change. A Dock that stays has its space already (fitScreen), so it counts as none.
+- (void)readDock {
+  self.dockRead = CFAbsoluteTimeGetCurrent();
+  NSScreen *main = NSScreen.screens.firstObject;
+  if (!main) return;
+  NSRectEdge edge = NSRectEdgeMinY;
+  CGFloat strip = TTOverlayAvoidsDock ? TTDockStrip(&edge) : 0;
+  NSRect whole = main.frame, visible = main.visibleFrame;
+  BOOL hides = strip > 0 && (edge == NSRectEdgeMinY ? NSMinY(visible) == NSMinY(whole) : edge == NSRectEdgeMinX ? NSMinX(visible) == NSMinX(whole) : NSMaxX(visible) == NSMaxX(whole));
+  if (!hides) strip = 0;
+  if (strip == self.dockStrip && edge == self.dockEdge) return;
+  self.dockStrip = strip; self.dockEdge = edge;
+  dictate_log([NSString stringWithFormat:@"dock: %@", strip > 0 ? [NSString stringWithFormat:@"hides at the %s, a strip of %.0f; the dots step aside while it is out", TTEdgeName(edge), strip] : @"stays, or there is none to step aside for"].UTF8String);
+  if (!strip && self.dockShown) { self.dockShown = NO; self.dockPushed = NO; dictate_ui_dock(false, 0, TTEdgeName(edge)); }
+}
+/// Is the Dock out? It comes out when the pointer pushes its edge and goes once the pointer leaves its
+/// strip, so the pointer says most of it; with leave to read the Dock, the Dock itself says whether it is on
+/// the screen (asked at most ten times a second, and only while the pointer is near it).
+- (void)watchDock:(CFAbsoluteTime)now {
+  if (now - self.dockRead > 5) [self readDock];
+  if (self.dockStrip <= 0) return;
+  NSRect whole = NSScreen.screens.firstObject.frame;
+  NSPoint at = NSEvent.mouseLocation;
+  NSRectEdge edge = self.dockEdge;
+  CGFloat depth = edge == NSRectEdgeMinY ? at.y - NSMinY(whole) : edge == NSRectEdgeMinX ? at.x - NSMinX(whole) : NSMaxX(whole) - at.x;
+  BOOL onMain = NSPointInRect(at, NSInsetRect(whole, -1, -1));
+  BOOL atEdge = onMain && depth <= 1.5, inStrip = onMain && depth <= self.dockStrip + 2;
+  BOOL shown = self.dockShown;
+  if (inStrip) {
+    self.dockLeft = 0;
+    if (atEdge) self.dockPushed = YES;
+    if (self.dockPushed) {
+      shown = YES;
+      if (AXIsProcessTrusted() && now - self.dockPolled > 0.1) {
+        self.dockPolled = now;
+        NSRect list = TTDockListFrame();
+        if (!NSIsEmptyRect(list)) { NSRect seen = NSIntersectionRect(list, whole); shown = NSWidth(seen) * NSHeight(seen) > 0.5 * NSWidth(list) * NSHeight(list); }
+      }
+    }
+  } else if (shown || self.dockPushed) {
+    // Gone from the strip: the Dock slides back a moment later.
+    if (!self.dockLeft) self.dockLeft = now;
+    if (now - self.dockLeft > 0.25) { shown = NO; self.dockPushed = NO; self.dockLeft = 0; }
+  }
+  if (shown != self.dockShown) { self.dockShown = shown; dictate_ui_dock(shown, self.dockStrip, TTEdgeName(edge)); }
 }
 - (void)attach:(NSWindow *)window {
   self.window = window;
@@ -892,6 +1047,7 @@ static void TTVoiceBringForward(NSRunningApplication *app, void (^then)(BOOL fro
   NSWindow *window = self.window;
   NSView *web = [self webView];
   if (!window || !web) { [self.mouseTimer invalidate]; self.mouseTimer = nil; return; }
+  [self watchDock:CFAbsoluteTimeGetCurrent()];
   NSPoint point = [web convertPoint:[window convertPointFromScreen:NSEvent.mouseLocation] fromView:nil];
   BOOL over = NO;
   for (NSValue *hit in self.hits) if (NSPointInRect(point, hit.rectValue)) { over = YES; break; }
@@ -989,6 +1145,7 @@ static BOOL TTVoiceNumbers(id row, NSUInteger count) {
 
 static TTVoiceCommands *voice;
 static TTVoiceOverlay *overlay;
+static void TTOverlayFit(void) { [overlay fitScreen]; }
 static NSWindow *TTVoiceOverlayWindow(void) { return overlay.window; }
 
 static NSDictionary *appliedSettings; // settings that arrived before the voice object
@@ -1106,11 +1263,20 @@ void dictate_overlay_layout(const char *json) {
   if ([values isKindOfClass:NSDictionary.class]) [overlay layout:values];
 }
 
+// Dictation › Sounds' preview of a cue, at the volume being chosen.
+void dictate_play_sound(const char *name, double volume) {
+  if (name) TTVoicePlaySound(@(name), volume);
+}
 void dictate_model_status(const char *message, int status) {
   if (!voice.enabled) return;
   voice.modelReady = status == 1; voice.modelPreparing = status == 0;
   voice.modelMessage = @(message);
   if (status < 0 && voice.phase == TTVoiceIdle) dictate_ui_error(message);
+}
+// Whether Return follows this hold's words, decided by Rust (the app's setting or a spoken "send") just
+// before the words arrive through dictate_result.
+void dictate_result_sends(const char *request, bool send) {
+  if (request && [voice.request isEqual:@(request)]) voice.sendAfter = send;
 }
 void dictate_draft_result(const char *request, const char *text) {
   if (![voice.request isEqual:@(request)] || voice.phase != TTVoiceListening) return;

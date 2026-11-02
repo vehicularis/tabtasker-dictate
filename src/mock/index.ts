@@ -1,6 +1,6 @@
 // The app in a browser: real settings kept in memory, a sample status, and each feature's own commands
 // from its file here. Nothing leaves the page and nothing persists past a reload.
-import { chordProblem, type Chord, type Settings, type Status } from '../store';
+import { chordProblem, SOUNDS, STICKY_HUES, type Chord, type Settings, type Status, type Sticky } from '../store';
 import { register as input } from './input';
 import { register as speech } from './speech';
 import { register as notes } from './notes';
@@ -28,9 +28,9 @@ export type Mock = {
 // The same as settings.rs's defaults.
 const DEFAULTS: Settings = {
   version: 1,
-  general: { menuBarIcon: true },
-  shortcuts: { dictate: 'fn', handsFree: true, command: 'control', note: null, meeting: null, pasteLast: null },
-  dictation: { language: 'auto', translateToEnglish: false, liveTyping: true, removeFillers: true, sounds: true, model: 'turbo' },
+  general: { menuBarIcon: true, showInDock: false },
+  shortcuts: { dictate: 'fn', handsFree: true, command: 'control', note: null, meeting: null, pasteLast: null, writeNote: null, sticky: null, ask: null },
+  dictation: { language: 'auto', translateToEnglish: false, liveTyping: true, removeFillers: true, sounds: true, soundVolume: 0.3, startSound: 'Tink', stopSound: 'Pop', model: 'turbo' },
   vocabulary: { words: [], replacements: [], learn: true, suggestions: [] },
   apps: {
     defaultStyle: 'default',
@@ -43,11 +43,11 @@ const DEFAULTS: Settings = {
     ] as const).map(([bundleId, name, style]) => ({ bundleId, name, style, polish: false })),
   },
   notes: { folder: null, fileName: '{date} {title}', frontmatter: true, dailyNote: false, tags: [], claudeTitle: true, claudeActions: false },
-  meetings: { folder: null, systemAudio: true, summarize: true, you: 'You', others: 'Others' },
-  claude: { enabled: false, model: 'claude-haiku-5-5', commands: true, claudeCode: null, projectFolder: null },
+  meetings: { folder: null, systemAudio: true, summarize: true, you: 'You', others: 'Others', speakers: true, decisions: true, actionItems: true },
+  claude: { enabled: false, via: 'api', model: 'claude-haiku-5-5', effort: 'medium', commands: true, claudeCode: null, localEndpoint: 'http://localhost:11434', localModel: 'llama3.2' },
   agents: { mcp: true, shareHistory: false, shareNotes: true, shareMeetings: true, allowWrite: false },
   history: { keep: 'week' },
-  appearance: { theme: 'system', edge: 'bottom', size: 'medium', idle: 'dots', hint: true },
+  appearance: { theme: 'system', edge: 'bottom', size: 'medium', idle: 'dots', hint: true, margin: 8, avoidDock: true },
 };
 
 const status: Status = {
@@ -74,17 +74,19 @@ const listOf = (item: Check): Check => value => Array.isArray(value) && value.ev
 const folder: Check = value => value === null || (typeof value === 'string' && value.startsWith('/') && !value.includes('\0'));
 const chord: Check = value => value === null || (object(value) && chordProblem(value as Chord) === null);
 const SCHEMA: Record<string, Record<string, Check>> = {
-  general: { menuBarIcon: bool },
-  shortcuts: { dictate: oneOf('fn', 'rightCommand', 'rightOption', 'rightControl', 'rightShift'), handsFree: bool, command: oneOf('control', 'option', 'command', 'shift', 'off'), note: chord, meeting: chord, pasteLast: chord },
-  dictation: { language: value => value === 'auto' || LANGUAGES.has(value as string), translateToEnglish: bool, liveTyping: bool, removeFillers: bool, sounds: bool, model: oneOf('turbo', 'small') },
+  general: { menuBarIcon: bool, showInDock: bool },
+  shortcuts: { dictate: oneOf('fn', 'rightCommand', 'rightOption', 'rightControl', 'rightShift'), handsFree: bool, command: oneOf('control', 'option', 'command', 'shift', 'off'), note: chord, meeting: chord, pasteLast: chord, writeNote: chord, sticky: chord, ask: chord },
+  dictation: { language: value => value === 'auto' || LANGUAGES.has(value as string), translateToEnglish: bool, liveTyping: bool, removeFillers: bool, sounds: bool,
+    soundVolume: value => typeof value === 'number' && Number.isFinite(value), startSound: oneOf(...SOUNDS), stopSound: oneOf(...SOUNDS), model: oneOf('turbo', 'small') },
   vocabulary: { words: listOf(text), replacements: listOf(pair => object(pair) && text(pair.from) && text(pair.to)), learn: bool, suggestions: listOf(text) },
-  apps: { styles: listOf(app => object(app) && text(app.bundleId) && text(app.name) && STYLES.includes(app.style as string) && (app.polish === undefined || bool(app.polish))), defaultStyle: oneOf(...STYLES) },
+  apps: { styles: listOf(app => object(app) && text(app.bundleId) && text(app.name) && STYLES.includes(app.style as string) && (app.polish === undefined || bool(app.polish)) && (app.send == null || bool(app.send))), defaultStyle: oneOf(...STYLES) },
   notes: { folder, fileName: value => typeof value === 'string' && !/[/:\0]/.test(value) && !value.trimStart().startsWith('.'), frontmatter: bool, dailyNote: bool, tags: listOf(text), claudeTitle: bool, claudeActions: bool },
-  meetings: { folder, systemAudio: bool, summarize: bool, you: text, others: text },
-  claude: { enabled: bool, model: oneOf('claude-haiku-5-5', 'claude-sonnet-5-5', 'claude-opus-5-5'), commands: bool, claudeCode: folder, projectFolder: folder },
+  meetings: { folder, systemAudio: bool, summarize: bool, you: text, others: text, speakers: bool, decisions: bool, actionItems: bool },
+  claude: { enabled: bool, via: oneOf('api', 'claudeCode', 'local'), model: oneOf('claude-haiku-5-5', 'claude-sonnet-5-5', 'claude-opus-5-5'), effort: oneOf('low', 'medium', 'high'), commands: bool, claudeCode: folder, localEndpoint: text, localModel: text },
   agents: { mcp: bool, shareHistory: bool, shareNotes: bool, shareMeetings: bool, allowWrite: bool },
   history: { keep: oneOf('off', 'day', 'week', 'month', 'forever') },
-  appearance: { theme: oneOf('system', 'light', 'dark'), edge: oneOf('bottom', 'left', 'right'), size: oneOf('small', 'medium', 'large'), idle: oneOf('dots', 'hidden'), hint: bool },
+  appearance: { theme: oneOf('system', 'light', 'dark'), edge: oneOf('bottom', 'left', 'right'), size: oneOf('small', 'medium', 'large'), idle: oneOf('dots', 'hidden'), hint: bool,
+    margin: value => typeof value === 'number' && value >= 0 && value <= 120, avoidDock: bool },
 };
 const valid = (next: Settings) => {
   const sections = next as unknown as Record<string, Record<string, unknown>>;
@@ -150,11 +152,29 @@ mock.handle('get_settings', () => copy(settings));
 mock.handle('update_settings', ({ patch }) => {
   if (!object(patch)) throw 'Invalid settings';
   const request = copy(patch);
-  if (object(request.claude)) delete request.claude.enabled; // only the app turns Claude on, once a key is tested
+  if (object(request.claude)) { delete request.claude.enabled; delete request.claude.via; } // only the app turns Claude on, once a connection is tested
   return mock.update(request);
 });
 mock.handle('reset_settings', () => { settings = { ...copy(DEFAULTS), claude: { ...copy(DEFAULTS.claude), enabled: settings.claude.enabled } }; return changed(); });
 mock.handle('status', () => copy(status));
+mock.handle('play_sound', () => {}); // a browser has none of the Mac's sounds
+// Stickies, in memory: `?sticky=<id>` is one for the sticky page to show.
+const folderOf = () => settings.notes.folder ?? status.notes;
+const stickies: Sticky[] = [{ id: 'demo', text: 'Call the venue about Thursday', hue: 'amber', x: 120, y: 140, width: 240, height: 200, pinned: true, folded: false, createdMs: Date.now(), updatedMs: Date.now() }];
+const stickyHue = (hue: unknown): Sticky['hue'] => (typeof hue === 'string' && hue in STICKY_HUES ? hue : 'amber') as Sticky['hue'];
+mock.handle('sticky_list', () => copy(stickies));
+mock.handle('sticky_get', ({ id }) => { const found = stickies.find(one => one.id === id) ?? stickies[0]; if (!found) throw 'That sticky is gone.'; return copy(found); });
+mock.handle('sticky_new', ({ hue, text }) => {
+  const last = stickies.at(-1);
+  const made: Sticky = { id: Math.random().toString(16).slice(2, 14), text: typeof text === 'string' ? text : '', hue: stickyHue(hue ?? ['amber', 'sky', 'sage', 'coral', 'violet', 'teal'][stickies.length % 6]), x: (last?.x ?? 92) + 28, y: (last?.y ?? 112) + 28, width: 240, height: 200, pinned: true, folded: false, createdMs: Date.now(), updatedMs: Date.now() };
+  stickies.push(made); emit('dictate-stickies', { count: stickies.length }); return copy(made);
+});
+mock.handle('sticky_update', ({ id, text, hue }) => { const found = stickies.find(one => one.id === id); if (!found) throw 'That sticky is gone.'; if (typeof text === 'string') found.text = text; if (hue) found.hue = stickyHue(hue); found.updatedMs = Date.now(); return copy(found); });
+mock.handle('sticky_show', () => {});
+mock.handle('sticky_pin', ({ id, pinned }) => { const found = stickies.find(one => one.id === id); if (!found) throw 'That sticky is gone.'; found.pinned = !!pinned; return copy(found); });
+mock.handle('sticky_fold', ({ id, folded }) => { const found = stickies.find(one => one.id === id); if (!found) throw 'That sticky is gone.'; found.folded = !!folded; return copy(found); });
+mock.handle('sticky_remove', ({ id }) => { const at = stickies.findIndex(one => one.id === id); if (at >= 0) stickies.splice(at, 1); emit('dictate-stickies', { count: stickies.length }); });
+mock.handle('sticky_to_note', ({ id }) => { const at = stickies.findIndex(one => one.id === id); if (at < 0) throw 'That sticky is gone.'; const [gone] = stickies.splice(at, 1); return `${folderOf()}/${gone.text.split('\n')[0].slice(0, 40)}.md`; });
 mock.handle('set_enabled', ({ enabled }) => {
   status.enabled = !!enabled;
   if (!enabled) { Object.assign(status, { modelReady: false, modelPreparing: false, modelMessage: 'Voice is off. Your local model is kept for next time.' }); return; }
@@ -175,8 +195,9 @@ mock.handle('request', ({ kind }) => {
 });
 mock.handle('layout', () => {});
 mock.handle('meeting', () => false);
-mock.handle('open_settings', ({ route }) => { open(`/settings.html${location.search}#${typeof route === 'string' ? route : 'general'}`, '_blank'); });
+mock.handle('open_app', ({ route }) => { open(`/app.html${location.search}#${typeof route === 'string' ? route : 'notes'}`, '_blank'); });
 mock.handle('paste_last', () => emit('dictate-notice', { message: 'Nothing to paste yet' }));
+mock.handle('quit', () => emit('dictate-notice', { message: 'Quit (in the app, it would)' }));
 mock.handle('save_note', ({ title, stamp }) => `${status.notes}/${stamp} ${title || 'Note'}.md`);
 mock.handle('show_notes', () => {});
 mock.handle('plugin:app|version', () => '0.1.0');

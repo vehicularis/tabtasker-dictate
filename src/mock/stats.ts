@@ -1,6 +1,6 @@
 import type { Mock } from '.';
 import type { HistoryEntry, Keep } from '../store';
-import type { HistoryStats } from '../settings/pages/History';
+import type { HistoryStats } from '../app/pages/History';
 
 // In a browser: a month of sample dictations, with history.rs's pruning and stats math.
 // `?history=empty` starts with nothing said.

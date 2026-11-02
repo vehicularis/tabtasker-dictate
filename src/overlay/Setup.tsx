@@ -6,21 +6,22 @@ import { Globe, Logo, NoteIcon, X } from './icons';
 
 const GLOBE = { inputSource: 'changes the input source', emoji: 'opens emoji', dictation: 'starts Dictation' };
 
-// ---------- setup: the microphone, your key, then the model, one step at a time ----------
+// ---------- the setup steps, as a card by the dots ----------
 
 export function Setup({ status, fnDown, fnTested, onClose }: { status: Status | null; fnDown: boolean; fnTested: boolean; onClose: () => void }) {
   const [asked, setAsked] = useState(false);
-  const chosen = useSettings()?.shortcuts.dictate ?? 'fn';
+  const settings = useSettings();
+  const chosen = settings?.shortcuts.dictate ?? 'fn';
   const name = KEY_NAMES[chosen];
   const ask = (kind: string) => { if (kind === 'accessibility') setAsked(true); void invoke('request', { kind }).catch(() => {}); };
-  const full = () => { onClose(); void invoke('open_settings', { route: 'setup' }).catch(() => {}); };
+  const full = () => { onClose(); void invoke('open_app', { route: 'setup' }).catch(() => {}); };
   const notes = status?.notes.replace(/^\/Users\/[^/]+/, '~') ?? '~/Documents/TabTasker Dictate';
+  const ready = setupDone(status);
   const sheet = (title: string, body: ReactNode) => <article className="glass card setup" data-glass data-hit aria-label="Set up">
     <header className="head"><Logo size={28} /><strong>{title}</strong><button type="button" className="close" aria-label="Close" onClick={onClose}><X /></button></header>
     <Ways notes={notes} name={name} />
     {body}
   </article>;
-  const ready = setupDone(status);
   if (ready) return sheet('You’re all set', <footer className="actions"><span className="ask" /><button type="button" className="btn primary" onClick={onClose}>Done</button></footer>);
 
   const mic = status?.microphone === 'allowed' ? 'done' : 'active';

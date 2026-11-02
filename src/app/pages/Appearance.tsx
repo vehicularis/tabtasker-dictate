@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { KEY_NAMES } from '../../overlay/Dock';
-import { GearIcon } from '../../overlay/icons';
+import { createGlass, flatWave, paintInside, type Glass } from '../../overlay/glass';
+import { LibraryGlyph, NoteGlyph, SettingsGlyph } from '../../overlay/glyphs';
+import { isDark } from '../../ui/theme';
 import type { Edge, PageProps, Patch, Settings, Size, Theme } from '../../store';
-import { Icon, PageHeader, Section, Segmented, Tile, TileGroup, Toggle } from '../../ui';
+import { PageHeader, Section, Segmented, Slider, Tile, TileGroup, Toggle } from '../../ui';
 
 const THEMES: { value: Theme; label: string }[] = [{ value: 'system', label: 'Automatic' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }];
 const EDGES: { value: Edge; label: string }[] = [{ value: 'left', label: 'Left' }, { value: 'bottom', label: 'Bottom' }, { value: 'right', label: 'Right' }];
@@ -42,11 +44,54 @@ export function Appearance({ settings, update }: PageProps) {
         </Tile>
       </TileGroup>
     </Section>
+    <Section title="Position" note="With Stay clear of the Dock on, the dots never sit under the Dock or the menu bar, whatever the margin. A Dock that hides itself keeps its strip too, so it never slides out over them.">
+      <TileGroup>
+        <Tile title="Margin" detail="How far the dots sit from the edge of the screen. At 0 they touch it.">
+          <Slider label="Margin" min={0} max={120} step={2} value={look.margin} format={value => `${value} pt`} onChange={margin => change({ margin })} />
+        </Tile>
+        <Tile title="Stay clear of the Dock" detail={look.avoidDock ? 'The dots keep above the Dock, hidden or not, and below the menu bar.' : 'The dots use the whole screen; the Dock can cover them.'}>
+          <Toggle label="Stay clear of the Dock" checked={look.avoidDock} onChange={avoidDock => change({ avoidDock })} />
+        </Tile>
+      </TileGroup>
+    </Section>
   </>;
 }
 
 // A MacBook with the dots on its screen, drawn from the settings as they are now. The window shows what the
 // moment does: a reply waiting for words, then the words arriving while the orb listens.
+// The orb as the overlay draws it, in miniature: the same glass and the same bars, following a voice the
+// preview makes up while the moment is Talking.
+function LiveOrb({ talking }: { talking: boolean }) {
+  const host = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const box = host.current;
+    if (!box) return;
+    const size = Math.ceil((box.clientWidth || 38) * Math.min(devicePixelRatio || 1, 2));
+    const accent = getComputedStyle(box).getPropertyValue('--accent').trim() || '#3b82f6';
+    const surface = document.createElement('canvas'), inside = document.createElement('canvas');
+    surface.width = surface.height = size; inside.width = inside.height = size;
+    let glass: Glass;
+    try { glass = createGlass(surface, accent); } catch { glass = flatWave(surface, accent); }
+    box.replaceChildren(surface, inside);
+    const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let frame = 0, energy = .3;
+    const started = performance.now();
+    const draw = (now: number) => {
+      const t = (now - started) / 1000;
+      const voice = talking ? .4 + .3 * Math.sin(t * 3.1) + .2 * Math.sin(t * 7.3) + .1 * Math.sin(t * 13.7) : 0;
+      const target = .25 + .75 * Math.max(0, Math.min(1, voice));
+      energy += (target - energy) * .2;
+      const time = 1.9 + (still ? 0 : t * 2.4);
+      glass.draw(time, isDark() ? [.09, .1, .11] : [.97, .97, .97], energy, 4, 0);
+      paintInside(inside, 'bars', energy, time, 0, accent);
+      frame = requestAnimationFrame(draw);
+    };
+    frame = requestAnimationFrame(draw);
+    return () => { cancelAnimationFrame(frame); glass.dispose(); };
+  }, [talking]);
+  return <span ref={host} className="look-orb" />;
+}
+
 function Preview({ look, keyName, moment, onMoment }: { look: Settings['appearance']; keyName: string; moment: Moment; onMoment: (moment: Moment) => void }) {
   const hidden = look.idle === 'hidden' && moment === 'idle';
   const said = { idle: hidden ? `Nothing shows until you hold ${keyName}` : 'The dots wait at the edge', hover: look.hint ? 'Pointing opens the buttons and the hint' : 'Pointing opens the buttons', talking: `While you hold ${keyName}, your words type where the cursor is` }[moment];
@@ -75,8 +120,8 @@ function Preview({ look, keyName, moment, onMoment }: { look: Settings['appearan
         </div>
         <span className="look-dock">
           <span className="look-dots"><i /><i /><i /></span>
-          <span className="look-pill"><i><Icon name="note" size={17} /></i><i><GearIcon /></i></span>
-          <span className="look-orb"><i /><i /><i /><i /><i /></span>
+          <span className="look-pill"><i><NoteGlyph size={18} /></i><i><LibraryGlyph size={18} /></i><i><SettingsGlyph size={18} /></i></span>
+          <LiveOrb talking={moment === 'talking'} />
           {look.hint && <span className="look-hint"><kbd>{keyName}</kbd>hold to type</span>}
           <svg className="look-pointer" viewBox="0 0 12 18"><path d="M1 1v14l3.6-3.4 2.3 5.4 2.3-1-2.3-5.3H12z" /></svg>
         </span>

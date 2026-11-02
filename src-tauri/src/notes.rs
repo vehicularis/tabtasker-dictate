@@ -218,6 +218,245 @@ fn recent_in(dir: &Path, n: usize) -> Vec<NoteRef> {
   notes
 }
 
+// ---------- the Library: every note and meeting, as the page lists them ----------
+
+/// One file the Library shows: where it is, what it is called, when it last changed, and a taste of it.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryItem { pub path: String, pub title: String, pub kind: &'static str, pub modified_ms: u64, pub words: usize, pub excerpt: String }
+
+/// The text after any front matter.
+fn past_front_matter(text: &str) -> &str {
+  let Some(rest) = text.strip_prefix("---\n") else { return text };
+  rest.find("\n---\n").map_or(text, |end| &rest[end + 5..])
+}
+
+/// A file's title: `title:` in its front matter, else its first heading, else its name.
+pub(crate) fn title_of(text: &str, stem: &str) -> String {
+  let front = text.strip_prefix("---\n").and_then(|rest| rest.find("\n---\n").map(|end| &rest[..end]));
+  let in_front = front.and_then(|front| front.lines().find_map(|line| line.strip_prefix("title:")))
+    .map(|title| title.trim().trim_matches(['"', '\'']).trim().to_owned()).filter(|title| !title.is_empty());
+  let heading = past_front_matter(text).lines().map(str::trim).find(|line| line.starts_with('#'))
+    .map(|line| line.trim_start_matches('#').trim().to_owned()).filter(|title| !title.is_empty());
+  in_front.or(heading).unwrap_or_else(|| stem.to_owned())
+}
+
+/// The words of the body: front matter, headings and list marks left out.
+fn body_words(text: &str) -> impl Iterator<Item = &str> {
+  past_front_matter(text).lines().map(str::trim)
+    .filter(|line| !line.is_empty() && !line.starts_with('#'))
+    .flat_map(|line| line.trim_start_matches(['-', '*', '>', ' ']).trim_start_matches("[ ]").trim_start_matches("[x]").split_whitespace())
+}
+
+/// The first words of the body, to about 160 characters.
+pub(crate) fn excerpt_of(text: &str) -> String {
+  let mut out = String::new();
+  for word in body_words(text) {
+    if out.chars().count() + word.chars().count() > 160 { out.push('…'); break; }
+    if !out.is_empty() { out.push(' '); }
+    out.push_str(word);
+  }
+  out
+}
+
+fn library_in(dir: &Path, kind: &'static str, out: &mut Vec<LibraryItem>) {
+  let Ok(entries) = std::fs::read_dir(dir) else { return };
+  for entry in entries.flatten() {
+    let path = entry.path();
+    let Some(stem) = path.file_stem().map(|stem| stem.to_string_lossy().into_owned()) else { continue };
+    if path.extension().is_none_or(|ext| ext != "md") || stem.starts_with('.') || !entry.file_type().is_ok_and(|kind| kind.is_file()) { continue; }
+    let Ok(meta) = entry.metadata() else { continue };
+    if meta.len() > 8 << 20 { continue; } // not a note
+    let modified = meta.modified().ok().and_then(|at| at.duration_since(UNIX_EPOCH).ok()).map_or(0, |age| age.as_millis() as u64);
+    let text = std::fs::read_to_string(&path).unwrap_or_default();
+    out.push(LibraryItem { path: path.display().to_string(), title: title_of(&text, &stem), kind, modified_ms: modified, words: body_words(&text).count(), excerpt: excerpt_of(&text) });
+  }
+}
+
+/// Every note and meeting file, newest first. Meetings saved inside the notes folder (the default,
+/// `Meetings/`) are found once, as meetings: each folder is read at its top level only.
+pub fn library() -> Vec<LibraryItem> {
+  let mut items = Vec::new();
+  if let Ok(dir) = notes_dir() { library_in(&dir, "note", &mut items); }
+  if let Ok(dir) = meetings_dir() { library_in(&dir, "meeting", &mut items); }
+  items.sort_by(|a, b| b.modified_ms.cmp(&a.modified_ms).then_with(|| a.title.cmp(&b.title)));
+  items
+}
+
+/// `path` as a Markdown file inside the notes or meetings folder, resolved first so `..` or a link can't
+/// reach outside them.
+pub(crate) fn in_library(path: &str) -> Result<PathBuf, String> {
+  let file = PathBuf::from(path).canonicalize().map_err(|_| "That file isn’t there any more.".to_owned())?;
+  let folders = [notes_dir(), meetings_dir()].into_iter().flatten().filter_map(|dir| dir.canonicalize().ok());
+  let inside = folders.into_iter().any(|dir| file.starts_with(dir));
+  if !inside || file.extension().is_none_or(|ext| ext != "md") || !file.is_file() { return Err("Only a saved note or meeting can be opened here.".into()); }
+  Ok(file)
+}
+
+#[tauri::command]
+pub async fn library_list() -> Result<Vec<LibraryItem>, String> {
+  tauri::async_runtime::spawn_blocking(library).await.map_err(|e| e.to_string())
+}
+
+/// Opens a note or meeting in whatever app the Mac opens Markdown with.
+#[tauri::command]
+pub fn library_open(path: String) -> Result<(), String> {
+  let file = in_library(&path)?;
+  std::process::Command::new("/usr/bin/open").arg(file).spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
+// ---------- the editor ----------
+
+/// A note or meeting as the editor holds it: the title apart from the body, which is the file's Markdown
+/// without its front matter or its heading.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoteDoc { pub path: String, pub title: String, pub body: String, pub kind: &'static str, pub modified_ms: u64 }
+
+/// The front matter block, delimiters included, and what follows it.
+fn split_front(text: &str) -> (&str, &str) {
+  let Some(rest) = text.strip_prefix("---\n") else { return ("", text) };
+  match rest.find("\n---\n") { Some(end) => (&text[..4 + end + 5], &rest[end + 5..]), None => ("", text) }
+}
+
+/// A leading `# Title` line, and the body after it.
+fn split_heading(rest: &str) -> (Option<&str>, &str) {
+  let rest = rest.trim_start_matches('\n');
+  let first = rest.lines().next().unwrap_or("");
+  match first.strip_prefix("# ") {
+    Some(heading) if !heading.trim().is_empty() => (Some(heading.trim()), rest[first.len()..].trim_start_matches('\n')),
+    _ => (None, rest),
+  }
+}
+
+/// The front matter with its `title:` line following `title`: changed, or dropped when the title is gone.
+fn retitled(front: &str, title: &str) -> String {
+  if front.is_empty() || !front.lines().any(|line| line.starts_with("title:")) { return front.to_owned(); }
+  let mut out = String::new();
+  for line in front.split_inclusive('\n') {
+    if line.starts_with("title:") { if !title.is_empty() { out.push_str(&format!("title: {}\n", scalar(title))); } } else { out.push_str(line); }
+  }
+  out
+}
+
+/// Whether `file` is in the meetings folder.
+fn kind_of(file: &Path) -> &'static str {
+  let in_meetings = meetings_dir().ok().and_then(|dir| dir.canonicalize().ok()).is_some_and(|dir| file.starts_with(dir));
+  if in_meetings { "meeting" } else { "note" }
+}
+
+fn modified_ms(path: &Path) -> u64 {
+  std::fs::metadata(path).ok().and_then(|meta| meta.modified().ok()).and_then(|at| at.duration_since(UNIX_EPOCH).ok()).map_or(0, |age| age.as_millis() as u64)
+}
+
+/// The note at `path`, for the editor.
+pub(crate) fn read_doc(path: &str) -> Result<NoteDoc, String> {
+  let file = in_library(path)?;
+  let text = std::fs::read_to_string(&file).map_err(|_| "That file isn’t there any more.".to_owned())?;
+  let stem = file.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default();
+  let (_, rest) = split_front(&text);
+  let (heading, body) = split_heading(rest);
+  let title = heading.map_or_else(|| title_of(&text, &stem), str::to_owned);
+  Ok(NoteDoc { path: file.display().to_string(), title, body: body.trim_end().to_owned(), kind: kind_of(&file), modified_ms: modified_ms(&file) })
+}
+
+/// Writes the note back: its front matter as it was (`title:` kept in step), `# title`, then the body.
+/// Written beside the file and moved into place, so a crash leaves the old note, never half a new one.
+pub(crate) fn write_doc(path: &str, title: &str, body: &str) -> Result<u64, String> {
+  let file = in_library(path)?;
+  if body.chars().count() > 1_000_000 { return Err("This note is too long to save".into()); }
+  let current = std::fs::read_to_string(&file).map_err(|_| "That file isn’t there any more.".to_owned())?;
+  let (front, _) = split_front(&current);
+  let title = title.split_whitespace().collect::<Vec<_>>().join(" ");
+  let mut text = retitled(front, &title);
+  if !text.is_empty() { text.push('\n'); }
+  if !title.is_empty() { text.push_str(&format!("# {title}\n\n")); }
+  text.push_str(body.trim_end());
+  text.push('\n');
+  let dir = file.parent().ok_or("That file isn’t there any more.")?;
+  let name = file.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
+  let temp = dir.join(format!(".{name}.{}.tmp", std::process::id()));
+  let written = std::fs::OpenOptions::new().write(true).create_new(true).open(&temp)
+    .and_then(|mut out| out.write_all(text.as_bytes()).and_then(|_| out.sync_all()))
+    .and_then(|_| std::fs::rename(&temp, &file));
+  if let Err(e) = written { let _ = std::fs::remove_file(&temp); return Err(format!("Couldn’t save the note: {e}")); }
+  Ok(modified_ms(&file))
+}
+
+/// A new note file for the editor, with whatever words there are so far (none is fine): named by the
+/// notes template, or a section in the day's note.
+pub(crate) fn new_doc(title: &str, body: &str, stamp_text: &str) -> Result<PathBuf, String> {
+  if body.chars().count() > 1_000_000 { return Err("This note is too long to save".into()); }
+  let at = stamp(stamp_text)?;
+  let dir = notes_dir()?;
+  std::fs::create_dir_all(&dir).map_err(|e| format!("Couldn’t make the notes folder: {e}"))?;
+  let note = compose(&settings::get().notes, Kind::Note, title, body, None, at, &[]);
+  if note.daily { append_daily(&dir, &note) } else { write_new(&dir, &note.stem, format!("{}{}", note.header, note.section).as_bytes()) }
+}
+
+/// Keeps a picture pasted or dropped into a note beside it, in `attachments/<the note's name>/`, and
+/// answers the path the note refers to it by (relative, so the folder can move). `data` is the file's
+/// bytes in base64; `name` a suggested file name (its extension is kept, the rest made safe).
+#[tauri::command]
+pub fn note_attach(path: String, name: String, data: String) -> Result<String, String> {
+  use base64::Engine;
+  let file = in_library(&path)?;
+  let bytes = base64::engine::general_purpose::STANDARD.decode(data.trim()).map_err(|_| "That picture couldn’t be read.".to_owned())?;
+  if bytes.is_empty() { return Err("That picture is empty.".into()); }
+  if bytes.len() > 25 << 20 { return Err("That picture is too big to keep in a note (25 MB at most).".into()); }
+  let dir = file.parent().ok_or("That file isn’t there any more.")?;
+  let stem = file.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_else(|| "note".into());
+  let folder = dir.join("attachments").join(clean(&stem));
+  std::fs::create_dir_all(&folder).map_err(|e| format!("Couldn’t make the attachments folder: {e}"))?;
+  let suggested = Path::new(&name);
+  let ext = suggested.extension().map(|ext| ext.to_string_lossy().to_lowercase()).filter(|ext| ["png", "jpg", "jpeg", "gif", "webp", "heic", "svg", "pdf"].contains(&ext.as_str())).unwrap_or_else(|| "png".into());
+  let base = clean(&suggested.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default());
+  let base = if base.is_empty() { "picture".to_owned() } else { base };
+  for n in 1..=1000 {
+    let file_name = if n == 1 { format!("{base}.{ext}") } else { format!("{base} {n}.{ext}") };
+    let target = folder.join(&file_name);
+    match std::fs::OpenOptions::new().write(true).create_new(true).open(&target) {
+      Ok(mut out) => {
+        out.write_all(&bytes).and_then(|_| out.sync_all()).map_err(|e| format!("Couldn’t save the picture: {e}"))?;
+        return Ok(format!("attachments/{}/{}", clean(&stem), file_name));
+      }
+      Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+      Err(e) => return Err(format!("Couldn’t save the picture: {e}")),
+    }
+  }
+  Err("Couldn’t find a free name for the picture".into())
+}
+
+/// Moves a note or meeting to the Trash, under a name that is free there, where it can come back from.
+#[tauri::command]
+pub fn note_delete(path: String) -> Result<(), String> {
+  let file = in_library(&path)?;
+  let trash = PathBuf::from(std::env::var_os("HOME").ok_or("No home folder")?).join(".Trash");
+  let name = file.file_name().map(|name| name.to_string_lossy().into_owned()).ok_or("That file isn’t there any more.")?;
+  let stem = name.strip_suffix(".md").unwrap_or(&name);
+  for n in 1..=100 {
+    let target = if n == 1 { trash.join(&name) } else { trash.join(format!("{stem} {n}.md")) };
+    if target.symlink_metadata().is_ok() { continue; }
+    return std::fs::rename(&file, &target).map_err(|e| format!("Couldn’t move it to the Trash: {e}"));
+  }
+  Err("Couldn’t find room in the Trash".into())
+}
+
+#[tauri::command]
+pub async fn note_read(path: String) -> Result<NoteDoc, String> {
+  tauri::async_runtime::spawn_blocking(move || read_doc(&path)).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn note_write(path: String, title: String, body: String) -> Result<u64, String> {
+  tauri::async_runtime::spawn_blocking(move || write_doc(&path, &title, &body)).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn note_new(title: String, text: String, stamp: String) -> Result<String, String> {
+  tauri::async_runtime::spawn_blocking(move || new_doc(&title, &text, &stamp).map(|path| path.display().to_string())).await.map_err(|e| e.to_string())?
+}
+
 /// Keeps the tray's Recent Notes in step with the folder, whatever changes it: Finder, Obsidian, a sync.
 // ponytail: a scan of the folder's top level every 4 s; FSEvents if folders of many thousands of notes show up.
 pub fn watch(app: &tauri::AppHandle) {
@@ -332,6 +571,47 @@ pub async fn choose_folder(window: tauri::WebviewWindow, message: Option<String>
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn a_note_splits_into_front_matter_title_and_body_and_writes_back_the_same_way() {
+    let text = "---\ncreated: 2026-11-02T13:05\ntitle: Hello\ntags: []\n---\n\n# Hello\n\nFirst line.\n\n- [ ] Call them\n";
+    let (front, rest) = split_front(text);
+    assert_eq!(front, "---\ncreated: 2026-11-02T13:05\ntitle: Hello\ntags: []\n---\n");
+    let (heading, body) = split_heading(rest);
+    assert_eq!(heading, Some("Hello"));
+    assert_eq!(body, "First line.\n\n- [ ] Call them\n");
+    assert_eq!(retitled(front, "Hello again"), "---\ncreated: 2026-11-02T13:05\ntitle: \"Hello again\"\ntags: []\n---\n", "a title with a space is quoted, as every value with one is");
+    assert_eq!(retitled(front, ""), "---\ncreated: 2026-11-02T13:05\ntags: []\n---\n");
+    assert_eq!(retitled("---\ncreated: x\n---\n", "New"), "---\ncreated: x\n---\n", "no title line, none added");
+    assert_eq!(split_front("# Plain\n\nWords\n"), ("", "# Plain\n\nWords\n"));
+    assert_eq!(split_heading("Just words\n"), (None, "Just words\n"));
+    assert_eq!(split_heading("\n\n# \n\nWords"), (None, "# \n\nWords"), "an empty heading is text");
+  }
+
+  #[test]
+  fn the_library_lists_notes_and_meetings_by_title_newest_first() {
+    let dir = std::env::temp_dir().join(format!("dictate-library-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("Meetings")).unwrap();
+    std::fs::write(dir.join("2026-11-02 Venue.md"), "---\ncreated: 2026-11-02T09:41\ntitle: \"Call the venue\"\n---\n\n# Venue\n\nCall the venue about Thursday and ask for the bigger room.\n\n## Action items\n\n- [ ] Call them\n").unwrap();
+    std::fs::write(dir.join("Plain.md"), "Just some words, no heading at all.\n").unwrap();
+    std::fs::write(dir.join(".hidden.md"), "# Hidden\n").unwrap();
+    std::fs::write(dir.join("notes.txt"), "not markdown").unwrap();
+    std::fs::write(dir.join("Meetings").join("Design review.md"), "# Design review\n\n**You** 00:00:01 Hello everyone\n").unwrap();
+    let mut items = Vec::new();
+    library_in(&dir, "note", &mut items);
+    library_in(&dir.join("Meetings"), "meeting", &mut items);
+    let mut titles: Vec<(&str, &str)> = items.iter().map(|item| (item.kind, item.title.as_str())).collect();
+    titles.sort();
+    assert_eq!(titles, vec![("meeting", "Design review"), ("note", "Call the venue"), ("note", "Plain")]);
+    let venue = items.iter().find(|item| item.title == "Call the venue").unwrap();
+    assert_eq!(venue.excerpt, "Call the venue about Thursday and ask for the bigger room. Call them");
+    assert_eq!(venue.words, 13);
+    assert_eq!(title_of("# Heading\n\nbody", "file"), "Heading");
+    assert_eq!(title_of("no heading", "A file name"), "A file name");
+    assert!(excerpt_of(&"word ".repeat(100)).ends_with('…'));
+    let _ = std::fs::remove_dir_all(&dir);
+  }
 
   const AT: &str = "2026-11-01 21.40";
   fn at() -> Stamp<'static> { stamp(AT).unwrap() }

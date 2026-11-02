@@ -6501,3 +6501,56 @@ freely, subject to the following restrictions:
    misrepresented as being the original software.
 
 3. This notice may not be removed or altered from any source distribution.
+
+Anthropic marks
+https://www.anthropic.com
+
+Claude, Claude Code and the Claude mark are trademarks of Anthropic, PBC. The Claude mark appears in
+TabTasker Dictate only to show where Claude can be connected and what it does; TabTasker Dictate is an
+independent product of Vehicularis Limited, not made by or affiliated with Anthropic. The Claude Code
+command-line tool runs on your Mac under Anthropic's own terms, with your own account.
+
+Ollama (used over its local API only; not bundled)
+https://github.com/ollama/ollama
+
+MIT License. Copyright (c) Ollama. A model you run with Ollama is yours to choose and comes under its own
+licence; TabTasker Dictate only sends it text and reads back the reply.
+
+sherpa-onnx
+https://github.com/k2-fsa/sherpa-onnx
+
+Copyright (c) 2022-2024 Xiaomi Corporation and the k2-fsa authors. Licensed under the Apache License,
+Version 2.0 (reproduced above). Its prebuilt static libraries, with ONNX Runtime (MIT License, Copyright (c)
+Microsoft Corporation) and kaldi-native-fbank (Apache License 2.0) inside them, are linked into
+TabTasker Dictate to tell the people in a meeting apart.
+
+pyannote segmentation 3.0 (pyannote-segmentation-3-0.onnx)
+https://huggingface.co/pyannote/segmentation-3.0, as converted by sherpa-onnx
+
+MIT License. Copyright (c) 2023 pyannote. Downloaded on demand when a meeting first needs it.
+
+NVIDIA NeMo TitaNet small (nemo_en_titanet_small.onnx)
+https://catalog.ngc.nvidia.com/orgs/nvidia/teams/nemo/models/titanet_small, as converted by sherpa-onnx
+
+Licensed under the Creative Commons Attribution 4.0 International License (CC BY 4.0),
+https://creativecommons.org/licenses/by/4.0/. Copyright (c) NVIDIA Corporation. Downloaded on demand when
+a meeting first needs it; it gives each stretch of speech a voiceprint.
+
+Tiptap (@tiptap/core, @tiptap/react, @tiptap/starter-kit and the extensions used) and ProseMirror
+https://tiptap.dev · https://prosemirror.net
+
+MIT License. Copyright (c) 2025 Tiptap GmbH; ProseMirror Copyright (C) 2015-2017 by Marijn Haverbeke
+and others. The Text editor in notes and stickies is built on them.
+
+lowlight and highlight.js
+https://github.com/wooorm/lowlight · https://highlightjs.org
+
+lowlight: MIT License, Copyright (c) Titus Wormer. highlight.js: BSD 3-Clause License, Copyright (c)
+2006 Ivan Sagalaev. They colour the code blocks in notes.
+
+marked (inside @tiptap/markdown)
+https://marked.js.org
+
+MIT License. Copyright (c) 2018+, MarkedJS; Copyright (c) 2011-2018, Christopher Jeffrey. It reads the
+Markdown of a note into the editor and writes it back.
+

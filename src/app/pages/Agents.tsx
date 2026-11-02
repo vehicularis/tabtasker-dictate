@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { invoke } from '../../bridge';
 import type { PageProps } from '../../store';
-import { Button, Icon, PageHeader, Section, Tile, TileGroup, Toggle } from '../../ui';
+import { Button, Icon, GroupHeader, Section, Tile, TileGroup, Toggle } from '../../ui';
 
 // What mcp.rs's agents_status reports.
 type Added = 'no' | 'yes' | 'elsewhere';
@@ -144,7 +144,7 @@ export function Agents({ settings, update }: PageProps) {
   const copy = () => void navigator.clipboard.writeText(usable).then(() => setCopied(true), () => setCopied(false));
 
   return <>
-    <PageHeader icon="agents" title="Agents (MCP)">Let Claude Code and Claude Desktop use your notes and meetings.</PageHeader>
+    <GroupHeader title="Reading your notes">Claude Code and Claude Desktop can read your notes and meetings through TabTasker Dictate, on this Mac. Claude Code is set up for it the moment you connect it above.</GroupHeader>
     <Section title="Server" note="The server runs on this Mac and opens only your notes and meetings folders. What an agent reads goes to its own model, like anything else you share with it.">
       <TileGroup>
         <Tile title="Answer agents" detail="Turn off to refuse every agent at once.">

@@ -1,14 +1,15 @@
 import { useEffect, useRef, type KeyboardEvent } from 'react';
 import type { Status } from '../store';
-import { AlarmIcon, Caret, Check, FolderIcon, GearIcon, MeetingIcon, MicIcon, NoteIcon, PasteIcon, SetupIcon } from './icons';
+import { Icon } from '../ui/Icon';
+import { AlarmIcon, Caret, Check, GearIcon, LibraryIcon, MeetingIcon, MicIcon, NoteIcon, PasteIcon, SetupIcon } from './icons';
 
 const itemsOf = (menu: Element) => [...menu.querySelectorAll<HTMLElement>(':scope > [role^="menuitem"], :scope > .sub > [role^="menuitem"]')];
 
 // The dots' right-click menu. It works from the keyboard like a Mac menu: arrows move, → and ← open and
 // close the microphones, Escape closes a level.
-export function Menu({ status, mics, meeting, onMics, onNote, onMeeting, onShowNotes, onPasteLast, onPickMic, onLogin, onHide, onSettings, onSetup }: {
-  status: Status | null; mics: boolean; meeting: boolean; onMics: (open: boolean) => void; onNote: () => void; onMeeting: () => void; onShowNotes: () => void; onPasteLast: () => void;
-  onPickMic: (id: string | null) => void; onLogin: () => void; onHide: () => void; onSettings: () => void; onSetup: () => void;
+export function Menu({ status, mics, meeting, onMics, onNote, onWriteNote, onSticky, onMeeting, onOpen, onPasteLast, onPickMic, onLogin, onHide, onSettings, onSetup, onQuit }: {
+  status: Status | null; mics: boolean; meeting: boolean; onMics: (open: boolean) => void; onNote: () => void; onWriteNote: () => void; onSticky: () => void; onMeeting: () => void; onOpen: () => void; onPasteLast: () => void;
+  onPickMic: (id: string | null) => void; onLogin: () => void; onHide: () => void; onSettings: () => void; onSetup: () => void; onQuit: () => void;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const parent = useRef<HTMLButtonElement>(null);
@@ -36,9 +37,11 @@ export function Menu({ status, mics, meeting, onMics, onNote, onMeeting, onShowN
       if (row !== document.activeElement) row.focus({ preventScroll: true });
       if (!row.closest('.submenu')) onMics(row.hasAttribute('aria-haspopup'));
     }}>
-    <button type="button" role="menuitem" tabIndex={-1} onClick={onNote}><NoteIcon />New note</button>
+    <button type="button" role="menuitem" tabIndex={-1} onClick={onNote}><NoteIcon />Speak a note</button>
+    <button type="button" role="menuitem" tabIndex={-1} onClick={onWriteNote}><Icon name="keyboard" size={16} />Write a note</button>
+    <button type="button" role="menuitem" tabIndex={-1} onClick={onSticky}><Icon name="sticky" size={16} />New sticky</button>
     <button type="button" role="menuitem" tabIndex={-1} onClick={onMeeting}><MeetingIcon />{meeting ? 'Stop meeting' : 'Start meeting'}</button>
-    <button type="button" role="menuitem" tabIndex={-1} onClick={onShowNotes}><FolderIcon />Show notes in Finder</button>
+    <button type="button" role="menuitem" tabIndex={-1} onClick={onOpen}><LibraryIcon />Open TabTasker Dictate</button>
     <button type="button" role="menuitem" tabIndex={-1} onClick={onPasteLast}><PasteIcon />Paste last transcript</button>
     <i className="rule" role="separator" />
     {status && status.inputs.length > 0 && <div className="sub">
@@ -51,10 +54,12 @@ export function Menu({ status, mics, meeting, onMics, onNote, onMeeting, onShowN
         <i className="rule" role="separator" /><p className="in-use">Mic in use<span>{status.inputInUse}</span></p>
       </div>}
     </div>}
-    <button type="button" role="menuitemcheckbox" tabIndex={-1} aria-checked={!!status?.openAtLogin} onClick={onLogin}>{status?.openAtLogin ? <Check /> : <span className="icon" />}Open at Login</button>
+    <button type="button" role="menuitemcheckbox" tabIndex={-1} aria-checked={!!status?.openAtLogin} onClick={onLogin}><Icon name={status?.openAtLogin ? 'boxCheck' : 'box'} size={16} />Open at Login</button>
     <i className="rule" role="separator" />
     <button type="button" role="menuitem" tabIndex={-1} onClick={onHide}><AlarmIcon />Hide for an hour</button>
     <button type="button" role="menuitem" tabIndex={-1} onClick={onSettings}><GearIcon />Settings…</button>
     <button type="button" role="menuitem" tabIndex={-1} onClick={onSetup}><SetupIcon />Set up…</button>
+    <i className="rule" role="separator" />
+    <button type="button" role="menuitem" tabIndex={-1} onClick={onQuit}><Icon name="power" size={16} />Quit TabTasker Dictate</button>
   </div>;
 }

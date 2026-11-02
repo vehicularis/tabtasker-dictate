@@ -153,7 +153,7 @@ export function Notes({ settings, update }: PageProps) {
 
     <Section title="With Claude" note={claude
       ? 'Claude sees the note’s words, never your voice. When Claude is slow or unavailable, the note is saved as it is.'
-      : <>These work once Claude is connected. <button type="button" className="link" onClick={() => { location.hash = 'claude'; }}>Connect Claude</button></>}>
+      : <>These work once Claude is connected. <button type="button" className="link" onClick={() => { location.hash = 'settings/agents'; }}>Connect Claude</button></>}>
       <TileGroup>
         <Tile title="Claude names the note" detail="A short title from what you said, unless you type one." dim={!claude}>
           <Toggle label="Claude names the note" checked={notes.claudeTitle} onChange={claudeTitle => update({ notes: { claudeTitle } })} />
