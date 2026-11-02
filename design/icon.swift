@@ -1,5 +1,5 @@
-// Draws TabTasker Dictate's app icon and menu bar mark: a text cursor between voice bars ("speak to type"),
-// white on a black tile, and the mark alone in black for the menu bar (a template image macOS tints).
+// Draws TabTasker Dictate's app icon and menu bar mark: TabTasker's otter with its voice on its chest, white
+// on Business's night-blue tile, and its head alone in black for the menu bar (a template image macOS tints).
 // Run from the repository root: swift design/icon.swift
 // It writes design/icon.png (1024 px) and design/tray*.png, and every icon Tauri bundles in src-tauri/icons.
 import CoreGraphics
@@ -54,24 +54,49 @@ func squircle(_ rect: CGRect, radius r: CGFloat) -> CGPath {
   return path
 }
 
-// The mark on the 1024 grid, centred on (512, 512): four bars, the cursor in the middle.
-func mark(_ ctx: CGContext, _ k: CGFloat) {
-  let bar: CGFloat = 64, stem: CGFloat = 35, serif: CGFloat = 102, tall: CGFloat = 512
-  let path = CGMutablePath()
-  for (dx, h) in [(-234, 205), (-117, 348), (117, 348), (234, 205)] as [(CGFloat, CGFloat)] {
-    path.addPath(capsule(CGRect(x: 512 + dx - bar / 2, y: 512 - h / 2, width: bar, height: h)))
+// TabTasker's otter, as Business draws it (flat, white, looking straight at you, its body running off
+// the bottom of the tile), here with its voice on its chest: three bars in the tile's ink, so Dictate
+// reads as the same family at a glance and as the one that listens up close. On the 1024 grid, in the
+// 824 px tile at (100, 100); CoreGraphics' y runs up.
+let ink = CGColor(srgbRed: 0.055, green: 0.082, blue: 0.145, alpha: 1)      // #0e1525, between the tile's two ends
+let tileTop = CGColor(srgbRed: 0.012, green: 0.027, blue: 0.094, alpha: 1)  // #030718
+let tileBottom = CGColor(srgbRed: 0.114, green: 0.157, blue: 0.227, alpha: 1) // #1d283a
+func ellipse(_ cx: CGFloat, _ cy: CGFloat, _ rx: CGFloat, _ ry: CGFloat) -> CGPath { CGPath(ellipseIn: CGRect(x: cx - rx, y: cy - ry, width: 2 * rx, height: 2 * ry), transform: nil) }
+func circle(_ cx: CGFloat, _ cy: CGFloat, _ r: CGFloat) -> CGPath { ellipse(cx, cy, r, r) }
+
+/// The white: the head and body as one rounded shape, with an ear on each side.
+func otterBody() -> CGPath {
+  let body = CGMutablePath()
+  body.addPath(CGPath(roundedRect: CGRect(x: 293, y: -200, width: 438, height: 955), cornerWidth: 219, cornerHeight: 219, transform: nil))
+  body.addPath(circle(357, 707, 77)); body.addPath(circle(667, 707, 77))
+  return body
+}
+/// The face and the voice, cut from the white in the tile's ink.
+func otterFace() -> CGPath {
+  let face = CGMutablePath()
+  face.addPath(circle(357, 707, 34)); face.addPath(circle(667, 707, 34))   // the ears' insides
+  face.addPath(circle(430, 573, 27)); face.addPath(circle(594, 573, 27))   // eyes
+  face.addPath(ellipse(512, 490, 30, 21))                                  // nose
+  for side in [-1, 1] as [CGFloat] {                                       // three whisker dots each side
+    for (dx, dy) in [(-14, 12), (6, 0), (-6, -16)] as [(CGFloat, CGFloat)] { face.addPath(circle(512 + side * (86 + dx * side), 452 + dy, 7)) }
   }
-  path.addPath(capsule(CGRect(x: 512 - stem / 2, y: 512 - tall / 2, width: stem, height: tall)))
-  for y in [512 + tall / 2 - stem, 512 - tall / 2] { path.addPath(capsule(CGRect(x: 512 - serif / 2, y: y, width: serif, height: stem))) }
-  // White with a whisper of shade toward the bottom, and a soft shadow, so it sits on the tile.
+  for (dx, h) in [(-60, 74), (0, 128), (60, 74)] as [(CGFloat, CGFloat)] { // the voice, on the chest
+    face.addPath(capsule(CGRect(x: 512 + dx - 15, y: 318 - h / 2, width: 30, height: h)))
+  }
+  return face
+}
+
+func mark(_ ctx: CGContext, _ k: CGFloat) {
+  // White with a whisper of shade toward the top, and a soft shadow, so it sits on the tile.
   ctx.saveGState()
   ctx.setShadow(offset: CGSize(width: 0, height: -6 * k), blur: 18 * k, color: grey(0, 0.45)) // shadows ignore the scale
-  ctx.addPath(path); ctx.setFillColor(grey(1)); ctx.fillPath()
+  ctx.addPath(otterBody()); ctx.setFillColor(grey(1)); ctx.fillPath()
   ctx.restoreGState()
-  ctx.saveGState(); ctx.addPath(path); ctx.clip()
-  let shade = CGGradient(colorsSpace: space, colors: [grey(1), grey(0.86)] as CFArray, locations: nil)!
-  ctx.drawLinearGradient(shade, start: CGPoint(x: 0, y: 768), end: CGPoint(x: 0, y: 256), options: [])
+  ctx.saveGState(); ctx.addPath(otterBody()); ctx.clip()
+  let shade = CGGradient(colorsSpace: space, colors: [grey(0.9), grey(0.97)] as CFArray, locations: nil)!
+  ctx.drawLinearGradient(shade, start: CGPoint(x: 0, y: 784), end: CGPoint(x: 0, y: 300), options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
   ctx.restoreGState()
+  ctx.addPath(otterFace()); ctx.setFillColor(ink); ctx.fillPath()
 }
 
 // The app icon at any size, drawn on Apple's 1024 grid: an 824 px tile, centred, with its shadow below.
@@ -81,32 +106,39 @@ func appIcon(_ size: Int) -> CGImage {
     let tile = squircle(CGRect(x: 100, y: 100, width: 824, height: 824), radius: 185)
     ctx.saveGState()
     ctx.setShadow(offset: CGSize(width: 0, height: -10 * s / 1024), blur: 28 * s / 1024, color: grey(0, 0.3))
-    ctx.addPath(tile); ctx.setFillColor(grey(0.04)); ctx.fillPath()
+    ctx.addPath(tile); ctx.setFillColor(ink); ctx.fillPath()
     ctx.restoreGState()
     ctx.saveGState(); ctx.addPath(tile); ctx.clip()
-    let fill = CGGradient(colorsSpace: space, colors: [grey(0.2), grey(0.035)] as CFArray, locations: nil)!
-    ctx.drawLinearGradient(fill, start: CGPoint(x: 0, y: 924), end: CGPoint(x: 0, y: 100), options: [])
-    let glow = CGGradient(colorsSpace: space, colors: [grey(1, 0.09), grey(1, 0)] as CFArray, locations: nil)!
-    ctx.drawRadialGradient(glow, startCenter: CGPoint(x: 512, y: 560), startRadius: 0, endCenter: CGPoint(x: 512, y: 560), endRadius: 440, options: [])
+    // Business's night sky: darkest at the top right, lifting toward the bottom left.
+    let fill = CGGradient(colorsSpace: space, colors: [tileTop, tileBottom] as CFArray, locations: nil)!
+    ctx.drawLinearGradient(fill, start: CGPoint(x: 924, y: 924), end: CGPoint(x: 100, y: 100), options: [])
     // Light along the top edge only, fading out down the sides.
     ctx.addPath(squircle(CGRect(x: 102, y: 102, width: 820, height: 820), radius: 183)); ctx.setLineWidth(4); ctx.replacePathWithStrokedPath(); ctx.clip()
-    let rim = CGGradient(colorsSpace: space, colors: [grey(1, 0.22), grey(1, 0)] as CFArray, locations: nil)!
+    let rim = CGGradient(colorsSpace: space, colors: [grey(1, 0.18), grey(1, 0)] as CFArray, locations: nil)!
     ctx.drawLinearGradient(rim, start: CGPoint(x: 0, y: 924), end: CGPoint(x: 0, y: 640), options: [])
     ctx.restoreGState()
+    ctx.saveGState(); ctx.addPath(tile); ctx.clip() // the otter's body runs off the bottom of the tile
     mark(ctx, s / 1024)
+    ctx.restoreGState()
   }
 }
 
-// The menu bar mark: 18 pt tall (Tauri sizes the tray image to 18 pt), drawn on the 36 px grid of the @2x
-// image so every edge lands on a pixel, in black on transparent.
+// The menu bar mark: the otter's head, 18 pt tall (Tauri sizes the tray image to 18 pt), drawn on the
+// 36 px grid of the @2x image so its edges land on pixels, in black on transparent with the face cut out
+// (a template image macOS tints).
 func trayIcon(_ size: Int) -> CGImage {
   image(size) { ctx, s in
     ctx.scaleBy(x: s / 36, y: s / 36)
-    let path = CGMutablePath()
-    for (x, h) in [(4, 12), (11, 20), (25, 20), (32, 12)] as [(CGFloat, CGFloat)] { path.addPath(capsule(CGRect(x: x - 2, y: 18 - h / 2, width: 4, height: h))) }
-    path.addPath(capsule(CGRect(x: 17, y: 3, width: 2, height: 30)))
-    for y in [3, 31] as [CGFloat] { path.addPath(capsule(CGRect(x: 15, y: y, width: 6, height: 2))) }
-    ctx.addPath(path); ctx.setFillColor(grey(0)); ctx.fillPath()
+    let head = CGMutablePath()
+    head.addPath(CGPath(roundedRect: CGRect(x: 6, y: -12, width: 24, height: 42), cornerWidth: 12, cornerHeight: 12, transform: nil))
+    head.addPath(circle(9, 28, 5)); head.addPath(circle(27, 28, 5))
+    ctx.addPath(head); ctx.setFillColor(grey(0)); ctx.fillPath()
+    let face = CGMutablePath()
+    face.addPath(circle(9, 28, 2)); face.addPath(circle(27, 28, 2))
+    face.addPath(circle(13, 19, 2)); face.addPath(circle(23, 19, 2))
+    face.addPath(ellipse(18, 13.5, 2.5, 1.8))
+    for (dx, h) in [(-4, 5), (0, 8), (4, 5)] as [(CGFloat, CGFloat)] { face.addPath(capsule(CGRect(x: 18 + dx - 1, y: 5 - h / 2, width: 2, height: h))) }
+    ctx.setBlendMode(.clear); ctx.addPath(face); ctx.fillPath()
   }
 }
 

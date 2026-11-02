@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 import { Icon } from '../ui/Icon';
 
 // The overlay's icons: the same monochrome line set as Settings (a 20 grid, 1.5 stroke, the text colour),
@@ -11,15 +11,34 @@ const GEAR = Array.from({ length: 8 }, (_, i) => {
   return `${i ? 'L' : 'M'}${at(-14, 5.9)}L${at(-8, 7.6)}L${at(8, 7.6)}L${at(14, 5.9)}A5.9 5.9 0 0 1 ${at(31, 5.9)}`;
 }).join('') + 'Z';
 
-// The app icon, as design/icon.swift draws it: the 824 tile of its 1024 grid scaled to 26.
-export const Logo = ({ size = 18 }: { size?: number }) => <svg width={size} height={size} viewBox="0 0 28 28" aria-hidden="true">
-  <rect x="1" y="1" width="26" height="26" rx="6.2" fill="#0b0b0c" />
-  <rect x="1.25" y="1.25" width="25.5" height="25.5" rx="5.95" fill="none" stroke="#fff" strokeOpacity=".14" strokeWidth=".5" />
-  <g fill="#fff">
-    {[[-7.38, 6.47], [-3.69, 10.98], [3.69, 10.98], [7.38, 6.47]].map(([dx, h]) => <rect key={dx} x={14 + dx - 1.01} y={14 - h / 2} width="2.02" height={h} rx="1.01" />)}
-    <rect x="13.45" y="5.92" width="1.1" height="16.16" rx=".55" /><rect x="12.4" y="5.92" width="3.2" height="1.1" rx=".55" /><rect x="12.4" y="20.98" width="3.2" height="1.1" rx=".55" />
-  </g>
-</svg>;
+// The app icon, as design/icon.swift draws it: TabTasker's otter with its voice on its chest, on Business's
+// night-blue tile. The 824 tile of the icon's 1024 grid is scaled to 26 here, and the otter is drawn in the
+// icon's own coordinates (y up) under one transform, so the two never drift apart.
+export const Logo = ({ size = 18 }: { size?: number }) => {
+  const id = useId();
+  const dots = [[-14, 12], [6, 0], [-6, -16]] as const;
+  return <svg width={size} height={size} viewBox="0 0 28 28" aria-hidden="true">
+    <defs>
+      <linearGradient id={`${id}-sky`} x1="1" y1="1" x2="0" y2="0"><stop offset="0" stopColor="#030718" /><stop offset="1" stopColor="#1d283a" /></linearGradient>
+      <clipPath id={`${id}-tile`}><rect x="1" y="1" width="26" height="26" rx="6.2" /></clipPath>
+    </defs>
+    <rect x="1" y="1" width="26" height="26" rx="6.2" fill={`url(#${id}-sky)`} />
+    <rect x="1.25" y="1.25" width="25.5" height="25.5" rx="5.95" fill="none" stroke="#fff" strokeOpacity=".12" strokeWidth=".5" />
+    {/* The clip is on its own group: on a transformed one it would be read in the icon's coordinates. */}
+    <g clipPath={`url(#${id}-tile)`}><g transform="translate(1 27) scale(.031553 -.031553) translate(-100 -100)">
+      <g fill="#f3f4f6">
+        <rect x="293" y="-200" width="438" height="955" rx="219" /><circle cx="357" cy="707" r="77" /><circle cx="667" cy="707" r="77" />
+      </g>
+      <g fill="#0e1525">
+        <circle cx="357" cy="707" r="34" /><circle cx="667" cy="707" r="34" /><circle cx="430" cy="573" r="27" /><circle cx="594" cy="573" r="27" />
+        <ellipse cx="512" cy="490" rx="30" ry="21" />
+        {dots.map(([dx, dy]) => <circle key={`l${dx}`} cx={426 + dx} cy={452 + dy} r="7" />)}
+        {dots.map(([dx, dy]) => <circle key={`r${dx}`} cx={598 - dx} cy={452 + dy} r="7" />)}
+        <rect x="437" y="281" width="30" height="74" rx="15" /><rect x="497" y="254" width="30" height="128" rx="15" /><rect x="557" y="281" width="30" height="74" rx="15" />
+      </g>
+    </g></g>
+  </svg>;
+};
 export const NoteIcon = () => <Icon name="note" size={17} />;
 export const MicIcon = () => <Icon name="mic" size={17} />;
 export const FolderIcon = () => <Icon name="folder" size={17} />;
