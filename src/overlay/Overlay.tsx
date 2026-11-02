@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
 import { invoke, listen } from '../bridge';
-import { needsSetup, setupDone, updateSettings, useSettings, type Edge, type Status } from '../store';
+import { needsSetup, setupDone, updateSettings, useSettings, type Edge, type Events, type Status } from '../store';
 import { applyTheme, isDark } from '../ui/theme';
 import { CommandCard } from './CommandCard';
 import { Dock } from './Dock';
@@ -208,6 +208,9 @@ export function Overlay() {
   const newSticky = useCallback(() => { setMenu(false); void invoke('sticky_new', {}).catch(error => setToast(typeof error === 'string' ? error : 'Couldn’t make a sticky')); }, []);
   // The global shortcut for a typed note, which the native side hears and hands here.
   useEffect(() => listen<{ what: string }>('dictate-open', ({ what }) => { if (what === 'writeNote') writeNote(); }), [writeNote]);
+  // The Dock that hides itself, sliding out over the dots' edge: the dots step aside by its strip until it goes.
+  const [dockInset, setDockInset] = useState(0);
+  useEffect(() => listen<Events['dictate-dock']>('dictate-dock', dock => setDockInset(dock.shown && dock.edge === edge ? dock.strip : 0)), [edge]);
   const startMeeting = () => {
     setMenu(false);
     const action = meetings?.recording ? 'stop' : 'start';
@@ -238,14 +241,14 @@ export function Overlay() {
   // Nothing is drawn until the settings say which edge the dots are on. Hidden for an hour, the dots go but
   // an answer from Claude, a meeting or a hands-free session still shows, or its words would be lost.
   if (!settings) return <div ref={root} className="layer" data-edge={edge} />;
-  if (hidden) return <div ref={root} className="layer" data-edge={edge} data-size={settings.appearance.size}>
+  if (hidden) return <div ref={root} className="layer" data-edge={edge} data-size={settings.appearance.size} style={{ '--dock-inset': `${dockInset}px` } as CSSProperties}>
     <div ref={dock} className="dock"><CommandCard /><MeetingPill /><HandsFree /></div>
   </div>;
   const mode = phase === 'listening' ? 'listening' : phase !== 'idle' ? 'thinking' : hover || menu ? 'hover' : 'idle';
   const card = setup;
   const quiet = settings.appearance.idle === 'hidden' && mode === 'idle' && !card && !saved && !toast;
   return <div ref={root} className="layer" data-edge={edge} data-mode={mode} data-size={settings.appearance.size} data-quiet={quiet || undefined} data-loading={loading || undefined}
-    style={{ '--margin': `${settings.appearance.margin}px` } as CSSProperties}
+    style={{ '--margin': `${settings.appearance.margin}px`, '--dock-inset': `${dockInset}px` } as CSSProperties}
     data-card={card || undefined} data-dragging={dragging || undefined}>
     <div ref={dock} className="dock">
       {setup && <Setup status={status} fnDown={fnDown} fnTested={fnTested} onClose={() => setSetup(false)} />}

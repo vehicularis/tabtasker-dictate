@@ -36,3 +36,4 @@ export function StickiesView({ onError }: { onError: (message: string) => void }
     </div>
   </>;
 }
+

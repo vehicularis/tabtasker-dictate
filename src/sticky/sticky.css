@@ -1,15 +1,13 @@
 /* A sticky, as TabTasker Business draws a sticker (boardColor.ts hueSurface): paper is the hue mixed into
    the surface (30 % on white; 26 % on a dark surface at night), ink is the hue mixed into the text colour
    (20 %; 34 % at night). It fills its transparent window; a thin bar in a deeper tint drags it. */
-html, body, #root { height: 100%; margin: 0; background: transparent; overflow: hidden; }
-/* WebKit keeps a button's native look unless told otherwise, even with a background set through a variable. */
-button { appearance: none; -webkit-appearance: none; font-family: var(--font); }
-body { font: 14px/1.45 var(--font); -webkit-font-smoothing: antialiased; }
+/* The page's own rules live in page.css, so this file can be borrowed by the Help page for a real sticky. */
 .sticky { --paper: color-mix(in srgb, var(--hue) 30%, #ffffff); --ink: color-mix(in srgb, var(--hue) 20%, #17181b); --bar: color-mix(in srgb, var(--hue) 44%, #ffffff); --dim: color-mix(in srgb, var(--ink) 55%, transparent);
   display: flex; flex-direction: column; box-sizing: border-box; height: 100%; border-radius: 6px; color: var(--ink); background: var(--paper); box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--ink) 18%, transparent); }
 @media (prefers-color-scheme: dark) {
-  .sticky { --paper: color-mix(in srgb, var(--hue) 26%, #1d2126); --ink: color-mix(in srgb, var(--hue) 34%, #e9ebee); --bar: color-mix(in srgb, var(--hue) 40%, #1d2126); }
+  :root:not([data-theme='light']) .sticky { --paper: color-mix(in srgb, var(--hue) 26%, #1d2126); --ink: color-mix(in srgb, var(--hue) 34%, #e9ebee); --bar: color-mix(in srgb, var(--hue) 40%, #1d2126); }
 }
+:root[data-theme='dark'] .sticky { --paper: color-mix(in srgb, var(--hue) 26%, #1d2126); --ink: color-mix(in srgb, var(--hue) 34%, #e9ebee); --bar: color-mix(in srgb, var(--hue) 40%, #1d2126); }
 .sticky-bar { position: relative; display: flex; flex: none; align-items: center; gap: 6px; height: 30px; padding: 0 5px 0 8px; border-radius: 6px 6px 0 0; background: var(--bar); cursor: grab; user-select: none; -webkit-user-select: none; }
 .sticky[data-folded] .sticky-bar { border-radius: 6px; }
 .sticky-bar:active { cursor: grabbing; }
@@ -47,4 +45,4 @@ body { font: 14px/1.45 var(--font); -webkit-font-smoothing: antialiased; }
 .sticky-menu .tick { display: inline-block; width: 14px; font-size: 12px; }
 .sticky-menu-hues { display: flex; gap: 7px; padding: 6px 8px 8px; }
 .sticky-menu-rule { display: block; height: 1px; margin: 3px 6px; background: color-mix(in srgb, var(--ink-menu) 12%, transparent); }
-:is(button, [tabindex]):focus-visible { outline: 2px solid var(--dim); outline-offset: 1px; }
+.sticky :is(button, [tabindex]):focus-visible { outline: 2px solid var(--dim); outline-offset: 1px; }

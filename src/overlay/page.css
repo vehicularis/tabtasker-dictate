@@ -1,0 +1,8 @@
+/* The overlay page itself: transparent and full screen, nothing selectable, keyboard focus ringed as everywhere else. */
+html, body, #root { height: 100%; margin: 0; background: transparent; overflow: hidden; }
+body { font: 14px/1.45 var(--font); color: var(--ink); -webkit-font-smoothing: antialiased; user-select: none; -webkit-user-select: none; }
+button { font: inherit; color: inherit; }
+/* Keyboard focus: the same ring as everywhere else. */
+:is(button, a, [tabindex]):focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+:is(button, a, [tabindex]):focus:not(:focus-visible) { outline: none; }
+:is(input, textarea):focus { outline: none; } /* a text field shows focus by its well, never a ring */

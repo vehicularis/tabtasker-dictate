@@ -54,6 +54,7 @@ export type Events = {
   'dictate-hands-free': { locked: boolean };
   'dictate-history': { entry: HistoryEntry };
   'dictate-learned': { word: string };
+  'dictate-dock': { shown: boolean; strip: number; edge: 'bottom' | 'left' | 'right' };
 };
 
 // NSEvent modifier flags, as the native side matches them.

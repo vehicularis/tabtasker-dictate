@@ -15,6 +15,7 @@ extern void dictate_ui_fn(bool down);
 extern void dictate_ui_open(const char *what);
 extern void dictate_ui_note(const char *text);
 extern void dictate_ui_pointer(bool over, double x, double y);
+extern void dictate_ui_dock(bool shown, double strip, const char *edge);
 extern void dictate_ui_said(const char *text, bool dictated, bool live);
 extern void dictate_ui_notice(const char *message);
 extern void dictate_log(const char *line);
@@ -874,6 +875,11 @@ static void TTVoicePlaySound(NSString *name, double volume) {
 @property (strong) NSMutableDictionary<NSNumber *, NSImage *> *masks;
 @property (strong) NSTimer *mouseTimer;
 @property BOOL shown, pointerOver;
+// The Dock that hides itself: its strip and edge (read every few seconds), whether it is out right now, and the clocks behind that.
+@property CGFloat dockStrip;
+@property NSRectEdge dockEdge;
+@property BOOL dockShown, dockPushed;
+@property CFAbsoluteTime dockRead, dockLeft, dockPolled;
 @property NSPoint pointer;
 @end
 
@@ -890,9 +896,12 @@ static void TTVoicePlaySound(NSString *name, double volume) {
   }
   return nil;
 }
-/// The Dock's strip on the screen that has it: its edge and thickness, read from the Dock's own
-/// accessibility tree (its one list is the Dock), which reports its size while it is hidden too. Zero
-/// when there is no Dock to ask or no leave to ask it.
+static const char *TTEdgeName(NSRectEdge edge) { return edge == NSRectEdgeMinX ? "left" : edge == NSRectEdgeMaxX ? "right" : "bottom"; }
+/// Which edge the Dock's own preference puts it on.
+static NSRectEdge TTDockEdgeFromPreferences(void) {
+  NSString *side = (__bridge_transfer NSString *)CFPreferencesCopyAppValue(CFSTR("orientation"), CFSTR("com.apple.dock"));
+  return [side isEqualToString:@"left"] ? NSRectEdgeMinX : [side isEqualToString:@"right"] ? NSRectEdgeMaxX : NSRectEdgeMinY;
+}
 /// Without leave to read the Dock, its own preferences say enough: a Dock that hides itself, on which edge,
 /// and how big its tiles are; its strip is the tile plus the padding around it (47 points at a tile of 26).
 static CGFloat TTDockStripFromPreferences(NSRectEdge *edge) {
@@ -900,65 +909,118 @@ static CGFloat TTDockStripFromPreferences(NSRectEdge *edge) {
   if (![hides respondsToSelector:@selector(boolValue)] || !hides.boolValue) return 0; // a Dock that stays reserves its space itself
   NSNumber *tile = (__bridge_transfer NSNumber *)CFPreferencesCopyAppValue(CFSTR("tilesize"), CFSTR("com.apple.dock"));
   CGFloat size = [tile respondsToSelector:@selector(doubleValue)] ? MAX(16.0, MIN(128.0, tile.doubleValue)) : 48.0;
-  NSString *side = (__bridge_transfer NSString *)CFPreferencesCopyAppValue(CFSTR("orientation"), CFSTR("com.apple.dock"));
-  *edge = [side isEqualToString:@"left"] ? NSRectEdgeMinX : [side isEqualToString:@"right"] ? NSRectEdgeMaxX : NSRectEdgeMinY;
+  *edge = TTDockEdgeFromPreferences();
   return size + 21.0;
 }
-static CGFloat TTDockStrip(NSRectEdge *edge) {
+/// The Dock's one list in its accessibility tree (the Dock itself), or NULL without leave to ask. The caller releases it.
+static AXUIElementRef TTDockList(void) {
   NSRunningApplication *dock = [NSRunningApplication runningApplicationsWithBundleIdentifier:@"com.apple.dock"].firstObject;
-  if (!dock) { dictate_log("dock: the Dock isn't running"); return 0; }
-  if (!AXIsProcessTrusted()) {
-    CGFloat guessed = TTDockStripFromPreferences(edge);
-    dictate_log([NSString stringWithFormat:@"dock: no leave to read the Dock (Accessibility is off); its preferences give a strip of %.0f", guessed].UTF8String);
-    return guessed;
-  }
+  if (!dock || !AXIsProcessTrusted()) return NULL;
   AXUIElementRef app = AXUIElementCreateApplication(dock.processIdentifier);
-  CFArrayRef children = NULL;
-  CGFloat thickness = 0;
+  CFArrayRef children = NULL; AXUIElementRef list = NULL;
   if (AXUIElementCopyAttributeValue(app, kAXChildrenAttribute, (CFTypeRef *)&children) == kAXErrorSuccess && children) {
-    for (CFIndex i = 0; i < CFArrayGetCount(children) && thickness == 0; i++) {
+    for (CFIndex i = 0; i < CFArrayGetCount(children) && !list; i++) {
       AXUIElementRef child = (AXUIElementRef)CFArrayGetValueAtIndex(children, i);
-      CFTypeRef role = NULL, size = NULL;
-      if (AXUIElementCopyAttributeValue(child, kAXRoleAttribute, &role) == kAXErrorSuccess && role && CFEqual(role, kAXListRole)
-          && AXUIElementCopyAttributeValue(child, kAXSizeAttribute, &size) == kAXErrorSuccess && size) {
-        CGSize box = CGSizeZero;
-        AXValueGetValue((AXValueRef)size, kAXValueTypeCGSize, &box);
-        // Along the bottom it is wide; at a side it is tall. Which side, the Dock's own preference says.
-        dictate_log([NSString stringWithFormat:@"dock: its list is %.0f × %.0f", box.width, box.height].UTF8String);
-        if (box.width >= box.height) { *edge = NSRectEdgeMinY; thickness = box.height; }
-        else {
-          NSString *side = (__bridge_transfer NSString *)CFPreferencesCopyAppValue(CFSTR("orientation"), CFSTR("com.apple.dock"));
-          *edge = [side isEqualToString:@"left"] ? NSRectEdgeMinX : NSRectEdgeMaxX;
-          thickness = box.width;
-        }
+      CFTypeRef role = NULL;
+      if (AXUIElementCopyAttributeValue(child, kAXRoleAttribute, &role) == kAXErrorSuccess && role) {
+        if (CFEqual(role, kAXListRole)) list = (AXUIElementRef)CFRetain(child);
+        CFRelease(role);
       }
-      if (role) CFRelease(role);
-      if (size) CFRelease(size);
     }
     CFRelease(children);
   }
   CFRelease(app);
-  return thickness;
+  return list;
+}
+/// Where the Dock's list is right now, in screen points from the bottom left of the main screen: on the
+/// screen while it is out, mostly past its edge while it hides. Empty when it cannot be read.
+static NSRect TTDockListFrame(void) {
+  AXUIElementRef list = TTDockList();
+  if (!list) return NSZeroRect;
+  CFTypeRef position = NULL, size = NULL;
+  NSRect frame = NSZeroRect;
+  if (AXUIElementCopyAttributeValue(list, kAXPositionAttribute, &position) == kAXErrorSuccess && position
+      && AXUIElementCopyAttributeValue(list, kAXSizeAttribute, &size) == kAXErrorSuccess && size) {
+    CGPoint origin = CGPointZero; CGSize box = CGSizeZero;
+    AXValueGetValue((AXValueRef)position, kAXValueTypeCGPoint, &origin);
+    AXValueGetValue((AXValueRef)size, kAXValueTypeCGSize, &box);
+    CGFloat height = NSHeight(NSScreen.screens.firstObject.frame); // accessibility measures down from the top left of the main screen
+    frame = NSMakeRect(origin.x, height - origin.y - box.height, box.width, box.height);
+  }
+  if (position) CFRelease(position);
+  if (size) CFRelease(size);
+  CFRelease(list);
+  return frame;
+}
+/// The Dock's strip on the screen that has it: its edge and thickness, from the Dock's own accessibility
+/// tree, which reports its size while it is hidden too; from its preferences without leave to ask. Zero
+/// when there is no Dock.
+static CGFloat TTDockStrip(NSRectEdge *edge) {
+  if (![NSRunningApplication runningApplicationsWithBundleIdentifier:@"com.apple.dock"].firstObject) return 0;
+  if (!AXIsProcessTrusted()) return TTDockStripFromPreferences(edge);
+  NSRect list = TTDockListFrame();
+  if (NSIsEmptyRect(list)) return 0;
+  // Along the bottom it is wide; at a side it is tall. Which side, the Dock's own preference says.
+  if (NSWidth(list) >= NSHeight(list)) { *edge = NSRectEdgeMinY; return NSHeight(list); }
+  *edge = TTDockEdgeFromPreferences();
+  return NSWidth(list);
 }
 - (void)fitScreen {
   NSScreen *screen = NSScreen.mainScreen ?: NSScreen.screens.firstObject;
   if (!screen) return;
+  // The visible frame stops at a Dock that stays. A Dock that hides itself reserves nothing, so the dots sit
+  // at the edge and step aside while it is out (readDock, track), rather than keeping its strip empty all day.
   NSRect fit = TTOverlayAvoidsDock ? screen.visibleFrame : screen.frame;
-  // A Dock that hides itself reserves nothing, so the visible frame runs to its edge and it would slide
-  // out over the dots. Its strip is kept clear anyway, on the screen that has the Dock (the one with the
-  // menu bar), when the visible frame reaches that edge.
-  if (TTOverlayAvoidsDock && NSEqualRects(screen.frame, NSScreen.screens.firstObject.frame)) { // the same screen, whatever object stands for it
-    NSRectEdge edge = NSRectEdgeMinY;
-    CGFloat strip = TTDockStrip(&edge);
-    NSRect whole = screen.frame;
-    if (strip > 0) {
-      if (edge == NSRectEdgeMinY && NSMinY(fit) == NSMinY(whole)) { fit.origin.y += strip; fit.size.height -= strip; }
-      else if (edge == NSRectEdgeMinX && NSMinX(fit) == NSMinX(whole)) { fit.origin.x += strip; fit.size.width -= strip; }
-      else if (edge == NSRectEdgeMaxX && NSMaxX(fit) == NSMaxX(whole)) fit.size.width -= strip;
-    }
-  }
   dictate_log([NSString stringWithFormat:@"overlay: fitted to %.0f × %.0f at %.0f, %.0f (clear of the Dock: %@)", fit.size.width, fit.size.height, fit.origin.x, fit.origin.y, TTOverlayAvoidsDock ? @"yes" : @"no"].UTF8String);
   [self.window setFrame:fit display:YES];
+  [self readDock];
+}
+/// The Dock that hides itself, on the screen with the menu bar: its edge and strip, kept fresh every few
+/// seconds and on every screen change. A Dock that stays has its space already (fitScreen), so it counts as none.
+- (void)readDock {
+  self.dockRead = CFAbsoluteTimeGetCurrent();
+  NSScreen *main = NSScreen.screens.firstObject;
+  if (!main) return;
+  NSRectEdge edge = NSRectEdgeMinY;
+  CGFloat strip = TTOverlayAvoidsDock ? TTDockStrip(&edge) : 0;
+  NSRect whole = main.frame, visible = main.visibleFrame;
+  BOOL hides = strip > 0 && (edge == NSRectEdgeMinY ? NSMinY(visible) == NSMinY(whole) : edge == NSRectEdgeMinX ? NSMinX(visible) == NSMinX(whole) : NSMaxX(visible) == NSMaxX(whole));
+  if (!hides) strip = 0;
+  if (strip == self.dockStrip && edge == self.dockEdge) return;
+  self.dockStrip = strip; self.dockEdge = edge;
+  dictate_log([NSString stringWithFormat:@"dock: %@", strip > 0 ? [NSString stringWithFormat:@"hides at the %s, a strip of %.0f; the dots step aside while it is out", TTEdgeName(edge), strip] : @"stays, or there is none to step aside for"].UTF8String);
+  if (!strip && self.dockShown) { self.dockShown = NO; self.dockPushed = NO; dictate_ui_dock(false, 0, TTEdgeName(edge)); }
+}
+/// Is the Dock out? It comes out when the pointer pushes its edge and goes once the pointer leaves its
+/// strip, so the pointer says most of it; with leave to read the Dock, the Dock itself says whether it is on
+/// the screen (asked at most ten times a second, and only while the pointer is near it).
+- (void)watchDock:(CFAbsoluteTime)now {
+  if (now - self.dockRead > 5) [self readDock];
+  if (self.dockStrip <= 0) return;
+  NSRect whole = NSScreen.screens.firstObject.frame;
+  NSPoint at = NSEvent.mouseLocation;
+  NSRectEdge edge = self.dockEdge;
+  CGFloat depth = edge == NSRectEdgeMinY ? at.y - NSMinY(whole) : edge == NSRectEdgeMinX ? at.x - NSMinX(whole) : NSMaxX(whole) - at.x;
+  BOOL onMain = NSPointInRect(at, NSInsetRect(whole, -1, -1));
+  BOOL atEdge = onMain && depth <= 1.5, inStrip = onMain && depth <= self.dockStrip + 2;
+  BOOL shown = self.dockShown;
+  if (inStrip) {
+    self.dockLeft = 0;
+    if (atEdge) self.dockPushed = YES;
+    if (self.dockPushed) {
+      shown = YES;
+      if (AXIsProcessTrusted() && now - self.dockPolled > 0.1) {
+        self.dockPolled = now;
+        NSRect list = TTDockListFrame();
+        if (!NSIsEmptyRect(list)) { NSRect seen = NSIntersectionRect(list, whole); shown = NSWidth(seen) * NSHeight(seen) > 0.5 * NSWidth(list) * NSHeight(list); }
+      }
+    }
+  } else if (shown || self.dockPushed) {
+    // Gone from the strip: the Dock slides back a moment later.
+    if (!self.dockLeft) self.dockLeft = now;
+    if (now - self.dockLeft > 0.25) { shown = NO; self.dockPushed = NO; self.dockLeft = 0; }
+  }
+  if (shown != self.dockShown) { self.dockShown = shown; dictate_ui_dock(shown, self.dockStrip, TTEdgeName(edge)); }
 }
 - (void)attach:(NSWindow *)window {
   self.window = window;
@@ -985,6 +1047,7 @@ static CGFloat TTDockStrip(NSRectEdge *edge) {
   NSWindow *window = self.window;
   NSView *web = [self webView];
   if (!window || !web) { [self.mouseTimer invalidate]; self.mouseTimer = nil; return; }
+  [self watchDock:CFAbsoluteTimeGetCurrent()];
   NSPoint point = [web convertPoint:[window convertPointFromScreen:NSEvent.mouseLocation] fromView:nil];
   BOOL over = NO;
   for (NSValue *hit in self.hits) if (NSPointInRect(point, hit.rectValue)) { over = YES; break; }

@@ -38,11 +38,11 @@ meetings. Only text ever goes to Claude, never audio.
 | `src-tauri/src/speech_note.rs` | Long notes: the audio is cut where you pause and each piece is transcribed once, while you are still talking. |
 | `src-tauri/src/settings.rs` | Settings in one JSON file in the app data folder, saved atomically and sent to every window. |
 | `src/overlay/` | The dots, the orb, the note's review card and setup, in a transparent window. |
-| `src/settings/` | The Settings window, one page per area, built from the shared design system in `src/ui/`. |
+| `src/app/` | The app's window in TabTasker Business's Mac shell (tabs, an icon spine, a column, the page): your notes, meetings and stickies, the settings pages and Help, built from the shared design system in `src/ui/`. |
 
 Without the app around it, `npm run dev` serves both pages to a browser with a mock of the app:
-`http://localhost:1420/?preview=menu` for an overlay state, `http://localhost:1420/settings.html#notes` for a Settings
-page, and `?theme=light` or `?theme=dark` on either.
+`http://localhost:1420/?preview=menu` for an overlay state, `http://localhost:1420/app.html#notes` for the
+window, and `?theme=light` or `?theme=dark` on either.
 
 The first launch downloads the model once (about 875 MB) from
 [vehicularis-edge-models](https://github.com/vehicularis/vehicularis-edge-models/releases), checking its size

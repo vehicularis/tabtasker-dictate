@@ -15,7 +15,7 @@
   color-scheme: light;
   --shadow-ink: #171717;
   /* Chrome recedes, content advances: a tinted frame and rail, rows white on a bright page. */
-  --window: #f7f7f7; --frame: #f4f4f4; --rail-panel: #fafafa; --section: rgb(235 235 235 / .45);
+  --window: #f7f7f7; --frame: #f4f4f4; --rail-panel: #fafafa; --section: rgb(235 235 235 / .45); --muted: #ebebeb;
   --card: #ffffff; --popover: #ffffff; --secondary: #e2e2e2; --input: #bdbdbd; --field: rgb(235 235 235 / .5);
   --surface: rgb(0 0 0 / .035); --surface-2: rgb(0 0 0 / .06); --surface-3: rgb(0 0 0 / .1);
   --ink: #202020; --ink-2: #595959; --ink-3: #707070;
@@ -45,7 +45,7 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     color-scheme: dark;
-    --window: #101010; --frame: #171717; --rail-panel: #1e1e1e; --section: rgb(41 41 41 / .4);
+    --window: #101010; --frame: #171717; --rail-panel: #1e1e1e; --section: rgb(41 41 41 / .4); --muted: #292929;
     --card: #242424; --popover: #303030; --secondary: #363636; --input: #4b4b4b; --field: rgb(75 75 75 / .3);
     --surface: rgb(255 255 255 / .04); --surface-2: rgb(255 255 255 / .08); --surface-3: rgb(255 255 255 / .12);
     --ink: #ededed; --ink-2: #a8a8a8; --ink-3: #8c8c8c;
@@ -64,7 +64,7 @@
 }
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --window: #101010; --frame: #171717; --rail-panel: #1e1e1e; --section: rgb(41 41 41 / .4);
+  --window: #101010; --frame: #171717; --rail-panel: #1e1e1e; --section: rgb(41 41 41 / .4); --muted: #292929;
   --card: #242424; --popover: #303030; --secondary: #363636; --input: #4b4b4b; --field: rgb(75 75 75 / .3);
   --surface: rgb(255 255 255 / .04); --surface-2: rgb(255 255 255 / .08); --surface-3: rgb(255 255 255 / .12);
   --ink: #ededed; --ink-2: #a8a8a8; --ink-3: #8c8c8c;

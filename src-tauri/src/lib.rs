@@ -21,7 +21,6 @@ use std::path::PathBuf;
 use std::sync::{atomic::{AtomicBool, Ordering}, Mutex, OnceLock};
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::TrayIconBuilder;
-use tauri::window::{Effect, EffectState, EffectsBuilder};
 use tauri::{ActivationPolicy, AppHandle, Emitter, LogicalPosition, Manager, RunEvent, TitleBarStyle, WebviewUrl, WebviewWindowBuilder, WindowEvent, Wry};
 
 const OVERLAY: &str = "overlay";
@@ -106,6 +105,12 @@ extern "C" fn dictate_ui_note(words: *const c_char) {
 extern "C" fn dictate_ui_pointer(over: bool, x: f64, y: f64) {
   let at = if over && x.is_finite() && y.is_finite() { serde_json::json!({ "x": x, "y": y }) } else { serde_json::Value::Null };
   emit("dictate-pointer", at);
+}
+/// The Dock sliding out over an edge, or back: the page steps the dots aside by `strip` points while it is out.
+#[no_mangle]
+extern "C" fn dictate_ui_dock(shown: bool, strip: f64, edge: *const c_char) {
+  let edge = text(edge).unwrap_or_else(|| "bottom".to_owned());
+  emit("dictate-dock", serde_json::json!({ "shown": shown, "strip": if strip.is_finite() { strip } else { 0.0 }, "edge": edge }));
 }
 /// A line for the app log: no speech, just what the microphone delivered.
 #[no_mangle]
@@ -262,10 +267,12 @@ fn show_main(app: &AppHandle, route: Option<&str>) -> tauri::Result<()> {
   let window = WebviewWindowBuilder::new(app, MAIN, WebviewUrl::App(format!("app.html#{}", route.unwrap_or("notes")).into()))
     .title("TabTasker Dictate")
     .inner_size(1040.0, 700.0).min_inner_size(840.0, 580.0).center()
-    .title_bar_style(TitleBarStyle::Overlay).hidden_title(true).traffic_light_position(LogicalPosition::new(12.0, 21.0)) // centred on the page's 38-point title strip: Tauri keeps the buttons 10 pt up inside a container it makes `y` taller, so their centre lands at y - 2
-    .transparent(true) // the sidebar's vibrancy shows through the page
-    .effects(EffectsBuilder::new().effect(Effect::Sidebar).state(EffectState::FollowsWindowActiveState).build())
+    .title_bar_style(TitleBarStyle::Overlay).hidden_title(true).traffic_light_position(LogicalPosition::new(12.0, 22.0)) // centred on the page's 40-point title bar: Tauri keeps the buttons 10 pt up inside a container it makes `y` taller, so their centre lands at y - 2
     .build()?;
+  // The frame's colour behind the page, as Business's window: the page paints the same, so the window's
+  // edge is the frame's and a resize never shows anything else.
+  let dark = matches!(window.theme(), Ok(tauri::Theme::Dark));
+  let _ = window.set_background_color(Some(if dark { tauri::window::Color(0x17, 0x17, 0x17, 0xff) } else { tauri::window::Color(0xeb, 0xeb, 0xeb, 0xff) }));
   window.set_focus()
 }
 
