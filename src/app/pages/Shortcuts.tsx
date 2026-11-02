@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, 
 import { listen } from '../../bridge';
 import { Globe } from '../../overlay/icons';
 import { MODIFIERS as FLAGS, useStatus, type Chord, type CommandKey, type DictateKey, type PageProps, type Settings, type Status } from '../../store';
-import { chordOf, Icon, Kbd, KeyRecorder, PageHeader, Section, Select, Tile, TileGroup, Toggle } from '../../ui';
+import { chordOf, Icon, Kbd, KeyRecorder, GroupHeader, Section, Select, Tile, TileGroup, Toggle } from '../../ui';
 import './shortcuts.css';
 
 type Key = { value: DictateKey; name: string; glyph: string; code?: string };
@@ -71,7 +71,7 @@ export function Shortcuts({ settings, update }: PageProps) {
     : keys.dictate === 'rightControl' ? 'Mac laptops have no right Control key, so this one needs an external keyboard.'
     : 'Typing with it still works: pressed with another key, it is a shortcut, not dictation.';
   return <>
-    <PageHeader icon="keyboard" title="Shortcuts">The key you hold to talk, and shortcuts for everything else.</PageHeader>
+    <GroupHeader title="Shortcuts">The key you hold to talk, and shortcuts for everything else.</GroupHeader>
     <Section title="Dictate">
       <TileGroup>
         <Tile stack title="Key to hold" detail={<>Hold <Kbd>{key.glyph}</Kbd> and speak: your words type where the cursor is. {aside}</>}>

@@ -8,6 +8,11 @@ export function PageHeader({ icon, title, children }: { icon: IconName; title: s
   </header>;
 }
 
+/// A heading inside a page, for a part that was once a page of its own.
+export function GroupHeader({ title, children }: { title: string; children?: ReactNode }) {
+  return <header className="ui-group-header"><h2>{title}</h2>{children && <p>{children}</p>}</header>;
+}
+
 /// A labelled group of tiles, with an optional line under it.
 export function Section({ title, note, children }: { title?: string; note?: ReactNode; children: ReactNode }) {
   return <section className="ui-section">

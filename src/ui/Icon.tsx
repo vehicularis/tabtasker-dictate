@@ -49,6 +49,13 @@ const PATHS = {
   tasks: <><rect x="2.75" y="3.75" width="5" height="5" rx="1.25" /><path d="m4.1 6.35 1 1 1.65-2.1M10.25 6.25h6.5M10.25 13.75h6.5" /><rect x="2.75" y="11.25" width="5" height="5" rx="1.25" /></>,
   quote: <path d="M8.25 8.25v3.5a2.5 2.5 0 0 1-2.5 2.5H5M8.25 8.25H4.5v-3h3.75zM16 8.25v3.5a2.5 2.5 0 0 1-2.5 2.5h-.75M16 8.25h-3.75v-3H16z" />,
   divider: <><path d="M3 10h14" /><path d="M5.5 5.5h9M5.5 14.5h9" strokeOpacity=".4" /></>,
+  table: <><rect x="2.75" y="3.75" width="14.5" height="12.5" rx="1.5" /><path d="M2.75 8h14.5M2.75 12.25h14.5M8 8v8.25M12.5 8v8.25" /></>,
+  image: <><rect x="2.75" y="3.75" width="14.5" height="12.5" rx="1.75" /><circle cx="7.25" cy="8" r="1.4" /><path d="m3.5 15.25 4.4-4.4a1 1 0 0 1 1.4 0l2.2 2.2 1.75-1.75a1 1 0 0 1 1.4 0l2.6 2.6" /></>,
+  grip: <path d="M7.5 5h.01M12.5 5h.01M7.5 10h.01M12.5 10h.01M7.5 15h.01M12.5 15h.01" strokeWidth="2.2" />,
+  rowAdd: <><rect x="2.75" y="3.75" width="14.5" height="6" rx="1.25" /><path d="M10 12.5v4.5M7.75 14.75h4.5" /></>,
+  colAdd: <><rect x="2.75" y="2.75" width="6" height="14.5" rx="1.25" /><path d="M12.5 10h4.5M14.75 7.75v4.5" /></>,
+  rowRemove: <><rect x="2.75" y="3.75" width="14.5" height="6" rx="1.25" /><path d="M7.75 14.75h4.5" /></>,
+  colRemove: <><rect x="2.75" y="2.75" width="6" height="14.5" rx="1.25" /><path d="M12.5 10h4.5" /></>,
   undo: <path d="M7.25 7.25H3.75V3.75M4.1 7.1A6 6 0 1 1 4 12.5" />,
   redo: <path d="M12.75 7.25h3.5V3.75M15.9 7.1A6 6 0 1 0 16 12.5" />,
 } as const;

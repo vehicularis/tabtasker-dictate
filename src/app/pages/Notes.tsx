@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { invoke } from '../../bridge';
 import { tilde, useStatus, type PageProps, type Settings } from '../../store';
-import { Button, ChipList, Icon, PageHeader, Section, Tile, TileGroup, Toggle } from '../../ui';
+import { Button, ChipList, Icon, GroupHeader, Section, Tile, TileGroup, Toggle } from '../../ui';
 import './Notes.css';
 
 type Folder = { path: string; vault: string | null };
@@ -95,7 +95,7 @@ export function Notes({ settings, update }: PageProps) {
   const path = folder?.path ?? status?.notes;
   const name = path?.split('/').filter(Boolean).pop() ?? 'TabTasker Dictate';
   return <>
-    <PageHeader icon="note" title="Notes">Spoken notes are saved as Markdown files in a folder you choose.</PageHeader>
+    <GroupHeader title="Notes">Spoken notes are saved as Markdown files in a folder you choose.</GroupHeader>
 
     <Section title="Folder" note={folderProblem ?? (notes.folder
       ? <>Notes are saved here from now on; notes already saved stay where they are. <button type="button" className="link" onClick={() => void update({ notes: { folder: null } })}>Use the default folder</button></>
@@ -153,7 +153,7 @@ export function Notes({ settings, update }: PageProps) {
 
     <Section title="With Claude" note={claude
       ? 'Claude sees the note’s words, never your voice. When Claude is slow or unavailable, the note is saved as it is.'
-      : <>These work once Claude is connected. <button type="button" className="link" onClick={() => { location.hash = 'claude'; }}>Connect Claude</button></>}>
+      : <>These work once Claude is connected. <button type="button" className="link" onClick={() => { location.hash = 'settings/ai'; }}>Connect Claude</button></>}>
       <TileGroup>
         <Tile title="Claude names the note" detail="A short title from what you said, unless you type one." dim={!claude}>
           <Toggle label="Claude names the note" checked={notes.claudeTitle} onChange={claudeTitle => update({ notes: { claudeTitle } })} />

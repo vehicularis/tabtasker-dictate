@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { invoke, listen } from '../../bridge';
 import { meetingLength, meetingWhen, useMeetingState, type MeetingEvent } from '../../overlay/MeetingPill';
 import { folderPath, tilde, useStatus, type PageProps } from '../../store';
-import { Button, PageHeader, Section, TextField, Tile, TileGroup, Toggle } from '../../ui';
+import { Button, GroupHeader, Section, TextField, Tile, TileGroup, Toggle } from '../../ui';
 
 const sentence = (text: string) => /[.!?]$/.test(text) ? text : `${text}.`;
 
@@ -59,7 +59,6 @@ export function Meetings({ settings, update }: PageProps) {
     if (shown?.state === 'saved' && shown.path) {
       const path = shown.path;
       return <Tile title={<span role="status">Meeting saved</span>} detail={<>{path.split('/').pop()?.replace(/\.md$/, '')}{shown.message && <><br />{shown.message}</>}</>}>
-        {settings.claude.claudeCode && <Button onClick={() => void invoke('send_to_claude_code', { path }).catch(() => setStartProblem('Couldn’t open Claude Code.'))}>Send to Claude Code</Button>}
         <Button onClick={() => reveal(path)}>Show in Finder</Button>
       </Tile>;
     }
@@ -74,7 +73,7 @@ export function Meetings({ settings, update }: PageProps) {
     ? 'Needs macOS 14.2 or later. On this Mac, meetings record your microphone only.'
     : `Includes the Mac’s own sound, such as the other side of a call.${permission === 'notDetermined' ? ' macOS asks once, when the first meeting starts.' : ''}`;
   return <>
-    <PageHeader icon="meeting" title="Meetings">Record a call or a room, and get a transcript with who said what. Start one from the dots’ pill, their menu, the menu bar, or here.</PageHeader>
+    <GroupHeader title="Meetings">Record a call or a room, and get a transcript with who said what. Start one from the dots’ pill, their menu, the menu bar, or here.</GroupHeader>
     <Section note={startProblem ?? undefined}>
       <TileGroup>
         <Tile title={recording ? 'Recording a meeting' : 'Start a meeting'}
@@ -109,14 +108,20 @@ export function Meetings({ settings, update }: PageProps) {
         {meetings.systemAudio && permission === 'denied' && <Tile title="System audio isn’t allowed" detail="Meetings record your microphone only. In Privacy & Security, turn on TabTasker Dictate under System Audio Recording Only.">
           <Button onClick={() => void invoke('meeting_privacy').catch(() => {})}>Open System Settings</Button>
         </Tile>}
-        <Tile title="Summary" detail={settings.claude.enabled ? 'Claude names the meeting and adds a summary, decisions and action items.' : 'Claude names the meeting and adds a summary, decisions and action items once connected.'}>
+        <Tile title="Summary" detail={settings.claude.enabled ? 'The model names the meeting and writes a summary under the title.' : 'The model names the meeting and writes a summary once Claude or a local model is connected.'}>
           <Toggle label="Summary" checked={meetings.summarize} onChange={summarize => update({ meetings: { summarize } })} />
+        </Tile>
+        <Tile title="Decisions" detail="A Decisions list in the summary." dim={!meetings.summarize}>
+          <Toggle label="Decisions" checked={meetings.decisions} disabled={!meetings.summarize} onChange={decisions => update({ meetings: { decisions } })} />
+        </Tile>
+        <Tile title="Action items" detail="A to-do list of who does what, in the summary." dim={!meetings.summarize}>
+          <Toggle label="Action items" checked={meetings.actionItems} disabled={!meetings.summarize} onChange={actionItems => update({ meetings: { actionItems } })} />
         </Tile>
       </TileGroup>
     </Section>
     <Section title="Transcript">
       <TileGroup>
-        <Tile title="Tell speakers apart" detail={meetings.speakers ? 'Each voice gets its own label, Speaker 1, Speaker 2 and on, whether it comes through the microphone or the call; yours keeps your name. Two small models (47 MB) download when a meeting first needs them, and the telling apart happens on this Mac after Stop.' : 'Lines are labelled by where they came from: your microphone, or the Mac’s sound.'}>
+        <Tile title="Tell speakers apart" detail={meetings.speakers ? 'Each voice gets its own label, Person 1, Person 2 and on, whether it comes through the microphone or the call; yours keeps your name. Two small models (47 MB) download when a meeting first needs them, and the telling apart happens on this Mac after Stop.' : 'Lines are labelled by where they came from: your microphone, or the Mac’s sound.'}>
           <Toggle label="Tell speakers apart" checked={meetings.speakers} onChange={speakers => update({ meetings: { speakers } })} />
         </Tile>
         <Tile title="Your name" detail="How your lines are labelled."><TextField label="Your name" value={meetings.you} onCommit={you => update({ meetings: { you } })} /></Tile>

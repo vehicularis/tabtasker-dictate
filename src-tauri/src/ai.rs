@@ -31,7 +31,7 @@ pub enum Kind { Meeting, Note }
 // ---------- errors, as the person reads them ----------
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Error { NoKey, BadKey, Forbidden, Billing, Model, TooLong, Rejected, RateLimited, Busy, Offline, Timeout, Refused, Cut, Broken, Empty, NoClaudeCode, NotSignedIn, CodeFailed }
+pub enum Error { NoKey, BadKey, Forbidden, Billing, Model, TooLong, Rejected, RateLimited, Busy, Offline, Timeout, Refused, Cut, Broken, Empty, NoClaudeCode, NotSignedIn, CodeFailed, LocalOffline, LocalModel }
 
 impl std::fmt::Display for Error {
   fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -54,6 +54,8 @@ impl std::fmt::Display for Error {
       Self::NoClaudeCode => "Claude Code isn’t on this Mac any more. Install it again, or connect with a key instead.",
       Self::NotSignedIn => "Claude Code isn’t signed in. Run claude in Terminal and sign in, then try again.",
       Self::CodeFailed => "Claude Code couldn’t answer that. Try again.",
+      Self::LocalOffline => "Can’t reach the local model. Is Ollama running?",
+      Self::LocalModel => "Ollama doesn’t have that model. Pull it there, or pick another in Settings.",
     })
   }
 }
@@ -170,10 +172,21 @@ pub(crate) fn spoken_request(instruction: &str, app_name: &str, model: ClaudeMod
   Request { model, system, user: wrap(&tag, instruction.trim()), max_tokens: 4096, effort: "medium", schema: Some(schema), tools: true }
 }
 
+/// The meeting summary's shape: a summary always, decisions and action items as Meetings in Settings has them.
+fn meeting_task() -> String {
+  let meetings = settings::get().meetings;
+  let mut sections = vec!["`## Summary` (a few sentences)".to_owned()];
+  if meetings.decisions { sections.push("`## Decisions` (a bulleted list)".into()); }
+  if meetings.action_items { sections.push("`## Action items` (a task list, `- [ ] Who: what`)".into()); }
+  let list = match sections.len() { 1 => sections[0].clone(), n => format!("{} and {}", sections[..n - 1].join(", "), sections[n - 1]) };
+  format!("You write notes from a meeting transcript. Its lines read `**Person** hh:mm:ss words`. Reply in Markdown with exactly {} section{}, heading{} as written: {list}. Write \"None\" under a section with nothing in it. Write in the transcript's language and only from what was said.",
+    match sections.len() { 1 => "this".to_owned(), n => format!("these {n}") }, if sections.len() == 1 { "" } else { "s" }, if sections.len() == 1 { "" } else { "s" })
+}
+
 pub(crate) fn summary_request(kind: Kind, text: &str, model: ClaudeModel) -> Request {
   let (tag, what, task) = match kind {
-    Kind::Meeting => (fence("transcript", text), "transcript", "You write notes from a meeting transcript. Its lines read `**Speaker** hh:mm:ss words`. Reply in Markdown with exactly these three sections, headings as written: `## Summary` (a few sentences), `## Decisions` (a bulleted list) and `## Action items` (a task list, `- [ ] Who: what`). Write \"None\" under a section with nothing in it. Write in the transcript's language and only from what was said."),
-    Kind::Note => (fence("note", text), "note", "You find the action items in a spoken note. Reply with a Markdown task list only (`- [ ] what`), one item per thing to do, in the note's language and only from what it says. Reply with exactly NONE when it has nothing to do."),
+    Kind::Meeting => (fence("transcript", text), "transcript", meeting_task()),
+    Kind::Note => (fence("note", text), "note", "You find the action items in a spoken note. Reply with a Markdown task list only (`- [ ] what`), one item per thing to do, in the note's language and only from what it says. Reply with exactly NONE when it has nothing to do.".to_owned()),
   };
   Request { model, system: format!("{task} {}", content_rule(&tag, what)), user: wrap(&tag, text), max_tokens: 8192, effort: "medium", schema: None, tools: false }
 }
@@ -244,7 +257,7 @@ async fn check(endpoint: &str, key: &str, model: ClaudeModel) -> Result<(), Erro
 /// How a request reaches Claude: Anthropic's API with the person's key, or Claude Code on this Mac with
 /// the account they signed in to there.
 #[derive(Clone, Debug)]
-pub(crate) enum Route { Api { endpoint: String, key: String }, Code { program: PathBuf } }
+pub(crate) enum Route { Api { endpoint: String, key: String }, Code { program: PathBuf }, Local { endpoint: String, model: String } }
 
 /// Claude's reply, and whether it read the person's notes, meetings or history on the way (Claude Code
 /// took more than one turn): what came out of those files is material, so such an answer is shown for
@@ -260,7 +273,32 @@ async fn ask_with(route: &Route, request: &Request, timeout: Duration) -> Result
       let (program, request) = (program.clone(), request.clone());
       tauri::async_runtime::spawn_blocking(move || code_call(&program, &request, timeout)).await.map_err(|_| Error::CodeFailed)?
     }
+    Route::Local { endpoint, model } => local_call(endpoint, model, request, timeout).await.map(|text| Answer { text, read_files: false }),
   }
+}
+
+/// A model on this Mac behind Ollama's API (LM Studio and others speak it too): one chat turn, whole.
+/// The schema, when there is one, goes as Ollama's `format`, which holds the reply to it.
+async fn local_call(endpoint: &str, model: &str, request: &Request, timeout: Duration) -> Result<String, Error> {
+  let client = client()?;
+  let mut body = json!({
+    "model": model, "stream": false,
+    "messages": [{ "role": "system", "content": request.system }, { "role": "user", "content": request.user }],
+    "options": { "num_predict": request.max_tokens },
+  });
+  if let Some(schema) = &request.schema { body["format"] = schema.clone(); }
+  let url = format!("{}/api/chat", endpoint.trim_end_matches('/'));
+  let response = client.post(&url).header("content-type", "application/json").body(body.to_string()).timeout(timeout).send().await
+    .map_err(|e| if e.is_timeout() { Error::Timeout } else { Error::LocalOffline })?;
+  let status = response.status().as_u16();
+  let bytes = response.bytes().await.map_err(|_| Error::Broken)?;
+  let value: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
+  let error = value["error"].as_str().unwrap_or_default();
+  if status == 404 || error.contains("not found") { return Err(Error::LocalModel); }
+  if status != 200 { log::warn!("local model: {status} {error}"); return Err(Error::Rejected); }
+  let text = value["message"]["content"].as_str().map(str::trim).unwrap_or_default().to_owned();
+  if text.is_empty() { return Err(Error::Empty); }
+  Ok(text)
 }
 
 /// The reply's text alone.
@@ -270,7 +308,7 @@ async fn ask(route: &Route, request: &Request, timeout: Duration) -> Result<Stri
 async fn probe(route: &Route, model: ClaudeModel) -> Result<(), Error> {
   match route {
     Route::Api { endpoint, key } => check(endpoint, key, model).await,
-    Route::Code { .. } => {
+    Route::Code { .. } | Route::Local { .. } => {
       let request = Request { model, system: "Reply with one word.".into(), user: "Hi".into(), max_tokens: 8, effort: "low", schema: None, tools: false };
       ask(route, &request, TEST_TIME).await.map(|_| ())
     }
@@ -397,6 +435,7 @@ fn route() -> Result<(Route, ClaudeModel), Error> {
   let route = match claude.via {
     ClaudeVia::Api => Route::Api { endpoint: MESSAGES.into(), key: saved_key().ok_or(Error::NoKey)? },
     ClaudeVia::ClaudeCode => Route::Code { program: claude.claude_code.map(PathBuf::from).filter(|path| executable(path)).ok_or(Error::NoClaudeCode)? },
+    ClaudeVia::Local => Route::Local { endpoint: claude.local_endpoint.clone(), model: claude.local_model.clone() },
   };
   Ok((route, claude.model))
 }
@@ -412,6 +451,7 @@ pub fn init(app: &AppHandle) {
   let enabled = match claude.via {
     ClaudeVia::Api => unsafe { dictate_keychain_exists() },
     ClaudeVia::ClaudeCode => claude.claude_code.as_deref().is_some_and(|path| executable(Path::new(path))),
+    ClaudeVia::Local => claude.enabled, // a local server may be down for now; it is tried when asked
   };
   if enabled != claude.enabled {
     if let Err(e) = settings::update(app, &json!({ "claude": { "enabled": enabled } })) { log::warn!("claude: {e}"); }
@@ -679,12 +719,28 @@ pub async fn claude_connect_code(app: AppHandle) -> Result<settings::Settings, S
   let program = tauri::async_runtime::spawn_blocking(move || code_program(Some(&finder))).await.map_err(|e| e.to_string())?
     .ok_or("Claude Code isn’t installed on this Mac. Install it and sign in, then try again.")?;
   probe(&Route::Code { program: program.clone() }, model).await.map_err(|e| e.to_string())?;
-  settings::update(&app, &json!({ "claude": { "enabled": true, "via": "claudeCode", "claudeCode": program.display().to_string() } }))
+  let saved = settings::update(&app, &json!({ "claude": { "enabled": true, "via": "claudeCode", "claudeCode": program.display().to_string() } }))?;
+  // Claude Code can read the notes from now on, with nothing more to set up: this app's own MCP server,
+  // added to Claude Code's list quietly. A copy that isn't installed in Applications is left out (mcp.rs says why).
+  if let Err(e) = crate::mcp::agents_add("claudeCode".into()).await { log::info!("mcp: not added to Claude Code: {e}"); }
+  Ok(saved)
 }
 
-/// Back from Claude Code: Claude stays on only if a key is saved to fall back to.
+/// A model on this Mac, through Ollama's API: a one-word request proves it answers, and only then is it
+/// the way in. `endpoint` is where Ollama listens, `model` the name it knows the model by.
 #[tauri::command]
-pub fn claude_disconnect_code(app: AppHandle) -> Result<settings::Settings, String> {
+pub async fn claude_connect_local(app: AppHandle, endpoint: String, model: String) -> Result<settings::Settings, String> {
+  let endpoint = endpoint.trim().trim_end_matches('/').to_owned();
+  let model = model.trim().to_owned();
+  if !(endpoint.starts_with("http://") || endpoint.starts_with("https://")) || endpoint.len() > 200 || endpoint.contains(char::is_whitespace) { return Err("Use the address Ollama listens on, like http://localhost:11434.".into()); }
+  if model.is_empty() || model.len() > 80 { return Err("Name the model as Ollama knows it, like llama3.2.".into()); }
+  probe(&Route::Local { endpoint: endpoint.clone(), model: model.clone() }, settings::get().claude.model).await.map_err(|e| e.to_string())?;
+  settings::update(&app, &json!({ "claude": { "enabled": true, "via": "local", "localEndpoint": endpoint, "localModel": model } }))
+}
+
+/// Back from Claude Code or a local model: Claude stays on only if a key is saved to fall back to.
+#[tauri::command]
+pub fn claude_disconnect(app: AppHandle) -> Result<settings::Settings, String> {
   let enabled = unsafe { dictate_keychain_exists() };
   settings::update(&app, &json!({ "claude": { "enabled": enabled, "via": "api" } }))
 }
@@ -762,97 +818,6 @@ pub async fn claude_code_find(app: AppHandle) -> Result<Option<String>, String> 
 pub fn claude_code_set(app: AppHandle, path: Option<String>) -> Result<settings::Settings, String> {
   if path.as_deref().is_some_and(|path| !executable(Path::new(path))) { return Err("There’s no program at that path.".into()); }
   settings::update(&app, &json!({ "claude": { "claudeCode": path } }))
-}
-
-/// `path` as a Markdown file inside one of `folders`, resolved first so `..` or a symlink can't reach
-/// outside them.
-fn note_inside(path: &str, folders: &[PathBuf]) -> Result<PathBuf, String> {
-  let file = PathBuf::from(path).canonicalize().map_err(|_| "That note isn’t there any more.".to_owned())?;
-  let inside = folders.iter().filter_map(|dir| dir.canonicalize().ok()).any(|dir| file.starts_with(dir));
-  if !inside || file.extension().is_none_or(|ext| ext != "md") || !file.is_file() { return Err("Only a saved note or meeting can go to Claude Code.".into()); }
-  Ok(file)
-}
-
-/// Single quotes for sh, which nothing inside can end.
-fn quoted(path: &Path) -> String { format!("'{}'", path.display().to_string().replace('\'', r"'\''")) }
-
-/// Notes up to this size go in as the first prompt; a longer one is passed by its path, which Claude
-/// Code reads itself, so the command line stays far below the system's limit.
-const PROMPT_BYTES: usize = 100_000;
-const LAUNCHER_PREFIX: &str = "tabtasker-dictate-claude-";
-
-/// A private folder in `root` (0700) holding the prompt (0600) and a script (0700) that reads it,
-/// deletes the folder and starts `claude` in `project` with the prompt as its first message. The
-/// prompt's words are only ever in its file, never in the script, and `--` keeps a note that starts
-/// with `-` (front matter, a list) from reading as an option.
-fn write_launcher(root: &Path, project: &Path, claude: &Path, prompt: &str) -> Result<PathBuf, String> {
-  use std::io::Write;
-  use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
-  let failed = |e: std::io::Error| format!("Couldn’t prepare Claude Code: {e}");
-  let mut bytes = [0u8; 8];
-  ring::rand::SecureRandom::fill(&ring::rand::SystemRandom::new(), &mut bytes).map_err(|_| "Couldn’t prepare Claude Code.".to_owned())?;
-  let dir = root.join(format!("{LAUNCHER_PREFIX}{}", bytes.iter().map(|byte| format!("{byte:02x}")).collect::<String>()));
-  std::fs::DirBuilder::new().mode(0o700).create(&dir).map_err(failed)?;
-  let write = |name: &str, mode: u32, contents: &str| -> Result<PathBuf, String> {
-    let path = dir.join(name);
-    let mut file = std::fs::OpenOptions::new().write(true).create_new(true).mode(mode).open(&path).map_err(failed)?;
-    file.write_all(contents.as_bytes()).map_err(failed)?;
-    Ok(path)
-  };
-  let note = write("prompt.md", 0o600, prompt)?;
-  let script = format!(
-    "#!/bin/sh\n# TabTasker Dictate: starts Claude Code with your note. This folder deletes itself.\nprompt=$(cat -- {note})\nrm -rf -- {dir}\ncd -- {project} || exit 1\nexec {claude} -- \"$prompt\"\n",
-    note = quoted(&note), dir = quoted(&dir), project = quoted(project), claude = quoted(claude));
-  write("Claude Code.command", 0o700, &script)
-}
-
-/// Launch folders that Terminal never ran, an hour on.
-fn clear_old_launchers(root: &Path) {
-  let Ok(entries) = std::fs::read_dir(root) else { return };
-  for entry in entries.flatten() {
-    if !entry.file_name().to_string_lossy().starts_with(LAUNCHER_PREFIX) { continue; }
-    let old = entry.metadata().ok().and_then(|meta| meta.modified().ok()).and_then(|at| at.elapsed().ok()).is_some_and(|age| age > Duration::from_secs(3600));
-    if old { let _ = std::fs::remove_dir_all(entry.path()); }
-  }
-}
-
-/// The macOS folder chooser, for when Settings has no project folder. None when the person cancels.
-fn choose_project() -> Option<PathBuf> {
-  let chosen = std::process::Command::new("/usr/bin/osascript")
-    .args(["-e", "activate", "-e", "POSIX path of (choose folder with prompt \"Choose the project to open in Claude Code\")"]).output().ok()?;
-  let path = PathBuf::from(String::from_utf8_lossy(&chosen.stdout).trim());
-  (chosen.status.success() && path.is_dir()).then_some(path)
-}
-
-/// Opens Terminal in the project folder running Claude Code with the note at `path` as the first
-/// prompt. False when the person cancelled choosing a project.
-#[tauri::command]
-pub async fn send_to_claude_code(app: AppHandle, path: String) -> Result<bool, String> {
-  tauri::async_runtime::spawn_blocking(move || {
-    let folders: Vec<PathBuf> = [crate::notes::notes_dir(), crate::notes::meetings_dir()].into_iter().flatten().collect();
-    let note = note_inside(&path, &folders)?;
-    let words = std::fs::read_to_string(&note).map_err(|_| "Couldn’t read the note.".to_owned())?;
-    let claude = settings::get().claude;
-    let program = match claude.claude_code.map(PathBuf::from).filter(|path| executable(path)) {
-      Some(program) => program,
-      None => remember_claude_code(&app, find_claude_code()).map(PathBuf::from)
-        .ok_or("Claude Code isn’t installed. Install it, or set where it is in Settings, under Claude.")?,
-    };
-    let project = match claude.project_folder.map(PathBuf::from).filter(|folder| folder.is_dir()) {
-      Some(folder) => folder,
-      None => match choose_project() { Some(folder) => folder, None => return Ok(false) },
-    };
-    let prompt = if words.len() <= PROMPT_BYTES { words } else { format!("Read the note at {} and help me with it.", note.display()) };
-    let root = std::env::temp_dir();
-    clear_old_launchers(&root);
-    let script = write_launcher(&root, &project, &program, &prompt)?;
-    let opened = std::process::Command::new("/usr/bin/open").args(["-a", "Terminal"]).arg(&script).status().map_err(|e| e.to_string())?;
-    if !opened.success() {
-      if let Some(dir) = script.parent() { let _ = std::fs::remove_dir_all(dir); }
-      return Err("Couldn’t open Terminal.".into());
-    }
-    Ok(true)
-  }).await.map_err(|e| e.to_string())?
 }
 
 #[cfg(test)]
@@ -1141,71 +1106,5 @@ mod tests {
     std::fs::remove_dir_all(home).unwrap();
   }
 
-  #[test]
-  fn only_a_saved_note_goes_to_claude_code() {
-    let root = temp("notes");
-    let (notes, meetings, outside) = (root.join("Notes"), root.join("Meetings"), root.join("Elsewhere"));
-    for dir in [&notes, &meetings, &outside] { std::fs::create_dir_all(dir).unwrap(); }
-    std::fs::write(notes.join("Plan.md"), "plan").unwrap();
-    std::fs::write(meetings.join("Standup.md"), "standup").unwrap();
-    std::fs::write(outside.join("secret.md"), "secret").unwrap();
-    std::fs::write(notes.join("photo.png"), "png").unwrap();
-    std::os::unix::fs::symlink(outside.join("secret.md"), notes.join("link.md")).unwrap();
-    let folders = [notes.clone(), meetings.clone()];
-    let at = |path: PathBuf| note_inside(&path.display().to_string(), &folders);
-    assert_eq!(at(notes.join("Plan.md")), Ok(notes.join("Plan.md")));
-    assert_eq!(at(meetings.join("Standup.md")), Ok(meetings.join("Standup.md")));
-    for bad in [outside.join("secret.md"), notes.join("../Elsewhere/secret.md"), notes.join("link.md"), notes.join("photo.png"), notes.join("gone.md"), notes.clone()] {
-      assert!(at(bad.clone()).is_err(), "{}", bad.display());
-    }
-    std::fs::remove_dir_all(root).unwrap();
-  }
 
-  #[test]
-  fn the_launcher_hands_the_note_over_through_a_private_file() {
-    use std::os::unix::fs::PermissionsExt;
-    let root = temp("launch");
-    let project = root.join("it's a project");
-    std::fs::create_dir_all(&project).unwrap();
-    // Stands in for `claude`, parsing its arguments as Claude Code does: a leading `-` is an option it
-    // refuses, until `--`. Writes where it ran and its prompt.
-    let fake = root.join("bin/fake claude");
-    program(&fake, &format!("#!/bin/sh\ncase \"$1\" in --) shift ;; -*) echo \"error: unknown option\" >&2; exit 1 ;; esac\npwd > {out}/where\nprintf '%s' \"$1\" > {out}/prompt\n", out = quoted(&root)));
-    let prompts = [
-      "# Plan\n\nShip it's \"release\" `whoami` $(touch pwned) $HOME; rm -rf / \\ \n\ttabs and ünïcode 🎙",
-      "---\ncreated: 2026-11-02\ntags: [plan]\nsource: TabTasker Dictate\n---\n\n# Plan\n",
-      "- [ ] buy milk\n- call the venue",
-    ];
-    for prompt in prompts {
-      let script = write_launcher(&root, &project, &fake, prompt).unwrap();
-      let dir = script.parent().unwrap().to_owned();
-      assert!(dir.file_name().unwrap().to_string_lossy().starts_with(LAUNCHER_PREFIX));
-      assert_eq!(std::fs::metadata(&dir).unwrap().permissions().mode() & 0o777, 0o700);
-      assert_eq!(std::fs::metadata(dir.join("prompt.md")).unwrap().permissions().mode() & 0o777, 0o600);
-      assert_eq!(std::fs::metadata(&script).unwrap().permissions().mode() & 0o777, 0o700);
-      let text = std::fs::read_to_string(&script).unwrap();
-      assert!(!text.contains("whoami") && !text.contains("pwned") && !text.contains("Plan") && !text.contains("milk"));
-      assert!(std::process::Command::new("/bin/sh").arg(&script).current_dir(&root).status().unwrap().success(), "{prompt}");
-      assert_eq!(std::fs::read_to_string(root.join("prompt")).unwrap(), prompt.trim_end_matches('\n'));
-      assert_eq!(PathBuf::from(std::fs::read_to_string(root.join("where")).unwrap().trim()).canonicalize().unwrap(), project);
-      assert!(!dir.exists()); // the folder is gone once Claude Code has the prompt
-      std::fs::remove_file(root.join("prompt")).unwrap();
-    }
-    assert!(!root.join("pwned").exists() && !project.join("pwned").exists());
-    std::fs::remove_dir_all(root).unwrap();
-  }
-
-  #[test]
-  fn old_launch_folders_are_cleared() {
-    let root = temp("clear");
-    let old = root.join(format!("{LAUNCHER_PREFIX}old"));
-    let fresh = root.join(format!("{LAUNCHER_PREFIX}fresh"));
-    let other = root.join("someone-else");
-    for dir in [&old, &fresh, &other] { std::fs::create_dir_all(dir).unwrap(); }
-    let hour_ago = std::time::SystemTime::now() - Duration::from_secs(2 * 3600);
-    for dir in [&old, &other] { std::fs::File::open(dir).unwrap().set_modified(hour_ago).unwrap(); }
-    clear_old_launchers(&root);
-    assert!(!old.exists() && fresh.exists() && other.exists());
-    std::fs::remove_dir_all(root).unwrap();
-  }
 }

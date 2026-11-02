@@ -25,11 +25,9 @@ use tauri::window::{Effect, EffectState, EffectsBuilder};
 use tauri::{ActivationPolicy, AppHandle, Emitter, LogicalPosition, Manager, RunEvent, TitleBarStyle, WebviewUrl, WebviewWindowBuilder, WindowEvent, Wry};
 
 const OVERLAY: &str = "overlay";
-const SETTINGS: &str = "settings";
-/// A note's editor window: this, then a hash of the file's path.
-const NOTE: &str = "note-";
-/// The Settings window's pages, by the hash it opens on.
-const ROUTES: &[&str] = &["general", "shortcuts", "dictation", "vocabulary", "apps", "library", "notes", "meetings", "claude", "agents", "history", "appearance", "about", "setup"];
+const MAIN: &str = "main";
+/// The app window's places, by the first part of the hash it opens on (`notes/<path>` opens that note).
+const ROUTES: &[&str] = &["notes", "meetings", "stickies", "ask", "settings", "setup", "about"];
 static APP: OnceLock<AppHandle> = OnceLock::new();
 /// This launch is the first and opened the full setup, so the overlay keeps its own setup card closed.
 static FIRST_RUN: AtomicBool = AtomicBool::new(false);
@@ -190,10 +188,11 @@ async fn meeting(app: AppHandle, action: String) -> Result<bool, String> {
   match meeting::start_problem() { Some(why) if !changed => Err(why), _ => Ok(changed) }
 }
 
-/// Opens the Settings window on `route`, or brings it forward on the page it shows when there is none.
+/// Opens the app's window at `route` (notes, meetings, stickies, ask, settings, settings/<page>, setup), or
+/// brings it forward where it is when there is none.
 #[tauri::command]
-fn open_settings(app: AppHandle, route: Option<String>) -> Result<(), String> {
-  show_settings(&app, route.as_deref()).map_err(|e| e.to_string())
+fn open_app(app: AppHandle, route: Option<String>) -> Result<(), String> {
+  show_main(&app, route.as_deref()).map_err(|e| e.to_string())
 }
 
 /// Types the newest transcript again where the cursor is.
@@ -248,21 +247,21 @@ fn overlay(app: &AppHandle) -> tauri::Result<()> {
   Ok(())
 }
 
-/// The Settings window, made on demand. While it is open the app has a Dock icon and a menu bar, like
-/// any app with a window; closing it goes back to the menu bar only. With no `route`, an open window
-/// keeps its page and a new one starts on General.
-fn show_settings(app: &AppHandle, route: Option<&str>) -> tauri::Result<()> {
-  let route = route.map(|route| if ROUTES.contains(&route) { route } else { "general" });
+/// The app's window (notes, meetings, stickies and the settings), made on demand. While it is open the
+/// app has a Dock icon and a menu bar, like any app with a window; closing it goes back to the menu bar
+/// only. With no `route`, an open window keeps its place and a new one starts on Notes.
+fn show_main(app: &AppHandle, route: Option<&str>) -> tauri::Result<()> {
+  let route = route.map(|route| if ROUTES.contains(&route.split('/').next().unwrap_or_default()) { route } else { "notes" });
   app.set_activation_policy(ActivationPolicy::Regular)?;
-  if let Some(window) = app.get_webview_window(SETTINGS) {
+  if let Some(window) = app.get_webview_window(MAIN) {
     if let Some(route) = route { window.eval(format!("location.hash = '#{route}'"))?; }
     window.unminimize()?;
     window.show()?;
     return window.set_focus();
   }
-  let window = WebviewWindowBuilder::new(app, SETTINGS, WebviewUrl::App(format!("settings.html#{}", route.unwrap_or("general")).into()))
+  let window = WebviewWindowBuilder::new(app, MAIN, WebviewUrl::App(format!("app.html#{}", route.unwrap_or("notes")).into()))
     .title("TabTasker Dictate")
-    .inner_size(860.0, 620.0).min_inner_size(760.0, 540.0).center()
+    .inner_size(1040.0, 700.0).min_inner_size(840.0, 580.0).center()
     .title_bar_style(TitleBarStyle::Overlay).hidden_title(true).traffic_light_position(LogicalPosition::new(12.0, 21.0)) // centred on the page's 38-point title strip: Tauri keeps the buttons 10 pt up inside a container it makes `y` taller, so their centre lands at y - 2
     .transparent(true) // the sidebar's vibrancy shows through the page
     .effects(EffectsBuilder::new().effect(Effect::Sidebar).state(EffectState::FollowsWindowActiveState).build())
@@ -270,32 +269,17 @@ fn show_settings(app: &AppHandle, route: Option<&str>) -> tauri::Result<()> {
   window.set_focus()
 }
 
-/// A note or meeting in its own editor window, one per file: made on demand, brought forward if open.
-/// Like Settings, it gives the app a Dock icon and a menu bar while it is open.
+/// A note or meeting, opened in the app's window on its own page.
 #[tauri::command]
 fn note_open(app: AppHandle, path: String) -> Result<(), String> { show_note(&app, &path) }
 
 fn show_note(app: &AppHandle, path: &str) -> Result<(), String> {
-  let file = notes::in_library(path)?;
-  let path = file.display().to_string();
-  let mut hasher = std::collections::hash_map::DefaultHasher::new();
-  std::hash::Hash::hash(&path, &mut hasher);
-  let label = format!("{NOTE}{:016x}", std::hash::Hasher::finish(&hasher));
-  app.set_activation_policy(ActivationPolicy::Regular).map_err(|e| e.to_string())?;
-  if let Some(window) = app.get_webview_window(&label) {
-    window.unminimize().and_then(|_| window.show()).and_then(|_| window.set_focus()).map_err(|e| e.to_string())?;
-    return Ok(());
-  }
-  let title = notes::read_doc(&path).map(|doc| doc.title).unwrap_or_else(|_| "Note".into());
-  let window = WebviewWindowBuilder::new(app, &label, WebviewUrl::App(format!("note.html?path={}", percent(&path)).into()))
-    .title(if title.is_empty() { "Note".into() } else { title })
-    .inner_size(760.0, 640.0).min_inner_size(440.0, 320.0).center()
-    .title_bar_style(TitleBarStyle::Overlay).hidden_title(true).traffic_light_position(LogicalPosition::new(12.0, 21.0)) // as Settings: centred on the page's 38-point strip
-    .build().map_err(|e| e.to_string())?;
-  window.set_focus().map_err(|e| e.to_string())
+  let doc = notes::read_doc(path)?;
+  let place = if doc.kind == "meeting" { "meetings" } else { "notes" };
+  show_main(app, Some(&format!("{place}/{}", percent(&doc.path)))).map_err(|e| e.to_string())
 }
 
-/// `text` as a URL query value: letters, digits and a path's own marks as they are, everything else as bytes.
+/// `text` in a URL: letters, digits and a path's own marks as they are, everything else as bytes.
 fn percent(text: &str) -> String {
   text.bytes().map(|byte| if byte.is_ascii_alphanumeric() || b"-._~/".contains(&byte) { (byte as char).to_string() } else { format!("%{byte:02X}") }).collect()
 }
@@ -358,8 +342,7 @@ pub(crate) fn recent_changed(app: &AppHandle) {
 /// General › Show in the Dock: the app as a regular one, with a Dock icon that opens Settings, or back to
 /// the menu bar only (unless Settings is open, which keeps the Dock icon until it closes).
 pub(crate) fn show_in_dock(app: &AppHandle, on: bool) {
-  let windowed = app.webview_windows().keys().any(|label| label == SETTINGS || label.starts_with(NOTE));
-  let policy = if on || windowed { ActivationPolicy::Regular } else { ActivationPolicy::Accessory };
+  let policy = if on || app.get_webview_window(MAIN).is_some() { ActivationPolicy::Regular } else { ActivationPolicy::Accessory };
   if let Err(e) = app.set_activation_policy(policy) { log::warn!("dock: {e}"); }
 }
 
@@ -385,7 +368,7 @@ fn tray(app: &AppHandle, enabled: bool) -> tauri::Result<()> {
     &meeting,
     &MenuItem::with_id(app, "paste-last", "Paste Last Transcript", true, None::<&str>)?,
     &recent, &separator()?,
-    &MenuItem::with_id(app, "library", "Library…", true, None::<&str>)?,
+    &MenuItem::with_id(app, "open", "Open TabTasker Dictate", true, None::<&str>)?,
     &MenuItem::with_id(app, "settings", "Settings…", true, Some("CmdOrCtrl+,"))?,
     &MenuItem::with_id(app, "setup", "Set Up…", true, None::<&str>)?,
     &MenuItem::with_id(app, "notes", "Show Notes in Finder", true, None::<&str>)?, &separator()?,
@@ -408,7 +391,7 @@ fn first_run(app: &AppHandle, status: &serde_json::Value) {
   if let Err(e) = settings::update(app, &serde_json::json!({})) { log::warn!("settings: {e}"); }
   if status["microphone"] == "allowed" && status["accessibility"] == true { return; }
   FIRST_RUN.store(true, Ordering::Relaxed);
-  if let Err(e) = show_settings(app, Some("setup")) { log::warn!("setup: {e}"); }
+  if let Err(e) = show_main(app, Some("setup")) { log::warn!("setup: {e}"); }
 }
 
 /// The tray's and the app menu's items, by id. Tauri hands every menu's events to one handler.
@@ -418,13 +401,13 @@ fn menu_event(app: &AppHandle, id: &str) {
     // The note card, with the keyboard in it; its Open in the editor button makes a file of it.
     "write" => emit("dictate-open", serde_json::json!({ "what": "writeNote" })),
     "sticky" => { if let Err(e) = stickies::create(app, None, None) { emit("dictate-notice", serde_json::json!({ "message": e })); } }
-    "library" => { let _ = show_settings(app, Some("library")); }
+    "open" => { let _ = show_main(app, None); }
     "meeting" => start_meeting(app),
     "paste-last" => paste_last(app.clone()),
     "notes" => { let _ = notes::show_notes(None); }
-    "settings" => { let _ = show_settings(app, None); }
-    "about" => { let _ = show_settings(app, Some("about")); }
-    "setup" => { let _ = show_settings(app, Some("setup")); }
+    "settings" => { let _ = show_main(app, Some("settings")); }
+    "about" => { let _ = show_main(app, Some("about")); }
+    "setup" => { let _ = show_main(app, Some("setup")); }
     // The item has already flipped its own check.
     "pause" => {
       let paused = PAUSED.get().and_then(|item| item.is_checked().ok()).unwrap_or(false);
@@ -434,7 +417,7 @@ fn menu_event(app: &AppHandle, id: &str) {
     _ => {
       let Some(index) = id.strip_prefix("recent:").and_then(|i| i.parse::<usize>().ok()) else { return };
       let file = RECENT.get().and_then(|(_, files)| files.lock().unwrap_or_else(|e| e.into_inner()).get(index).cloned());
-      // A recent note opens in the editor; one the editor can't take (moved out of the folder) goes to the Mac's default app.
+      // A recent note opens in the window; one it can't take (moved out of the folder) goes to the Mac's default app.
       if let Some(file) = file { if show_note(app, &file.display().to_string()).is_err() { let _ = std::process::Command::new("/usr/bin/open").arg(file).spawn(); } }
     }
   }
@@ -502,14 +485,14 @@ pub fn run() {
   log::info!("TabTasker Dictate {} starting", env!("CARGO_PKG_VERSION"));
   tauri::Builder::default()
     .invoke_handler(tauri::generate_handler![
-      status, set_enabled, set_input, set_open_at_login, request, layout, meeting, open_settings, paste_last, play_sound,
+      status, set_enabled, set_input, set_open_at_login, request, layout, meeting, open_app, paste_last, play_sound,
       notes::save_note, notes::show_notes, notes::notes_folder, notes::preview_note, notes::choose_folder, notes::library_list, notes::library_open,
-      notes::note_read, notes::note_write, notes::note_new, note_open,
-      stickies::sticky_list, stickies::sticky_get, stickies::sticky_new, stickies::sticky_update, stickies::sticky_remove, stickies::sticky_to_note, settings::get_settings, settings::update_settings, settings::reset_settings,
+      notes::note_read, notes::note_write, notes::note_new, notes::note_delete, notes::note_attach, note_open,
+      stickies::sticky_list, stickies::sticky_get, stickies::sticky_new, stickies::sticky_update, stickies::sticky_remove, stickies::sticky_to_note, stickies::sticky_show, settings::get_settings, settings::update_settings, settings::reset_settings,
       speech::speech_models, speech::prepare_model, speech::vocabulary_fit, text::list_apps,
       history::history_list, history::history_stats, history::history_delete, history::history_clear, history::history_type,
       ai::claude_save_key, ai::claude_test, ai::claude_remove_key, ai::claude_open_console, ai::claude_insert, ai::claude_dismiss,
-      ai::claude_code_find, ai::claude_code_set, ai::send_to_claude_code, ai::claude_connect_code, ai::claude_disconnect_code, ai::claude_ask,
+      ai::claude_code_find, ai::claude_code_set, ai::claude_connect_code, ai::claude_connect_local, ai::claude_disconnect, ai::claude_ask,
       mcp::agents_status, mcp::agents_add,
       meeting::meeting_state, meeting::meeting_recover, meeting::meeting_reveal, meeting::meeting_privacy,
     ])
@@ -536,11 +519,9 @@ pub fn run() {
     })
     .on_menu_event(|app, event| menu_event(app, event.id().as_ref()))
     .on_window_event(|window, event| {
-      // Settings or the last note closed: back to the menu bar only, unless the Dock icon is wanted all along.
-      if (window.label() == SETTINGS || window.label().starts_with(NOTE)) && matches!(event, WindowEvent::Destroyed) && !settings::get().general.show_in_dock {
-        let app = window.app_handle();
-        let others = app.webview_windows().keys().any(|label| label != window.label() && (label == SETTINGS || label.starts_with(NOTE)));
-        if !others { let _ = app.set_activation_policy(ActivationPolicy::Accessory); }
+      // The window closed: back to the menu bar only, unless the Dock icon is wanted all along.
+      if window.label() == MAIN && matches!(event, WindowEvent::Destroyed) && !settings::get().general.show_in_dock {
+        let _ = window.app_handle().set_activation_policy(ActivationPolicy::Accessory);
       }
       // A sticky moved or resized comes back where it was left.
       if window.label().starts_with("sticky-") && matches!(event, WindowEvent::Moved(_) | WindowEvent::Resized(_)) { stickies::frame_changed(window.app_handle(), window.label()); }
@@ -550,7 +531,7 @@ pub fn run() {
     .run(|app, event| match event {
       RunEvent::Exit => speech::shutdown(app),
       // Opening the app again from Finder, Spotlight or the Dock: the way back with the menu bar icon hidden.
-      RunEvent::Reopen { .. } => { if let Err(e) = show_settings(app, None) { log::warn!("settings: {e}"); } }
+      RunEvent::Reopen { .. } => { if let Err(e) = show_main(app, None) { log::warn!("settings: {e}"); } }
       _ => {}
     });
 }

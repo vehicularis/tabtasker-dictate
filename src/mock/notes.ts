@@ -78,7 +78,9 @@ export function register(mock: Mock) {
     library.unshift({ path, title: (title as string) || note.stem, kind: 'note', modifiedMs: Date.now(), words: (text as string).split(/\s+/).filter(Boolean).length, excerpt: (text as string).slice(0, 160) });
     return path;
   });
-  mock.handle('note_open', ({ path }) => { open(`/note.html?path=${encodeURIComponent(path as string)}${location.search.includes('theme=') ? `&theme=${new URLSearchParams(location.search).get('theme')}` : ''}`, '_blank'); });
+  mock.handle('note_open', ({ path }) => { const item = library.find(one => one.path === path); location.hash = `${item?.kind === 'meeting' ? 'meetings' : 'notes'}/${encodeURIComponent(path as string)}`; });
+  mock.handle('note_attach', ({ name, data }) => `data:image/${String(name).split('.').pop() === 'jpg' ? 'jpeg' : String(name).split('.').pop()};base64,${data}`); // the browser shows it from the data itself
+  mock.handle('note_delete', ({ path }) => { const at = library.findIndex(one => one.path === path); if (at >= 0) library.splice(at, 1); docs.delete(path as string); });
   mock.handle('notes_folder', () => {
     const path = folder();
     return { path, vault: path === VAULT || path.startsWith(`${VAULT}/`) ? 'Second Brain' : null };

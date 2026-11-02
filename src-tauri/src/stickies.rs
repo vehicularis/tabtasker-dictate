@@ -75,6 +75,21 @@ fn open(app: &AppHandle, sticky: &Sticky) -> tauri::Result<()> {
   window.set_focus()
 }
 
+/// A sticky said aloud ("sticky: call Thomas"): made with the words, or the overlay told why not.
+pub fn from_voice(app: &AppHandle, words: &str) {
+  match create(app, None, Some(words)) {
+    Ok(_) => { let _ = app.emit_to("overlay", "dictate-notice", serde_json::json!({ "message": if words.is_empty() { "A sticky, on the screen" } else { "Sticky made" } })); }
+    Err(e) => { let _ = app.emit_to("overlay", "dictate-notice", serde_json::json!({ "message": e })); }
+  }
+}
+
+/// Brings a sticky's window forward (made again if it was closed by the system).
+#[tauri::command]
+pub fn sticky_show(app: AppHandle, id: String) -> Result<(), String> {
+  let sticky = all(&app).into_iter().find(|sticky| sticky.id == id).ok_or("That sticky is gone.")?;
+  open(&app, &sticky).map_err(|e| e.to_string())
+}
+
 /// At launch: every sticky back on the screen where it was.
 pub fn show_all(app: &AppHandle) {
   for sticky in all(app) { if let Err(e) = open(app, &sticky) { log::warn!("sticky: {e}"); } }

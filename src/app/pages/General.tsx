@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { invoke } from '../../bridge';
 import { resetSettings, useStatus, type PageProps } from '../../store';
-import { Button, Icon, PageHeader, Section, Select, Tile, TileGroup, Toggle } from '../../ui';
+import { Button, Icon, GroupHeader, Section, Select, Tile, TileGroup, Toggle } from '../../ui';
 
 const ask = (kind: string) => void invoke('request', { kind }).catch(() => {});
 
@@ -18,7 +18,7 @@ export function General({ settings, update }: PageProps) {
   const icon = settings.general.menuBarIcon;
   const mic = status?.microphone;
   return <>
-    <PageHeader icon="general" title="General">How TabTasker Dictate starts and listens.</PageHeader>
+    <GroupHeader title="Startup and listening">How TabTasker Dictate starts, and which microphone it listens with.</GroupHeader>
     <Section title="Startup">
       <TileGroup>
         <Tile title="Open at Login" detail="Starts in the menu bar when you log in.">
@@ -29,7 +29,7 @@ export function General({ settings, update }: PageProps) {
           : `Hidden. To come back here, open TabTasker Dictate again from Finder or Spotlight${settings.appearance.idle === 'dots' ? ', or right-click the dots' : ''}.`}>
           <Toggle label="Menu bar icon" checked={icon} onChange={menuBarIcon => void update({ general: { menuBarIcon } })} />
         </Tile>
-        <Tile title="Show in the Dock" detail={settings.general.showInDock ? 'Always in the Dock; clicking the icon opens Settings.' : 'In the Dock only while Settings is open.'}>
+        <Tile title="Show in the Dock" detail={settings.general.showInDock ? 'Always in the Dock; clicking the icon opens TabTasker Dictate.' : 'In the Dock only while the window is open.'}>
           <Toggle label="Show in the Dock" checked={settings.general.showInDock} onChange={showInDock => void update({ general: { showInDock } })} />
         </Tile>
       </TileGroup>

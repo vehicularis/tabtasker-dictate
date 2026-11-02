@@ -59,7 +59,7 @@ fn assign_speakers(lines: &mut [Line], source: Source, turns: &[crate::speakers:
 }
 
 /// What each voice is called. The microphone's main voice, by time spoken, is `you`; every other voice is
-/// numbered in order of first appearance, Speaker 1, Speaker 2 and on; a stream whose voices weren't told
+/// numbered in order of first appearance, Person 1, Person 2 and on; a stream whose voices weren't told
 /// apart keeps its own label, `you` for the microphone and `others` for the Mac's sound.
 fn speaker_names(lines: &[Line], you: &str, others: &str) -> std::collections::HashMap<(Source, Option<u32>), String> {
   let (you, others) = (label(you, "You"), label(others, "Others"));
@@ -77,7 +77,7 @@ fn speaker_names(lines: &[Line], you: &str, others: &str) -> std::collections::H
   let mut n = 0;
   for line in heard {
     let key = (line.source, line.speaker);
-    if !names.contains_key(&key) { n += 1; names.insert(key, format!("Speaker {n}")); }
+    if !names.contains_key(&key) { n += 1; names.insert(key, format!("Person {n}")); }
   }
   names
 }
@@ -887,7 +887,7 @@ mod tests {
     assign_speakers(&mut lines, Source::System, &[Turn { start: 9 * s, end: 11 * s, speaker: 0 }]);
     assert_eq!(lines.iter().map(|line| line.speaker).collect::<Vec<_>>(), vec![Some(0), Some(0), Some(1), Some(0)]);
     let (markdown, _) = transcript(&lines, &[], "Can", "Others");
-    assert_eq!(markdown, "**Can** 00:00:00 Hello all. Thanks for coming.\n\n**Speaker 1** 00:00:06 Glad to be here.\n\n**Speaker 2** 00:00:09 Hi from the call.");
+    assert_eq!(markdown, "**Can** 00:00:00 Hello all. Thanks for coming.\n\n**Person 1** 00:00:06 Glad to be here.\n\n**Person 2** 00:00:09 Hi from the call.");
     // A line no voice covers keeps its stream's label; without any voices, the old labels stand.
     let plain = [line(Source::Mic, 0.0, "a"), line(Source::System, 3.0, "b")];
     assert_eq!(transcript(&plain, &[], "You", "Others").0, "**You** 00:00:00 a\n\n**Others** 00:00:03 b");

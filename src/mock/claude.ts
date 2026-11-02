@@ -34,7 +34,8 @@ export function register(mock: Mock) {
     if (!signedIn) throw 'Claude Code isn’t signed in. Run claude in Terminal and sign in, then try again.';
     return mock.update({ claude: { enabled: true, via: 'claudeCode' } });
   });
-  mock.handle('claude_disconnect_code', () => mock.update({ claude: { enabled: saved, via: 'api' } }));
+  mock.handle('claude_disconnect', () => mock.update({ claude: { enabled: saved, via: 'api' } }));
+  mock.handle('claude_connect_local', async ({ endpoint, model }) => { await later(500); if (typeof endpoint !== 'string' || !/^https?:\/\//.test(endpoint)) throw 'Use the address Ollama listens on, like http://localhost:11434.'; if (!model) throw 'Name the model as Ollama knows it, like llama3.2.'; return mock.update({ claude: { enabled: true, via: 'local', localEndpoint: endpoint, localModel: model } }); });
   mock.handle('claude_test', async () => {
     const claude = mock.settings().claude;
     await later(claude.via === 'claudeCode' ? 1800 : 700);
@@ -61,7 +62,6 @@ export function register(mock: Mock) {
     if (next && !PROGRAMS.includes(next)) throw 'There’s no program at that path.';
     return mock.update({ claude: { claudeCode: next } });
   });
-  mock.handle('send_to_claude_code', async () => { await later(400); return true; });
   // A typed question: answered as a spoken command is, on the same card.
   mock.handle('claude_ask', async ({ question }) => {
     if (!mock.settings().claude.enabled) throw 'Connect Claude in Settings first.';

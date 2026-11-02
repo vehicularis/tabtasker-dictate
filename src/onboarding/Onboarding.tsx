@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react';
 import { closeWindow, invoke, listen } from '../bridge';
-import { Claude } from '../settings/pages/Claude';
-import { Meetings } from '../settings/pages/Meetings';
-import { Notes } from '../settings/pages/Notes';
+import { Claude } from '../app/pages/Claude';
+import { Meetings } from '../app/pages/Meetings';
+import { Notes } from '../app/pages/Notes';
 import { setupDone, tilde, updateSettings, useSettings, useStatus, type CommandKey, type DictateKey, type PageProps, type Patch, type Settings, type Status } from '../store';
 import { Button, Icon, Kbd, ProgressBar, Segmented, Select, Toast, Toggle, type IconName } from '../ui';
 import { Globe, KEY_NAMES, Keyboard } from './Keyboard';
@@ -119,7 +119,7 @@ export function Onboarding() {
 
   return <div className="onboarding">
     <div className="titlebar" data-tauri-drag-region />
-    {!last && <Button variant="quiet" small className="setup-leave" onClick={() => { location.hash = 'general'; }}>Open Settings</Button>}
+    {!last && <Button variant="quiet" small className="setup-leave" onClick={() => { location.hash = 'settings'; }}>Open Settings</Button>}
     <nav className="setup-progress" aria-label="Setup steps">
       <ol>
         {STEPS.map((candidate, i) => <li key={candidate.id}>
@@ -140,7 +140,7 @@ export function Onboarding() {
       <span className="setup-count" aria-hidden="true">{at + 1} of {STEPS.length}</span>
       <span className="end">
         {last ? <>
-          <Button onClick={() => { location.hash = 'general'; }}>Open Settings</Button>
+          <Button onClick={() => { location.hash = 'settings'; }}>Open Settings</Button>
           <Button variant="primary" onClick={closeWindow}>{finished ? 'Start dictating' : 'Close'}</Button>
         </> : ready(step.id)
           ? <Button variant="primary" onClick={() => setAt(at + 1)}>{at === 0 ? 'Get started' : 'Continue'}</Button>

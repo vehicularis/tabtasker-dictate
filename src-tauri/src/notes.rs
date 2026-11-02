@@ -394,6 +394,54 @@ pub(crate) fn new_doc(title: &str, body: &str, stamp_text: &str) -> Result<PathB
   if note.daily { append_daily(&dir, &note) } else { write_new(&dir, &note.stem, format!("{}{}", note.header, note.section).as_bytes()) }
 }
 
+/// Keeps a picture pasted or dropped into a note beside it, in `attachments/<the note's name>/`, and
+/// answers the path the note refers to it by (relative, so the folder can move). `data` is the file's
+/// bytes in base64; `name` a suggested file name (its extension is kept, the rest made safe).
+#[tauri::command]
+pub fn note_attach(path: String, name: String, data: String) -> Result<String, String> {
+  use base64::Engine;
+  let file = in_library(&path)?;
+  let bytes = base64::engine::general_purpose::STANDARD.decode(data.trim()).map_err(|_| "That picture couldn’t be read.".to_owned())?;
+  if bytes.is_empty() { return Err("That picture is empty.".into()); }
+  if bytes.len() > 25 << 20 { return Err("That picture is too big to keep in a note (25 MB at most).".into()); }
+  let dir = file.parent().ok_or("That file isn’t there any more.")?;
+  let stem = file.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_else(|| "note".into());
+  let folder = dir.join("attachments").join(clean(&stem));
+  std::fs::create_dir_all(&folder).map_err(|e| format!("Couldn’t make the attachments folder: {e}"))?;
+  let suggested = Path::new(&name);
+  let ext = suggested.extension().map(|ext| ext.to_string_lossy().to_lowercase()).filter(|ext| ["png", "jpg", "jpeg", "gif", "webp", "heic", "svg", "pdf"].contains(&ext.as_str())).unwrap_or_else(|| "png".into());
+  let base = clean(&suggested.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default());
+  let base = if base.is_empty() { "picture".to_owned() } else { base };
+  for n in 1..=1000 {
+    let file_name = if n == 1 { format!("{base}.{ext}") } else { format!("{base} {n}.{ext}") };
+    let target = folder.join(&file_name);
+    match std::fs::OpenOptions::new().write(true).create_new(true).open(&target) {
+      Ok(mut out) => {
+        out.write_all(&bytes).and_then(|_| out.sync_all()).map_err(|e| format!("Couldn’t save the picture: {e}"))?;
+        return Ok(format!("attachments/{}/{}", clean(&stem), file_name));
+      }
+      Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+      Err(e) => return Err(format!("Couldn’t save the picture: {e}")),
+    }
+  }
+  Err("Couldn’t find a free name for the picture".into())
+}
+
+/// Moves a note or meeting to the Trash, under a name that is free there, where it can come back from.
+#[tauri::command]
+pub fn note_delete(path: String) -> Result<(), String> {
+  let file = in_library(&path)?;
+  let trash = PathBuf::from(std::env::var_os("HOME").ok_or("No home folder")?).join(".Trash");
+  let name = file.file_name().map(|name| name.to_string_lossy().into_owned()).ok_or("That file isn’t there any more.")?;
+  let stem = name.strip_suffix(".md").unwrap_or(&name);
+  for n in 1..=100 {
+    let target = if n == 1 { trash.join(&name) } else { trash.join(format!("{stem} {n}.md")) };
+    if target.symlink_metadata().is_ok() { continue; }
+    return std::fs::rename(&file, &target).map_err(|e| format!("Couldn’t move it to the Trash: {e}"));
+  }
+  Err("Couldn’t find room in the Trash".into())
+}
+
 #[tauri::command]
 pub async fn note_read(path: String) -> Result<NoteDoc, String> {
   tauri::async_runtime::spawn_blocking(move || read_doc(&path)).await.map_err(|e| e.to_string())?

@@ -709,6 +709,11 @@ extern "C" fn dictate_audio(id: *const c_char, samples: *const f32, count: usize
     let ctx = context::get(&id);
     // Return follows the words when the app is one for messages, or when "send" ended what was said.
     let (result, send) = match result {
+      // "Sticky: call Thomas" puts a sticky on the screen instead of typing.
+      Ok(text) if ctx.mode.types() && text::sticky_words(&text).is_some() => {
+        if let (Some(app), Some(words)) = (APP.get(), text::sticky_words(&text)) { crate::stickies::from_voice(app, &words); }
+        (Ok(String::new()), false)
+      }
       Ok(text) if ctx.mode.types() => { let (text, spoken) = text::without_send(&text); let send = spoken || settings::get().apps.send_for(&ctx.bundle_id); (Ok(text), send) }
       other => (other, false),
     };

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { invoke } from '../../bridge';
 import type { PageProps } from '../../store';
-import { Button, ChipList, EmptyState, Icon, PageHeader, Section, Tile, TileGroup, Toggle } from '../../ui';
+import { Button, ChipList, EmptyState, Icon, GroupHeader, Section, Tile, TileGroup, Toggle } from '../../ui';
 import './speech.css';
 
 const same = (one: string, other: string) => one.toLowerCase() === other.toLowerCase();
@@ -41,7 +41,7 @@ export function Vocabulary({ settings, update }: PageProps) {
   const enter = (event: KeyboardEvent) => { if (event.key === 'Enter') { event.preventDefault(); addReplacement(); } };
 
   return <>
-    <PageHeader icon="book" title="Vocabulary">Names and terms Whisper should spell your way.</PageHeader>
+    <GroupHeader title="Vocabulary">Names and terms Whisper should spell your way.</GroupHeader>
     <Section title="Words" note={wordsNote}>
       <TileGroup>
         <Tile title="Your words" stack>

@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main",
+  "description": "The app's window (notes, meetings, stickies, settings): its commands and events, dragging by the title strip, closing itself when setup is done, and naming itself.",
+  "windows": ["main"],
+  "permissions": ["core:default", "core:window:allow-start-dragging", "core:window:allow-close", "core:window:allow-set-title", "core:window:allow-set-focus"]
+}

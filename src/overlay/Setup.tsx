@@ -1,26 +1,22 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
 import { invoke } from '../bridge';
 import { KEY_NAMES } from '../onboarding/Keyboard';
-import { setupDone, updateSettings, useSettings, type DictateKey, type Settings, type Status } from '../store';
-import { Icon, type IconName } from '../ui/Icon';
+import { setupDone, useSettings, type DictateKey, type Status } from '../store';
 import { Globe, Logo, NoteIcon, X } from './icons';
 
 const GLOBE = { inputSource: 'changes the input source', emoji: 'opens emoji', dictation: 'starts Dictation' };
 
-// ---------- the gear's card: quick settings once set up; until then (or when asked for) the setup steps ----------
+// ---------- the setup steps, as a card by the dots ----------
 
-/// `steps` shows the setup steps even on a Mac that is set up (the menu's Set up…); otherwise the card is
-/// the quick settings as soon as setup is done.
-export function Setup({ status, fnDown, fnTested, steps, onClose }: { status: Status | null; fnDown: boolean; fnTested: boolean; steps?: boolean; onClose: () => void }) {
+export function Setup({ status, fnDown, fnTested, onClose }: { status: Status | null; fnDown: boolean; fnTested: boolean; onClose: () => void }) {
   const [asked, setAsked] = useState(false);
   const settings = useSettings();
   const chosen = settings?.shortcuts.dictate ?? 'fn';
   const name = KEY_NAMES[chosen];
   const ask = (kind: string) => { if (kind === 'accessibility') setAsked(true); void invoke('request', { kind }).catch(() => {}); };
-  const full = () => { onClose(); void invoke('open_settings', { route: 'setup' }).catch(() => {}); };
+  const full = () => { onClose(); void invoke('open_app', { route: 'setup' }).catch(() => {}); };
   const notes = status?.notes.replace(/^\/Users\/[^/]+/, '~') ?? '~/Documents/TabTasker Dictate';
   const ready = setupDone(status);
-  if (ready && !steps && settings) return <Quick settings={settings} name={name} onClose={onClose} />;
   const sheet = (title: string, body: ReactNode) => <article className="glass card setup" data-glass data-hit aria-label="Set up">
     <header className="head"><Logo size={28} /><strong>{title}</strong><button type="button" className="close" aria-label="Close" onClick={onClose}><X /></button></header>
     <Ways notes={notes} name={name} />
@@ -55,35 +51,6 @@ export function Setup({ status, fnDown, fnTested, steps, onClose }: { status: St
     </ol>
     <footer className="actions"><span className="ask" /><button type="button" className="btn" onClick={full}>Open full setup</button></footer>
   </>);
-}
-
-// The settings worth a switch without leaving what you are doing, each saved as it is flipped, and the
-// way to every other one. The rows are Settings' tiles, in the card's glass.
-function Quick({ settings, name, onClose }: { settings: Settings; name: string; onClose: () => void }) {
-  const { dictation, shortcuts, appearance } = settings;
-  const all = () => { onClose(); void invoke('open_settings', {}).catch(() => {}); };
-  const save = (patch: Parameters<typeof updateSettings>[0]) => { void updateSettings(patch).catch(() => {}); };
-  const rows: { icon: IconName; title: string; detail: string; on: boolean; flip: (on: boolean) => void }[] = [
-    { icon: 'keyboard', title: 'Live typing', detail: `Words appear as you speak. Off, they arrive when you let go of ${name}.`, on: dictation.liveTyping, flip: liveTyping => save({ dictation: { liveTyping } }) },
-    { icon: 'eraser', title: 'Remove filler words', detail: 'Leaves out um, uh, er, ah and hmm.', on: dictation.removeFillers, flip: removeFillers => save({ dictation: { removeFillers } }) },
-    { icon: 'speaker', title: 'Sounds', detail: 'A cue as listening starts and stops.', on: dictation.sounds, flip: sounds => save({ dictation: { sounds } }) },
-    { icon: 'mic', title: 'Hands-free', detail: `Double-tap ${name} to keep listening until you tap again.`, on: shortcuts.handsFree, flip: handsFree => save({ shortcuts: { handsFree } }) },
-    { icon: 'dots', title: 'Hide the dots when idle', detail: `Nothing shows until you hold ${name}.`, on: appearance.idle === 'hidden', flip: hidden => save({ appearance: { idle: hidden ? 'hidden' : 'dots' } }) },
-  ];
-  return <article className="glass card setup quick" data-glass data-hit aria-label="Quick settings">
-    <header className="head"><Logo size={28} /><strong>Quick settings</strong><button type="button" className="close" aria-label="Close" onClick={onClose}><X /></button></header>
-    <ul className="ways">
-      {rows.map(row => <li key={row.title}>
-        <span className="row-icon" aria-hidden="true"><Icon name={row.icon} size={17} /></span>
-        <span className="what">{row.title}<small>{row.detail}</small></span>
-        <button type="button" role="switch" className="switch" aria-checked={row.on} aria-label={row.title} onClick={() => row.flip(!row.on)}><span className="knob" /></button>
-      </li>)}
-    </ul>
-    <footer className="actions">
-      <span className="ask">Everything else: the key, Claude, notes, meetings, how the dots look.</span>
-      <button type="button" className="btn primary" onClick={all}>All settings…</button>
-    </footer>
-  </article>;
 }
 
 function Step({ index, status, name, line, action }: { index: number; status: string; name: string; line: ReactNode; action: ReactNode }) {

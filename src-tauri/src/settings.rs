@@ -195,9 +195,12 @@ pub struct Meetings {
   pub others: String,
   /// Each voice gets its own label (speaker diarization, two small models downloaded at the first meeting).
   pub speakers: bool,
+  /// What the summary holds besides the summary itself.
+  pub decisions: bool,
+  pub action_items: bool,
 }
 impl Default for Meetings {
-  fn default() -> Self { Self { folder: None, system_audio: true, summarize: true, you: "You".into(), others: "Others".into(), speakers: true } }
+  fn default() -> Self { Self { folder: None, system_audio: true, summarize: true, you: "You".into(), others: "Others".into(), speakers: true, decisions: true, action_items: true } }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -220,15 +223,17 @@ pub struct Claude {
   pub model: ClaudeModel,
   pub commands: bool,
   pub claude_code: Option<String>,
-  pub project_folder: Option<String>,
+  /// A model on this Mac behind Ollama's API (LM Studio speaks it too): where, and which.
+  pub local_endpoint: String,
+  pub local_model: String,
 }
 impl Default for Claude {
-  fn default() -> Self { Self { enabled: false, via: ClaudeVia::Api, model: ClaudeModel::Haiku, commands: true, claude_code: None, project_folder: None } }
+  fn default() -> Self { Self { enabled: false, via: ClaudeVia::Api, model: ClaudeModel::Haiku, commands: true, claude_code: None, local_endpoint: "http://localhost:11434".into(), local_model: "llama3.2".into() } }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub enum ClaudeVia { Api, ClaudeCode }
+pub enum ClaudeVia { Api, ClaudeCode, Local }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -322,7 +327,10 @@ impl Settings {
     let distinct = chords.iter().enumerate().all(|(i, a)| chords[..i].iter().all(|b| (a.key_code, a.modifiers) != (b.key_code, b.modifiers)));
     let file_name = &self.notes.file_name;
     let language = &self.dictation.language;
-    folder(&self.notes.folder) && folder(&self.meetings.folder) && folder(&self.claude.claude_code) && folder(&self.claude.project_folder)
+    let local = &self.claude;
+    folder(&self.notes.folder) && folder(&self.meetings.folder) && folder(&self.claude.claude_code)
+      && (local.local_endpoint.starts_with("http://") || local.local_endpoint.starts_with("https://")) && local.local_endpoint.len() <= 200 && !local.local_endpoint.contains(char::is_whitespace)
+      && !local.local_model.trim().is_empty() && local.local_model.len() <= 80
       && chords.iter().all(|chord| chord.valid()) && distinct
       && !file_name.contains(['/', ':', '\0']) && !file_name.trim_start().starts_with('.')
       && SOUNDS.contains(&self.dictation.start_sound.as_str()) && SOUNDS.contains(&self.dictation.stop_sound.as_str())
@@ -591,8 +599,8 @@ mod tests {
     assert_eq!(value["apps"]["defaultStyle"], "default");
     assert!(value["apps"]["styles"].as_array().unwrap().iter().any(|app| app["bundleId"] == "com.apple.Terminal" && app["style"] == "code" && app["polish"] == false));
     assert_eq!(value["notes"], json!({ "folder": null, "fileName": "{date} {title}", "frontmatter": true, "dailyNote": false, "tags": [], "claudeTitle": true, "claudeActions": false }));
-    assert_eq!(value["meetings"], json!({ "folder": null, "systemAudio": true, "summarize": true, "you": "You", "others": "Others", "speakers": true }));
-    assert_eq!(value["claude"], json!({ "enabled": false, "via": "api", "model": "claude-haiku-5-5", "commands": true, "claudeCode": null, "projectFolder": null }));
+    assert_eq!(value["meetings"], json!({ "folder": null, "systemAudio": true, "summarize": true, "you": "You", "others": "Others", "speakers": true, "decisions": true, "actionItems": true }));
+    assert_eq!(value["claude"], json!({ "enabled": false, "via": "api", "model": "claude-haiku-5-5", "commands": true, "claudeCode": null, "localEndpoint": "http://localhost:11434", "localModel": "llama3.2" }));
     assert_eq!(value["agents"], json!({ "mcp": true, "shareHistory": false, "shareNotes": true, "shareMeetings": true, "allowWrite": false }));
     assert_eq!(value["history"], json!({ "keep": "week" }));
     assert_eq!(value["appearance"], json!({ "theme": "system", "edge": "bottom", "size": "medium", "idle": "dots", "hint": true, "margin": 8, "avoidDock": true }));

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { invoke } from '../../bridge';
 import { sendsByDefault, type AppStyle, type PageProps, type Style } from '../../store';
-import { Button, Icon, PageHeader, Section, Select, Tile, TileGroup, Toggle } from '../../ui';
+import { Button, Icon, GroupHeader, Section, Select, Tile, TileGroup, Toggle } from '../../ui';
 import './speech.css';
 
 const STYLES: { value: Style; label: string; detail: string; said?: string; typed?: string }[] = [
@@ -99,7 +99,7 @@ export function AppStyles({ settings, update }: PageProps) {
   const claude = settings.claude.enabled;
 
   return <>
-    <PageHeader icon="apps" title="App styles">How your words are written in each app.</PageHeader>
+    <GroupHeader title="App styles">How your words are written in each app.</GroupHeader>
     <Section title="Everywhere else">
       <TileGroup>
         <Tile title="Default style" detail="For every app without a style of its own.">
@@ -109,7 +109,7 @@ export function AppStyles({ settings, update }: PageProps) {
     </Section>
     <Section title="Apps" note={<>Send presses Return once your words are typed, as in a chat: on by default in Slack, Messages, WhatsApp, Teams, Telegram, Discord and Signal. Saying “send” at the end sends one message anywhere.
       {claude ? ' Polish asks Claude to tidy your words in that app, within a few seconds; your own words stand if it can’t.'
-        : <> Claude can also polish your words in the apps you choose. <button type="button" className="link" onClick={() => { location.hash = 'claude'; }}>Connect Claude</button></>}</>}>
+        : <> Claude can also polish your words in the apps you choose. <button type="button" className="link" onClick={() => { location.hash = 'settings/ai'; }}>Connect Claude</button></>}</>}>
       <TileGroup label="Apps">
         <Tile title={picking ? 'Add an app' : `${apps.styles.length} ${apps.styles.length === 1 ? 'app' : 'apps'}`} stack={picking}>
           {picking
