@@ -11,30 +11,35 @@ const GEAR = Array.from({ length: 8 }, (_, i) => {
   return `${i ? 'L' : 'M'}${at(-14, 5.9)}L${at(-8, 7.6)}L${at(8, 7.6)}L${at(14, 5.9)}A5.9 5.9 0 0 1 ${at(31, 5.9)}`;
 }).join('') + 'Z';
 
-// The app icon, as design/icon.swift draws it: TabTasker's otter with its voice on its chest, on Business's
-// night-blue tile. The 824 tile of the icon's 1024 grid is scaled to 26 here, and the otter is drawn in the
-// icon's own coordinates (y up) under one transform, so the two never drift apart.
+// The app icon, as design/icon.swift draws it: TabTasker's otter on dark grey with sound waves at either
+// side of its head. The icon's 1024 grid is scaled to the 26 tile here, and the otter is drawn in the icon's
+// own coordinates (y up) under one transform, so the two never drift apart.
 export const Logo = ({ size = 18 }: { size?: number }) => {
   const id = useId();
-  const dots = [[-14, 12], [6, 0], [-6, -16]] as const;
+  const dots = [[-18, 14], [10, 0], [-8, -22]] as const;
+  // An arc of radius r about (cx, 560) between two angles, as SVG writes it.
+  const arc = (cx: number, r: number, from: number, to: number) => {
+    const at = (deg: number) => `${(cx + r * Math.cos(deg * Math.PI / 180)).toFixed(1)} ${(560 + r * Math.sin(deg * Math.PI / 180)).toFixed(1)}`;
+    return `M${at(from)}A${r} ${r} 0 0 1 ${at(to)}`;
+  };
   return <svg width={size} height={size} viewBox="0 0 28 28" aria-hidden="true">
     <defs>
-      <linearGradient id={`${id}-sky`} x1="1" y1="1" x2="0" y2="0"><stop offset="0" stopColor="#030718" /><stop offset="1" stopColor="#1d283a" /></linearGradient>
+      <linearGradient id={`${id}-grey`} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#3c3d41" /><stop offset="1" stopColor="#18181b" /></linearGradient>
       <clipPath id={`${id}-tile`}><rect x="1" y="1" width="26" height="26" rx="6.2" /></clipPath>
     </defs>
-    <rect x="1" y="1" width="26" height="26" rx="6.2" fill={`url(#${id}-sky)`} />
+    <rect x="1" y="1" width="26" height="26" rx="6.2" fill={`url(#${id}-grey)`} />
     <rect x="1.25" y="1.25" width="25.5" height="25.5" rx="5.95" fill="none" stroke="#fff" strokeOpacity=".12" strokeWidth=".5" />
     {/* The clip is on its own group: on a transformed one it would be read in the icon's coordinates. */}
-    <g clipPath={`url(#${id}-tile)`}><g transform="translate(1 27) scale(.031553 -.031553) translate(-100 -100)">
+    <g clipPath={`url(#${id}-tile)`}><g transform="translate(1 27) scale(.025391 -.025391)">
+      <path d={[arc(236, 104, 118, 242), arc(236, 176, 118, 242), arc(788, 104, -62, 62), arc(788, 176, -62, 62)].join('')} fill="none" stroke="#fff" strokeOpacity=".82" strokeWidth="26" strokeLinecap="round" />
       <g fill="#f3f4f6">
-        <rect x="293" y="-200" width="438" height="955" rx="219" /><circle cx="357" cy="707" r="77" /><circle cx="667" cy="707" r="77" />
+        <rect x="240" y="-300" width="544" height="1114" rx="272" /><circle cx="320" cy="754" r="96" /><circle cx="704" cy="754" r="96" />
       </g>
-      <g fill="#0e1525">
-        <circle cx="357" cy="707" r="34" /><circle cx="667" cy="707" r="34" /><circle cx="430" cy="573" r="27" /><circle cx="594" cy="573" r="27" />
-        <ellipse cx="512" cy="490" rx="30" ry="21" />
-        {dots.map(([dx, dy]) => <circle key={`l${dx}`} cx={426 + dx} cy={452 + dy} r="7" />)}
-        {dots.map(([dx, dy]) => <circle key={`r${dx}`} cx={598 - dx} cy={452 + dy} r="7" />)}
-        <rect x="437" y="281" width="30" height="74" rx="15" /><rect x="497" y="254" width="30" height="128" rx="15" /><rect x="557" y="281" width="30" height="74" rx="15" />
+      <g fill="#171719">
+        <circle cx="320" cy="754" r="44" /><circle cx="704" cy="754" r="44" /><circle cx="410" cy="588" r="34" /><circle cx="614" cy="588" r="34" />
+        <ellipse cx="512" cy="486" rx="34" ry="24" />
+        {dots.map(([dx, dy]) => <circle key={`l${dx}`} cx={414 + dx} cy={432 + dy} r="9" />)}
+        {dots.map(([dx, dy]) => <circle key={`r${dx}`} cx={610 - dx} cy={432 + dy} r="9" />)}
       </g>
     </g></g>
   </svg>;
