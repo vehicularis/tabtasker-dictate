@@ -8,6 +8,7 @@ pub mod ai;
 pub mod context;
 pub mod history;
 pub mod mcp;
+pub mod meeting;
 pub mod notes;
 pub mod settings;
 pub mod speech;
@@ -160,12 +161,14 @@ fn layout(app: AppHandle, glass: Vec<[f64; 6]>, hit: Vec<[f64; 4]>, dark: Option
   app.run_on_main_thread(move || unsafe { dictate_overlay_layout(json.as_ptr()) }).map_err(|e| e.to_string())
 }
 
-/// A meeting from the menu or the dots: `start` or `stop`. False when nothing changed.
+/// A meeting from the menu or the dots: `start` or `stop`. False when nothing changed; an error says
+/// why a meeting couldn't start.
 #[tauri::command]
 async fn meeting(app: AppHandle, action: String) -> Result<bool, String> {
   if !matches!(action.as_str(), "start" | "stop") { return Err("Unknown action".into()); }
   let action = CString::new(action).map_err(|e| e.to_string())?;
-  on_main(&app, move || unsafe { dictate_meeting(action.as_ptr()) }).await
+  let changed = on_main(&app, move || unsafe { dictate_meeting(action.as_ptr()) }).await?;
+  match meeting::start_problem() { Some(why) if !changed => Err(why), _ => Ok(changed) }
 }
 
 /// Opens the Settings window on `route`, or brings it forward on the page it shows when there is none.
@@ -192,10 +195,14 @@ extern "C" fn dictate_paste_last() {
   if let Some(app) = APP.get() { paste_last(app.clone()); }
 }
 
+/// The tray's meeting item starts one, or stops the one recording.
 fn start_meeting(app: &AppHandle) {
   let app = app.clone();
   let _ = app.clone().run_on_main_thread(move || {
-    if !unsafe { dictate_meeting(c"start".as_ptr()) } { let _ = app.emit_to(OVERLAY, "dictate-notice", serde_json::json!({ "message": "Couldn’t start the meeting" })); }
+    if !unsafe { dictate_meeting(c"toggle".as_ptr()) } {
+      let why = meeting::start_problem().unwrap_or_else(|| "Couldn’t start the meeting".into());
+      let _ = app.emit_to(OVERLAY, "dictate-notice", serde_json::json!({ "message": why }));
+    }
   });
 }
 
@@ -261,6 +268,12 @@ fn app_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
 /// The tray's Recent Notes, and the files its items open.
 static RECENT: OnceLock<(Submenu<Wry>, Mutex<Vec<PathBuf>>)> = OnceLock::new();
 static PAUSED: OnceLock<CheckMenuItem<Wry>> = OnceLock::new();
+static MEETING: OnceLock<MenuItem<Wry>> = OnceLock::new();
+
+/// The tray's meeting item says what it will do.
+pub(crate) fn meeting_changed(recording: bool) {
+  if let Some(item) = MEETING.get() { let _ = item.set_text(if recording { "Stop Meeting" } else { "Start Meeting" }); }
+}
 
 /// Rebuilds Recent Notes from the notes folder: after a save, or when the folder changes.
 pub(crate) fn recent_changed(app: &AppHandle) {
@@ -291,9 +304,10 @@ fn tray(app: &AppHandle, enabled: bool) -> tauri::Result<()> {
   let separator = || PredefinedMenuItem::separator(app);
   let recent = Submenu::with_id(app, "recent", "Recent Notes", true)?;
   let paused = CheckMenuItem::with_id(app, "pause", "Pause Dictation", true, !enabled, None::<&str>)?;
+  let meeting = MenuItem::with_id(app, "meeting", "Start Meeting", true, None::<&str>)?;
   let menu = Menu::with_items(app, &[
     &MenuItem::with_id(app, "note", "New Note", true, None::<&str>)?,
-    &MenuItem::with_id(app, "meeting", "Start Meeting", true, None::<&str>)?,
+    &meeting,
     &MenuItem::with_id(app, "paste-last", "Paste Last Transcript", true, None::<&str>)?,
     &recent, &separator()?,
     &MenuItem::with_id(app, "settings", "Settings…", true, Some("CmdOrCtrl+,"))?,
@@ -304,6 +318,7 @@ fn tray(app: &AppHandle, enabled: bool) -> tauri::Result<()> {
   ])?;
   let _ = RECENT.set((recent, Mutex::default()));
   let _ = PAUSED.set(paused);
+  let _ = MEETING.set(meeting);
   recent_changed(app);
   // The mark alone, in black: macOS tints a template icon for the menu bar's light or dark look.
   let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray@2x.png"))?;
@@ -345,6 +360,7 @@ pub fn run() {
       ai::claude_save_key, ai::claude_test, ai::claude_remove_key, ai::claude_open_console, ai::claude_insert, ai::claude_dismiss,
       ai::claude_code_find, ai::claude_code_set, ai::send_to_claude_code,
       mcp::agents_status, mcp::agents_add,
+      meeting::meeting_state, meeting::meeting_recover, meeting::meeting_reveal, meeting::meeting_privacy,
     ])
     .setup(|app| {
       app.set_activation_policy(ActivationPolicy::Accessory); // a menu bar app: no Dock icon
@@ -354,6 +370,7 @@ pub fn run() {
       history::init(&handle)?;
       ai::init(&handle);
       speech::init(&handle)?;
+      meeting::init(&handle)?;
       unsafe { dictate_init() };
       settings::apply(&handle, &settings::get());
       overlay(&handle)?;
