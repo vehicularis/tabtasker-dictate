@@ -239,6 +239,7 @@ extern "C" {
   fn dictate_keychain_exists() -> bool;
   fn dictate_keychain_delete() -> bool;
   fn dictate_command_result(request: *const c_char, text: *const c_char, action: *const c_char);
+  fn dictate_claude_front(bundle_id: *const c_char, activate: bool) -> bool;
 }
 
 fn saved_key() -> Option<String> {
@@ -312,7 +313,7 @@ pub fn polish(text: &str, ctx: &HoldContext) -> Option<String> {
     Ok(_) => { log::warn!("claude: polish set aside, it changed the length too much"); None }
     Err(e) => {
       log::warn!("claude: polish failed: {e:?}");
-      if e.needs_settings() { notice(&format!("Polish is off for now. {e}")); }
+      if e.needs_settings() { notice(&format!("Couldn’t polish that, so it was typed as you said it. {e}")); }
       None
     }
   }
@@ -368,8 +369,22 @@ async fn command(endpoint: &str, key: &str, model: ClaudeModel, instruction: &st
 
 /// Requests the person closed while Claude was working: their answer is dropped, never typed.
 static DISMISSED: Mutex<VecDeque<String>> = Mutex::new(VecDeque::new());
+/// Each request and the app it was spoken in, for Insert to go back to.
+static ORIGINS: Mutex<VecDeque<(String, String)>> = Mutex::new(VecDeque::new());
+
+/// Adds `item` to one of the short lists above, letting the oldest go.
+fn keep<T>(list: &Mutex<VecDeque<T>>, item: T) {
+  let mut list = list.lock().unwrap_or_else(|e| e.into_inner());
+  if list.len() >= 32 { list.pop_front(); }
+  list.push_back(item);
+}
 
 fn dismissed(request: &str) -> bool { DISMISSED.lock().unwrap_or_else(|e| e.into_inner()).iter().any(|id| id == request) }
+
+fn origin(request: &str) -> Option<String> {
+  let kept = ORIGINS.lock().unwrap_or_else(|e| e.into_inner()).iter().rev().find(|(id, _)| id == request).map(|(_, app)| app.clone());
+  kept.or_else(|| Some(context::get(request).bundle_id)).filter(|app| !app.is_empty())
+}
 
 fn emit_command(payload: Value) {
   if let Some(app) = APP.get() { let _ = app.emit_to("overlay", "dictate-command", payload); }
@@ -388,10 +403,11 @@ fn type_result(request: &str, text: &str) {
 /// once it is taken: the answer arrives later through `dictate-command` and dictate_command_result.
 /// False means Claude is not connected, and the overlay says "Connect Claude in Settings to use commands".
 #[no_mangle]
-extern "C" fn dictate_command(request: *const c_char, instruction: *const c_char, selection: *const c_char, _bundle_id: *const c_char) -> bool {
-  let (request, instruction, selection) = (c_text(request), c_text(instruction), c_text(selection));
+extern "C" fn dictate_command(request: *const c_char, instruction: *const c_char, selection: *const c_char, bundle_id: *const c_char) -> bool {
+  let (request, instruction, selection, bundle_id) = (c_text(request), c_text(instruction), c_text(selection), c_text(bundle_id));
   let claude = settings::get().claude;
   if !claude.enabled || request.is_empty() || APP.get().is_none() { return false; }
+  if !bundle_id.is_empty() { keep(&ORIGINS, (request.clone(), bundle_id)); }
   let error = |text: &str| emit_command(json!({ "request": request, "phase": "error", "text": text, "instruction": instruction }));
   if !claude.commands { error("Commands are off. Turn them on in Settings, under Claude."); return true; }
   if instruction.trim().is_empty() { error("Didn’t catch what to do. Hold the keys and try again."); return true; }
@@ -409,29 +425,58 @@ extern "C" fn dictate_command(request: *const c_char, instruction: *const c_char
   true
 }
 
-/// The answer card's Insert: types the answer where the cursor is.
+/// Whether the app `bundle_id` is in front, asking it forward first when `activate` is set. Answered
+/// on the main thread, where AppKit keeps that state.
+fn in_front(app: &AppHandle, bundle_id: &CString, activate: bool) -> bool {
+  let (done, answer) = std::sync::mpsc::channel();
+  let bundle_id = bundle_id.clone();
+  if app.run_on_main_thread(move || { let _ = done.send(unsafe { dictate_claude_front(bundle_id.as_ptr(), activate) }); }).is_err() { return false; }
+  answer.recv_timeout(Duration::from_secs(1)).unwrap_or(false)
+}
+
+/// Brings `bundle_id` back to the front and waits, up to a second, until it is there.
+fn bring_back(app: &AppHandle, bundle_id: &str) -> bool {
+  let Ok(bundle_id) = CString::new(bundle_id) else { return false };
+  if in_front(app, &bundle_id, true) { return true; }
+  let deadline = Instant::now() + Duration::from_secs(1);
+  while Instant::now() < deadline {
+    std::thread::sleep(Duration::from_millis(40));
+    if in_front(app, &bundle_id, false) {
+      // ponytail: the app counts as front as its activation starts; a beat more lets its window take the
+      // keyboard. Wait for NSWorkspaceDidActivateApplicationNotification instead if this proves short.
+      std::thread::sleep(Duration::from_millis(120));
+      return true;
+    }
+  }
+  false
+}
+
+/// The answer card's Insert. Clicking the card makes this app active, so the app the command was spoken
+/// in comes back to the front first, and the answer is typed there.
 #[tauri::command]
-pub fn claude_insert(request: String, text: String) -> Result<(), String> {
+pub async fn claude_insert(app: AppHandle, request: String, text: String) -> Result<(), String> {
   if text.trim().is_empty() || text.chars().count() > 100_000 { return Err("Nothing to insert".into()); }
-  type_result(&request, &text);
-  Ok(())
+  tauri::async_runtime::spawn_blocking(move || {
+    if !origin(&request).is_some_and(|bundle_id| bring_back(&app, &bundle_id)) {
+      return Err("Couldn’t get back to the app you asked in. Copy the answer instead.".to_owned());
+    }
+    type_result(&request, &text);
+    Ok(())
+  }).await.map_err(|e| e.to_string())?
 }
 
 /// The card was closed: whatever Claude answers for `request` now is dropped.
 #[tauri::command]
-pub fn claude_dismiss(request: String) {
-  let mut gone = DISMISSED.lock().unwrap_or_else(|e| e.into_inner());
-  if gone.len() >= 32 { gone.pop_front(); }
-  gone.push_back(request);
-}
+pub fn claude_dismiss(request: String) { keep(&DISMISSED, request); }
 
 // ---------- the key, from the Claude page ----------
 
-/// Tests a pasted key with a one-token request, and only then keeps it in the Keychain and turns Claude on.
+/// Tests a pasted key with a one-token request to the chosen model, and only then keeps it in the
+/// Keychain and turns Claude on.
 #[tauri::command]
 pub async fn claude_save_key(app: AppHandle, key: String) -> Result<settings::Settings, String> {
   let key = key_shape(&key)?.to_owned();
-  check(MESSAGES, &key, ClaudeModel::Haiku).await.map_err(|e| e.to_string())?;
+  check(MESSAGES, &key, settings::get().claude.model).await.map_err(|e| e.to_string())?;
   let stored = CString::new(key).map_err(|_| "Invalid key".to_owned())?;
   if !unsafe { dictate_keychain_set(stored.as_ptr()) } { return Err("Couldn’t save the key in your Keychain.".into()); }
   settings::update(&app, &json!({ "claude": { "enabled": true } }))
@@ -498,18 +543,32 @@ fn find_claude_code() -> Option<PathBuf> {
   first_claude(login_shell_claude(), &home)
 }
 
+/// The path to keep after a search: what it found, else the saved one while a program is still there.
+fn kept_claude_code(saved: Option<String>, found: Option<PathBuf>) -> Option<String> {
+  found.map(|path| path.display().to_string()).or_else(|| saved.filter(|path| executable(Path::new(path))))
+}
+
+/// Saves what a search came to, so the Claude page never shows a path that doesn't run.
 fn remember_claude_code(app: &AppHandle, found: Option<PathBuf>) -> Option<String> {
-  let found = found?.display().to_string();
-  if settings::get().claude.claude_code.as_deref() != Some(found.as_str()) {
-    if let Err(e) = settings::update(app, &json!({ "claude": { "claudeCode": found } })) { log::warn!("claude code: {e}"); }
+  let saved = settings::get().claude.claude_code;
+  let kept = kept_claude_code(saved.clone(), found);
+  if kept != saved {
+    if let Err(e) = settings::update(app, &json!({ "claude": { "claudeCode": kept } })) { log::warn!("claude code: {e}"); }
   }
-  Some(found)
+  kept
 }
 
 /// The page's Find: looks again and keeps what it finds. None when Claude Code isn't installed.
 #[tauri::command]
 pub async fn claude_code_find(app: AppHandle) -> Result<Option<String>, String> {
   tauri::async_runtime::spawn_blocking(move || remember_claude_code(&app, find_claude_code())).await.map_err(|e| e.to_string())
+}
+
+/// A path typed on the Claude page, kept only when there is a program at it. None clears it.
+#[tauri::command]
+pub fn claude_code_set(app: AppHandle, path: Option<String>) -> Result<settings::Settings, String> {
+  if path.as_deref().is_some_and(|path| !executable(Path::new(path))) { return Err("There’s no program at that path.".into()); }
+  settings::update(&app, &json!({ "claude": { "claudeCode": path } }))
 }
 
 /// `path` as a Markdown file inside one of `folders`, resolved first so `..` or a symlink can't reach
@@ -531,7 +590,8 @@ const LAUNCHER_PREFIX: &str = "tabtasker-dictate-claude-";
 
 /// A private folder in `root` (0700) holding the prompt (0600) and a script (0700) that reads it,
 /// deletes the folder and starts `claude` in `project` with the prompt as its first message. The
-/// prompt's words are only ever in its file, never in the script.
+/// prompt's words are only ever in its file, never in the script, and `--` keeps a note that starts
+/// with `-` (front matter, a list) from reading as an option.
 fn write_launcher(root: &Path, project: &Path, claude: &Path, prompt: &str) -> Result<PathBuf, String> {
   use std::io::Write;
   use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
@@ -548,7 +608,7 @@ fn write_launcher(root: &Path, project: &Path, claude: &Path, prompt: &str) -> R
   };
   let note = write("prompt.md", 0o600, prompt)?;
   let script = format!(
-    "#!/bin/sh\n# TabTasker Dictate: starts Claude Code with your note. This folder deletes itself.\nprompt=$(cat -- {note})\nrm -rf -- {dir}\ncd -- {project} || exit 1\nexec {claude} \"$prompt\"\n",
+    "#!/bin/sh\n# TabTasker Dictate: starts Claude Code with your note. This folder deletes itself.\nprompt=$(cat -- {note})\nrm -rf -- {dir}\ncd -- {project} || exit 1\nexec {claude} -- \"$prompt\"\n",
     note = quoted(&note), dir = quoted(&dir), project = quoted(project), claude = quoted(claude));
   write("Claude Code.command", 0o700, &script)
 }
@@ -808,6 +868,12 @@ mod tests {
     program(&home.join("bin/claude"), "#!/bin/sh\n");
     assert_eq!(first_claude(Some(home.join("bin/claude")), &home), Some(home.join("bin/claude"))); // the login shell's answer wins
     assert_eq!(first_claude(Some(PathBuf::from("relative/claude")), &home), Some(home.join(".local/bin/claude")));
+    // A search that finds nothing keeps a saved path only while a program is there.
+    let (typed, gone) = (home.join("bin/claude").display().to_string(), home.join("nope/claude").display().to_string());
+    assert_eq!(kept_claude_code(Some(typed.clone()), None), Some(typed.clone()));
+    assert_eq!(kept_claude_code(Some(gone.clone()), None), None);
+    assert_eq!(kept_claude_code(Some(gone), Some(home.join(".local/bin/claude"))), Some(home.join(".local/bin/claude").display().to_string()));
+    assert_eq!(kept_claude_code(None, None), None);
     std::fs::remove_dir_all(home).unwrap();
   }
 
@@ -837,22 +903,30 @@ mod tests {
     let root = temp("launch");
     let project = root.join("it's a project");
     std::fs::create_dir_all(&project).unwrap();
-    // Stands in for `claude`: writes where it ran and its first argument.
+    // Stands in for `claude`, parsing its arguments as Claude Code does: a leading `-` is an option it
+    // refuses, until `--`. Writes where it ran and its prompt.
     let fake = root.join("bin/fake claude");
-    program(&fake, &format!("#!/bin/sh\npwd > {out}/where\nprintf '%s' \"$1\" > {out}/prompt\n", out = quoted(&root)));
-    let prompt = "# Plan\n\nShip it's \"release\" `whoami` $(touch pwned) $HOME; rm -rf / \\ \n\ttabs and ünïcode 🎙";
-    let script = write_launcher(&root, &project, &fake, prompt).unwrap();
-    let dir = script.parent().unwrap().to_owned();
-    assert!(dir.file_name().unwrap().to_string_lossy().starts_with(LAUNCHER_PREFIX));
-    assert_eq!(std::fs::metadata(&dir).unwrap().permissions().mode() & 0o777, 0o700);
-    assert_eq!(std::fs::metadata(dir.join("prompt.md")).unwrap().permissions().mode() & 0o777, 0o600);
-    assert_eq!(std::fs::metadata(&script).unwrap().permissions().mode() & 0o777, 0o700);
-    let text = std::fs::read_to_string(&script).unwrap();
-    assert!(!text.contains("whoami") && !text.contains("pwned") && !text.contains("Plan"));
-    assert!(std::process::Command::new("/bin/sh").arg(&script).current_dir(&root).status().unwrap().success());
-    assert_eq!(std::fs::read_to_string(root.join("prompt")).unwrap(), prompt.trim_end_matches('\n'));
-    assert_eq!(PathBuf::from(std::fs::read_to_string(root.join("where")).unwrap().trim()).canonicalize().unwrap(), project);
-    assert!(!dir.exists()); // the folder is gone once Claude Code has the prompt
+    program(&fake, &format!("#!/bin/sh\ncase \"$1\" in --) shift ;; -*) echo \"error: unknown option\" >&2; exit 1 ;; esac\npwd > {out}/where\nprintf '%s' \"$1\" > {out}/prompt\n", out = quoted(&root)));
+    let prompts = [
+      "# Plan\n\nShip it's \"release\" `whoami` $(touch pwned) $HOME; rm -rf / \\ \n\ttabs and ünïcode 🎙",
+      "---\ncreated: 2026-11-02\ntags: [plan]\nsource: TabTasker Dictate\n---\n\n# Plan\n",
+      "- [ ] buy milk\n- call the venue",
+    ];
+    for prompt in prompts {
+      let script = write_launcher(&root, &project, &fake, prompt).unwrap();
+      let dir = script.parent().unwrap().to_owned();
+      assert!(dir.file_name().unwrap().to_string_lossy().starts_with(LAUNCHER_PREFIX));
+      assert_eq!(std::fs::metadata(&dir).unwrap().permissions().mode() & 0o777, 0o700);
+      assert_eq!(std::fs::metadata(dir.join("prompt.md")).unwrap().permissions().mode() & 0o777, 0o600);
+      assert_eq!(std::fs::metadata(&script).unwrap().permissions().mode() & 0o777, 0o700);
+      let text = std::fs::read_to_string(&script).unwrap();
+      assert!(!text.contains("whoami") && !text.contains("pwned") && !text.contains("Plan") && !text.contains("milk"));
+      assert!(std::process::Command::new("/bin/sh").arg(&script).current_dir(&root).status().unwrap().success(), "{prompt}");
+      assert_eq!(std::fs::read_to_string(root.join("prompt")).unwrap(), prompt.trim_end_matches('\n'));
+      assert_eq!(PathBuf::from(std::fs::read_to_string(root.join("where")).unwrap().trim()).canonicalize().unwrap(), project);
+      assert!(!dir.exists()); // the folder is gone once Claude Code has the prompt
+      std::fs::remove_file(root.join("prompt")).unwrap();
+    }
     assert!(!root.join("pwned").exists() && !project.join("pwned").exists());
     std::fs::remove_dir_all(root).unwrap();
   }

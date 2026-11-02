@@ -35,7 +35,7 @@ export function General(_: PageProps) {
     </Section>
     <Section title="Reset">
       <TileGroup>
-        <Tile title={resetting ? 'Reset all settings?' : 'Reset all settings'} detail="Every setting goes back to how it was at first launch. Your notes and the speech model stay.">
+        <Tile title={resetting ? 'Reset all settings?' : 'Reset all settings'} detail="Every setting goes back to how it was at first launch. Your notes, the speech model and your Claude key stay.">
           {resetting
             ? <><Button variant="quiet" onClick={() => setResetting(false)}>Cancel</Button>
               <Button variant="danger" onClick={() => { setResetting(false); run(resetSettings(), 'Couldn’t reset settings'); }}>Reset</Button></>

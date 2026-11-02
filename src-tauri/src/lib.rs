@@ -321,7 +321,7 @@ pub fn run() {
       status, set_enabled, set_input, set_open_at_login, request, layout, meeting, open_settings, paste_last,
       notes::save_note, notes::show_notes, settings::get_settings, settings::update_settings, settings::reset_settings,
       ai::claude_save_key, ai::claude_test, ai::claude_remove_key, ai::claude_open_console, ai::claude_insert, ai::claude_dismiss,
-      ai::claude_code_find, ai::send_to_claude_code,
+      ai::claude_code_find, ai::claude_code_set, ai::send_to_claude_code,
     ])
     .setup(|app| {
       app.set_activation_policy(ActivationPolicy::Accessory); // a menu bar app: no Dock icon

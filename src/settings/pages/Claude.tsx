@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { invoke } from '../../bridge';
 import { folderPath, tilde, useStatus, type ClaudeModel, type CommandKey, type DictateKey, type PageProps, type Settings } from '../../store';
 import { Button, Icon, PageHeader, Section, Segmented, TextField, Tile, TileGroup, Toggle } from '../../ui';
@@ -23,13 +23,26 @@ export function Claude({ settings, update }: PageProps) {
   const [status] = useStatus();
   const [problem, setProblem] = useState<string | null>(null);
   const [finding, setFinding] = useState(false);
+  const [refused, setRefused] = useState(0); // a refused path goes back to the saved one in the field
+  const refocus = useRef(false);
+  useEffect(() => {
+    if (refocus.current) document.querySelector<HTMLInputElement>('input[aria-label="Claude Code path"]')?.focus();
+    refocus.current = false;
+  }, [refused]);
   const path = (key: 'claudeCode' | 'projectFolder') => (typed: string) => {
     const value = folderPath(typed, status?.home);
     if (value === undefined) { setProblem(key === 'claudeCode' ? 'Use a full path, like ~/.local/bin/claude.' : 'Use a full path, like ~/Code/project.'); return; }
     setProblem(null);
-    void update({ claude: { [key]: value } });
+    // Claude Code's path is kept only once the app has checked a program is there.
+    if (key === 'claudeCode') void invoke('claude_code_set', { path: value }).catch(error => {
+      setProblem(message(error, 'Couldn’t keep that path.'));
+      refocus.current = document.activeElement?.getAttribute('aria-label') === 'Claude Code path'; // Return, not a click elsewhere
+      setRefused(n => n + 1);
+    });
+    else void update({ claude: { projectFolder: value } });
   };
   const find = () => {
+    if (finding) return;
     setFinding(true); setProblem(null);
     void invoke<string | null>('claude_code_find').then(found => {
       if (!found) setProblem('Claude Code isn’t installed on this Mac. Install it, then choose Find again.');
@@ -57,8 +70,8 @@ export function Claude({ settings, update }: PageProps) {
     <Section title="Claude Code" note={problem ?? 'Send to Claude Code, on a saved note, opens Terminal in your project and starts Claude Code with the note as its first message.'}>
       <TileGroup>
         <Tile title="Claude Code" detail={claude.claudeCode ? 'Found on this Mac.' : 'Not found yet. It is looked for each time the app opens.'}>
-          <TextField label="Claude Code path" monospace value={tilde(claude.claudeCode ?? '', status?.home)} placeholder="~/.local/bin/claude" onCommit={path('claudeCode')} />
-          <Button disabled={finding} onClick={find}>{finding ? 'Finding…' : 'Find'}</Button>
+          <TextField key={refused} label="Claude Code path" monospace value={tilde(claude.claudeCode ?? '', status?.home)} placeholder="~/.local/bin/claude" onCommit={path('claudeCode')} />
+          <Button aria-busy={finding} onClick={find}>{finding ? 'Finding…' : 'Find'}</Button>
         </Tile>
         <Tile title="Project folder" detail={claude.projectFolder ? 'Where Claude Code starts.' : 'Empty: you choose a folder each time.'}>
           <TextField label="Project folder" monospace value={tilde(claude.projectFolder ?? '', status?.home)} placeholder="~/Code/project" onCommit={path('projectFolder')} />
@@ -68,37 +81,52 @@ export function Claude({ settings, update }: PageProps) {
   </>;
 }
 
-/// The key: pasted once, tested, then shown only as saved, with Test and Remove.
+/// The key: pasted once, tested, then shown only as saved, with Test and Remove. Focus never falls back to
+/// the top of the page: it stays in the field while a key is tested, and moves with each step.
 function Connection({ connected, model }: { connected: boolean; model: ClaudeModel }) {
+  const id = useId();
   const [key, setKey] = useState('');
   const [busy, setBusy] = useState<'connect' | 'test' | null>(null);
   const [removing, setRemoving] = useState(false);
   const [note, setNote] = useState<{ text: string; error?: boolean } | null>(null);
+  const focusNext = useRef<string | null>(null);
+  const focus = (what: 'key' | 'test' | 'remove' | 'cancel') => { focusNext.current = `${id}-${what}`; };
+  useEffect(() => {
+    // Kept until its target is drawn: a connect or remove shows its new state once the settings arrive.
+    const target = focusNext.current && document.getElementById(focusNext.current);
+    if (!target) return;
+    target.focus();
+    focusNext.current = null;
+  });
   const connect = (event: FormEvent) => {
     event.preventDefault();
     if (!key.trim() || busy) return;
     setBusy('connect'); setNote(null);
-    void invoke('claude_save_key', { key }).then(() => { setKey(''); setNote({ text: 'Connected. Your key is saved in your Keychain.' }); },
-      error => setNote({ text: message(error, 'Couldn’t connect.'), error: true })).finally(() => setBusy(null));
+    void invoke('claude_save_key', { key }).then(() => { setKey(''); setNote({ text: 'Connected. Your key is saved in your Keychain.' }); focus('test'); },
+      error => { setNote({ text: message(error, 'Couldn’t connect.'), error: true }); focus('key'); }).finally(() => setBusy(null));
   };
   const test = () => {
+    if (busy) return;
     setBusy('test'); setNote(null);
     void invoke<number>('claude_test').then(ms => setNote({ text: `Working. ${NAME[model]} answered in ${seconds(ms)}.` }),
       error => setNote({ text: message(error, 'The test didn’t go through.'), error: true })).finally(() => setBusy(null));
   };
+  const confirm = () => { setRemoving(true); setNote(null); focus('cancel'); };
+  const cancel = () => { setRemoving(false); focus('remove'); };
   const remove = () => {
-    setRemoving(false); setNote(null);
-    void invoke('claude_remove_key').catch(error => setNote({ text: message(error, 'Couldn’t remove the key.'), error: true }));
+    setRemoving(false); setNote(null); focus('key'); // the field appears with the settings, maybe before this answers
+    void invoke('claude_remove_key').catch(error => { setNote({ text: message(error, 'Couldn’t remove the key.'), error: true }); focus('remove'); });
   };
+  const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.preventDefault(); cancel(); } };
   const said = note && <span role={note.error ? 'alert' : 'status'} style={note.error ? { color: 'var(--danger)' } : undefined}>{note.text}</span>;
 
   if (!connected) return <Section title="Connection" note={said ?? 'Claude sees text only, never your voice. Nothing is sent until you connect.'}>
     <TileGroup>
-      <Tile title="Anthropic API key" detail="Paste a key from the Anthropic Console. It is tested with a tiny request, then saved in your Keychain." stack>
+      <Tile title="Anthropic API key" detail="Paste a key from the Anthropic Console. It is tested with a tiny request to the model below, then saved in your Keychain." stack>
         <form className="pair" onSubmit={connect}>
-          <input className="ui-field mono" type="password" value={key} aria-label="Anthropic API key" placeholder="sk-ant-…" autoComplete="off" spellCheck={false}
-            disabled={!!busy} onChange={event => setKey(event.target.value)} />
-          <Button type="submit" variant="primary" disabled={!key.trim() || !!busy}>{busy ? 'Testing…' : 'Connect'}</Button>
+          <input id={`${id}-key`} className="ui-field mono" type="password" value={key} aria-label="Anthropic API key" placeholder="sk-ant-…" autoComplete="off" spellCheck={false}
+            readOnly={!!busy} aria-busy={!!busy} onChange={event => setKey(event.target.value)} />
+          <Button type="submit" variant="primary" disabled={!key.trim()} aria-busy={!!busy}>{busy ? 'Testing…' : 'Connect'}</Button>
         </form>
       </Tile>
       <Tile title="No key yet?" detail="Create one in the Anthropic Console. Usage is billed to your Anthropic account.">
@@ -111,10 +139,10 @@ function Connection({ connected, model }: { connected: boolean; model: ClaudeMod
     <TileGroup>
       <Tile title={removing ? 'Remove the key?' : 'Anthropic API key'} detail={removing ? 'Claude turns off until you paste a key again.' : 'Saved in your Keychain.'}>
         {removing
-          ? <><Button variant="quiet" onClick={() => setRemoving(false)}>Cancel</Button><Button variant="danger" onClick={remove}>Remove</Button></>
+          ? <><Button id={`${id}-cancel`} variant="quiet" onClick={cancel} onKeyDown={escape}>Cancel</Button><Button variant="danger" onClick={remove} onKeyDown={escape}>Remove</Button></>
           : <><span className="state" data-on><Icon name="check" size={14} />Saved</span>
-            <Button disabled={!!busy} onClick={test}>{busy === 'test' ? 'Testing…' : 'Test'}</Button>
-            <Button variant="danger" disabled={!!busy} onClick={() => { setRemoving(true); setNote(null); }}>Remove…</Button></>}
+            <Button id={`${id}-test`} aria-busy={busy === 'test'} onClick={test}>{busy === 'test' ? 'Testing…' : 'Test'}</Button>
+            <Button id={`${id}-remove`} variant="danger" disabled={busy === 'test'} onClick={confirm}>Remove…</Button></>}
       </Tile>
     </TileGroup>
   </Section>;
@@ -122,11 +150,13 @@ function Connection({ connected, model }: { connected: boolean; model: ClaudeMod
 
 /// What goes to Anthropic, feature by feature, as the settings stand now.
 function Seen({ settings }: { settings: Settings }) {
-  const { claude, apps, notes, meetings } = settings;
+  const { claude, apps, notes, meetings, shortcuts } = settings;
   const polished = apps.styles.filter(app => app.polish && app.style !== 'raw').length;
+  const commands = claude.commands && shortcuts.command !== 'off';
   const rows: { title: string; detail: string; on: boolean; state: string; route?: string; place?: string }[] = [
     { title: 'Polish', detail: 'What you dictate, in apps where polish is on, to tidy it.', on: polished > 0, state: polished ? `In ${polished} ${polished === 1 ? 'app' : 'apps'}` : 'Off', route: 'apps', place: 'App styles' },
-    { title: 'Commands', detail: 'What you say with the command key, and the text you selected.', on: claude.commands, state: claude.commands ? 'On' : 'Off' },
+    { title: 'Commands', detail: 'What you say with the command key, and the text you selected.', on: commands, state: commands ? 'On' : 'Off',
+      ...(shortcuts.command === 'off' && { route: 'shortcuts', place: 'Shortcuts' }) },
     { title: 'Notes', detail: 'A saved note’s words, for its title and action items.', on: notes.claudeTitle || notes.claudeActions, state: notes.claudeTitle || notes.claudeActions ? 'On' : 'Off', route: 'notes', place: 'Notes' },
     { title: 'Meetings', detail: 'The transcript, for a summary, decisions and action items.', on: meetings.summarize, state: meetings.summarize ? 'On' : 'Off', route: 'meetings', place: 'Meetings' },
   ];

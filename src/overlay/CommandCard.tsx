@@ -36,9 +36,11 @@ async function copyText(text: string) {
 export function CommandCard() {
   const [command, setCommand] = useState<Command | null>(PREVIEW ? SAMPLES[PREVIEW] ?? null : null);
   const [copied, setCopied] = useState(false);
+  const [inserting, setInserting] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null); // the answer stays, with what went wrong
   useEffect(() => listen<Command>('dictate-command', next => {
     if (next.phase === 'done') setCommand(current => current?.request === next.request ? null : current);
-    else { setCommand(next); setCopied(false); }
+    else { setCommand(next); setCopied(false); setProblem(null); }
   }), []);
   useEffect(() => { // an error says its piece and goes
     if (command?.phase !== 'error' || PREVIEW) return;
@@ -67,9 +69,14 @@ export function CommandCard() {
   }
 
   const text = command.text ?? '';
-  const insert = () => void invoke('claude_insert', { request: command.request, text }).then(() => setCommand(null),
-    error => setCommand({ ...command, phase: 'error', text: failed(error, 'Couldn’t insert the answer.') }));
-  const copy = () => void copyText(text).then(() => setCopied(true), () => setCommand({ ...command, phase: 'error', text: 'Couldn’t copy the answer.' }));
+  // Insert brings back the app the command was spoken in and types there, so the card waits for it.
+  const insert = () => {
+    if (inserting) return;
+    setInserting(true); setProblem(null); setCopied(false);
+    void invoke('claude_insert', { request: command.request, text }).then(() => setCommand(null),
+      error => setProblem(failed(error, 'Couldn’t insert the answer.'))).finally(() => setInserting(false));
+  };
+  const copy = () => { setProblem(null); void copyText(text).then(() => setCopied(true), () => setProblem('Couldn’t copy the answer.')); };
   const keys = (event: KeyboardEvent) => {
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); insert(); } else escape(event);
   };
@@ -78,10 +85,10 @@ export function CommandCard() {
     {command.instruction && <p className="claude-asked">{command.instruction}</p>}
     <div className="claude-answer" tabIndex={0} aria-label="Answer">{text}</div>
     <footer className="actions">
-      <span className="ask" role="status">{copied ? 'Copied' : ''}</span>
+      <span className="ask" role={problem ? 'alert' : 'status'} data-error={problem ? true : undefined}>{problem ?? (copied ? 'Copied' : '')}</span>
       <button type="button" className="btn" onClick={close}>Close</button>
       <button type="button" className="btn" onClick={copy}>Copy</button>
-      <button type="button" className="btn primary" title="Type it where your cursor is (⌘↩)" onClick={insert}>Insert</button>
+      <button type="button" className="btn primary" title="Type it in the app you asked in (⌘↩)" aria-busy={inserting} onClick={insert}>{inserting ? 'Inserting…' : 'Insert'}</button>
     </footer>
   </article>;
 }
