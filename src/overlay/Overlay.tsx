@@ -6,7 +6,7 @@ import { CommandCard, SendToClaudeCode } from './CommandCard';
 import { Dock } from './Dock';
 import { HandsFree } from './HandsFree';
 import { Learned } from './Learned';
-import { MeetingPill } from './MeetingPill';
+import { MeetingPill, useMeetingState } from './MeetingPill';
 import { Menu } from './Menu';
 import { NoteCard, type Draft } from './NoteCard';
 import { PREVIEW, PREVIEW_EDGE, SAMPLE, SETUP } from './preview';
@@ -43,6 +43,7 @@ export function Overlay() {
   const [hover, setHover] = useState(PREVIEW === 'hover' || PREVIEW === 'menu' || PREVIEW === 'mics');
   const [menu, setMenu] = useState(PREVIEW === 'menu' || PREVIEW === 'mics');
   const [mics, setMics] = useState(PREVIEW === 'mics');
+  const [meetings, lookMeetings] = useMeetingState();
   const [hidden, setHidden] = useState(false);
   // The edge from before settings kept it, used until it has moved over.
   const [legacyEdge, setLegacyEdge] = useState(() => PREVIEW ? null : stored<Edge | null>(EDGE, null));
@@ -219,7 +220,9 @@ export function Overlay() {
   const openSettings = useCallback(() => { setMenu(false); void invoke('open_settings', {}).catch(() => setToast('Couldn’t open Settings')); }, []);
   const startMeeting = () => {
     setMenu(false);
-    void invoke<boolean>('meeting', { action: 'start' }).then(started => { if (!started) setToast('Couldn’t start the meeting'); }).catch(() => setToast('Couldn’t start the meeting'));
+    const action = meetings?.recording ? 'stop' : 'start';
+    void invoke<boolean>('meeting', { action }).then(changed => { if (!changed && action === 'start') setToast('Couldn’t start the meeting'); })
+      .catch((error: unknown) => setToast(typeof error === 'string' ? error : 'Couldn’t start the meeting'));
   };
   const hideForAnHour = () => { setMenu(false); setHidden(true); setTimeout(() => setHidden(false), 60 * 60 * 1000); };
   const pickMic = (id: string | null) => { setMenu(false); void invoke('set_input', { id }).then(refresh).catch(() => setToast('Couldn’t change the microphone')); };
@@ -267,8 +270,8 @@ export function Overlay() {
       {toast && <p className="glass toast" data-glass role="status">{toast}</p>}
       <Dock mode={mode} dots={dots} label={pending ? 'Open the note' : 'TabTasker Dictate'} hint={settings.appearance.hint} quiet={quiet} level={level} typing={dictating}
         onHover={setHover} onGrab={grab} onDots={clickDots} onNote={takeNote} onSetup={openSetup} onOrb={() => { if (noting) takeNote(); }}
-        onMenu={() => { if (phase === 'idle') { setMenu(true); refresh(); } }}
-        menu={menu && <Menu status={status} mics={mics} onMics={setMics} onNote={() => { setMenu(false); takeNote(); }} onMeeting={startMeeting}
+        onMenu={() => { if (phase === 'idle') { setMenu(true); refresh(); lookMeetings(); } }}
+        menu={menu && <Menu status={status} mics={mics} meeting={!!meetings?.recording} onMics={setMics} onNote={() => { setMenu(false); takeNote(); }} onMeeting={startMeeting}
           onShowNotes={() => { setMenu(false); void invoke('show_notes', {}).catch(() => {}); }} onPickMic={pickMic} onLogin={login}
           onHide={hideForAnHour} onSettings={openSettings} onSetup={openSetup} />} />
     </div>
