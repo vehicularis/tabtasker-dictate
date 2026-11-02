@@ -38,6 +38,16 @@ function compose(notes: Notes, title: string, body: string, actions: string | nu
 export function register(mock: Mock) {
   const folder = () => mock.settings().notes.folder ?? mock.status.notes;
   let picked = 0;
+  // The Library: a few saved notes and meetings, as the folders would hold them. `?library=empty` has none.
+  const hour = 3_600_000, now = Date.now();
+  const library = new URLSearchParams(location.search).get('library') === 'empty' ? [] : [
+    { path: `${folder()}/Meetings/2026-11-02 Design review.md`, title: 'Design review', kind: 'meeting', modifiedMs: now - hour, words: 1240, excerpt: 'You 00:00:04 Right, so Thursday at 10 works for everyone? Maria 00:00:09 Yes, I have the big room booked. We should start with the floor plan and then…' },
+    { path: `${folder()}/2026-11-02 Call the venue.md`, title: 'Call the venue about Thursday', kind: 'note', modifiedMs: now - 3 * hour, words: 42, excerpt: 'Call the venue about Thursday and ask for the bigger room. Then send Maria the new floor plan before lunch. Call them Send the plan' },
+    { path: `${folder()}/2026-11-01 Ideas for the launch.md`, title: 'Ideas for the launch', kind: 'note', modifiedMs: now - 26 * hour, words: 310, excerpt: 'A short video first, then the three screenshots, then the pricing. Ask Sam whether the onboarding emails can go out the same morning.' },
+    { path: `${folder()}/Meetings/2026-10-30 Weekly.md`, title: 'Weekly', kind: 'meeting', modifiedMs: now - 70 * hour, words: 2890, excerpt: 'You 00:00:02 Quick round, then the roadmap. Priya 00:00:15 The board deck has no draft yet…' },
+  ];
+  mock.handle('library_list', () => library);
+  mock.handle('library_open', () => {});
   mock.handle('notes_folder', () => {
     const path = folder();
     return { path, vault: path === VAULT || path.startsWith(`${VAULT}/`) ? 'Second Brain' : null };

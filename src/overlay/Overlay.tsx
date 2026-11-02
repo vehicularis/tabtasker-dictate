@@ -271,10 +271,11 @@ export function Overlay() {
       <HandsFree />
       <Learned />
       {toast && <p className="glass toast" data-glass role="status">{toast}</p>}
-      <Dock mode={mode} dots={dots} label={pending ? 'Open the note' : 'TabTasker Dictate'} hint={settings.appearance.hint} quiet={quiet} level={level} typing={dictating}
+      <Dock mode={mode} dots={dots} label={pending ? 'Open the note' : 'TabTasker Dictate'} hint={settings.appearance.hint} quiet={quiet} level={level} typing={dictating} words={live ?? ''}
         onHover={setHover} onGrab={grab} onDots={clickDots} onNote={takeNote} onSetup={() => openSetup('quick')} onOrb={() => { if (noting) takeNote(); }}
         onMenu={() => { if (phase === 'idle') { setMenu(true); refresh(); lookMeetings(); } }}
         menu={menu && <Menu status={status} mics={mics} meeting={!!meetings?.recording} onMics={setMics} onNote={() => { setMenu(false); takeNote(); }} onMeeting={startMeeting}
+          onLibrary={() => { setMenu(false); void invoke('open_settings', { route: 'library' }).catch(() => setToast('Couldn’t open the Library')); }}
           onShowNotes={() => { setMenu(false); void invoke('show_notes', {}).catch(() => {}); }} onPasteLast={() => { setMenu(false); void invoke('paste_last').catch(() => {}); }} onPickMic={pickMic} onLogin={login}
           onHide={hideForAnHour} onSettings={openSettings} onSetup={() => openSetup('steps')} />} />
     </div>

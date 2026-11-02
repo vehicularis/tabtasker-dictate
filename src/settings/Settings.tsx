@@ -10,6 +10,7 @@ import { Claude } from './pages/Claude';
 import { Dictation } from './pages/Dictation';
 import { General } from './pages/General';
 import { History } from './pages/History';
+import { Library } from './pages/Library';
 import { Meetings } from './pages/Meetings';
 import { Notes } from './pages/Notes';
 import { Shortcuts } from './pages/Shortcuts';
@@ -28,6 +29,7 @@ const GROUPS: { name: string; pages: Page[] }[] = [
     { route: 'apps', title: 'App styles', icon: 'apps', Page: AppStyles, keywords: 'style casual formal code raw polish apps' },
   ] },
   { name: 'Notes & meetings', pages: [
+    { route: 'library', title: 'Library', icon: 'library', Page: Library, keywords: 'library all notes meetings files saved transcripts open finder search browse' },
     { route: 'notes', title: 'Notes', icon: 'note', Page: Notes, keywords: 'folder file name template front matter yaml daily note tags obsidian title action items' },
     { route: 'meetings', title: 'Meetings', icon: 'meeting', Page: Meetings, keywords: 'record system audio summary decisions speakers labels folder' },
   ] },

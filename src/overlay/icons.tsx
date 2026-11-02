@@ -40,6 +40,7 @@ export const Logo = ({ size = 18 }: { size?: number }) => {
   </svg>;
 };
 export const NoteIcon = () => <Icon name="note" size={17} />;
+export const LibraryIcon = () => <Icon name="library" size={17} />;
 export const MicIcon = () => <Icon name="mic" size={17} />;
 export const FolderIcon = () => <Icon name="folder" size={17} />;
 export const PasteIcon = () => <Icon name="copy" size={17} />;

@@ -105,6 +105,6 @@ export function SendToClaudeCode({ path, onSent, onError }: { path: string; onSe
       error => onError(failed(error, 'Couldn’t open Claude Code'))).finally(() => setSending(false));
   };
   return <button type="button" className="glass claude-send" data-glass data-hit disabled={sending} onClick={send}>
-    <Icon name="claude" size={15} />{sending ? 'Opening Claude Code…' : 'Send to Claude Code'}
+    <Icon name="claudeCode" size={15} />{sending ? 'Opening Claude Code…' : 'Send to Claude Code'}
   </button>;
 }

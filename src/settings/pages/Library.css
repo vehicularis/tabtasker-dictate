@@ -1,0 +1,20 @@
+/* The Library: a search and a filter, then the files by day, each a raised row with its kind, a taste of it and its actions. */
+.library-bar { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; }
+.library-search { display: flex; flex: 1; align-items: center; gap: 6px; width: auto; min-width: 0; color: var(--ink-3); }
+.library-search input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: 0; font: inherit; color: var(--ink); background: none; }
+.library-search input::placeholder { color: var(--ink-3); }
+.library-search input::-webkit-search-cancel-button { display: none; }
+.library-day { margin: 18px 4px 8px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.library-day:first-of-type { margin-top: 12px; }
+.library-item { display: flex; align-items: flex-start; gap: 12px; padding: 11px 12px 11px 14px; border-radius: var(--radius-row); background: var(--card); box-shadow: var(--elev-raised); }
+.library-kind { display: grid; flex: none; place-items: center; width: 30px; height: 30px; margin-top: 1px; border-radius: 9px; color: var(--ink-2); background: var(--surface-2); box-shadow: var(--elev-well); }
+.library-kind[data-kind='meeting'] { color: var(--accent-ink); background: var(--accent-fill); }
+.library-what { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; }
+.library-title { padding: 0; border: 0; background: none; font: 500 14px/1.4 var(--font); color: var(--ink); text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+.library-title:hover { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); }
+.library-excerpt { display: -webkit-box; margin: 0; overflow: hidden; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: 13px; line-height: 1.4; color: var(--ink-2); overflow-wrap: anywhere; }
+.library-meta { margin: 2px 0 0; font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.library-actions { display: flex; flex: none; align-items: center; gap: 4px; margin-top: 1px; }
+.library-actions .ui-button[aria-label] { color: var(--ink-3); }
+.library-item:hover .library-actions .ui-button[aria-label], .library-actions .ui-button[aria-label]:focus-visible { color: var(--ink-2); }
+.library-actions .ui-button[aria-label]:hover { color: var(--ink); }

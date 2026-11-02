@@ -34,6 +34,8 @@ export type Settings = {
 // The events pages hear, besides the native voice code's own, with what each carries.
 export type HoldMode = 'dictate' | 'note' | 'command' | 'handsfree';
 export type HistoryEntry = { atMs: number; mode: HoldMode; bundleId: string; appName: string; words: number; seconds: number; text: string };
+/// A note or meeting file as the Library lists it (notes.rs LibraryItem).
+export type LibraryItem = { path: string; title: string; kind: 'note' | 'meeting'; modifiedMs: number; words: number; excerpt: string };
 export type Events = {
   'dictate-settings': Settings;
   'dictate-command': { request: string; phase: 'thinking' | 'answer' | 'done' | 'error'; text?: string; instruction?: string };

@@ -1,13 +1,13 @@
 import { useEffect, useRef, type KeyboardEvent } from 'react';
 import type { Status } from '../store';
-import { AlarmIcon, Caret, Check, FolderIcon, GearIcon, MeetingIcon, MicIcon, NoteIcon, PasteIcon, SetupIcon } from './icons';
+import { AlarmIcon, Caret, Check, FolderIcon, GearIcon, LibraryIcon, MeetingIcon, MicIcon, NoteIcon, PasteIcon, SetupIcon } from './icons';
 
 const itemsOf = (menu: Element) => [...menu.querySelectorAll<HTMLElement>(':scope > [role^="menuitem"], :scope > .sub > [role^="menuitem"]')];
 
 // The dots' right-click menu. It works from the keyboard like a Mac menu: arrows move, → and ← open and
 // close the microphones, Escape closes a level.
-export function Menu({ status, mics, meeting, onMics, onNote, onMeeting, onShowNotes, onPasteLast, onPickMic, onLogin, onHide, onSettings, onSetup }: {
-  status: Status | null; mics: boolean; meeting: boolean; onMics: (open: boolean) => void; onNote: () => void; onMeeting: () => void; onShowNotes: () => void; onPasteLast: () => void;
+export function Menu({ status, mics, meeting, onMics, onNote, onMeeting, onLibrary, onShowNotes, onPasteLast, onPickMic, onLogin, onHide, onSettings, onSetup }: {
+  status: Status | null; mics: boolean; meeting: boolean; onMics: (open: boolean) => void; onNote: () => void; onMeeting: () => void; onLibrary: () => void; onShowNotes: () => void; onPasteLast: () => void;
   onPickMic: (id: string | null) => void; onLogin: () => void; onHide: () => void; onSettings: () => void; onSetup: () => void;
 }) {
   const root = useRef<HTMLDivElement>(null);
@@ -38,6 +38,7 @@ export function Menu({ status, mics, meeting, onMics, onNote, onMeeting, onShowN
     }}>
     <button type="button" role="menuitem" tabIndex={-1} onClick={onNote}><NoteIcon />New note</button>
     <button type="button" role="menuitem" tabIndex={-1} onClick={onMeeting}><MeetingIcon />{meeting ? 'Stop meeting' : 'Start meeting'}</button>
+    <button type="button" role="menuitem" tabIndex={-1} onClick={onLibrary}><LibraryIcon />Library…</button>
     <button type="button" role="menuitem" tabIndex={-1} onClick={onShowNotes}><FolderIcon />Show notes in Finder</button>
     <button type="button" role="menuitem" tabIndex={-1} onClick={onPasteLast}><PasteIcon />Paste last transcript</button>
     <i className="rule" role="separator" />

@@ -25,7 +25,7 @@ use tauri::{ActivationPolicy, AppHandle, Emitter, LogicalPosition, Manager, RunE
 const OVERLAY: &str = "overlay";
 const SETTINGS: &str = "settings";
 /// The Settings window's pages, by the hash it opens on.
-const ROUTES: &[&str] = &["general", "shortcuts", "dictation", "vocabulary", "apps", "notes", "meetings", "claude", "agents", "history", "appearance", "about", "setup"];
+const ROUTES: &[&str] = &["general", "shortcuts", "dictation", "vocabulary", "apps", "library", "notes", "meetings", "claude", "agents", "history", "appearance", "about", "setup"];
 static APP: OnceLock<AppHandle> = OnceLock::new();
 /// This launch is the first and opened the full setup, so the overlay keeps its own setup card closed.
 static FIRST_RUN: AtomicBool = AtomicBool::new(false);
@@ -383,7 +383,7 @@ pub fn run() {
   tauri::Builder::default()
     .invoke_handler(tauri::generate_handler![
       status, set_enabled, set_input, set_open_at_login, request, layout, meeting, open_settings, paste_last, play_sound,
-      notes::save_note, notes::show_notes, notes::notes_folder, notes::preview_note, notes::choose_folder, settings::get_settings, settings::update_settings, settings::reset_settings,
+      notes::save_note, notes::show_notes, notes::notes_folder, notes::preview_note, notes::choose_folder, notes::library_list, notes::library_open, settings::get_settings, settings::update_settings, settings::reset_settings,
       speech::speech_models, speech::prepare_model, speech::vocabulary_fit, text::list_apps,
       history::history_list, history::history_stats, history::history_delete, history::history_clear, history::history_type,
       ai::claude_save_key, ai::claude_test, ai::claude_remove_key, ai::claude_open_console, ai::claude_insert, ai::claude_dismiss,

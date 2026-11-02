@@ -5,8 +5,8 @@
   --tint: rgb(255 255 255 / .6); --rim: rgb(255 255 255 / .8); --drop: rgb(0 0 0 / .14);
   --well: rgb(0 0 0 / .05); --well-shadow: rgb(0 0 0 / .1);
   --key: linear-gradient(#ffffff, #f1f1f3); --key-ink: rgb(0 0 0 / .55); --key-edge: rgb(0 0 0 / .14); --key-light: rgb(255 255 255 / .9);
-  /* The orb is the accent: black with white bars in light, white with black bars in dark. */
-  --orb: radial-gradient(circle at 35% 30%, #3a3a3e, #0b0b0c 70%); --orb-ink: #ffffff; --orb-light: rgb(255 255 255 / .2);
+  /* The orb as Business draws it: a smoked disc under glass, the bars and wave in the accent, the cursor in ink. */
+  --orb-body: rgb(250 249 247 / .94); --orb-ink: #1d1d1f; --orb-bars: #2563eb; --orb-wave: #2563eb;
   --wallpaper: radial-gradient(120% 90% at 20% 10%, #dfe7f5, #f3eee8 60%);
 }
 @media (prefers-color-scheme: dark) {
@@ -14,7 +14,7 @@
     --tint: rgb(28 28 30 / .55); --rim: rgb(255 255 255 / .22); --drop: rgb(0 0 0 / .35);
     --well: rgb(0 0 0 / .24); --well-shadow: rgb(0 0 0 / .35);
     --key: linear-gradient(#2d2e31, #232427); --key-ink: rgb(255 255 255 / .6); --key-edge: rgb(0 0 0 / .5); --key-light: rgb(255 255 255 / .08);
-    --orb: radial-gradient(circle at 35% 30%, #ffffff, #dcdcdf 75%); --orb-ink: #000000; --orb-light: rgb(255 255 255 / .9);
+    --orb-body: rgb(22 22 25 / .92); --orb-ink: #f4efe6; --orb-bars: #3b82f6; --orb-wave: #3b82f6;
     --wallpaper: radial-gradient(120% 90% at 20% 10%, #3b4a6b, #161a24 60%), #161a24;
   }
 }
@@ -22,7 +22,7 @@
   --tint: rgb(28 28 30 / .55); --rim: rgb(255 255 255 / .22); --drop: rgb(0 0 0 / .35);
   --well: rgb(0 0 0 / .24); --well-shadow: rgb(0 0 0 / .35);
   --key: linear-gradient(#2d2e31, #232427); --key-ink: rgb(255 255 255 / .6); --key-edge: rgb(0 0 0 / .5); --key-light: rgb(255 255 255 / .08);
-  --orb: radial-gradient(circle at 35% 30%, #ffffff, #dcdcdf 75%); --orb-ink: #000000; --orb-light: rgb(255 255 255 / .9);
+  --orb-body: rgb(22 22 25 / .92); --orb-ink: #f4efe6; --orb-bars: #3b82f6; --orb-wave: #3b82f6;
   --wallpaper: radial-gradient(120% 90% at 20% 10%, #3b4a6b, #161a24 60%), #161a24;
 }
 html, body, #root { height: 100%; margin: 0; background: transparent; overflow: hidden; }
@@ -95,14 +95,14 @@ button { font: inherit; color: inherit; }
 .in-use { margin: 0; padding: 4px 10px 6px 34px; font-size: 12px; color: var(--ink-3); }
 .in-use span { display: block; font-size: 13px; color: var(--ink-2); }
 
-.orb { position: absolute; display: grid; place-items: center; width: 42px; height: 42px; padding: 0; border: 0; border-radius: 50%; background: var(--orb); box-shadow: inset 0 1px 0 var(--orb-light), 0 8px 24px rgb(0 0 0 / .35), 0 0 0 .5px rgb(0 0 0 / .2); opacity: 0; transform: scale(.5); pointer-events: none; transition: opacity .2s, transform .35s var(--spring); cursor: pointer; }
-.layer:is([data-mode='listening'], [data-mode='thinking']) .orb { opacity: 1; transform: none; pointer-events: auto; }
-.layer[data-mode='thinking'] .orb { animation: breathe 1.1s ease-in-out infinite alternate; }
-@keyframes breathe { to { transform: scale(.9); } }
-.bars { display: flex; align-items: center; gap: 2.5px; height: 18px; }
-.bars i { width: 2.6px; height: 18px; border-radius: 2px; background: var(--orb-ink); transform: scaleY(.2); }
-.caret { width: 2px; height: 16px; border-radius: 1px; background: var(--orb-ink); animation: blink 1.06s step-end infinite; }
-@keyframes blink { 50% { opacity: 0; } }
+/* The orb, as Business draws it: a smoked disc (the glass, bars, cursor and wave are drawn on canvases over
+   it by Orb.tsx) that grows from the point where the dots meet and folds back into it. */
+.orb { position: absolute; width: 64px; height: 64px; padding: 0; border: 0; border-radius: 50%; background: radial-gradient(circle closest-side, var(--orb-body) 80%, transparent 81%); filter: drop-shadow(0 8px 20px rgb(0 0 0 / .3)); opacity: 0; transform: scale(.09); pointer-events: none; transition: transform .3s ease-in, opacity .1s .2s; cursor: pointer; }
+.orb-glass, .orb canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+.layer:is([data-mode='listening'], [data-mode='thinking']) .orb { opacity: 1; transform: none; pointer-events: auto; transition: opacity .1s .1s, transform .55s var(--spring) .1s; }
+/* Transcribing: the orb breathes. */
+.layer[data-mode='thinking'] .orb { animation: breathe 1.8s ease-in-out infinite; }
+@keyframes breathe { 50% { scale: calc(var(--scale) * 1.06); } }
 
 /* ---------- the bubble, the saved note and the toast ---------- */
 .said { box-sizing: border-box; max-width: 380px; margin: 0; padding: 7px 12px 8px; border: 0; border-radius: 14px; font-size: 14px; text-align: left; animation: pop .25s var(--ease) both; }
@@ -150,6 +150,7 @@ button { font: inherit; color: inherit; }
 .switch[aria-checked='true'] { background: var(--accent); }
 .switch[aria-checked='true'] .knob { transform: translateX(16px); }
 .quick .ask { font-size: 12.5px; line-height: 1.35; color: var(--ink-3); }
+.row-icon { display: grid; flex: none; place-items: center; width: 30px; height: 30px; border-radius: 9px; color: var(--ink-2); background: var(--surface); box-shadow: inset 0 1px 2px var(--well-shadow); }
 /* Raised rows, as in Settings. */
 .ways { display: flex; flex-direction: column; gap: 5px; margin: 0; padding: 0; list-style: none; }
 .ways li { display: flex; align-items: center; gap: 12px; min-height: 44px; box-sizing: border-box; padding: 8px 12px; border-radius: 12px; background: var(--surface-2); box-shadow: var(--elev-raised); }

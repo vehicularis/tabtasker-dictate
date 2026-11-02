@@ -2,6 +2,7 @@ import { useState, type CSSProperties, type ReactNode } from 'react';
 import { invoke } from '../bridge';
 import { KEY_NAMES } from '../onboarding/Keyboard';
 import { setupDone, updateSettings, useSettings, type DictateKey, type Settings, type Status } from '../store';
+import { Icon, type IconName } from '../ui/Icon';
 import { Globe, Logo, NoteIcon, X } from './icons';
 
 const GLOBE = { inputSource: 'changes the input source', emoji: 'opens emoji', dictation: 'starts Dictation' };
@@ -62,17 +63,18 @@ function Quick({ settings, name, onClose }: { settings: Settings; name: string; 
   const { dictation, shortcuts, appearance } = settings;
   const all = () => { onClose(); void invoke('open_settings', {}).catch(() => {}); };
   const save = (patch: Parameters<typeof updateSettings>[0]) => { void updateSettings(patch).catch(() => {}); };
-  const rows: { title: string; detail: string; on: boolean; flip: (on: boolean) => void }[] = [
-    { title: 'Live typing', detail: `Words appear as you speak. Off, they arrive when you let go of ${name}.`, on: dictation.liveTyping, flip: liveTyping => save({ dictation: { liveTyping } }) },
-    { title: 'Remove filler words', detail: 'Leaves out um, uh, er, ah and hmm.', on: dictation.removeFillers, flip: removeFillers => save({ dictation: { removeFillers } }) },
-    { title: 'Sounds', detail: 'A cue as listening starts and stops.', on: dictation.sounds, flip: sounds => save({ dictation: { sounds } }) },
-    { title: 'Hands-free', detail: `Double-tap ${name} to keep listening until you tap again.`, on: shortcuts.handsFree, flip: handsFree => save({ shortcuts: { handsFree } }) },
-    { title: 'Hide the dots when idle', detail: `Nothing shows until you hold ${name}.`, on: appearance.idle === 'hidden', flip: hidden => save({ appearance: { idle: hidden ? 'hidden' : 'dots' } }) },
+  const rows: { icon: IconName; title: string; detail: string; on: boolean; flip: (on: boolean) => void }[] = [
+    { icon: 'keyboard', title: 'Live typing', detail: `Words appear as you speak. Off, they arrive when you let go of ${name}.`, on: dictation.liveTyping, flip: liveTyping => save({ dictation: { liveTyping } }) },
+    { icon: 'eraser', title: 'Remove filler words', detail: 'Leaves out um, uh, er, ah and hmm.', on: dictation.removeFillers, flip: removeFillers => save({ dictation: { removeFillers } }) },
+    { icon: 'speaker', title: 'Sounds', detail: 'A cue as listening starts and stops.', on: dictation.sounds, flip: sounds => save({ dictation: { sounds } }) },
+    { icon: 'mic', title: 'Hands-free', detail: `Double-tap ${name} to keep listening until you tap again.`, on: shortcuts.handsFree, flip: handsFree => save({ shortcuts: { handsFree } }) },
+    { icon: 'dots', title: 'Hide the dots when idle', detail: `Nothing shows until you hold ${name}.`, on: appearance.idle === 'hidden', flip: hidden => save({ appearance: { idle: hidden ? 'hidden' : 'dots' } }) },
   ];
   return <article className="glass card setup quick" data-glass data-hit aria-label="Quick settings">
     <header className="head"><Logo size={28} /><strong>Quick settings</strong><button type="button" className="close" aria-label="Close" onClick={onClose}><X /></button></header>
     <ul className="ways">
       {rows.map(row => <li key={row.title}>
+        <span className="row-icon" aria-hidden="true"><Icon name={row.icon} size={17} /></span>
         <span className="what">{row.title}<small>{row.detail}</small></span>
         <button type="button" role="switch" className="switch" aria-checked={row.on} aria-label={row.title} onClick={() => row.flip(!row.on)}><span className="knob" /></button>
       </li>)}
