@@ -320,6 +320,7 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![
       status, set_enabled, set_input, set_open_at_login, request, layout, meeting, open_settings, paste_last,
       notes::save_note, notes::show_notes, settings::get_settings, settings::update_settings, settings::reset_settings,
+      speech::speech_models, speech::prepare_model, speech::vocabulary_fit, text::list_apps,
     ])
     .setup(|app| {
       app.set_activation_policy(ActivationPolicy::Accessory); // a menu bar app: no Dock icon

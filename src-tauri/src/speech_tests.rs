@@ -1,5 +1,14 @@
 use super::*;
 
+/// The engine on the models in `root`, as a launch with Turbo chosen leaves it.
+fn loaded(root: &Path) -> LocalSpeech {
+  let speech = LocalSpeech::new(root.to_owned());
+  speech.enabled.store(true, Ordering::Relaxed);
+  *speech.engine.lock().unwrap() = Some(Engine::load(root, settings::Model::Turbo).unwrap());
+  *speech.vad.lock().unwrap() = Some(load_vad(root).unwrap());
+  speech
+}
+
 #[test]
 fn download_client_initializes_tls_in_a_fresh_process() {
   const PROBE: &str = "TABTASKER_VOICE_CLIENT_TEST";
@@ -32,7 +41,8 @@ fn invalid_and_silent_audio_never_reaches_the_model() {
   assert!(validate_audio(&[]).is_err());
   assert!(validate_audio(&vec![0.0; 16000]).is_err());
   assert!(validate_audio(&vec![f32::NAN; 16000]).is_err());
-  assert!(validate_audio(&vec![0.5; MAX_SAMPLES + 1]).is_err());
+  assert!(validate_audio(&vec![0.5; HANDS_FREE_SAMPLES + 1]).is_err());
+  assert!(validate_audio(&vec![0.25; HANDS_FREE_SAMPLES]).is_ok()); // a hands-free session reaches ten minutes
   assert!(validate_audio(&vec![0.25; 16000]).is_ok());
 }
 
@@ -56,10 +66,8 @@ fn cancellation_and_deadline_abort_local_inference() {
 
 #[test]
 fn a_meeting_piece_gives_the_engine_up_to_a_release_pause_and_quit() {
-  let speech: &'static LocalSpeech = Box::leak(Box::new(LocalSpeech {
-    root: PathBuf::new(), enabled: AtomicBool::new(true), preparing: Mutex::default(), job: Mutex::default(), engine: Mutex::default(),
-    vad: Mutex::default(), draft: Mutex::default(), hold: Mutex::default(), note: Mutex::default(), releases: AtomicUsize::new(0),
-  }));
+  let speech: &'static LocalSpeech = Box::leak(Box::new(LocalSpeech::new(PathBuf::new())));
+  speech.enabled.store(true, Ordering::Relaxed);
   let mut abort = Abort { cancelled: Arc::default(), started: Instant::now(), piece: Some(speech) };
   let stops = |abort: &mut Abort| unsafe { should_abort((abort as *mut Abort).cast()) };
   assert!(!stops(&mut abort));
@@ -88,14 +96,11 @@ async fn cancellation_interrupts_a_stalled_download() {
 #[ignore = "Downloads are explicit; set TABTASKER_SPEECH_FIXTURE_DIR to verified models and 16 kHz mono fixture.f32"]
 fn real_local_model_transcribes_fixture_and_rejects_silence() {
   let root = PathBuf::from(std::env::var("TABTASKER_SPEECH_FIXTURE_DIR").unwrap());
-  for model in MODELS { verify_model(&root.join(model.name), model).unwrap(); }
+  for model in WITH_TURBO { verify_model(&root.join(model.name), model).unwrap(); }
   let bytes = std::fs::read(root.join("fixture.f32")).unwrap();
   let pcm: Vec<f32> = bytes.as_chunks::<4>().0.iter().map(|b| f32::from_le_bytes(*b)).collect();
   let started = Instant::now();
-  let speech = LocalSpeech {
-    root: root.clone(), enabled: AtomicBool::new(true), preparing: Mutex::default(), job: Mutex::default(),
-    engine: Mutex::new(Some(Engine::load(&root).unwrap())), vad: Mutex::new(Some(load_vad(&root).unwrap())), draft: Mutex::default(), hold: Mutex::default(), note: Mutex::default(), releases: AtomicUsize::new(0),
-  };
+  let speech = loaded(&root);
   let loaded = started.elapsed();
   let flag = Arc::new(AtomicBool::new(false));
   let result = speech.finish("first", &pcm, flag.clone()).unwrap();
@@ -157,10 +162,7 @@ fn a_long_note_is_transcribed_while_it_is_said_and_finishes_at_once() {
   let mut stream = Vec::new();
   for _ in 0..2 { for (name, _) in &english { stream.extend(wav(name)); stream.extend(vec![0.0f32; 12_800]); } }
   assert!(stream.len() > 90 * 16000, "{} s", stream.len() / 16000);
-  let speech = LocalSpeech {
-    root: root.clone(), enabled: AtomicBool::new(true), preparing: Mutex::default(), job: Mutex::default(),
-    engine: Mutex::new(Some(Engine::load(&root).unwrap())), vad: Mutex::new(Some(load_vad(&root).unwrap())), draft: Mutex::default(), hold: Mutex::default(), note: Mutex::default(), releases: AtomicUsize::new(0),
-  };
+  let speech = loaded(&root);
   let go = || Arc::new(AtomicBool::new(false));
   speech.note("note", |_| ()); // the first step begins it
   // What the Mac does: every half second, the audio it still holds; it drops what is transcribed.
@@ -189,4 +191,47 @@ fn a_long_note_is_transcribed_while_it_is_said_and_finishes_at_once() {
   assert!(speech.note_step(speech.engine.lock().unwrap().as_mut().unwrap(), "note", 0, &stream[..16000 * 9], go()).is_err());
   speech.forget_note("note");
   assert!(speech.note_step(speech.engine.lock().unwrap().as_mut().unwrap(), "next", 0, &stream[..16000], go()).is_ok());
+}
+
+#[test]
+fn each_model_choice_downloads_its_whisper_and_the_speech_detection() {
+  for (choice, name) in [(settings::Model::Turbo, "ggml-acft-large-v3-turbo-q8_0.bin"), (settings::Model::Small, "ggml-small-q8_0.bin")] {
+    let names: Vec<&str> = files(choice).iter().map(|model| model.name).collect();
+    assert_eq!(names, [name, SILERO.name]);
+    for model in files(choice) {
+      assert!(model.url.starts_with("https://") && model.url.ends_with(model.name), "{}", model.url);
+      assert_eq!(model.sha256.len(), 64);
+      assert!(model.sha256.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()));
+    }
+  }
+  // whisper.cpp's own small model, as published.
+  assert_eq!((SMALL.bytes, SMALL.sha256), (264464607, "49c8fb02b65e6049d5fa6c04f81f53b867b5ec9540406812c643f177317f779f"));
+  assert!(SMALL.url.starts_with("https://huggingface.co/ggerganov/whisper.cpp/resolve/main/"));
+}
+
+#[test]
+fn the_vocabulary_prompt_is_newest_first_and_stays_under_its_budget() {
+  let words: Vec<String> = ["Kubernetes", " ", "TabTasker", "İstanbul", "Can Turgut", "a\0b", "Vehicularis"].map(String::from).to_vec();
+  assert_eq!(prompt_text(&words, |_| true), (" Kubernetes, TabTasker, İstanbul, Can Turgut, Vehicularis".into(), 5));
+  // A budget keeps the newest words that fit, and never a part of one.
+  assert_eq!(prompt_text(&words, |text| text.chars().count() <= 40), (" Kubernetes, TabTasker, İstanbul".into(), 3));
+  assert_eq!(prompt_text(&words, |text| text.len() < 5), (String::new(), 0));
+  assert_eq!(prompt_text(&[], |_| true), (String::new(), 0));
+}
+
+#[test]
+fn a_pinned_language_skips_detection_and_auto_keeps_it() {
+  assert_eq!(pinned("auto"), None);
+  assert_eq!(pinned("tr"), whisper_rs::get_lang_id("tr"));
+  assert!(pinned("tr").is_some());
+  assert_eq!(pinned("xx"), None);
+  // With no hold and the default settings, the language is whatever the passes hear.
+  assert_eq!(language("nobody"), None);
+}
+
+#[test]
+fn small_sees_the_whole_window_and_turbo_only_the_speech() {
+  assert_eq!(encoder_ctx(settings::Model::Turbo, 16000), 178);
+  assert_eq!(encoder_ctx(settings::Model::Small, 16000), 0);
+  assert_eq!(encoder_ctx(settings::Model::Small, MAX_SAMPLES), 0);
 }
