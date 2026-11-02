@@ -283,13 +283,15 @@ fn code_reply(stdout: &[u8]) -> Result<String, Error> {
   let text = value["result"].as_str().unwrap_or_default().trim();
   if value["is_error"] == true || value["subtype"].as_str().is_some_and(|kind| kind.starts_with("error")) {
     let said = text.to_lowercase();
-    log::warn!("claude code: {}", if text.is_empty() { value["subtype"].as_str().unwrap_or("failed") } else { text });
-    return Err(if said.contains("not logged in") || said.contains("/login") || said.contains("authentication") || said.contains("invalid api key") { Error::NotSignedIn }
+    let error = if said.contains("not logged in") || said.contains("/login") || said.contains("authentication") || said.contains("invalid api key") { Error::NotSignedIn }
       else if said.contains("rate limit") || said.contains("usage limit") || said.contains("too many requests") { Error::RateLimited }
       else if said.contains("overloaded") { Error::Busy }
       else if said.contains("too long") || said.contains("too large") || said.contains("prompt is too") { Error::TooLong }
       else if said.contains("refus") { Error::Refused }
-      else { Error::CodeFailed });
+      else { Error::CodeFailed };
+    // The kind only, as for the API: the message can quote the person's words.
+    log::warn!("claude code: {} ({error:?})", value["subtype"].as_str().unwrap_or("failed"));
+    return Err(error);
   }
   match value["stop_reason"].as_str() {
     Some("refusal") => return Err(Error::Refused),
