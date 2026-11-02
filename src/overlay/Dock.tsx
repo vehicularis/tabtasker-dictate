@@ -1,6 +1,10 @@
 import type { PointerEvent as ReactPointerEvent, ReactNode, RefObject } from 'react';
+import { useSettings, type DictateKey } from '../store';
 import { GearIcon, NoteIcon } from './icons';
 import { Orb } from './Orb';
+
+/// The dictate key as the hint and Appearance's preview name it.
+export const KEY_NAMES: Record<DictateKey, string> = { fn: 'fn', rightCommand: 'right ⌘', rightOption: 'right ⌥', rightControl: 'right ⌃', rightShift: 'right ⇧' };
 
 // The dots, the pill they open into on hover, and the orb they become while you talk. `quiet` dots
 // (Appearance › idle hidden) are not drawn and take no clicks until the key is held.
@@ -8,6 +12,7 @@ export function Dock({ mode, menu, dots, label, hint, quiet, level, typing, onHo
   mode: string; menu: ReactNode; dots: RefObject<HTMLButtonElement | null>; label: string; hint: boolean; quiet: boolean; level: { current: number }; typing: boolean;
   onHover: (over: boolean) => void; onMenu: () => void; onGrab: (event: ReactPointerEvent) => void; onDots: () => void; onNote: () => void; onSetup: () => void; onOrb: () => void;
 }) {
+  const key = KEY_NAMES[useSettings()?.shortcuts.dictate ?? 'fn'];
   return <div className="spot" data-spot onPointerEnter={() => onHover(true)} onPointerLeave={() => onHover(false)}
     onContextMenu={event => { event.preventDefault(); onMenu(); }}>
     {menu}
@@ -20,6 +25,6 @@ export function Dock({ mode, menu, dots, label, hint, quiet, level, typing, onHo
       <button type="button" aria-label="Set up" title="Set up" tabIndex={mode === 'hover' ? 0 : -1} onClick={onSetup}><GearIcon /></button>
     </div>
     <Orb mode={mode} level={level} typing={typing} onClick={onOrb} />
-    {hint && <span className="label" aria-hidden="true"><span className="glass"><kbd>fn</kbd> hold to type</span></span>}
+    {hint && <span className="label" aria-hidden="true"><span className="glass"><kbd>{key}</kbd> hold to type</span></span>}
   </div>;
 }

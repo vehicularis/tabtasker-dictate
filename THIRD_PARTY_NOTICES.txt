@@ -1,6 +1,6 @@
-Third-party notices for the voice models in this repository
+Third-party notices for the voice models and whisper.cpp in TabTasker Dictate
 
-Whisper model — https://github.com/openai/whisper
+Whisper model: https://github.com/openai/whisper
 
 MIT License
 
@@ -237,7 +237,7 @@ Licensed under the Apache License, Version 2.0, reproduced below.
    See the License for the specific language governing permissions and
    limitations under the License.
 
-whisper.cpp / ggml — https://github.com/ggml-org/whisper.cpp
+whisper.cpp / ggml: https://github.com/ggml-org/whisper.cpp
 
 MIT License
 
@@ -261,7 +261,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-Silero VAD — https://github.com/snakers4/silero-vad
+Silero VAD: https://github.com/snakers4/silero-vad
 
 MIT License
 
