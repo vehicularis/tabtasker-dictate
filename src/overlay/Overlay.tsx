@@ -192,16 +192,29 @@ export function Overlay() {
     setHover(false); setMenu(false);
     void invoke('request', { kind: 'note' }).catch(() => { noteRequested.current = false; });
   };
+  // The draft save_note is writing. Claude may take seconds to name it, and the card can be hidden and
+  // opened again meanwhile: one save at a time, and the note stays as it is until it is written.
+  const sending = useRef<Draft | null>(null);
+  const [saving, setSaving] = useState(false);
   const save = async () => {
-    if (!draft?.text.trim()) return;
+    const sent = draft;
+    if (!sent?.text.trim() || sending.current) return;
+    sending.current = sent; setSaving(true); setDiscarding(false);
     try {
-      const path = await invoke<string>('save_note', { title: draft.title.trim(), text: draft.text, stamp: stamp(new Date()), named: !!draft.named });
-      setDraft(null); setReviewing(false); setSaved(path);
+      const path = await invoke<string>('save_note', { title: sent.title.trim(), text: sent.text, stamp: stamp(new Date()), named: !!sent.named });
+      // A note dictated during the save was added after the saved words: it stays, as a new note.
+      setDraft(current => {
+        const rest = current && current !== sent ? current.text.slice(sent.text.trimEnd().length).trim() : '';
+        return rest ? { title: titleOf(rest), text: rest } : null;
+      });
+      setSaved(path);
     } catch (error) {
       setToast(typeof error === 'string' ? error : 'Couldn’t save the note');
+    } finally {
+      sending.current = null; setSaving(false);
     }
   };
-  const discard = () => { setDraft(null); setReviewing(false); setDiscarding(false); };
+  const discard = () => { if (sending.current) return; setDraft(null); setReviewing(false); setDiscarding(false); };
   const openSetup = () => { setMenu(false); refresh(); setSetup(true); };
   const openSettings = useCallback(() => { setMenu(false); void invoke('open_settings', {}).catch(() => setToast('Couldn’t open Settings')); }, []);
   const startMeeting = () => {
@@ -238,7 +251,7 @@ export function Overlay() {
     data-card={card || undefined} data-pending={pending || undefined} data-dragging={dragging || undefined}>
     <div ref={dock} className="dock">
       {setup && <Setup status={status} fnDown={fnDown} fnTested={fnTested} onClose={() => setSetup(false)} />}
-      {!setup && draft && reviewing && <NoteCard draft={draft} onChange={setDraft} more={noting ? live : null} canTalk={phase === 'idle'}
+      {!setup && draft && reviewing && <NoteCard draft={draft} onChange={setDraft} more={noting ? live : null} canTalk={phase === 'idle'} saving={saving}
         discarding={discarding} onDiscarding={setDiscarding} onSave={save} onDiscard={discard} onHide={() => setReviewing(false)} onTalk={takeNote} onGrab={grab} />}
       {noting && phase === 'listening' && !card && <p className="glass said" data-glass role="status">
         <small>Note · {clockOf(since)}</small><span>{live ?? 'Listening…'}</span>

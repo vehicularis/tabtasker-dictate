@@ -253,14 +253,21 @@ static PAUSED: OnceLock<CheckMenuItem<Wry>> = OnceLock::new();
 pub(crate) fn recent_changed(app: &AppHandle) {
   let Some((menu, files)) = RECENT.get() else { return };
   let notes = notes::recent(10);
-  let rebuild = || -> tauri::Result<()> {
-    while menu.remove_at(0)?.is_some() {}
-    if notes.is_empty() { return menu.append(&MenuItem::with_id(app, "recent-none", "No notes yet", false, None::<&str>)?); }
-    for (i, note) in notes.iter().enumerate() { menu.append(&MenuItem::with_id(app, format!("recent:{i}"), &note.title, true, None::<&str>)?)?; }
-    Ok(())
-  };
-  if let Err(e) = rebuild() { log::warn!("recent notes: {e}"); }
-  *files.lock().unwrap_or_else(|e| e.into_inner()) = notes.into_iter().map(|note| note.path).collect();
+  let handle = app.clone();
+  // Off the main thread each menu call is its own trip there, so rebuilds from two threads could interleave
+  // into duplicate items. On it, this runs at once and whole.
+  let rebuilt = app.run_on_main_thread(move || {
+    let app = &handle;
+    let rebuild = || -> tauri::Result<()> {
+      while menu.remove_at(0)?.is_some() {}
+      if notes.is_empty() { return menu.append(&MenuItem::with_id(app, "recent-none", "No notes yet", false, None::<&str>)?); }
+      for (i, note) in notes.iter().enumerate() { menu.append(&MenuItem::with_id(app, format!("recent:{i}"), &note.title, true, None::<&str>)?)?; }
+      Ok(())
+    };
+    if let Err(e) = rebuild() { log::warn!("recent notes: {e}"); }
+    *files.lock().unwrap_or_else(|e| e.into_inner()) = notes.into_iter().map(|note| note.path).collect();
+  });
+  if let Err(e) = rebuilt { log::warn!("recent notes: {e}"); }
 }
 
 fn show_paused(paused: bool) {

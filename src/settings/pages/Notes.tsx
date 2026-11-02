@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { invoke } from '../../bridge';
 import { tilde, useStatus, type PageProps, type Settings } from '../../store';
 import { Button, ChipList, Icon, PageHeader, Section, Tile, TileGroup, Toggle } from '../../ui';
@@ -44,6 +44,7 @@ export function Notes({ settings, update }: PageProps) {
   }, [notes.folder]);
 
   const templateProblem = nameProblem(template);
+  const problemId = useId();
   // The preview follows the name as it is typed, and the saved one while what is typed can't be used.
   const shown: Settings['notes'] = { ...notes, fileName: templateProblem || !template.trim() ? notes.fileName : template };
   const actions = claude && notes.claudeActions ? SAMPLE.actions : null;
@@ -74,13 +75,16 @@ export function Notes({ settings, update }: PageProps) {
     if (!next.trim()) { setTemplate(notes.fileName); return; }
     if (!nameProblem(next) && next !== notes.fileName) void update({ notes: { fileName: next } });
   };
-  // Puts a token where the caret was, over any selected text, and never inside another token.
+  // Puts a token where the caret was, over any selected text, and never inside another token. A space
+  // keeps it apart from a word or token it would touch; a separator already there stands.
   const insert = (token: string) => {
     let [start, end] = selection.current ?? [template.length, template.length];
     const open = template.lastIndexOf('{', start - 1), close = template.indexOf('}', start);
     if (start === end && start > 0 && open > template.lastIndexOf('}', start - 1) && close >= 0) start = end = close + 1;
-    const next = template.slice(0, start) + token + template.slice(end);
-    const caret = start + token.length;
+    const before = /[\p{L}\p{N}})\]]$/u.test(template.slice(0, start)) ? ' ' : '';
+    const after = /^[\p{L}\p{N}{([]/u.test(template.slice(end)) ? ' ' : '';
+    const next = template.slice(0, start) + before + token + after + template.slice(end);
+    const caret = start + before.length + token.length;
     selection.current = [caret, caret];
     setTemplate(next);
     commit(next);
@@ -107,7 +111,7 @@ export function Notes({ settings, update }: PageProps) {
       </TileGroup>
     </Section>
 
-    <Section title="Files" note={templateProblem ?? (!notes.dailyNote && notes.fileName !== DEFAULT_NAME
+    <Section title="Files" note={templateProblem ? <span id={problemId} role="alert">{templateProblem}</span> : (!notes.dailyNote && notes.fileName !== DEFAULT_NAME
       ? <button type="button" className="link" onClick={() => void update({ notes: { fileName: DEFAULT_NAME } })}>Use the default name, {DEFAULT_NAME}</button> : undefined)}>
       <TileGroup>
         <Tile title="Daily note" detail="Adds each note to one file a day, named by its date, as a new section with the time.">
@@ -115,7 +119,8 @@ export function Notes({ settings, update }: PageProps) {
         </Tile>
         <Tile title="File name" detail={notes.dailyNote ? 'Not used while daily note is on.' : 'Filled in for each note. A name that is taken gets a number, so no note is ever replaced.'} stack dim={notes.dailyNote}>
           <span className="notes-template">
-            <input ref={field} className="ui-field mono" aria-label="File name" aria-invalid={!!templateProblem || undefined} value={template} disabled={notes.dailyNote} spellCheck={false}
+            <input ref={field} className="ui-field mono" aria-label="File name" aria-invalid={!!templateProblem || undefined}
+              aria-describedby={templateProblem ? problemId : undefined} value={template} disabled={notes.dailyNote} spellCheck={false}
               placeholder={DEFAULT_NAME} onChange={event => { setTemplate(event.target.value); remember(); }} onSelect={remember} onBlur={() => commit(template)}
               onKeyDown={event => {
                 if (event.key === 'Enter') { event.preventDefault(); commit(template); }
