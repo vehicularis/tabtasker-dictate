@@ -43,7 +43,8 @@ button { font: inherit; color: inherit; }
 .glass { position: relative; background: var(--tint); box-shadow: inset 0 1px 0 var(--rim), 0 18px 50px var(--drop), 0 2px 8px rgb(0 0 0 / .12); }
 
 /* ---------- the dots, their pill and the orb ---------- */
-.spot { position: relative; display: grid; place-items: center; min-width: 48px; min-height: 48px; }
+/* It grows with the size, so the parts scaled inside it keep their share of margin to the screen's edge. */
+.spot { position: relative; display: grid; place-items: center; min-width: calc(48px * var(--scale)); min-height: calc(48px * var(--scale)); }
 /* A small glass capsule behind the dots, so they read on any wallpaper. */
 .capsule { position: absolute; width: 34px; height: 14px; border-radius: 7px; opacity: .9; transition: opacity .2s; }
 .layer:is([data-edge='left'], [data-edge='right']) .capsule { width: 14px; height: 34px; }
@@ -90,7 +91,8 @@ button { font: inherit; color: inherit; }
 .submenu { --menu-at: translate(0); top: auto; bottom: calc(-1 * var(--inset)); left: calc(100% + var(--inset) + 6px); max-height: 70vh; overflow-y: auto; }
 .layer[data-edge='right'] .submenu { left: auto; right: calc(100% + var(--inset) + 6px); }
 .layer:is([data-edge='left'], [data-edge='right']) .submenu { top: calc(-1 * var(--inset)); bottom: auto; }
-.in-use { margin: 0; padding: 4px 10px 6px; font-size: 12px; color: var(--ink-3); }
+/* Indented past the check column (row padding, icon, gap), under the names, as in a Mac menu. */
+.in-use { margin: 0; padding: 4px 10px 6px 34px; font-size: 12px; color: var(--ink-3); }
 .in-use span { display: block; font-size: 13px; color: var(--ink-2); }
 
 .orb { position: absolute; display: grid; place-items: center; width: 42px; height: 42px; padding: 0; border: 0; border-radius: 50%; background: var(--orb); box-shadow: inset 0 1px 0 var(--orb-light), 0 8px 24px rgb(0 0 0 / .35), 0 0 0 .5px rgb(0 0 0 / .2); opacity: 0; transform: scale(.5); pointer-events: none; transition: opacity .2s, transform .35s var(--spring); cursor: pointer; }

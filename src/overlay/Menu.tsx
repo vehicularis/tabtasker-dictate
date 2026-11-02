@@ -28,7 +28,14 @@ export function Menu({ status, mics, onMics, onNote, onMeeting, onShowNotes, onP
     event.preventDefault(); event.stopPropagation();
   };
   return <div ref={root} className="glass menu" data-glass data-hit role="menu" aria-label="TabTasker Dictate" tabIndex={-1} onKeyDown={keys}
-    onPointerMove={event => { const row = (event.target as Element).closest('[role="menuitem"]'); if (row) onMics(row.hasAttribute('aria-haspopup')); }}>
+    onPointerMove={event => {
+      const row = (event.target as Element).closest<HTMLElement>('[role^="menuitem"]');
+      if (!row) return;
+      // The pointer moves the selection, as in a Mac menu: the arrows carry on from the row under it, and
+      // focus never sits in a list that a root row is about to close.
+      if (row !== document.activeElement) row.focus({ preventScroll: true });
+      if (!row.closest('.submenu')) onMics(row.hasAttribute('aria-haspopup'));
+    }}>
     <button type="button" role="menuitem" tabIndex={-1} onClick={onNote}><NoteIcon />New note</button>
     <button type="button" role="menuitem" tabIndex={-1} onClick={onMeeting}><MeetingIcon />Start meeting</button>
     <button type="button" role="menuitem" tabIndex={-1} onClick={onShowNotes}><FolderIcon />Show notes in Finder</button>

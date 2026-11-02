@@ -6,6 +6,27 @@ import icon from '../../../src-tauri/icons/128x128@2x.png';
 import licence from '../../../LICENSE?raw';
 import notices from '../../../THIRD_PARTY_NOTICES.txt?raw';
 
+type Paragraph = { text: string; indent: number; hang: number; lines: number };
+
+// The files are wrapped at 80 columns and the box is often narrower, so each paragraph's lines are
+// joined to wrap to the box. Indents carry the sections, lists and centred headings, so they stay;
+// a line that is less indented, or a bare link, starts a new paragraph.
+function unwrap(text: string) {
+  const out: (Paragraph | null)[] = [];
+  for (const line of text.replace(/^\n+/, '').trimEnd().split('\n')) {
+    const words = line.trim(), indent = line.length - line.trimStart().length, last = out[out.length - 1];
+    if (!words) out.push(null);
+    else if (last && indent >= last.indent && !/^https?:\/\//.test(words)) { if (last.lines++ === 1) last.hang = indent; last.text += ` ${words}`; }
+    else out.push({ text: words, indent, hang: indent, lines: 1 });
+  }
+  return out;
+}
+const LICENCE = unwrap(licence), NOTICES = unwrap(notices);
+
+const Notices = ({ label, text }: { label: string; text: (Paragraph | null)[] }) => <div className="notices" role="document" tabIndex={0} aria-label={label}>
+  {text.map((line, i) => line ? <p key={i} style={{ paddingLeft: `${line.hang}ch`, textIndent: `${line.indent - line.hang}ch` }}>{line.text}</p> : <br key={i} />)}
+</div>;
+
 // A promise with its icon in front, as macOS lists privacy.
 const Pledge = ({ icon, title, children }: { icon: IconName; title: string; children: ReactNode }) => <div className="ui-tile pledge">
   <span className="pledge-icon"><Icon name={icon} size={18} /></span>
@@ -26,7 +47,7 @@ export function About(_: PageProps) {
     <Section title="Privacy">
       <TileGroup label="Privacy">
         <Pledge icon="shield" title="Your voice stays on this Mac">Whisper transcribes it here. Audio is never uploaded or shared, and isn’t kept once it’s transcribed.</Pledge>
-        <Pledge icon="claude" title="Claude only if you connect it">It gets text, never audio, and only for what you ask of it. Your key stays in the Keychain.</Pledge>
+        <Pledge icon="claude" title="Claude only if you connect it">It gets text, never audio: your commands, plus the dictations it polishes, notes it titles and meetings it summarizes while those are on. Your key stays in the Keychain.</Pledge>
         <Pledge icon="folder" title="Your words are yours">Notes, meetings and history are kept on this Mac. Agents see only what you share on the Agents page.</Pledge>
         <Pledge icon="check" title="No account and no analytics">Nothing to sign in to, and nothing about how you use it is sent anywhere.</Pledge>
       </TileGroup>
@@ -36,12 +57,12 @@ export function About(_: PageProps) {
         <Tile title="Apache License 2.0" detail="TabTasker Dictate is open source.">
           <Button small aria-expanded={reading} onClick={() => setReading(!reading)}>{reading ? 'Hide licence' : 'Read licence'}</Button>
         </Tile>
-        {reading && <div className="ui-tile stack"><pre className="notices" tabIndex={0} aria-label="Apache License 2.0">{licence.replace(/^\n+/, '').trimEnd()}</pre></div>}
+        {reading && <div className="ui-tile stack"><Notices label="Apache License 2.0" text={LICENCE} /></div>}
       </TileGroup>
     </Section>
-    <Section title="Third-party notices" note="The speech model and the libraries inside TabTasker Dictate, with their licences.">
+    <Section title="Third-party notices" note="The voice models and whisper.cpp inside TabTasker Dictate, with their licences.">
       <TileGroup label="Third-party notices">
-        <div className="ui-tile stack"><pre className="notices" tabIndex={0} aria-label="Third-party notices">{notices.trimEnd()}</pre></div>
+        <div className="ui-tile stack"><Notices label="Third-party notices" text={NOTICES} /></div>
       </TileGroup>
     </Section>
     <p className="about-foot">© 2026 Vehicularis Limited</p>

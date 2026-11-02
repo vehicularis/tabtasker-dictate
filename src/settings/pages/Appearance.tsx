@@ -19,7 +19,7 @@ export function Appearance({ settings, update }: PageProps) {
   return <>
     <PageHeader icon="appearance" title="Appearance">How TabTasker Dictate looks on your screen.</PageHeader>
     <Preview look={look} keyName={key} moment={moment} onMoment={setMoment} />
-    <Section title="Theme">
+    <Section>
       <TileGroup>
         <Tile title="Theme" detail="For the dots and this window. Automatic follows your Mac.">
           <Segmented label="Theme" value={look.theme} options={THEMES} onChange={theme => change({ theme })} />
@@ -37,7 +37,7 @@ export function Appearance({ settings, update }: PageProps) {
         <Tile title="When idle" detail={`Hidden shows nothing until you hold ${key}.`}>
           <Segmented label="When idle" value={look.idle} options={[{ value: 'dots', label: 'Dots' }, { value: 'hidden', label: 'Hidden' }]} onChange={idle => change({ idle }, 'idle')} />
         </Tile>
-        <Tile title="Hint" detail={`“${key} hold to type” beside the dots when you point at them.`}>
+        <Tile title="Hint" detail={`Shows “${key} hold to type” beside the dots when you point at them.`}>
           <Toggle label="Hint" checked={look.hint} onChange={hint => change({ hint }, 'hover')} />
         </Tile>
       </TileGroup>
@@ -48,7 +48,7 @@ export function Appearance({ settings, update }: PageProps) {
 // A small screen with the dots on it, drawn from the settings as they are now.
 function Preview({ look, keyName, moment, onMoment }: { look: Settings['appearance']; keyName: string; moment: Moment; onMoment: (moment: Moment) => void }) {
   const hidden = look.idle === 'hidden' && moment === 'idle';
-  const said = { idle: hidden ? `Nothing shows until you hold ${keyName}` : 'The dots wait at the edge', hover: look.hint ? 'Pointing at the dots opens their buttons and the hint' : 'Pointing at the dots opens their buttons', talking: `While you hold ${keyName}, the orb listens` }[moment];
+  const said = { idle: hidden ? `Nothing shows until you hold ${keyName}` : 'The dots wait at the edge', hover: look.hint ? 'Pointing opens the buttons and the hint' : 'Pointing opens the buttons', talking: `While you hold ${keyName}, the orb listens` }[moment];
   return <figure className="look" data-edge={look.edge} data-size={look.size} data-moment={moment} data-quiet={look.idle === 'hidden' || undefined}>
     <div className="look-screen" role="img" aria-label={`The dots at the ${look.edge} edge, ${look.size}. ${said}.`}>
       <span className="look-menubar"><svg viewBox="0 0 36 36" aria-hidden="true"><path d="M2 14a2 2 0 0 1 4 0v8a2 2 0 0 1-4 0zM9 10a2 2 0 0 1 4 0v16a2 2 0 0 1-4 0zM23 10a2 2 0 0 1 4 0v16a2 2 0 0 1-4 0zM30 14a2 2 0 0 1 4 0v8a2 2 0 0 1-4 0zM17 4a1 1 0 0 1 2 0v28a1 1 0 0 1-2 0zM15 4h6v2h-6zM15 30h6v2h-6z" /></svg></span>
