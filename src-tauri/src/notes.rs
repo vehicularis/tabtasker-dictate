@@ -285,7 +285,7 @@ pub fn library() -> Vec<LibraryItem> {
 
 /// `path` as a Markdown file inside the notes or meetings folder, resolved first so `..` or a link can't
 /// reach outside them.
-fn in_library(path: &str) -> Result<PathBuf, String> {
+pub(crate) fn in_library(path: &str) -> Result<PathBuf, String> {
   let file = PathBuf::from(path).canonicalize().map_err(|_| "That file isn’t there any more.".to_owned())?;
   let folders = [notes_dir(), meetings_dir()].into_iter().flatten().filter_map(|dir| dir.canonicalize().ok());
   let inside = folders.into_iter().any(|dir| file.starts_with(dir));
@@ -303,6 +303,110 @@ pub async fn library_list() -> Result<Vec<LibraryItem>, String> {
 pub fn library_open(path: String) -> Result<(), String> {
   let file = in_library(&path)?;
   std::process::Command::new("/usr/bin/open").arg(file).spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
+// ---------- the editor ----------
+
+/// A note or meeting as the editor holds it: the title apart from the body, which is the file's Markdown
+/// without its front matter or its heading.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoteDoc { pub path: String, pub title: String, pub body: String, pub kind: &'static str, pub modified_ms: u64 }
+
+/// The front matter block, delimiters included, and what follows it.
+fn split_front(text: &str) -> (&str, &str) {
+  let Some(rest) = text.strip_prefix("---\n") else { return ("", text) };
+  match rest.find("\n---\n") { Some(end) => (&text[..4 + end + 5], &rest[end + 5..]), None => ("", text) }
+}
+
+/// A leading `# Title` line, and the body after it.
+fn split_heading(rest: &str) -> (Option<&str>, &str) {
+  let rest = rest.trim_start_matches('\n');
+  let first = rest.lines().next().unwrap_or("");
+  match first.strip_prefix("# ") {
+    Some(heading) if !heading.trim().is_empty() => (Some(heading.trim()), rest[first.len()..].trim_start_matches('\n')),
+    _ => (None, rest),
+  }
+}
+
+/// The front matter with its `title:` line following `title`: changed, or dropped when the title is gone.
+fn retitled(front: &str, title: &str) -> String {
+  if front.is_empty() || !front.lines().any(|line| line.starts_with("title:")) { return front.to_owned(); }
+  let mut out = String::new();
+  for line in front.split_inclusive('\n') {
+    if line.starts_with("title:") { if !title.is_empty() { out.push_str(&format!("title: {}\n", scalar(title))); } } else { out.push_str(line); }
+  }
+  out
+}
+
+/// Whether `file` is in the meetings folder.
+fn kind_of(file: &Path) -> &'static str {
+  let in_meetings = meetings_dir().ok().and_then(|dir| dir.canonicalize().ok()).is_some_and(|dir| file.starts_with(dir));
+  if in_meetings { "meeting" } else { "note" }
+}
+
+fn modified_ms(path: &Path) -> u64 {
+  std::fs::metadata(path).ok().and_then(|meta| meta.modified().ok()).and_then(|at| at.duration_since(UNIX_EPOCH).ok()).map_or(0, |age| age.as_millis() as u64)
+}
+
+/// The note at `path`, for the editor.
+pub(crate) fn read_doc(path: &str) -> Result<NoteDoc, String> {
+  let file = in_library(path)?;
+  let text = std::fs::read_to_string(&file).map_err(|_| "That file isn’t there any more.".to_owned())?;
+  let stem = file.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default();
+  let (_, rest) = split_front(&text);
+  let (heading, body) = split_heading(rest);
+  let title = heading.map_or_else(|| title_of(&text, &stem), str::to_owned);
+  Ok(NoteDoc { path: file.display().to_string(), title, body: body.trim_end().to_owned(), kind: kind_of(&file), modified_ms: modified_ms(&file) })
+}
+
+/// Writes the note back: its front matter as it was (`title:` kept in step), `# title`, then the body.
+/// Written beside the file and moved into place, so a crash leaves the old note, never half a new one.
+pub(crate) fn write_doc(path: &str, title: &str, body: &str) -> Result<u64, String> {
+  let file = in_library(path)?;
+  if body.chars().count() > 1_000_000 { return Err("This note is too long to save".into()); }
+  let current = std::fs::read_to_string(&file).map_err(|_| "That file isn’t there any more.".to_owned())?;
+  let (front, _) = split_front(&current);
+  let title = title.split_whitespace().collect::<Vec<_>>().join(" ");
+  let mut text = retitled(front, &title);
+  if !text.is_empty() { text.push('\n'); }
+  if !title.is_empty() { text.push_str(&format!("# {title}\n\n")); }
+  text.push_str(body.trim_end());
+  text.push('\n');
+  let dir = file.parent().ok_or("That file isn’t there any more.")?;
+  let name = file.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
+  let temp = dir.join(format!(".{name}.{}.tmp", std::process::id()));
+  let written = std::fs::OpenOptions::new().write(true).create_new(true).open(&temp)
+    .and_then(|mut out| out.write_all(text.as_bytes()).and_then(|_| out.sync_all()))
+    .and_then(|_| std::fs::rename(&temp, &file));
+  if let Err(e) = written { let _ = std::fs::remove_file(&temp); return Err(format!("Couldn’t save the note: {e}")); }
+  Ok(modified_ms(&file))
+}
+
+/// A new note file for the editor, with whatever words there are so far (none is fine): named by the
+/// notes template, or a section in the day's note.
+pub(crate) fn new_doc(title: &str, body: &str, stamp_text: &str) -> Result<PathBuf, String> {
+  if body.chars().count() > 1_000_000 { return Err("This note is too long to save".into()); }
+  let at = stamp(stamp_text)?;
+  let dir = notes_dir()?;
+  std::fs::create_dir_all(&dir).map_err(|e| format!("Couldn’t make the notes folder: {e}"))?;
+  let note = compose(&settings::get().notes, Kind::Note, title, body, None, at, &[]);
+  if note.daily { append_daily(&dir, &note) } else { write_new(&dir, &note.stem, format!("{}{}", note.header, note.section).as_bytes()) }
+}
+
+#[tauri::command]
+pub async fn note_read(path: String) -> Result<NoteDoc, String> {
+  tauri::async_runtime::spawn_blocking(move || read_doc(&path)).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn note_write(path: String, title: String, body: String) -> Result<u64, String> {
+  tauri::async_runtime::spawn_blocking(move || write_doc(&path, &title, &body)).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn note_new(title: String, text: String, stamp: String) -> Result<String, String> {
+  tauri::async_runtime::spawn_blocking(move || new_doc(&title, &text, &stamp).map(|path| path.display().to_string())).await.map_err(|e| e.to_string())?
 }
 
 /// Keeps the tray's Recent Notes in step with the folder, whatever changes it: Finder, Obsidian, a sync.
@@ -419,6 +523,22 @@ pub async fn choose_folder(window: tauri::WebviewWindow, message: Option<String>
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn a_note_splits_into_front_matter_title_and_body_and_writes_back_the_same_way() {
+    let text = "---\ncreated: 2026-11-02T13:05\ntitle: Hello\ntags: []\n---\n\n# Hello\n\nFirst line.\n\n- [ ] Call them\n";
+    let (front, rest) = split_front(text);
+    assert_eq!(front, "---\ncreated: 2026-11-02T13:05\ntitle: Hello\ntags: []\n---\n");
+    let (heading, body) = split_heading(rest);
+    assert_eq!(heading, Some("Hello"));
+    assert_eq!(body, "First line.\n\n- [ ] Call them\n");
+    assert_eq!(retitled(front, "Hello again"), "---\ncreated: 2026-11-02T13:05\ntitle: \"Hello again\"\ntags: []\n---\n", "a title with a space is quoted, as every value with one is");
+    assert_eq!(retitled(front, ""), "---\ncreated: 2026-11-02T13:05\ntags: []\n---\n");
+    assert_eq!(retitled("---\ncreated: x\n---\n", "New"), "---\ncreated: x\n---\n", "no title line, none added");
+    assert_eq!(split_front("# Plain\n\nWords\n"), ("", "# Plain\n\nWords\n"));
+    assert_eq!(split_heading("Just words\n"), (None, "Just words\n"));
+    assert_eq!(split_heading("\n\n# \n\nWords"), (None, "# \n\nWords"), "an empty heading is text");
+  }
 
   #[test]
   fn the_library_lists_notes_and_meetings_by_title_newest_first() {

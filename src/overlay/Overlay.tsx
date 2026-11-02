@@ -224,6 +224,21 @@ export function Overlay() {
     }
   };
   const discard = () => { if (sending.current) return; setDraft(null); setReviewing(false); setDiscarding(false); };
+  // The draft becomes a file at once and opens in the editor, where it grows into whatever it needs to be.
+  const expand = async () => {
+    const sent = draft;
+    if (!sent || sending.current) return;
+    sending.current = sent; setSaving(true); setDiscarding(false);
+    try {
+      const path = await invoke<string>('note_new', { title: sent.title.trim(), text: sent.text, stamp: stamp(new Date()) });
+      await invoke('note_open', { path });
+      setDraft(null); setReviewing(false);
+    } catch (error) {
+      setToast(typeof error === 'string' ? error : 'Couldn’t open the editor');
+    } finally {
+      sending.current = null; setSaving(false);
+    }
+  };
   const openSetup = (what: 'quick' | 'steps' = 'quick') => { setMenu(false); refresh(); setSetup(what); };
   const openSettings = useCallback(() => { setMenu(false); void invoke('open_settings', {}).catch(() => setToast('Couldn’t open Settings')); }, []);
   const openLibrary = useCallback(() => { setMenu(false); setHover(false); setSetup(false); setAsking(false); setLibrary(true); }, []);
@@ -280,7 +295,7 @@ export function Overlay() {
       {library && !setup && <LibraryCard claudeCode={!!settings.claude.claudeCode} onClose={() => setLibrary(false)} onError={setToast} onWriteNote={writeNote} />}
       {asking && !setup && <AskCard onClose={() => setAsking(false)} onError={setToast} />}
       {!setup && draft && reviewing && <NoteCard draft={draft} onChange={setDraft} more={noting ? live : null} canTalk={phase === 'idle'} saving={saving}
-        discarding={discarding} onDiscarding={setDiscarding} onSave={save} onDiscard={discard} onHide={() => setReviewing(false)} onTalk={takeNote} onGrab={grab} />}
+        discarding={discarding} onDiscarding={setDiscarding} onSave={save} onExpand={() => void expand()} onDiscard={discard} onHide={() => setReviewing(false)} onTalk={takeNote} onGrab={grab} />}
       {noting && phase === 'listening' && !card && <p className="glass said" data-glass data-live role="status">
         <small>Note · {clockOf(since)}</small><span>{live ?? 'Listening…'}</span>
       </p>}

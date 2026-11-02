@@ -1,0 +1,60 @@
+/* The Text editor (Editor.tsx), on the design tokens. The bar is a row of small round-cornered buttons
+   with no borders: a pressed one sits on a plate, as every other control in the app does. The body is
+   the prose itself, with the rhythm richEditor.css gives TabTasker Business's pages. */
+.ed { display: flex; flex-direction: column; min-height: 0; }
+.ed-bar { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 2px 8px; }
+.ed-group { display: inline-flex; gap: 2px; }
+.ed-group + .ed-group { position: relative; padding-left: 8px; }
+.ed-group + .ed-group::before { content: ''; position: absolute; left: 0; top: 7px; bottom: 7px; width: 1px; background: var(--surface-3); }
+.ed-tool { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 7px; color: var(--ink-2); background: none; cursor: pointer;
+  font: 600 11.5px/1 var(--font); letter-spacing: .02em; transition: background var(--quick) var(--ease), color var(--quick) var(--ease); }
+.ed-tool:hover { color: var(--ink); background: var(--surface-2); }
+.ed-tool[aria-pressed='true'] { color: var(--ink); background: var(--surface-3); }
+.ed-tool:disabled { opacity: .4; cursor: default; background: none; }
+.ed-tool b { font-weight: 700; }
+.ed-link { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 2px 0 9px; border-radius: 9px; color: var(--ink-3); background: var(--field); box-shadow: var(--elev-well); }
+.ed-link input { width: 220px; height: 100%; padding: 0; border: 0; outline: 0; font: 13.5px/1 var(--font); color: var(--ink); background: none; }
+.ed-link input::placeholder { color: var(--ink-3); }
+.ed-tail { display: inline-flex; align-items: center; margin-left: auto; font-size: 12.5px; color: var(--ink-3); }
+
+/* ---------- the prose ---------- */
+/* EditorContent is the body's own element: it fills the column, and its bottom padding is where a click below the last line lands to keep writing. */
+.ed-content { flex: 1 1 auto; min-height: 0; }
+.ed-body { box-sizing: border-box; min-height: 100%; outline: none; caret-color: var(--accent); font: 15.5px/1.55 var(--font); color: var(--ink); }
+.ed-body > * + * { margin-top: .7em; }
+.ed-body > *:first-child { margin-top: 0; }
+.ed-body p { margin: 0; }
+.ed-body h1, .ed-body h2, .ed-body h3 { margin: 1em 0 .35em; font-family: var(--font-display); font-weight: 600; line-height: 1.2; letter-spacing: -.01em; text-wrap: balance; }
+.ed-body h1 { font-size: 1.7em; } .ed-body h2 { font-size: 1.35em; } .ed-body h3 { font-size: 1.12em; }
+.ed-body > :is(h1, h2, h3):first-child { margin-top: 0; }
+.ed-body ul, .ed-body ol { margin: 0; padding-left: 1.5em; }
+.ed-body ul { list-style: disc; } .ed-body ol { list-style: decimal; }
+.ed-body li + li { margin-top: .15em; }
+.ed-body li > p { margin: 0; }
+.ed-body li > ul, .ed-body li > ol { margin-top: .15em; }
+/* To-do lists: the box on the first line, done items greyed and struck, the children left alone. */
+.ed-body ul[data-type='taskList'] { list-style: none; padding-left: .15em; }
+.ed-body ul[data-type='taskList'] li { display: flex; align-items: flex-start; gap: .5em; }
+.ed-body ul[data-type='taskList'] li > label { display: inline-flex; align-items: center; flex: none; height: 1.55em; user-select: none; -webkit-user-select: none; cursor: pointer; }
+.ed-body ul[data-type='taskList'] li > label input { width: 15px; height: 15px; margin: 0; accent-color: var(--accent); }
+.ed-body ul[data-type='taskList'] li > div { flex: 1 1 auto; min-width: 0; }
+.ed-body ul[data-type='taskList'] li[data-checked='true'] > div > p { color: var(--ink-3); text-decoration: line-through; }
+.ed-body blockquote { margin: 0; padding: .1em 0 .1em 1em; border-left: 3px solid var(--surface-3); color: var(--ink-2); }
+.ed-body pre { margin: 0; padding: .7em .9em; border-radius: 10px; background: var(--surface-2); font: 13px/1.5 var(--font-mono); overflow-x: auto; }
+.ed-body pre code { padding: 0; background: none; font: inherit; }
+.ed-body code { padding: .1em .35em; border-radius: 5px; background: var(--surface-2); font: .88em var(--font-mono); }
+.ed-body mark { padding: 0 .1em; border-radius: 3px; background: color-mix(in srgb, #fde68a 85%, transparent); color: inherit; }
+:root[data-theme='dark'] .ed-body mark { background: color-mix(in srgb, #d97706 55%, transparent); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .ed-body mark { background: color-mix(in srgb, #d97706 55%, transparent); } }
+.ed-body a { color: var(--accent-ink); text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); text-underline-offset: 3px; }
+.ed-body hr { height: 1px; margin: 1.2em 0; border: 0; background: var(--surface-3); }
+.ed-body hr.ProseMirror-selectednode { background: var(--accent); }
+.ed-body .ProseMirror-selectednode { outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; border-radius: 4px; }
+.ed-body p.is-editor-empty:first-child::before { content: attr(data-placeholder); float: left; height: 0; color: var(--ink-3); pointer-events: none; }
+.ed-body .ProseMirror-gapcursor::after { border-top-color: var(--ink); }
+
+/* A sticky's words: the same editor, smaller and a touch heavier, filling the paper. */
+.ed.compact { flex: 1; }
+.ed-body.compact { padding: 10px 12px 12px; font: 500 15px/1.45 var(--font); }
+.ed-body.compact h1, .ed-body.compact h2, .ed-body.compact h3 { margin: .5em 0 .2em; font-family: var(--font); }
+.ed-body.compact h1 { font-size: 1.25em; } .ed-body.compact h2 { font-size: 1.12em; } .ed-body.compact h3 { font-size: 1em; }

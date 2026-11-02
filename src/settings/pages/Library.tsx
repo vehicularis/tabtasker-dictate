@@ -63,14 +63,15 @@ export function Library({ settings }: PageProps) {
           {group.items.map(item => <article key={item.path} className="library-item" aria-label={item.title}>
             <span className="library-kind" data-kind={item.kind}><Icon name={item.kind === 'meeting' ? 'meeting' : 'note'} size={16} /></span>
             <div className="library-what">
-              <button type="button" className="library-title" onClick={() => act('library_open', item.path, 'Couldn’t open that file.')}>{item.title}</button>
+              <button type="button" className="library-title" onClick={() => act('note_open', item.path, 'Couldn’t open that note.')}>{item.title}</button>
               {item.excerpt && <p className="library-excerpt">{item.excerpt}</p>}
               <p className="library-meta">{item.kind === 'meeting' ? 'Meeting' : 'Note'} · {clock(item.modifiedMs)} · {count(item.words, 'word')}</p>
             </div>
             <div className="library-actions">
+              <Button small variant="quiet" aria-label={`Open ${item.title} in another app`} title="Open in another app" icon="external" onClick={() => act('library_open', item.path, 'Couldn’t open that file.')} />
               <Button small variant="quiet" aria-label={`Show ${item.title} in Finder`} title="Show in Finder" icon="folder" onClick={() => act('show_notes', item.path, 'Couldn’t show that in Finder.')} />
               {settings.claude.claudeCode && <Button small variant="quiet" aria-label={`Send ${item.title} to Claude Code`} title="Send to Claude Code" icon="claudeCode" onClick={() => act('send_to_claude_code', item.path, 'Couldn’t open Claude Code.')} />}
-              <Button small onClick={() => act('library_open', item.path, 'Couldn’t open that file.')}>Open</Button>
+              <Button small onClick={() => act('note_open', item.path, 'Couldn’t open that note.')}>Open</Button>
             </div>
           </article>)}
         </TileGroup>

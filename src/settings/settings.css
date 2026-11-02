@@ -9,7 +9,10 @@ button, input, select { font-family: var(--font); }
 .link:hover { text-decoration-color: currentColor; }
 
 .window { --overlap: 24px; --strip: 38px; display: grid; grid-template-columns: 236px minmax(0, 1fr); grid-template-rows: var(--strip) minmax(0, 1fr); box-sizing: border-box; height: 100%; padding: 0 10px 10px; background: var(--frame); }
-.titlebar { grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; height: var(--strip); margin: 0 -10px; font-size: 13px; font-weight: 600; color: var(--ink-2); user-select: none; -webkit-user-select: none; }
+.titlebar { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; height: var(--strip); margin: 0 -10px; padding-left: 86px; font-size: 13px; color: var(--ink-3); user-select: none; -webkit-user-select: none; }
+.titlebar-app { font-weight: 600; color: var(--ink-2); }
+.titlebar-page::before { content: '›'; margin-right: 8px; color: var(--ink-3); }
+.titlebar-page { font-weight: 500; color: var(--ink-2); }
 
 /* ---------- the rail: title, search, the pages in named groups; the open one pressed in ---------- */
 .rail { position: relative; display: flex; flex-direction: column; gap: 10px; min-height: 0; padding: 12px calc(12px + var(--overlap)) 14px 12px; overflow-y: auto; border-radius: 20px 0 0 20px;

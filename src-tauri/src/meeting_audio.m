@@ -269,26 +269,41 @@ static void TTMeetingClosed(void) {
 
 - (NSString *)openMic {
   AVAudioEngine *engine = [AVAudioEngine new];
+  BOOL cancelling = NO;
   @try {
     AVAudioInputNode *input = engine.inputNode;
     NSError *error;
     // Echo cancellation takes what the speakers play out of the microphone, so without headphones the
     // other side of a call is not heard twice.
-    if (![input setVoiceProcessingEnabled:YES error:&error]) dictate_log("meeting: the microphone has no echo cancellation");
-    else if (@available(macOS 14.0, *)) {
-      // Voice processing turns other audio down, which would quiet the call itself.
-      AVAudioVoiceProcessingOtherAudioDuckingConfiguration ducking = { .enableAdvancedDucking = NO, .duckingLevel = AVAudioVoiceProcessingOtherAudioDuckingLevelMin };
-      input.voiceProcessingOtherAudioDuckingConfiguration = ducking;
+    if (![input setVoiceProcessingEnabled:YES error:&error]) dictate_log([NSString stringWithFormat:@"meeting: the microphone has no echo cancellation: %@", error.localizedDescription ?: @"no reason given"].UTF8String);
+    else {
+      cancelling = YES;
+      if (@available(macOS 14.0, *)) {
+        // Voice processing turns other audio down, which would quiet the call itself.
+        AVAudioVoiceProcessingOtherAudioDuckingConfiguration ducking = { .enableAdvancedDucking = NO, .duckingLevel = AVAudioVoiceProcessingOtherAudioDuckingLevelMin };
+        input.voiceProcessingOtherAudioDuckingConfiguration = ducking;
+      }
     }
     (void)engine.mainMixerNode; // voice processing runs the output side too, which needs its chain
   } @catch (NSException *exception) {
-    (void)exception;
+    dictate_log([NSString stringWithFormat:@"meeting: the microphone engine could not be made: %@", exception.reason ?: exception.name].UTF8String);
     return @"Couldn’t start the mic";
   }
   self.engine = engine;
   // A headset switching profile or a new default device stops the engine: it picks up again.
   [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(micChanged:) name:AVAudioEngineConfigurationChangeNotification object:engine];
-  return [self tapMic:engine];
+  NSString *problem = [self tapMic:engine];
+  // Echo cancellation runs the speakers' side too, and on some Macs that side will not start (a display's
+  // speakers, a device mid-switch, a system that refuses voice processing): the microphone plain, then,
+  // which still records everything, with the other side of a call possibly heard twice.
+  if (problem && cancelling) {
+    dictate_log([NSString stringWithFormat:@"meeting: %@ with echo cancellation; trying the microphone plain", problem].UTF8String);
+    [engine stop];
+    NSError *error;
+    if ([engine.inputNode setVoiceProcessingEnabled:NO error:&error]) problem = [self tapMic:engine];
+    else dictate_log([NSString stringWithFormat:@"meeting: echo cancellation would not turn off: %@", error.localizedDescription ?: @"no reason given"].UTF8String);
+  }
+  return problem;
 }
 // On the control queue.
 - (NSString *)tapMic:(AVAudioEngine *)engine {
@@ -296,7 +311,10 @@ static void TTMeetingClosed(void) {
     AVAudioInputNode *input = engine.inputNode;
     [input removeTapOnBus:0];
     AVAudioFormat *format = [input outputFormatForBus:0];
-    if (!format.channelCount || format.sampleRate <= 0) return @"No mic found";
+    if (!format.channelCount || format.sampleRate <= 0) {
+      dictate_log([NSString stringWithFormat:@"meeting: the microphone reports no usable format (%u channels at %.0f Hz)", (unsigned)format.channelCount, format.sampleRate].UTF8String);
+      return @"No mic found";
+    }
     TTMeetingStream *mic = self.mic;
     dispatch_queue_t audio = TTMeetingAudio();
     AVAudioNodeTapBlock append = ^(AVAudioPCMBuffer *buffer, AVAudioTime *when) {
@@ -309,15 +327,21 @@ static void TTMeetingClosed(void) {
     NSError *error;
 #if defined(__MAC_27_0)
     if (@available(macOS 27.0, *)) {
-      if (![input installTapOnBus:0 bufferSize:frames format:nil error:&error block:append]) return @"Couldn’t start the mic";
+      if (![input installTapOnBus:0 bufferSize:frames format:nil error:&error block:append]) {
+        dictate_log([NSString stringWithFormat:@"meeting: the microphone tap would not install: %@", error.localizedDescription ?: @"no reason given"].UTF8String);
+        return @"Couldn’t start the mic";
+      }
     } else { [input installTapOnBus:0 bufferSize:frames format:nil block:append]; }
 #else // built with an SDK before macOS 27, which has no error-returning tap
     [input installTapOnBus:0 bufferSize:frames format:nil block:append];
 #endif
     [engine prepare];
-    if (!engine.isRunning && ![engine startAndReturnError:&error]) return @"Couldn’t start the mic";
+    if (!engine.isRunning && ![engine startAndReturnError:&error]) {
+      dictate_log([NSString stringWithFormat:@"meeting: the microphone engine would not start: %@", error.localizedDescription ?: @"no reason given"].UTF8String);
+      return @"Couldn’t start the mic";
+    }
   } @catch (NSException *exception) {
-    (void)exception;
+    dictate_log([NSString stringWithFormat:@"meeting: the microphone threw: %@", exception.reason ?: exception.name].UTF8String);
     return @"Couldn’t start the mic";
   }
   return nil;

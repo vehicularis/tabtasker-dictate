@@ -3,7 +3,7 @@
 type Tauri = {
   core: { invoke: (command: string, args?: Record<string, unknown>) => Promise<unknown> };
   event: { listen: (name: string, handler: (event: { payload: unknown }) => void) => Promise<() => void> };
-  window: { getCurrentWindow: () => { close: () => Promise<void> } };
+  window: { getCurrentWindow: () => { close: () => Promise<void>; setTitle: (title: string) => Promise<void> } };
 };
 const tauri = () => (window as unknown as { __TAURI__?: Tauri }).__TAURI__;
 export const inApp = () => !!tauri();
@@ -27,3 +27,5 @@ export function listen<T>(name: string, handler: (payload: T) => void): () => vo
 
 // Closes the window this page is in; a browser tab has none to close.
 export const closeWindow = () => { void tauri()?.window.getCurrentWindow().close(); };
+// Names the window this page is in, as the Mac shows it in Mission Control and the Window menu; a browser tab names itself.
+export const setWindowTitle = (title: string) => { const app = tauri(); if (app) void app.window.getCurrentWindow().setTitle(title).catch(() => {}); else document.title = title; };

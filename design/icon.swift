@@ -55,54 +55,69 @@ func squircle(_ rect: CGRect, radius r: CGFloat) -> CGPath {
   return path
 }
 
-// TabTasker's otter exactly as Business draws it (flat, white, looking straight at you, its body running
-// off the bottom), on a dark grey rather than Business's night blue, and speaking: where its mouth and
-// whiskers are, a small waveform. Drawn on the 1024 grid, full bleed; CoreGraphics' y runs up.
+// TabTasker's otter exactly as Business draws it (apps/web/public/tabtasker-mark.svg), on a dark grey
+// rather than Business's night blue, and speaking: a small waveform where its mouth is. The mark's own
+// numbers are used: its tile is 64 units and the otter's group sits at translate(32 47) scale(1.3), so
+// on the 1024 grid one unit of the group is 20.8 px. The head is a dome with shoulders (never a tall
+// rounded box, which reads as a bear), the ears stand proud of it, and the body runs off the bottom.
+// CoreGraphics' y runs up and the mark's down, so the group is flipped and every number below is the SVG's.
 let ink = CGColor(srgbRed: 0.09, green: 0.09, blue: 0.10, alpha: 1)        // #171719, the face
 let tileTop = CGColor(srgbRed: 0.235, green: 0.239, blue: 0.255, alpha: 1)  // #3c3d41
 let tileBottom = CGColor(srgbRed: 0.094, green: 0.094, blue: 0.106, alpha: 1) // #18181b
-func ellipse(_ cx: CGFloat, _ cy: CGFloat, _ rx: CGFloat, _ ry: CGFloat) -> CGPath { CGPath(ellipseIn: CGRect(x: cx - rx, y: cy - ry, width: 2 * rx, height: 2 * ry), transform: nil) }
-func circle(_ cx: CGFloat, _ cy: CGFloat, _ r: CGFloat) -> CGPath { ellipse(cx, cy, r, r) }
-func arc(_ cx: CGFloat, _ cy: CGFloat, _ r: CGFloat, _ from: CGFloat, _ to: CGFloat) -> CGPath {
-  let path = CGMutablePath()
-  path.addArc(center: CGPoint(x: cx, y: cy), radius: r, startAngle: from * .pi / 180, endAngle: to * .pi / 180, clockwise: false)
-  return path
+let unit: CGFloat = 1024 / 64 * 1.3
+let markOrigin = CGPoint(x: 512, y: 1024 - 47 * 1024 / 64)
+/// A path drawn in the group's units, placed on the grid given (the 1024 one unless told otherwise).
+func inMark(origin: CGPoint = markOrigin, unit u: CGFloat = unit, _ draw: (CGMutablePath) -> Void) -> CGPath {
+  let path = CGMutablePath(); draw(path)
+  var flip = CGAffineTransform(translationX: origin.x, y: origin.y).scaledBy(x: u, y: -u)
+  return path.copy(using: &flip) ?? path
 }
-
-/// The white: the head and body as one rounded shape, with an ear on each side (Business's 512 grid, doubled).
-func otterBody() -> CGPath {
-  let body = CGMutablePath()
-  // A tall rounded rectangle, its top corners at r 68, never a dome (a dome is what reads as a bear).
-  body.addPath(CGPath(roundedRect: CGRect(x: 241, y: -300, width: 540, height: 1122), cornerWidth: 68, cornerHeight: 68, transform: nil))
-  body.addPath(circle(324, 730, 92)); body.addPath(circle(698, 730, 92))
-  return body
+func dot(_ path: CGMutablePath, _ cx: CGFloat, _ cy: CGFloat, _ rx: CGFloat, _ ry: CGFloat? = nil) {
+  path.addEllipse(in: CGRect(x: cx - rx, y: cy - (ry ?? rx), width: 2 * rx, height: 2 * (ry ?? rx)))
 }
-/// The face, cut from the white in ink.
-func otterFace() -> CGPath {
-  let face = CGMutablePath()
-  face.addPath(circle(324, 730, 41)); face.addPath(circle(698, 730, 41))   // the ears' insides
-  face.addPath(circle(407, 585, 32)); face.addPath(circle(615, 585, 32))   // eyes
-  face.addPath(ellipse(511, 481, 34, 26))                                  // nose
-  for side in [-1, 1] as [CGFloat] {                                       // three whisker dots each side, as Business has them
-    for (dx, dy) in [(-73, 439), (-96, 419), (-73, 398)] as [(CGFloat, CGFloat)] { face.addPath(circle(511 + side * dx, dy, 9)) }
+/// The head and body as one shape: the mark's path, verbatim.
+func otterHead(_ path: CGMutablePath) {
+  path.move(to: CGPoint(x: -13, y: -16))
+  path.addCurve(to: CGPoint(x: 0, y: -25), control1: CGPoint(x: -13, y: -22), control2: CGPoint(x: -7, y: -25))
+  path.addCurve(to: CGPoint(x: 13, y: -16), control1: CGPoint(x: 7, y: -25), control2: CGPoint(x: 13, y: -22))
+  path.addLine(to: CGPoint(x: 13, y: 15))
+  path.addCurve(to: CGPoint(x: 0, y: 25), control1: CGPoint(x: 13, y: 22), control2: CGPoint(x: 7, y: 25))
+  path.addCurve(to: CGPoint(x: -13, y: 15), control1: CGPoint(x: -7, y: 25), control2: CGPoint(x: -13, y: 22))
+  path.closeSubpath()
+}
+/// Its voice: five bars of a small wave between the whiskers, where the mouth is.
+let voice: [(CGFloat, CGFloat)] = [(-1.73, 0.87), (-0.865, 1.44), (0, 2.02), (0.865, 1.44), (1.73, 0.87)]
+/// The face, cut from the white in ink: the ears' insides, eyes, nose and whisker dots as Business has them, and the voice.
+func otterFace(_ face: CGMutablePath, voice bars: [(CGFloat, CGFloat)]) {
+  dot(face, -9, -22, 2); dot(face, 9, -22, 2)
+  dot(face, -5, -15, 1.6); dot(face, 5, -15, 1.6)
+  dot(face, 0, -10, 1.7, 1.3)
+  for side in [-1, 1] as [CGFloat] { for (x, y) in [(3.5, -8), (4.6, -7), (3.5, -6)] as [(CGFloat, CGFloat)] { dot(face, side * x, y, 0.45) } }
+  for (x, h) in bars { face.addRoundedRect(in: CGRect(x: x - 0.24, y: -6.75 - h / 2, width: 0.48, height: h), cornerWidth: 0.24, cornerHeight: 0.24) }
+}
+/// The white, in two fills (the head's curve and the ears' circles may wind opposite ways, and one
+/// nonzero fill would then leave the overlap empty): drawn in a layer, so the shadow and the shade
+/// fall on the union once.
+func white(_ ctx: CGContext, origin: CGPoint = markOrigin, unit u: CGFloat = unit, shade: Bool) {
+  ctx.beginTransparencyLayer(auxiliaryInfo: nil)
+  ctx.setFillColor(grey(1))
+  ctx.addPath(inMark(origin: origin, unit: u) { otterHead($0) }); ctx.fillPath()
+  ctx.addPath(inMark(origin: origin, unit: u) { dot($0, -9, -22, 4.5); dot($0, 9, -22, 4.5) }); ctx.fillPath()
+  if shade { // a whisper of shade toward the top, on the white alone
+    ctx.setBlendMode(.sourceAtop)
+    let tone = CGGradient(colorsSpace: space, colors: [grey(0.9), grey(0.97)] as CFArray, locations: nil)!
+    ctx.drawLinearGradient(tone, start: CGPoint(x: 0, y: origin.y + 25 * u), end: CGPoint(x: 0, y: origin.y), options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
+    ctx.setBlendMode(.normal)
   }
-  for (dx, h) in [(-36, 18), (-18, 30), (0, 42), (18, 30), (36, 18)] as [(CGFloat, CGFloat)] { // its voice, a small wave where the mouth is
-    face.addPath(capsule(CGRect(x: 511 + dx - 5, y: 412 - h / 2, width: 10, height: h)))
-  }
-  return face
+  ctx.endTransparencyLayer()
 }
 
 func mark(_ ctx: CGContext, _ k: CGFloat) {
-  // White with a whisper of shade toward the top, and a soft shadow, so it sits on the tile.
   ctx.saveGState()
   ctx.setShadow(offset: CGSize(width: 0, height: -6 * k), blur: 18 * k, color: grey(0, 0.45)) // shadows ignore the scale
-  ctx.addPath(otterBody()); ctx.setFillColor(grey(1)); ctx.fillPath()
+  white(ctx, shade: true)
   ctx.restoreGState()
-  ctx.saveGState(); ctx.addPath(otterBody()); ctx.clip()
-  let shade = CGGradient(colorsSpace: space, colors: [grey(0.9), grey(0.97)] as CFArray, locations: nil)!
-  ctx.drawLinearGradient(shade, start: CGPoint(x: 0, y: 822), end: CGPoint(x: 0, y: 300), options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
-  ctx.restoreGState()
-  ctx.addPath(otterFace()); ctx.setFillColor(ink); ctx.fillPath()
+  ctx.addPath(inMark { otterFace($0, voice: voice) }); ctx.setFillColor(ink); ctx.fillPath()
 }
 
 // The app icon at any size: full bleed, as Business draws its own. macOS 26 and later mask every icon into
@@ -124,16 +139,20 @@ func appIcon(_ size: Int) -> CGImage {
 func trayIcon(_ size: Int) -> CGImage {
   image(size) { ctx, s in
     ctx.scaleBy(x: s / 36, y: s / 36)
-    let head = CGMutablePath()
-    head.addPath(CGPath(roundedRect: CGRect(x: 6, y: -12, width: 24, height: 42), cornerWidth: 3.5, cornerHeight: 3.5, transform: nil))
-    head.addPath(circle(9.5, 26, 4)); head.addPath(circle(26.5, 26, 4))
-    ctx.addPath(head); ctx.setFillColor(grey(0)); ctx.fillPath()
-    let face = CGMutablePath()
-    face.addPath(circle(9.5, 26, 1.8)); face.addPath(circle(26.5, 26, 1.8))
-    face.addPath(circle(13.5, 20, 1.6)); face.addPath(circle(22.5, 20, 1.6))
-    face.addPath(ellipse(18, 15.5, 2, 1.5))
-    for (dx, h) in [(-3, 2.5), (0, 4.5), (3, 2.5)] as [(CGFloat, CGFloat)] { face.addPath(capsule(CGRect(x: 18 + dx - 0.8, y: 10 - h / 2, width: 1.6, height: h))) } // three bars read at 18 pt
-    ctx.setBlendMode(.clear); ctx.addPath(face); ctx.fillPath()
+    // The same mark, 0.92 px a unit on the 36 grid, its head's top at y 29 and its body running off the bottom.
+    let origin = CGPoint(x: 18, y: 6), u: CGFloat = 0.92
+    ctx.setFillColor(grey(0))
+    ctx.addPath(inMark(origin: origin, unit: u) { otterHead($0) }); ctx.fillPath()
+    ctx.addPath(inMark(origin: origin, unit: u) { dot($0, -9, -22, 4.5); dot($0, 9, -22, 4.5) }); ctx.fillPath()
+    ctx.setBlendMode(.clear)
+    ctx.addPath(inMark(origin: origin, unit: u) { face in
+      dot(face, -9, -22, 2); dot(face, 9, -22, 2)
+      dot(face, -5, -15, 1.6); dot(face, 5, -15, 1.6)
+      dot(face, 0, -10, 1.7, 1.3)
+      for (x, h) in [(-1.75, 2.7), (0, 4.9), (1.75, 2.7)] as [(CGFloat, CGFloat)] { // three bars read at 18 pt; the whiskers would not
+        face.addRoundedRect(in: CGRect(x: x - 0.45, y: -5 - h / 2, width: 0.9, height: h), cornerWidth: 0.45, cornerHeight: 0.45)
+      }
+    }); ctx.fillPath()
   }
 }
 

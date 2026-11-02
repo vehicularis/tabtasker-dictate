@@ -25,13 +25,15 @@ const SAMPLE: LibraryItem[] = [
 ];
 
 // The Library, from the dots: your notes and meetings, newest first, in the overlay's glass. A click opens
-// one in your Markdown app; the whole Library, with search across everything, is a page in Settings.
+// one in the editor; the whole Library, with search across everything, is a page in Settings.
 export function LibraryCard({ claudeCode, onClose, onError, onWriteNote }: { claudeCode: boolean; onClose: () => void; onError: (message: string) => void; onWriteNote: () => void }) {
   const [items, setItems] = useState<LibraryItem[] | null>(PREVIEW ? SAMPLE : null);
+  const [folder, setFolder] = useState(PREVIEW ? 'TabTasker Dictate' : '');
   const [query, setQuery] = useState('');
   const field = useRef<HTMLInputElement>(null);
   const refresh = () => { if (!PREVIEW) void invoke<LibraryItem[]>('library_list').then(setItems, () => onError('Couldn’t read your notes.')); };
   useEffect(refresh, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!PREVIEW) void invoke<{ path: string }>('notes_folder').then(found => setFolder(found.path.split('/').pop() ?? ''), () => {}); }, []);
   useEffect(() => listen('dictate-meeting', refresh), []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { field.current?.focus(); }, []);
   const act = (command: string, path: string, fallback: string) => void invoke(command, { path }).catch(() => onError(fallback));
@@ -49,10 +51,11 @@ export function LibraryCard({ claudeCode, onClose, onError, onWriteNote }: { cla
     <ul className="ways library-list">
       {shown.map(item => <li key={item.path}>
         <span className="row-icon" aria-hidden="true">{item.kind === 'meeting' ? <Icon name="meeting" size={16} /> : <NoteGlyph size={18} />}</span>
-        <button type="button" className="what library-open" onClick={() => act('library_open', item.path, 'Couldn’t open that file.')}>
+        <button type="button" className="what library-open" onClick={() => act('note_open', item.path, 'Couldn’t open that note.')}>
           {item.title}<small>{item.kind === 'meeting' ? 'Meeting' : 'Note'} · {when(item.modifiedMs)}{item.excerpt ? ` · ${item.excerpt}` : ''}</small>
         </button>
         <span className="library-acts">
+          <button type="button" className="tool" aria-label={`Open ${item.title} in another app`} title="Open in another app" onClick={() => act('library_open', item.path, 'Couldn’t open that file.')}><Icon name="external" size={15} /></button>
           <button type="button" className="tool" aria-label={`Show ${item.title} in Finder`} title="Show in Finder" onClick={() => act('show_notes', item.path, 'Couldn’t show that in Finder.')}><Icon name="folder" size={15} /></button>
           {claudeCode && <button type="button" className="tool" aria-label={`Send ${item.title} to Claude Code`} title="Send to Claude Code" onClick={() => act('send_to_claude_code', item.path, 'Couldn’t open Claude Code.')}><Icon name="claudeCode" size={15} /></button>}
         </span>
@@ -60,7 +63,9 @@ export function LibraryCard({ claudeCode, onClose, onError, onWriteNote }: { cla
     </ul>
     <footer className="actions">
       <button type="button" className="btn" onClick={onWriteNote}><NoteGlyph size={16} />Write a note</button>
-      <span className="ask">{items ? `${items.filter(item => item.kind === 'note').length} notes, ${items.filter(item => item.kind === 'meeting').length} meetings` : ''}</span>
+      <button type="button" className="ask library-folder" title={folder ? `Your notes are Markdown files in the ${folder} folder. Show it in Finder.` : undefined} onClick={() => void invoke('show_notes', {}).catch(() => onError('Couldn’t show the folder in Finder.'))}>
+        {items ? `${items.filter(item => item.kind === 'note').length} notes, ${items.filter(item => item.kind === 'meeting').length} meetings` : ''}{folder ? <small> · in {folder}</small> : null}
+      </button>
       <button type="button" className="btn" onClick={all}><LibraryGlyph size={16} />All of it</button>
     </footer>
   </article>;

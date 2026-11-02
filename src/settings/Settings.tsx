@@ -88,11 +88,13 @@ export function Settings() {
     go(next.dataset.route!);
   };
 
-  // The workspace shell from TabTasker Business: a title strip with the traffic lights, then a rail panel
-  // and the page as a raised island on a tinted frame. The strip and the frame drag the window.
+  // The workspace shell from TabTasker Business: a title strip with the traffic lights and, to their right
+  // as in Business's Mac app, the app's name and the page that is open (the window holds your Library as
+  // well as settings, so it is never called Settings); then a rail panel and the page as a raised island on
+  // a tinted frame. The strip and the frame drag the window.
   return <div className="window" data-tauri-drag-region>
-    <header className="titlebar" data-tauri-drag-region><span data-tauri-drag-region>Settings</span></header>
-    <nav ref={nav} className="rail" aria-label="Settings" onKeyDown={arrows}>
+    <header className="titlebar" data-tauri-drag-region><span className="titlebar-app" data-tauri-drag-region>TabTasker Dictate</span><span className="titlebar-page" data-tauri-drag-region>{page.title}</span></header>
+    <nav ref={nav} className="rail" aria-label="TabTasker Dictate" onKeyDown={arrows}>
       <label className="search">
         <Icon name="search" size={15} />
         <input ref={search} type="search" placeholder="Search" aria-label="Search settings" value={query} spellCheck={false}

@@ -890,9 +890,59 @@ static void TTVoicePlaySound(NSString *name, double volume) {
   }
   return nil;
 }
+/// The Dock's strip on the screen that has it: its edge and thickness, read from the Dock's own
+/// accessibility tree (its one list is the Dock), which reports its size while it is hidden too. Zero
+/// when there is no Dock to ask or no leave to ask it.
+static CGFloat TTDockStrip(NSRectEdge *edge) {
+  NSRunningApplication *dock = [NSRunningApplication runningApplicationsWithBundleIdentifier:@"com.apple.dock"].firstObject;
+  if (!dock || !AXIsProcessTrusted()) { dictate_log(dock ? "dock: no leave to read the Dock (Accessibility is off)" : "dock: the Dock isn't running"); return 0; }
+  AXUIElementRef app = AXUIElementCreateApplication(dock.processIdentifier);
+  CFArrayRef children = NULL;
+  CGFloat thickness = 0;
+  if (AXUIElementCopyAttributeValue(app, kAXChildrenAttribute, (CFTypeRef *)&children) == kAXErrorSuccess && children) {
+    for (CFIndex i = 0; i < CFArrayGetCount(children) && thickness == 0; i++) {
+      AXUIElementRef child = (AXUIElementRef)CFArrayGetValueAtIndex(children, i);
+      CFTypeRef role = NULL, size = NULL;
+      if (AXUIElementCopyAttributeValue(child, kAXRoleAttribute, &role) == kAXErrorSuccess && role && CFEqual(role, kAXListRole)
+          && AXUIElementCopyAttributeValue(child, kAXSizeAttribute, &size) == kAXErrorSuccess && size) {
+        CGSize box = CGSizeZero;
+        AXValueGetValue((AXValueRef)size, kAXValueTypeCGSize, &box);
+        // Along the bottom it is wide; at a side it is tall. Which side, the Dock's own preference says.
+        dictate_log([NSString stringWithFormat:@"dock: its list is %.0f × %.0f", box.width, box.height].UTF8String);
+        if (box.width >= box.height) { *edge = NSRectEdgeMinY; thickness = box.height; }
+        else {
+          NSString *side = (__bridge_transfer NSString *)CFPreferencesCopyAppValue(CFSTR("orientation"), CFSTR("com.apple.dock"));
+          *edge = [side isEqualToString:@"left"] ? NSRectEdgeMinX : NSRectEdgeMaxX;
+          thickness = box.width;
+        }
+      }
+      if (role) CFRelease(role);
+      if (size) CFRelease(size);
+    }
+    CFRelease(children);
+  }
+  CFRelease(app);
+  return thickness;
+}
 - (void)fitScreen {
   NSScreen *screen = NSScreen.mainScreen ?: NSScreen.screens.firstObject;
-  if (screen) [self.window setFrame:TTOverlayAvoidsDock ? screen.visibleFrame : screen.frame display:YES];
+  if (!screen) return;
+  NSRect fit = TTOverlayAvoidsDock ? screen.visibleFrame : screen.frame;
+  // A Dock that hides itself reserves nothing, so the visible frame runs to its edge and it would slide
+  // out over the dots. Its strip is kept clear anyway, on the screen that has the Dock (the one with the
+  // menu bar), when the visible frame reaches that edge.
+  if (TTOverlayAvoidsDock && NSEqualRects(screen.frame, NSScreen.screens.firstObject.frame)) { // the same screen, whatever object stands for it
+    NSRectEdge edge = NSRectEdgeMinY;
+    CGFloat strip = TTDockStrip(&edge);
+    NSRect whole = screen.frame;
+    if (strip > 0) {
+      if (edge == NSRectEdgeMinY && NSMinY(fit) == NSMinY(whole)) { fit.origin.y += strip; fit.size.height -= strip; }
+      else if (edge == NSRectEdgeMinX && NSMinX(fit) == NSMinX(whole)) { fit.origin.x += strip; fit.size.width -= strip; }
+      else if (edge == NSRectEdgeMaxX && NSMaxX(fit) == NSMaxX(whole)) fit.size.width -= strip;
+    }
+  }
+  dictate_log([NSString stringWithFormat:@"overlay: fitted to %.0f × %.0f at %.0f, %.0f (clear of the Dock: %@)", fit.size.width, fit.size.height, fit.origin.x, fit.origin.y, TTOverlayAvoidsDock ? @"yes" : @"no"].UTF8String);
+  [self.window setFrame:fit display:YES];
 }
 - (void)attach:(NSWindow *)window {
   self.window = window;

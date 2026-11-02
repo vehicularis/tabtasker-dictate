@@ -44,12 +44,12 @@ export function Appearance({ settings, update }: PageProps) {
         </Tile>
       </TileGroup>
     </Section>
-    <Section title="Position" note="With Stay clear of the Dock on, the dots never sit under the Dock or the menu bar, whatever the margin.">
+    <Section title="Position" note="With Stay clear of the Dock on, the dots never sit under the Dock or the menu bar, whatever the margin. A Dock that hides itself keeps its strip too, so it never slides out over them.">
       <TileGroup>
-        <Tile title="Margin" detail="How far the dots sit from the edge of the screen.">
+        <Tile title="Margin" detail="How far the dots sit from the edge of the screen. At 0 they touch it.">
           <Slider label="Margin" min={0} max={120} step={2} value={look.margin} format={value => `${value} pt`} onChange={margin => change({ margin })} />
         </Tile>
-        <Tile title="Stay clear of the Dock" detail={look.avoidDock ? 'The dots keep above the Dock and below the menu bar.' : 'The dots use the whole screen; an auto-hidden Dock can cover them.'}>
+        <Tile title="Stay clear of the Dock" detail={look.avoidDock ? 'The dots keep above the Dock, hidden or not, and below the menu bar.' : 'The dots use the whole screen; the Dock can cover them.'}>
           <Toggle label="Stay clear of the Dock" checked={look.avoidDock} onChange={avoidDock => change({ avoidDock })} />
         </Tile>
       </TileGroup>

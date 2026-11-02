@@ -11,7 +11,12 @@ body { font: 14px/1.45 var(--font); -webkit-font-smoothing: antialiased; }
 .sticky-tool { display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 6px; color: rgb(0 0 0 / .62); background: none; cursor: pointer; }
 .sticky-tool:hover { color: var(--ink); background: rgb(0 0 0 / .08); }
 .sticky-tool:disabled { opacity: .35; cursor: default; }
-.sticky-text { flex: 1; min-height: 0; margin: 0; padding: 10px 12px 12px; border: 0; outline: 0; resize: none; color: inherit; background: none; font: 500 15px/1.45 var(--font); }
-.sticky-text::placeholder { color: rgb(0 0 0 / .4); }
+.sticky .ed { flex: 1; min-height: 0; }
+.sticky .ed-content { overflow-y: auto; }
+.sticky .ed-body { color: inherit; caret-color: var(--ink); }
+.sticky .ed-body p.is-editor-empty:first-child::before { color: rgb(0 0 0 / .4); }
+.sticky .ed-body a { color: #1d4ed8; }
+.sticky .ed-body :is(code, pre) { background: rgb(0 0 0 / .07); }
+.sticky .ed-body blockquote { border-left-color: rgb(0 0 0 / .18); color: rgb(0 0 0 / .62); }
 .sticky-problem { margin: 0; padding: 4px 12px 8px; font-size: 12px; color: #a3261e; }
 :is(button, [tabindex]):focus-visible { outline: 2px solid rgb(0 0 0 / .5); outline-offset: 1px; }

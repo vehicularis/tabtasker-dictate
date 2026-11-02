@@ -48,6 +48,13 @@ button { font: inherit; color: inherit; }
 /* ---------- the dots, their pill and the orb ---------- */
 /* It grows with the size, so the parts scaled inside it keep their share of margin to the screen's edge. */
 .spot { position: relative; display: grid; place-items: center; min-width: calc(48px * var(--scale)); min-height: calc(48px * var(--scale)); }
+/* The dots, their capsule, the pill and the orb all sit on the spot's screen-side edge, and scale from it, so a margin of 0 puts them on the edge itself. */
+.layer[data-edge='bottom'] .spot { align-items: end; }
+.layer[data-edge='bottom'] :is(.capsule, .dots, .pill, .orb) { transform-origin: 50% 100%; }
+.layer[data-edge='left'] .spot { justify-items: start; }
+.layer[data-edge='left'] :is(.capsule, .dots, .pill, .orb) { transform-origin: 0 50%; }
+.layer[data-edge='right'] .spot { justify-items: end; }
+.layer[data-edge='right'] :is(.capsule, .dots, .pill, .orb) { transform-origin: 100% 50%; }
 /* A small glass capsule behind the dots, so they read on any wallpaper. */
 .capsule { position: absolute; width: 34px; height: 14px; border-radius: 7px; opacity: .9; transition: opacity .2s; }
 .layer:is([data-edge='left'], [data-edge='right']) .capsule { width: 14px; height: 34px; }
@@ -115,17 +122,6 @@ button { font: inherit; color: inherit; }
 .orb { position: absolute; display: flex; align-items: center; box-sizing: border-box; width: 64px; height: 64px; padding: 0; border: 0; border-radius: 32px; background: radial-gradient(circle closest-side, var(--orb-body) 80%, transparent 81%); filter: drop-shadow(0 8px 20px rgb(0 0 0 / .3)); opacity: 0; transform: scale(.09); pointer-events: none; transition: transform .3s ease-in, opacity .1s .2s; cursor: pointer; }
 .orb-glass { position: relative; flex: none; width: 64px; height: 64px; }
 .orb canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
-/* With words, the orb is a capsule: the glass keeps its place at the left and the words run to the right of
-   it, the newest always in view, the oldest fading out at the left edge of the text. On a side edge it
-   grows toward the screen, never off it. */
-.orb[data-words] { width: auto; max-width: min(420px, calc(100vw - 32px)); padding: 0 20px 0 0; background: var(--orb-body); box-shadow: inset 0 0 0 .5px rgb(255 255 255 / .12), inset 0 1px 0 rgb(255 255 255 / .08); }
-.orb[data-words] .orb-glass { margin-left: -6px; }
-.orb-words { display: flex; justify-content: flex-end; max-width: 330px; overflow: hidden; font-size: 14.5px; line-height: 1.3; color: var(--orb-ink); -webkit-mask-image: linear-gradient(90deg, transparent, #000 28px); mask-image: linear-gradient(90deg, transparent, #000 28px); animation: words-in .25s var(--ease) both; }
-.orb-words > span { flex: none; white-space: nowrap; }
-@keyframes words-in { from { opacity: 0; } }
-.layer[data-edge='left'] .orb[data-words] { justify-self: start; }
-.layer[data-edge='right'] .orb[data-words] { justify-self: end; flex-direction: row-reverse; padding: 0 0 0 20px; }
-.layer[data-edge='right'] .orb[data-words] .orb-glass { margin: 0 -6px 0 0; }
 .layer:is([data-mode='listening'], [data-mode='thinking']) .orb { opacity: 1; transform: none; pointer-events: auto; transition: opacity .1s .1s, transform .55s var(--spring) .1s; }
 /* Transcribing: the orb breathes. */
 .layer[data-mode='thinking'] .orb { animation: breathe 1.8s ease-in-out infinite; }
@@ -149,6 +145,7 @@ button { font: inherit; color: inherit; }
 .name { display: flex; align-items: center; gap: 7px; font-weight: 600; color: var(--ink); }
 .head { cursor: grab; }
 .close { display: grid; place-items: center; width: 22px; height: 22px; margin-left: auto; padding: 0; border: 0; border-radius: 50%; background: none; opacity: .55; cursor: pointer; }
+.close.grow + .close { margin-left: 0; }
 .close:hover { opacity: 1; }
 .title { display: block; width: 100%; box-sizing: border-box; margin: 2px 0 6px; padding: 2px 0; border: 0; border-radius: 6px; background: none; color: var(--ink); font: 500 18px/1.3 var(--font-display); }
 .title::placeholder { color: var(--ink-3); }

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { invoke } from '../bridge';
 import { STICKY_HUES, type Sticky as Record, type StickyHue } from '../store';
 import { Icon } from '../ui/Icon';
+import { Editor } from '../editor/Editor';
 
 const id = new URLSearchParams(location.search).get('id') ?? '';
 const HUES = Object.keys(STICKY_HUES) as StickyHue[];
@@ -9,8 +10,8 @@ const HUES = Object.keys(STICKY_HUES) as StickyHue[];
 const stamp = () => { const d = new Date(), p = (n: number) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}.${p(d.getMinutes())}`; };
 const message = (error: unknown, fallback: string) => typeof error === 'string' ? error : fallback;
 
-// One sticky, in its own small window: a colour bar to drag it by (and recolour it), its words, saved as
-// they are typed, and two ways out: as a note in the notes folder, or gone. Hold the dictate key with the
+// One sticky, in its own small window: a colour bar to drag it by (and recolour it), its words in the Text
+// editor (Markdown shortcuts work), saved as they are typed, and two ways out: as a note in the notes folder, or gone. Hold the dictate key with the
 // words focused to talk into it.
 export function Sticky() {
   const [sticky, setSticky] = useState<Record | null>(null);
@@ -40,7 +41,7 @@ export function Sticky() {
         <button type="button" className="sticky-tool" title="Close" aria-label="Close this sticky" onClick={close}><Icon name="close" size={12} /></button>
       </span>
     </header>
-    <textarea className="sticky-text" aria-label="Sticky" value={text} placeholder="Type, or hold fn and talk" autoFocus spellCheck onChange={event => edit(event.target.value)} />
+    {sticky && <Editor key={sticky.id} compact markdown={sticky.text} label="Sticky" placeholder="Type, or hold fn and talk" autoFocus={!sticky.text} onChange={edit} />}
     {problem && <p className="sticky-problem" role="alert">{problem}</p>}
   </div>;
 }

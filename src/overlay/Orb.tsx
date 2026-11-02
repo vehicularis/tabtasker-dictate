@@ -3,9 +3,9 @@ import { isDark } from '../ui/theme';
 import { createGlass, flatWave, paintInside, type Glass } from './glass';
 
 // The orb, as TabTasker Business draws its own: a smoked disc under glass, with level bars that follow your
-// voice while you talk, a text cursor while your words type (held still while they change), and the wave
-// while what you said is transcribed. `words` are the live words: once there are any, the orb stretches
-// into a capsule and they run inside it, the newest at the right.
+// voice while you talk, a text cursor while your words type, and the wave while what you said is
+// transcribed. `words` are the live words while typing: they go into the field itself, never into the orb;
+// here they only tell the cursor when to hold still (solid while words are going in, blinking once they stop).
 export function Orb({ mode, level, typing, words, onClick }: { mode: string; level: { current: number }; typing: boolean; words: string; onClick: () => void }) {
   const host = useRef<HTMLSpanElement>(null);
   const glass = useRef<Glass | null>(null);
@@ -64,9 +64,7 @@ export function Orb({ mode, level, typing, words, onClick }: { mode: string; lev
     frame = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(frame);
   }, [active, level]);
-  const said = words.trim();
-  return <button type="button" className="orb" data-hit data-words={said ? '' : undefined} tabIndex={-1} aria-label={mode === 'thinking' ? 'Transcribing' : typing ? 'Typing' : 'Recording'} onClick={onClick}>
+  return <button type="button" className="orb" data-hit tabIndex={-1} aria-label={mode === 'thinking' ? 'Transcribing' : typing ? 'Typing' : 'Recording'} onClick={onClick}>
     <span ref={host} className="orb-glass" aria-hidden="true" />
-    {said && <span className="orb-words" role="status"><span>{said}</span></span>}
   </button>;
 }

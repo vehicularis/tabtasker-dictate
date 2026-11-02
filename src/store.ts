@@ -43,6 +43,8 @@ export type StickyHue = keyof typeof STICKY_HUES;
 export type Sticky = { id: string; text: string; hue: StickyHue; x: number; y: number; width: number; height: number; createdMs: number; updatedMs: number };
 /// A note or meeting file as the Library lists it (notes.rs LibraryItem).
 export type LibraryItem = { path: string; title: string; kind: 'note' | 'meeting'; modifiedMs: number; words: number; excerpt: string };
+/// A note or meeting in the editor (notes.rs NoteDoc): its title apart, its body as Markdown with no front matter or heading.
+export type NoteDoc = { path: string; title: string; body: string; kind: 'note' | 'meeting'; modifiedMs: number };
 export type Events = {
   'dictate-settings': Settings;
   'dictate-command': { request: string; phase: 'thinking' | 'answer' | 'done' | 'error'; text?: string; instruction?: string; typed?: boolean };

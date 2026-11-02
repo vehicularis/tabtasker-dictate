@@ -48,6 +48,37 @@ export function register(mock: Mock) {
   ];
   mock.handle('library_list', () => library);
   mock.handle('library_open', () => {});
+  // The editor: a note's title and body, in memory. A library item it has never seen reads as its excerpt.
+  const docs = new Map<string, { title: string; body: string }>();
+  const docOf = (path: string) => {
+    const known = docs.get(path);
+    if (known) return known;
+    const item = library.find(one => one.path === path);
+    if (!item) throw 'That file isn’t there any more.';
+    const made = { title: item.title, body: item.kind === 'meeting' ? item.excerpt.replace(/ (\w+ \d\d:\d\d:\d\d) /g, '\n\n**$1** ') : `${item.excerpt}\n\n- [ ] Call them\n- [x] Send the plan\n` };
+    docs.set(path, made);
+    return made;
+  };
+  mock.handle('note_read', ({ path }) => {
+    const item = library.find(one => one.path === path);
+    const doc = docOf(path as string);
+    return { path, title: doc.title, body: doc.body, kind: item?.kind ?? 'note', modifiedMs: item?.modifiedMs ?? Date.now() };
+  });
+  mock.handle('note_write', ({ path, title, body }) => {
+    const doc = docOf(path as string);
+    doc.title = title as string; doc.body = body as string;
+    const item = library.find(one => one.path === path);
+    if (item) { item.title = doc.title || item.path.split('/').pop()!.replace(/\.md$/, ''); item.excerpt = doc.body.replace(/[#>*_`-]/g, ' ').split(/\s+/).filter(Boolean).slice(0, 28).join(' '); item.modifiedMs = Date.now(); item.words = doc.body.split(/\s+/).filter(Boolean).length; }
+    return Date.now();
+  });
+  mock.handle('note_new', ({ title, text, stamp }) => {
+    const note = compose(mock.settings().notes, title as string, text as string, null, stamp as string);
+    const path = `${folder()}/${note.stem}.md`;
+    docs.set(path, { title: title as string, body: text as string });
+    library.unshift({ path, title: (title as string) || note.stem, kind: 'note', modifiedMs: Date.now(), words: (text as string).split(/\s+/).filter(Boolean).length, excerpt: (text as string).slice(0, 160) });
+    return path;
+  });
+  mock.handle('note_open', ({ path }) => { open(`/note.html?path=${encodeURIComponent(path as string)}${location.search.includes('theme=') ? `&theme=${new URLSearchParams(location.search).get('theme')}` : ''}`, '_blank'); });
   mock.handle('notes_folder', () => {
     const path = folder();
     return { path, vault: path === VAULT || path.startsWith(`${VAULT}/`) ? 'Second Brain' : null };

@@ -14,10 +14,12 @@ const GEAR = Array.from({ length: 8 }, (_, i) => {
 // The app icon, as design/icon.swift draws it: TabTasker's otter on dark grey, speaking (a small waveform
 // where its mouth is). The 1024 grid is scaled to the 26 tile here, and the otter is drawn in the icon's own
 // coordinates (y up) under one transform, so the two never drift apart.
+/// Business's mark (apps/web/public/tabtasker-mark.svg), in its own units: the head's path, the whisker dots, and Dictate's voice at the mouth.
+export const OTTER = 'M-13 -16 C-13 -22 -7 -25 0 -25 C7 -25 13 -22 13 -16 L13 15 C13 22 7 25 0 25 C-7 25 -13 22 -13 15 Z';
+export const WHISKERS = [[-3.5, -8], [-4.6, -7], [-3.5, -6], [3.5, -8], [4.6, -7], [3.5, -6]] as const;
+export const VOICE = [[-1.73, 0.87], [-0.865, 1.44], [0, 2.02], [0.865, 1.44], [1.73, 0.87]] as const;
 export const Logo = ({ size = 18 }: { size?: number }) => {
   const id = useId();
-  const voice = [[-36, 18], [-18, 30], [0, 42], [18, 30], [36, 18]] as const;
-  const dots = [[-73, 439], [-96, 419], [-73, 398]] as const;
   return <svg width={size} height={size} viewBox="0 0 28 28" aria-hidden="true">
     <defs>
       <linearGradient id={`${id}-grey`} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#3c3d41" /><stop offset="1" stopColor="#18181b" /></linearGradient>
@@ -25,17 +27,15 @@ export const Logo = ({ size = 18 }: { size?: number }) => {
     </defs>
     <rect x="1" y="1" width="26" height="26" rx="6.2" fill={`url(#${id}-grey)`} />
     <rect x="1.25" y="1.25" width="25.5" height="25.5" rx="5.95" fill="none" stroke="#fff" strokeOpacity=".12" strokeWidth=".5" />
-    {/* The clip is on its own group: on a transformed one it would be read in the icon's coordinates. */}
-    <g clipPath={`url(#${id}-tile)`}><g transform="translate(1 27) scale(.025391 -.025391)">
-      <g fill="#f3f4f6">
-        <rect x="241" y="-300" width="540" height="1122" rx="68" /><circle cx="324" cy="730" r="92" /><circle cx="698" cy="730" r="92" />
-      </g>
+    {/* The mark's tile is 64 units and this one 26; its group sits at (32 47) and is scaled 1.3, as in the SVG. The clip is on its own group:
+        on a transformed one it would be read in the mark's coordinates. */}
+    <g clipPath={`url(#${id}-tile)`}><g transform="translate(14 20.094) scale(.52813)">
+      <g fill="#f3f4f6"><circle cx="-9" cy="-22" r="4.5" /><circle cx="9" cy="-22" r="4.5" /><path d={OTTER} /></g>
       <g fill="#171719">
-        <circle cx="324" cy="730" r="41" /><circle cx="698" cy="730" r="41" /><circle cx="407" cy="585" r="32" /><circle cx="615" cy="585" r="32" />
-        <ellipse cx="511" cy="481" rx="34" ry="26" />
-        {dots.map(([dx, y]) => <circle key={`l${y}`} cx={511 + dx} cy={y} r="9" />)}
-        {dots.map(([dx, y]) => <circle key={`r${y}`} cx={511 - dx} cy={y} r="9" />)}
-        {voice.map(([dx, h]) => <rect key={dx} x={511 + dx - 5} y={412 - h / 2} width="10" height={h} rx="5" />)}
+        <circle cx="-9" cy="-22" r="2" /><circle cx="9" cy="-22" r="2" /><circle cx="-5" cy="-15" r="1.6" /><circle cx="5" cy="-15" r="1.6" />
+        <ellipse cx="0" cy="-10" rx="1.7" ry="1.3" />
+        {WHISKERS.map(([x, y]) => <circle key={`${x} ${y}`} cx={x} cy={y} r=".45" />)}
+        {VOICE.map(([x, h]) => <rect key={x} x={x - 0.24} y={-6.75 - h / 2} width=".48" height={h} rx=".24" />)}
       </g>
     </g></g>
   </svg>;
