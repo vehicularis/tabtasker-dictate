@@ -340,12 +340,14 @@ pub fn run() {
       status, set_enabled, set_input, set_open_at_login, request, layout, meeting, open_settings, paste_last,
       notes::save_note, notes::show_notes, notes::notes_folder, notes::preview_note, notes::choose_folder, settings::get_settings, settings::update_settings, settings::reset_settings,
       speech::speech_models, speech::prepare_model, speech::vocabulary_fit, text::list_apps,
+      history::history_list, history::history_stats, history::history_delete, history::history_clear, history::history_type,
     ])
     .setup(|app| {
       app.set_activation_policy(ActivationPolicy::Accessory); // a menu bar app: no Dock icon
       let handle = app.handle().clone();
       APP.get_or_init(|| handle.clone());
       settings::init(&handle)?;
+      history::init(&handle)?;
       speech::init(&handle)?;
       unsafe { dictate_init() };
       settings::apply(&handle, &settings::get());
