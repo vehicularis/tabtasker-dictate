@@ -73,6 +73,11 @@ extern "C" fn dictate_ui_fn(down: bool) {
 extern "C" fn dictate_ui_said(words: *const c_char, dictated: bool, live: bool) {
   if let Some(words) = text(words) { emit("dictate-said", serde_json::json!({ "text": words, "dictated": dictated, "live": live })); }
 }
+/// Hands-free listening locked by a double tap of the dictate key, or over.
+#[no_mangle]
+extern "C" fn dictate_ui_hands_free(locked: bool) {
+  emit("dictate-hands-free", serde_json::json!({ "locked": locked }));
+}
 /// A note is done: its words go to the review card.
 #[no_mangle]
 extern "C" fn dictate_ui_note(words: *const c_char) {
@@ -137,10 +142,11 @@ async fn set_open_at_login(app: AppHandle, enabled: bool) -> Result<bool, String
   on_main(&app, move || unsafe { dictate_open_at_login(enabled as i32) }).await
 }
 
-/// Setup and recording actions: open macOS's microphone or Accessibility prompts, start or stop a note.
+/// Setup and recording actions: open macOS's microphone or Accessibility prompts, start or stop a note,
+/// send or cancel hands-free listening.
 #[tauri::command]
 async fn request(app: AppHandle, kind: String) -> Result<(), String> {
-  if !matches!(kind.as_str(), "microphone" | "accessibility" | "keyboard" | "note") { return Err("Unknown request".into()); }
+  if !matches!(kind.as_str(), "microphone" | "accessibility" | "keyboard" | "note" | "send" | "cancel") { return Err("Unknown request".into()); }
   let kind = CString::new(kind).map_err(|e| e.to_string())?;
   on_main(&app, move || unsafe { dictate_request(kind.as_ptr()) }).await
 }
@@ -177,6 +183,12 @@ fn paste_last(app: AppHandle) {
     }
     None => emit("dictate-notice", serde_json::json!({ "message": "Nothing to paste yet" })),
   }
+}
+
+/// Paste Last Transcript from its chord.
+#[no_mangle]
+extern "C" fn dictate_paste_last() {
+  if let Some(app) = APP.get() { paste_last(app.clone()); }
 }
 
 fn start_meeting(app: &AppHandle) {
