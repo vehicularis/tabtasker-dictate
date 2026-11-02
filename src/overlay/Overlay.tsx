@@ -195,7 +195,7 @@ export function Overlay() {
   const save = async () => {
     if (!draft?.text.trim()) return;
     try {
-      const path = await invoke<string>('save_note', { title: draft.title.trim(), text: draft.text, stamp: stamp(new Date()) });
+      const path = await invoke<string>('save_note', { title: draft.title.trim(), text: draft.text, stamp: stamp(new Date()), named: !!draft.named });
       setDraft(null); setReviewing(false); setSaved(path);
     } catch (error) {
       setToast(typeof error === 'string' ? error : 'Couldn’t save the note');
@@ -239,7 +239,7 @@ export function Overlay() {
     <div ref={dock} className="dock">
       {setup && <Setup status={status} fnDown={fnDown} fnTested={fnTested} onClose={() => setSetup(false)} />}
       {!setup && draft && reviewing && <NoteCard draft={draft} onChange={setDraft} more={noting ? live : null} canTalk={phase === 'idle'}
-        discarding={discarding} onDiscarding={setDiscarding} onSave={() => void save()} onDiscard={discard} onHide={() => setReviewing(false)} onTalk={takeNote} onGrab={grab} />}
+        discarding={discarding} onDiscarding={setDiscarding} onSave={save} onDiscard={discard} onHide={() => setReviewing(false)} onTalk={takeNote} onGrab={grab} />}
       {noting && phase === 'listening' && !card && <p className="glass said" data-glass role="status">
         <small>Note · {clockOf(since)}</small><span>{live ?? 'Listening…'}</span>
       </p>}

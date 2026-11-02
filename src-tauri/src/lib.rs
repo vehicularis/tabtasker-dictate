@@ -319,7 +319,7 @@ pub fn run() {
   tauri::Builder::default()
     .invoke_handler(tauri::generate_handler![
       status, set_enabled, set_input, set_open_at_login, request, layout, meeting, open_settings, paste_last,
-      notes::save_note, notes::show_notes, settings::get_settings, settings::update_settings, settings::reset_settings,
+      notes::save_note, notes::show_notes, notes::notes_folder, notes::preview_note, notes::choose_folder, settings::get_settings, settings::update_settings, settings::reset_settings,
     ])
     .setup(|app| {
       app.set_activation_policy(ActivationPolicy::Accessory); // a menu bar app: no Dock icon
@@ -333,6 +333,7 @@ pub fn run() {
       handle.set_menu(app_menu(&handle)?)?;
       let enabled = status_json().and_then(|json| serde_json::from_str::<serde_json::Value>(&json).ok()).is_some_and(|status| status["enabled"] == true);
       tray(&handle, enabled)?;
+      notes::watch(&handle);
       Ok(())
     })
     .on_menu_event(|app, event| menu_event(app, event.id().as_ref()))
