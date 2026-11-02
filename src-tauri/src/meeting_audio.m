@@ -307,9 +307,13 @@ static void TTMeetingClosed(void) {
     };
     AVAudioFrameCount frames = (AVAudioFrameCount)ceil(format.sampleRate * 0.1);
     NSError *error;
+#if defined(__MAC_27_0)
     if (@available(macOS 27.0, *)) {
       if (![input installTapOnBus:0 bufferSize:frames format:nil error:&error block:append]) return @"Couldn’t start the mic";
     } else { [input installTapOnBus:0 bufferSize:frames format:nil block:append]; }
+#else // built with an SDK before macOS 27, which has no error-returning tap
+    [input installTapOnBus:0 bufferSize:frames format:nil block:append];
+#endif
     [engine prepare];
     if (!engine.isRunning && ![engine startAndReturnError:&error]) return @"Couldn’t start the mic";
   } @catch (NSException *exception) {

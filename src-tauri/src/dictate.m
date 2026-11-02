@@ -495,9 +495,13 @@ static void TTVoiceBringForward(NSRunningApplication *app, void (^then)(BOOL fro
       AVAudioNodeTapBlock append = ^(AVAudioPCMBuffer *buffer, AVAudioTime *when) { (void)when; [audio append:buffer]; };
       AVAudioFrameCount frames = (AVAudioFrameCount)ceil(format.sampleRate * 0.1);
       NSError *error;
+#if defined(__MAC_27_0)
       if (@available(macOS 27.0, *)) {
         if (![input installTapOnBus:0 bufferSize:frames format:nil error:&error block:append]) problem = @"Couldn’t start the mic";
       } else { [input installTapOnBus:0 bufferSize:frames format:nil block:append]; }
+#else // built with an SDK before macOS 27, which has no error-returning tap
+      [input installTapOnBus:0 bufferSize:frames format:nil block:append];
+#endif
       if (!problem) {
         [engine prepare];
         if (![engine startAndReturnError:&error]) problem = @"Couldn’t start the mic";
