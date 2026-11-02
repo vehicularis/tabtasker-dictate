@@ -385,6 +385,14 @@ pub fn get() -> Settings {
   CURRENT.read().unwrap_or_else(|e| e.into_inner()).clone().unwrap_or_default()
 }
 
+/// The settings in `path` made current for a process that never saves them, such as the MCP server,
+/// which reads them again for every request so a change in the app reaches it.
+pub fn use_file(path: &Path) -> Settings {
+  let settings = load_from(path);
+  *CURRENT.write().unwrap_or_else(|e| e.into_inner()) = Some(settings.clone());
+  settings
+}
+
 pub fn init(app: &AppHandle) -> Result<(), String> {
   let path = app.path().app_data_dir().map_err(|e| e.to_string())?.join("settings.json");
   let (settings, damaged) = load(&path);
