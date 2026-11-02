@@ -43,6 +43,7 @@ export function register(mock: Mock) {
   const library = new URLSearchParams(location.search).get('library') === 'empty' ? [] : [
     { path: `${folder()}/Meetings/2026-11-02 Design review.md`, title: 'Design review', kind: 'meeting', modifiedMs: now - hour, words: 1240, excerpt: 'You 00:00:04 Right, so Thursday at 10 works for everyone? Maria 00:00:09 Yes, I have the big room booked. We should start with the floor plan and then…' },
     { path: `${folder()}/2026-11-02 Call the venue.md`, title: 'Call the venue about Thursday', kind: 'note', modifiedMs: now - 3 * hour, words: 42, excerpt: 'Call the venue about Thursday and ask for the bigger room. Then send Maria the new floor plan before lunch. Call them Send the plan' },
+    { path: `${folder()}/2026-11-02 Note 2.md`, title: '2026-11-02 Note 2', kind: 'note', modifiedMs: now - 2 * hour, words: 0, excerpt: '' }, // a note just made, empty
     { path: `${folder()}/2026-11-01 Ideas for the launch.md`, title: 'Ideas for the launch', kind: 'note', modifiedMs: now - 26 * hour, words: 310, excerpt: 'A short video first, then the three screenshots, then the pricing. Ask Sam whether the onboarding emails can go out the same morning.' },
     { path: `${folder()}/Meetings/2026-10-30 Weekly.md`, title: 'Weekly', kind: 'meeting', modifiedMs: now - 70 * hour, words: 2890, excerpt: 'You 00:00:02 Quick round, then the roadmap. Priya 00:00:15 The board deck has no draft yet…' },
   ];
@@ -55,7 +56,7 @@ export function register(mock: Mock) {
     if (known) return known;
     const item = library.find(one => one.path === path);
     if (!item) throw 'That file isn’t there any more.';
-    const made = { title: item.title, body: item.kind === 'meeting' ? item.excerpt.replace(/ (\w+ \d\d:\d\d:\d\d) /g, '\n\n**$1** ') : `${item.excerpt}\n\n- [ ] Call them\n- [x] Send the plan\n` };
+    const made = { title: item.title, body: item.words === 0 ? '' : item.kind === 'meeting' ? item.excerpt.replace(/ (\w+ \d\d:\d\d:\d\d) /g, '\n\n**$1** ') : `${item.excerpt}\n\n- [ ] Call them\n- [x] Send the plan\n` };
     docs.set(path, made);
     return made;
   };

@@ -20,6 +20,9 @@
 /* ---------- the prose ---------- */
 /* EditorContent is the body's own element: it fills the column, and its bottom padding is where a click below the last line lands to keep writing. */
 .ed-content { flex: 1 1 auto; min-height: 0; overflow-x: hidden; }
+/* No ring on the body, ever: it shows focus by its caret. ui.css rings every [tabindex] on keyboard focus with more weight than a
+   bare class, and the ring, clipped on three sides by the scroller, was left as one stray line under the words. */
+.ed .ed-body:is(:focus, :focus-visible) { outline: none; }
 .ed-body { box-sizing: border-box; min-height: 100%; overflow-wrap: anywhere; outline: none; caret-color: var(--accent); font: 15.5px/1.55 var(--font); color: var(--ink); }
 .ed-body > * + * { margin-top: .7em; }
 .ed-body > *:first-child { margin-top: 0; }
