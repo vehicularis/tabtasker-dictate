@@ -72,16 +72,16 @@ func arc(_ cx: CGFloat, _ cy: CGFloat, _ r: CGFloat, _ from: CGFloat, _ to: CGFl
 /// The white: the head and body as one rounded shape, with an ear on each side (Business's 512 grid, doubled).
 func otterBody() -> CGPath {
   let body = CGMutablePath()
-  body.addPath(CGPath(roundedRect: CGRect(x: 240, y: -300, width: 544, height: 1114), cornerWidth: 272, cornerHeight: 272, transform: nil))
-  body.addPath(circle(320, 754, 96)); body.addPath(circle(704, 754, 96))
+  body.addPath(CGPath(roundedRect: CGRect(x: 262, y: -300, width: 500, height: 1114), cornerWidth: 250, cornerHeight: 250, transform: nil))
+  body.addPath(circle(336, 758, 90)); body.addPath(circle(688, 758, 90))
   return body
 }
 /// The face, cut from the white in ink.
 func otterFace() -> CGPath {
   let face = CGMutablePath()
-  face.addPath(circle(320, 754, 44)); face.addPath(circle(704, 754, 44))   // the ears' insides
-  face.addPath(circle(410, 588, 34)); face.addPath(circle(614, 588, 34))   // eyes
-  face.addPath(ellipse(512, 486, 34, 24))                                  // nose
+  face.addPath(circle(336, 758, 41)); face.addPath(circle(688, 758, 41))   // the ears' insides
+  face.addPath(circle(418, 590, 32)); face.addPath(circle(606, 590, 32))   // eyes
+  face.addPath(ellipse(512, 490, 31, 22))                                  // nose
   for side in [-1, 1] as [CGFloat] {                                       // three whisker dots each side
     for (dx, dy) in [(-18, 14), (10, 0), (-8, -22)] as [(CGFloat, CGFloat)] { face.addPath(circle(512 + side * (98 + dx * side), 432 + dy, 9)) }
   }
@@ -90,15 +90,15 @@ func otterFace() -> CGPath {
 /// The voice: two arcs at either side of the head, opening outward.
 func otterVoice() -> CGPath {
   let voice = CGMutablePath()
-  for (cx, from, to) in [(CGFloat(236), CGFloat(118), CGFloat(242)), (CGFloat(788), CGFloat(-62), CGFloat(62))] {
-    for r in [104, 176] as [CGFloat] { voice.addPath(arc(cx, 560, r, from, to)) }
+  for (cx, from, to) in [(CGFloat(240), CGFloat(120), CGFloat(240)), (CGFloat(784), CGFloat(-60), CGFloat(60))] {
+    for r in [100, 168] as [CGFloat] { voice.addPath(arc(cx, 560, r, from, to)) }
   }
   return voice
 }
 
 func mark(_ ctx: CGContext, _ k: CGFloat) {
   ctx.saveGState()
-  ctx.addPath(otterVoice()); ctx.setLineWidth(26); ctx.setLineCap(.round); ctx.setStrokeColor(grey(1, 0.82)); ctx.strokePath()
+  ctx.addPath(otterVoice()); ctx.setLineWidth(24); ctx.setLineCap(.round); ctx.setStrokeColor(grey(1, 0.72)); ctx.strokePath()
   ctx.restoreGState()
   // White with a whisper of shade toward the top, and a soft shadow, so it sits on the tile.
   ctx.saveGState()

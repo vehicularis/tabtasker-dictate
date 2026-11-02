@@ -264,8 +264,8 @@ export function Overlay() {
       {setup && <Setup status={status} fnDown={fnDown} fnTested={fnTested} steps={setup === 'steps'} onClose={() => setSetup(false)} />}
       {!setup && draft && reviewing && <NoteCard draft={draft} onChange={setDraft} more={noting ? live : null} canTalk={phase === 'idle'} saving={saving}
         discarding={discarding} onDiscarding={setDiscarding} onSave={save} onDiscard={discard} onHide={() => setReviewing(false)} onTalk={takeNote} onGrab={grab} />}
-      {phase === 'listening' && !card && (noting || live) && <p className="glass said" data-glass data-live role="status">
-        <small>{noting ? `Note · ${clockOf(since)}` : dictating ? 'Typing' : 'Listening'}</small><span>{live ?? 'Listening…'}</span>
+      {noting && phase === 'listening' && !card && <p className="glass said" data-glass data-live role="status">
+        <small>Note · {clockOf(since)}</small><span>{live ?? 'Listening…'}</span>
       </p>}
       {saved && !card && <button type="button" className="glass said saved" data-glass data-hit onClick={() => { void invoke('show_notes', { file: saved }).catch(() => {}); setSaved(null); }}>
         <small>Saved · Show in Finder</small><span>{saved.split('/').pop()?.replace(/\.md$/, '')}</span>
@@ -276,7 +276,7 @@ export function Overlay() {
       <HandsFree />
       <Learned />
       {toast && <p className="glass toast" data-glass role="status">{toast}</p>}
-      <Dock mode={mode} dots={dots} label={pending ? 'Open the note' : 'TabTasker Dictate'} hint={settings.appearance.hint} quiet={quiet} level={level} typing={dictating} words={live ?? ''}
+      <Dock mode={mode} dots={dots} label={pending ? 'Open the note' : 'TabTasker Dictate'} hint={settings.appearance.hint} quiet={quiet} level={level} typing={dictating} words={noting ? '' : live ?? ''}
         onHover={setHover} onGrab={grab} onDots={clickDots} onNote={takeNote} onSetup={() => openSetup('quick')} onOrb={() => { if (noting) takeNote(); }}
         onMenu={() => { if (phase === 'idle') { setMenu(true); refresh(); lookMeetings(); } }}
         menu={menu && <Menu status={status} mics={mics} meeting={!!meetings?.recording} onMics={setMics} onNote={() => { setMenu(false); takeNote(); }} onMeeting={startMeeting}

@@ -11,17 +11,13 @@ const GEAR = Array.from({ length: 8 }, (_, i) => {
   return `${i ? 'L' : 'M'}${at(-14, 5.9)}L${at(-8, 7.6)}L${at(8, 7.6)}L${at(14, 5.9)}A5.9 5.9 0 0 1 ${at(31, 5.9)}`;
 }).join('') + 'Z';
 
-// The app icon, as design/icon.swift draws it: TabTasker's otter on dark grey with sound waves at either
-// side of its head. The icon's 1024 grid is scaled to the 26 tile here, and the otter is drawn in the icon's
-// own coordinates (y up) under one transform, so the two never drift apart.
+// The app icon, as design/icon.swift draws it: TabTasker's otter on dark grey. At the sizes a card shows
+// it, the icon's sound waves would only crowd the head, so they are left to the icon itself. The 1024 grid
+// is scaled to the 26 tile here, and the otter is drawn in the icon's own coordinates (y up) under one
+// transform, so the two never drift apart.
 export const Logo = ({ size = 18 }: { size?: number }) => {
   const id = useId();
   const dots = [[-18, 14], [10, 0], [-8, -22]] as const;
-  // An arc of radius r about (cx, 560) between two angles, as SVG writes it.
-  const arc = (cx: number, r: number, from: number, to: number) => {
-    const at = (deg: number) => `${(cx + r * Math.cos(deg * Math.PI / 180)).toFixed(1)} ${(560 + r * Math.sin(deg * Math.PI / 180)).toFixed(1)}`;
-    return `M${at(from)}A${r} ${r} 0 0 1 ${at(to)}`;
-  };
   return <svg width={size} height={size} viewBox="0 0 28 28" aria-hidden="true">
     <defs>
       <linearGradient id={`${id}-grey`} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#3c3d41" /><stop offset="1" stopColor="#18181b" /></linearGradient>
@@ -31,13 +27,12 @@ export const Logo = ({ size = 18 }: { size?: number }) => {
     <rect x="1.25" y="1.25" width="25.5" height="25.5" rx="5.95" fill="none" stroke="#fff" strokeOpacity=".12" strokeWidth=".5" />
     {/* The clip is on its own group: on a transformed one it would be read in the icon's coordinates. */}
     <g clipPath={`url(#${id}-tile)`}><g transform="translate(1 27) scale(.025391 -.025391)">
-      <path d={[arc(236, 104, 118, 242), arc(236, 176, 118, 242), arc(788, 104, -62, 62), arc(788, 176, -62, 62)].join('')} fill="none" stroke="#fff" strokeOpacity=".82" strokeWidth="26" strokeLinecap="round" />
       <g fill="#f3f4f6">
-        <rect x="240" y="-300" width="544" height="1114" rx="272" /><circle cx="320" cy="754" r="96" /><circle cx="704" cy="754" r="96" />
+        <rect x="262" y="-300" width="500" height="1114" rx="250" /><circle cx="336" cy="758" r="90" /><circle cx="688" cy="758" r="90" />
       </g>
       <g fill="#171719">
-        <circle cx="320" cy="754" r="44" /><circle cx="704" cy="754" r="44" /><circle cx="410" cy="588" r="34" /><circle cx="614" cy="588" r="34" />
-        <ellipse cx="512" cy="486" rx="34" ry="24" />
+        <circle cx="336" cy="758" r="41" /><circle cx="688" cy="758" r="41" /><circle cx="418" cy="590" r="32" /><circle cx="606" cy="590" r="32" />
+        <ellipse cx="512" cy="490" rx="31" ry="22" />
         {dots.map(([dx, dy]) => <circle key={`l${dx}`} cx={414 + dx} cy={432 + dy} r="9" />)}
         {dots.map(([dx, dy]) => <circle key={`r${dx}`} cx={610 - dx} cy={432 + dy} r="9" />)}
       </g>
