@@ -721,8 +721,12 @@ pub async fn claude_connect_code(app: AppHandle) -> Result<settings::Settings, S
   probe(&Route::Code { program: program.clone() }, model).await.map_err(|e| e.to_string())?;
   let saved = settings::update(&app, &json!({ "claude": { "enabled": true, "via": "claudeCode", "claudeCode": program.display().to_string() } }))?;
   // Claude Code can read the notes from now on, with nothing more to set up: this app's own MCP server,
-  // added to Claude Code's list quietly. A copy that isn't installed in Applications is left out (mcp.rs says why).
-  if let Err(e) = crate::mcp::agents_add("claudeCode".into()).await { log::info!("mcp: not added to Claude Code: {e}"); }
+  // added to Claude Code's list, as Claude & AI says it will be. Only while Answer agents is on (the switch
+  // that refuses every agent), and only the reading tools unless Write notes is on too; a copy that isn't
+  // installed in Applications is left out (mcp.rs says why).
+  if settings::get().agents.mcp {
+    if let Err(e) = crate::mcp::agents_add("claudeCode".into()).await { log::info!("mcp: not added to Claude Code: {e}"); }
+  }
   Ok(saved)
 }
 
