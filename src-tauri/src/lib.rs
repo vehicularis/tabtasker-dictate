@@ -265,14 +265,21 @@ static PAUSED: OnceLock<CheckMenuItem<Wry>> = OnceLock::new();
 pub(crate) fn recent_changed(app: &AppHandle) {
   let Some((menu, files)) = RECENT.get() else { return };
   let notes = notes::recent(10);
-  let rebuild = || -> tauri::Result<()> {
-    while menu.remove_at(0)?.is_some() {}
-    if notes.is_empty() { return menu.append(&MenuItem::with_id(app, "recent-none", "No notes yet", false, None::<&str>)?); }
-    for (i, note) in notes.iter().enumerate() { menu.append(&MenuItem::with_id(app, format!("recent:{i}"), &note.title, true, None::<&str>)?)?; }
-    Ok(())
-  };
-  if let Err(e) = rebuild() { log::warn!("recent notes: {e}"); }
-  *files.lock().unwrap_or_else(|e| e.into_inner()) = notes.into_iter().map(|note| note.path).collect();
+  let handle = app.clone();
+  // Off the main thread each menu call is its own trip there, so rebuilds from two threads could interleave
+  // into duplicate items. On it, this runs at once and whole.
+  let rebuilt = app.run_on_main_thread(move || {
+    let app = &handle;
+    let rebuild = || -> tauri::Result<()> {
+      while menu.remove_at(0)?.is_some() {}
+      if notes.is_empty() { return menu.append(&MenuItem::with_id(app, "recent-none", "No notes yet", false, None::<&str>)?); }
+      for (i, note) in notes.iter().enumerate() { menu.append(&MenuItem::with_id(app, format!("recent:{i}"), &note.title, true, None::<&str>)?)?; }
+      Ok(())
+    };
+    if let Err(e) = rebuild() { log::warn!("recent notes: {e}"); }
+    *files.lock().unwrap_or_else(|e| e.into_inner()) = notes.into_iter().map(|note| note.path).collect();
+  });
+  if let Err(e) = rebuilt { log::warn!("recent notes: {e}"); }
 }
 
 fn show_paused(paused: bool) {
@@ -331,7 +338,7 @@ pub fn run() {
   tauri::Builder::default()
     .invoke_handler(tauri::generate_handler![
       status, set_enabled, set_input, set_open_at_login, request, layout, meeting, open_settings, paste_last,
-      notes::save_note, notes::show_notes, settings::get_settings, settings::update_settings, settings::reset_settings,
+      notes::save_note, notes::show_notes, notes::notes_folder, notes::preview_note, notes::choose_folder, settings::get_settings, settings::update_settings, settings::reset_settings,
       speech::speech_models, speech::prepare_model, speech::vocabulary_fit, text::list_apps,
     ])
     .setup(|app| {
@@ -346,6 +353,7 @@ pub fn run() {
       handle.set_menu(app_menu(&handle)?)?;
       let enabled = status_json().and_then(|json| serde_json::from_str::<serde_json::Value>(&json).ok()).is_some_and(|status| status["enabled"] == true);
       tray(&handle, enabled)?;
+      notes::watch(&handle);
       Ok(())
     })
     .on_menu_event(|app, event| menu_event(app, event.id().as_ref()))
