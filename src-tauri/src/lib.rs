@@ -7,6 +7,7 @@
 pub mod ai;
 pub mod context;
 pub mod history;
+pub mod mcp;
 pub mod notes;
 pub mod settings;
 pub mod speech;
@@ -343,6 +344,7 @@ pub fn run() {
       history::history_list, history::history_stats, history::history_delete, history::history_clear, history::history_type,
       ai::claude_save_key, ai::claude_test, ai::claude_remove_key, ai::claude_open_console, ai::claude_insert, ai::claude_dismiss,
       ai::claude_code_find, ai::claude_code_set, ai::send_to_claude_code,
+      mcp::agents_status, mcp::agents_add,
     ])
     .setup(|app| {
       app.set_activation_policy(ActivationPolicy::Accessory); // a menu bar app: no Dock icon
