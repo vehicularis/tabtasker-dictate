@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { invoke } from '../../bridge';
-import { folderPath, tilde, useStatus, type ClaudeModel, type CommandKey, type DictateKey, type PageProps, type Settings } from '../../store';
+import { folderPath, tilde, useStatus, type ClaudeModel, type ClaudeVia, type CommandKey, type DictateKey, type PageProps, type Settings } from '../../store';
 import { Button, Icon, PageHeader, Section, Segmented, TextField, Tile, TileGroup, Toggle } from '../../ui';
 
 const MODELS: { value: ClaudeModel; label: string }[] = [
@@ -54,8 +54,8 @@ export function Claude({ settings, update }: PageProps) {
     : `Hold ${DICTATE[keys.dictate]} with ${COMMAND[keys.command]} and say what to do. With text selected, Claude rewrites it; otherwise it answers or writes at the cursor.`;
 
   return <>
-    <PageHeader icon="claude" title="Claude">Polish, commands, titles and summaries, with your own Anthropic key.</PageHeader>
-    <Connection connected={claude.enabled} model={claude.model} />
+    <PageHeader icon="claude" title="Claude">Polish, commands, titles and summaries, with your own Anthropic key or through Claude Code.</PageHeader>
+    <Connection claude={claude} home={status?.home} />
     <Section title="Model" note={claude.enabled ? undefined : 'These take effect once Claude is connected.'}>
       <TileGroup>
         <Tile title="Model" detail={ABOUT[claude.model]}>
@@ -81,16 +81,22 @@ export function Claude({ settings, update }: PageProps) {
   </>;
 }
 
-/// The key: pasted once, tested, then shown only as saved, with Test and Remove. Focus never falls back to
-/// the top of the page: it stays in the field while a key is tested, and moves with each step.
-function Connection({ connected, model }: { connected: boolean; model: ClaudeModel }) {
+const VIAS: { value: ClaudeVia; label: string }[] = [{ value: 'claudeCode', label: 'Claude Code' }, { value: 'api', label: 'Anthropic key' }];
+
+/// Two ways in: the Claude Code on this Mac, with the account signed in there, or a key pasted once,
+/// tested, then shown only as saved. Connected, the way in use shows with Test and a way out. Focus never
+/// falls back to the top of the page: it stays in the field while a key is tested, and moves with each step.
+function Connection({ claude, home }: { claude: Settings['claude']; home?: string }) {
+  const { enabled: connected, model } = claude;
   const id = useId();
   const [key, setKey] = useState('');
+  // Which way to offer first: Claude Code when it is on this Mac, since there is nothing to paste.
+  const [via, setVia] = useState<ClaudeVia>(claude.claudeCode ? 'claudeCode' : 'api');
   const [busy, setBusy] = useState<'connect' | 'test' | null>(null);
   const [removing, setRemoving] = useState(false);
   const [note, setNote] = useState<{ text: string; error?: boolean } | null>(null);
   const focusNext = useRef<string | null>(null);
-  const focus = (what: 'key' | 'test' | 'remove' | 'cancel') => { focusNext.current = `${id}-${what}`; };
+  const focus = (what: 'key' | 'code' | 'test' | 'remove' | 'cancel') => { focusNext.current = `${id}-${what}`; };
   useEffect(() => {
     // Kept until its target is drawn: a connect or remove shows its new state once the settings arrive.
     const target = focusNext.current && document.getElementById(focusNext.current);
@@ -104,6 +110,16 @@ function Connection({ connected, model }: { connected: boolean; model: ClaudeMod
     setBusy('connect'); setNote(null);
     void invoke('claude_save_key', { key }).then(() => { setKey(''); setNote({ text: 'Connected. Your key is saved in your Keychain.' }); focus('test'); },
       error => { setNote({ text: message(error, 'Couldn’t connect.'), error: true }); focus('key'); }).finally(() => setBusy(null));
+  };
+  const connectCode = () => {
+    if (busy) return;
+    setBusy('connect'); setNote(null);
+    void invoke('claude_connect_code').then(() => { setNote({ text: 'Connected through Claude Code, with your Claude account.' }); focus('test'); },
+      error => { setNote({ text: message(error, 'Couldn’t connect through Claude Code.'), error: true }); focus('code'); }).finally(() => setBusy(null));
+  };
+  const disconnectCode = () => {
+    setNote(null); focus('code');
+    void invoke('claude_disconnect_code').catch(error => { setNote({ text: message(error, 'Couldn’t disconnect.'), error: true }); focus('remove'); });
   };
   const test = () => {
     if (busy) return;
@@ -120,17 +136,34 @@ function Connection({ connected, model }: { connected: boolean; model: ClaudeMod
   const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.preventDefault(); cancel(); } };
   const said = note && <span role={note.error ? 'alert' : 'status'} style={note.error ? { color: 'var(--danger)' } : undefined}>{note.text}</span>;
 
+  const codeWhere = claude.claudeCode ? tilde(claude.claudeCode, home) : null;
   if (!connected) return <Section title="Connection" note={said ?? 'Claude sees text only, never your voice. Nothing is sent until you connect.'}>
     <TileGroup>
-      <Tile title="Anthropic API key" detail="Paste a key from the Anthropic Console. It is tested with a tiny request to the model below, then saved in your Keychain." stack>
+      <Tile title="Connect through" detail={via === 'claudeCode' ? 'Claude Code runs on this Mac with the Claude account you signed in to there. Nothing else to set up or pay for.' : 'Your own Anthropic key, billed to your Anthropic account.'}>
+        <Segmented label="Connect through" value={via} options={VIAS} onChange={setVia} />
+      </Tile>
+      {via === 'claudeCode' && <Tile title="Claude Code" detail={codeWhere ? `Found at ${codeWhere}. A tiny request to the model below checks it is signed in.` : 'Not found on this Mac. Install Claude Code, run it once in Terminal and sign in, then choose Find below.'}>
+        <Button id={`${id}-code`} variant="primary" disabled={!claude.claudeCode} aria-busy={busy === 'connect'} onClick={connectCode}>{busy === 'connect' ? 'Testing…' : 'Connect'}</Button>
+      </Tile>}
+      {via === 'api' && <Tile title="Anthropic API key" detail="Paste a key from the Anthropic Console. It is tested with a tiny request to the model below, then saved in your Keychain." stack>
         <form className="pair" onSubmit={connect}>
           <input id={`${id}-key`} className="ui-field mono" type="password" value={key} aria-label="Anthropic API key" placeholder="sk-ant-…" autoComplete="off" spellCheck={false}
             readOnly={!!busy} aria-busy={!!busy} onChange={event => setKey(event.target.value)} />
           <Button type="submit" variant="primary" disabled={!key.trim()} aria-busy={!!busy}>{busy ? 'Testing…' : 'Connect'}</Button>
         </form>
-      </Tile>
-      <Tile title="No key yet?" detail="Create one in the Anthropic Console. Usage is billed to your Anthropic account.">
+      </Tile>}
+      {via === 'api' && <Tile title="No key yet?" detail="Create one in the Anthropic Console. Usage is billed to your Anthropic account.">
         <Button variant="quiet" icon="external" onClick={() => void invoke('claude_open_console').catch(() => {})}>Get a key</Button>
+      </Tile>}
+    </TileGroup>
+  </Section>;
+
+  if (claude.via === 'claudeCode') return <Section title="Connection" note={said ?? 'Requests run through Claude Code on this Mac, with your Claude account. Your key, if you saved one, is not used.'}>
+    <TileGroup>
+      <Tile title="Claude Code" detail={codeWhere ? `At ${codeWhere}, signed in as you are there.` : 'Signed in as you are there.'}>
+        <span className="state" data-on><Icon name="check" size={14} />Connected</span>
+        <Button id={`${id}-test`} aria-busy={busy === 'test'} onClick={test}>{busy === 'test' ? 'Testing…' : 'Test'}</Button>
+        <Button id={`${id}-remove`} disabled={busy === 'test'} onClick={disconnectCode}>Disconnect</Button>
       </Tile>
     </TileGroup>
   </Section>;
@@ -140,7 +173,7 @@ function Connection({ connected, model }: { connected: boolean; model: ClaudeMod
       <Tile title={removing ? 'Remove the key?' : 'Anthropic API key'} detail={removing ? 'Claude turns off until you paste a key again.' : 'Saved in your Keychain.'}>
         {removing
           ? <><Button id={`${id}-cancel`} variant="quiet" onClick={cancel} onKeyDown={escape}>Cancel</Button><Button variant="danger" onClick={remove} onKeyDown={escape}>Remove</Button></>
-          : <><span className="state" data-on><Icon name="check" size={14} />Saved</span>
+          : <><span className="state" data-on><Icon name="check" size={14} />Connected</span>
             <Button id={`${id}-test`} aria-busy={busy === 'test'} onClick={test}>{busy === 'test' ? 'Testing…' : 'Test'}</Button>
             <Button id={`${id}-remove`} variant="danger" disabled={busy === 'test'} onClick={confirm}>Remove…</Button></>}
       </Tile>
@@ -160,7 +193,7 @@ function Seen({ settings }: { settings: Settings }) {
     { title: 'Notes', detail: 'A saved note’s words, for its title and action items.', on: notes.claudeTitle || notes.claudeActions, state: notes.claudeTitle || notes.claudeActions ? 'On' : 'Off', route: 'notes', place: 'Notes' },
     { title: 'Meetings', detail: 'The transcript, for a summary, decisions and action items.', on: meetings.summarize, state: meetings.summarize ? 'On' : 'Off', route: 'meetings', place: 'Meetings' },
   ];
-  return <Section title="What Claude sees" note="Only text, sent straight to Anthropic over an encrypted connection with your key. Your voice never leaves this Mac.">
+  return <Section title="What Claude sees" note={claude.via === 'claudeCode' ? 'Only text, sent through Claude Code with your Claude account. Your voice never leaves this Mac.' : 'Only text, sent straight to Anthropic over an encrypted connection with your key. Your voice never leaves this Mac.'}>
     <TileGroup>
       {rows.map(row => <Tile key={row.title} title={row.title} detail={row.detail} dim={!claude.enabled}>
         {row.route && <Button variant="quiet" small onClick={() => { location.hash = row.route!; }} aria-label={`Open ${row.place}`}>{row.place}</Button>}

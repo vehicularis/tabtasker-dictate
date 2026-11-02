@@ -8,7 +8,10 @@ Talk instead of typing, on your Mac. Speech is transcribed on the Mac by Whisper
   as you like. The note is transcribed while you talk, a sentence at a time, so it is ready the moment you
   stop. Review the title and words, then save it as a Markdown file in `~/Documents/TabTasker Dictate`.
 
-It runs from the menu bar, with no account and nothing to sign in to.
+It runs from the menu bar, with no account and nothing to sign in to. Claude is optional: connect it in
+Settings with your own Anthropic key, or through the Claude Code on your Mac with the Claude account you
+signed in to there, and it polishes what you dictate, answers spoken commands and summarises notes and
+meetings. Only text ever goes to Claude, never audio.
 
 ## How it works
 

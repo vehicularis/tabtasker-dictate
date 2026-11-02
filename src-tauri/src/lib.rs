@@ -382,12 +382,12 @@ fn menu_event(app: &AppHandle, id: &str) {
 pub fn run() {
   tauri::Builder::default()
     .invoke_handler(tauri::generate_handler![
-      status, set_enabled, set_input, set_open_at_login, request, layout, meeting, open_settings, paste_last,
+      status, set_enabled, set_input, set_open_at_login, request, layout, meeting, open_settings, paste_last, play_sound,
       notes::save_note, notes::show_notes, notes::notes_folder, notes::preview_note, notes::choose_folder, settings::get_settings, settings::update_settings, settings::reset_settings,
       speech::speech_models, speech::prepare_model, speech::vocabulary_fit, text::list_apps,
       history::history_list, history::history_stats, history::history_delete, history::history_clear, history::history_type,
       ai::claude_save_key, ai::claude_test, ai::claude_remove_key, ai::claude_open_console, ai::claude_insert, ai::claude_dismiss,
-      ai::claude_code_find, ai::claude_code_set, ai::send_to_claude_code,
+      ai::claude_code_find, ai::claude_code_set, ai::send_to_claude_code, ai::claude_connect_code, ai::claude_disconnect_code,
       mcp::agents_status, mcp::agents_add,
       meeting::meeting_state, meeting::meeting_recover, meeting::meeting_reveal, meeting::meeting_privacy,
     ])

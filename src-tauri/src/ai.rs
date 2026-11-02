@@ -1,9 +1,11 @@
 //! Claude, when the person connects it: polish, commands, summaries and titles, plus sending a note to
 //! Claude Code. Only text is sent, never audio, and every caller keeps its own words when this answers None.
+//! Claude is reached one of two ways (`Route`): Anthropic's Messages API with the person's own key, or
+//! the Claude Code on this Mac, run non-interactively with the Claude account they signed in to there.
 //! The key lives in the Keychain alone: it is read just before a request and never logged, saved in
 //! settings, emitted or handed to a page.
 use crate::context::{self, HoldContext};
-use crate::settings::{self, ClaudeModel, Style};
+use crate::settings::{self, ClaudeModel, ClaudeVia, Style};
 use serde_json::{json, Value};
 use std::collections::VecDeque;
 use std::ffi::{c_char, CStr, CString};
@@ -29,7 +31,7 @@ pub enum Kind { Meeting, Note }
 // ---------- errors, as the person reads them ----------
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Error { NoKey, BadKey, Forbidden, Billing, Model, TooLong, Rejected, RateLimited, Busy, Offline, Timeout, Refused, Cut, Broken, Empty }
+pub enum Error { NoKey, BadKey, Forbidden, Billing, Model, TooLong, Rejected, RateLimited, Busy, Offline, Timeout, Refused, Cut, Broken, Empty, NoClaudeCode, NotSignedIn, CodeFailed }
 
 impl std::fmt::Display for Error {
   fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -49,6 +51,9 @@ impl std::fmt::Display for Error {
       Self::Cut => "Claude’s answer was cut short.",
       Self::Broken => "Claude’s answer didn’t come through. Try again.",
       Self::Empty => "Claude had nothing to say.",
+      Self::NoClaudeCode => "Claude Code isn’t on this Mac any more. Install it again, or connect with a key instead.",
+      Self::NotSignedIn => "Claude Code isn’t signed in. Run claude in Terminal and sign in, then try again.",
+      Self::CodeFailed => "Claude Code couldn’t answer that. Try again.",
     })
   }
 }
@@ -67,7 +72,7 @@ impl Error {
     }
   }
   /// The key or the account needs the person, not a retry.
-  fn needs_settings(self) -> bool { matches!(self, Self::BadKey | Self::Forbidden | Self::Billing | Self::Model) }
+  fn needs_settings(self) -> bool { matches!(self, Self::BadKey | Self::Forbidden | Self::Billing | Self::Model | Self::NoClaudeCode | Self::NotSignedIn) }
 }
 
 // ---------- requests ----------
@@ -231,6 +236,104 @@ async fn check(endpoint: &str, key: &str, model: ClaudeModel) -> Result<(), Erro
   if status == 200 { Ok(()) } else { reply_text(status, &bytes).map(|_| ()) }
 }
 
+// ---------- the two ways to Claude ----------
+
+/// How a request reaches Claude: Anthropic's API with the person's key, or Claude Code on this Mac with
+/// the account they signed in to there.
+#[derive(Clone, Debug)]
+pub(crate) enum Route { Api { endpoint: String, key: String }, Code { program: PathBuf } }
+
+/// `request` answered the way the person connected, within `timeout`.
+async fn ask(route: &Route, request: &Request, timeout: Duration) -> Result<String, Error> {
+  match route {
+    Route::Api { endpoint, key } => call(endpoint, key, request, timeout).await,
+    Route::Code { program } => {
+      let (program, request) = (program.clone(), request.clone());
+      tauri::async_runtime::spawn_blocking(move || code_call(&program, &request, timeout)).await.map_err(|_| Error::CodeFailed)?
+    }
+  }
+}
+
+/// A one-word request down `route`: any answer means it works with `model`.
+async fn probe(route: &Route, model: ClaudeModel) -> Result<(), Error> {
+  match route {
+    Route::Api { endpoint, key } => check(endpoint, key, model).await,
+    Route::Code { .. } => {
+      let request = Request { model, system: "Reply with one word.".into(), user: "Hi".into(), max_tokens: 8, effort: "low", schema: None };
+      ask(route, &request, TEST_TIME).await.map(|_| ())
+    }
+  }
+}
+
+/// Claude Code's command line for `request`: print mode, one turn, no tools, none of the person's
+/// settings, hooks or MCP servers, and no session kept. The person's text goes in on stdin, so a long
+/// transcript never meets the command line's limit, and `--` keeps nothing in it from reading as an option.
+fn code_args(request: &Request) -> Vec<String> {
+  let mut args: Vec<String> = ["-p", "--output-format", "json", "--tools", "", "--no-session-persistence", "--setting-sources", "", "--strict-mcp-config", "--model"]
+    .into_iter().map(str::to_owned).collect();
+  args.push(model_id(request.model).to_owned());
+  args.extend(["--effort".to_owned(), request.effort.to_owned(), "--system-prompt".to_owned(), request.system.clone()]);
+  if let Some(schema) = &request.schema { args.extend(["--json-schema".to_owned(), schema.to_string()]); }
+  args
+}
+
+/// What Claude Code printed for a request: its answer, or why there is none, read as the API's are.
+fn code_reply(stdout: &[u8]) -> Result<String, Error> {
+  let value: Value = serde_json::from_slice(stdout).map_err(|_| Error::Broken)?;
+  let text = value["result"].as_str().unwrap_or_default().trim();
+  if value["is_error"] == true || value["subtype"].as_str().is_some_and(|kind| kind.starts_with("error")) {
+    let said = text.to_lowercase();
+    log::warn!("claude code: {}", if text.is_empty() { value["subtype"].as_str().unwrap_or("failed") } else { text });
+    return Err(if said.contains("not logged in") || said.contains("/login") || said.contains("authentication") || said.contains("invalid api key") { Error::NotSignedIn }
+      else if said.contains("rate limit") || said.contains("usage limit") || said.contains("too many requests") { Error::RateLimited }
+      else if said.contains("overloaded") { Error::Busy }
+      else if said.contains("too long") || said.contains("too large") || said.contains("prompt is too") { Error::TooLong }
+      else if said.contains("refus") { Error::Refused }
+      else { Error::CodeFailed });
+  }
+  match value["stop_reason"].as_str() {
+    Some("refusal") => return Err(Error::Refused),
+    Some("max_tokens") => return Err(Error::Cut),
+    _ => {}
+  }
+  if text.is_empty() { Err(Error::Empty) } else { Ok(text.to_owned()) }
+}
+
+/// Runs Claude Code once for `request`, given `timeout`; a run that takes longer is stopped. Blocking,
+/// for a worker thread.
+fn code_call(program: &Path, request: &Request, timeout: Duration) -> Result<String, Error> {
+  use std::io::{Read, Write};
+  use std::process::{Command, Stdio};
+  let mut child = Command::new(program).args(code_args(request)).current_dir(std::env::temp_dir())
+    .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().map_err(|_| Error::NoClaudeCode)?;
+  // Written on its own thread: a prompt longer than the pipe would otherwise wait on a child that is
+  // itself waiting to print. A child that quits early (not signed in) closes the pipe; that is fine.
+  let (mut stdin, mut stdout) = (child.stdin.take().ok_or(Error::CodeFailed)?, child.stdout.take().ok_or(Error::CodeFailed)?);
+  let prompt = request.user.clone();
+  let writer = std::thread::spawn(move || { let _ = stdin.write_all(prompt.as_bytes()); });
+  let reader = std::thread::spawn(move || { let mut out = Vec::new(); let _ = stdout.read_to_end(&mut out); out });
+  let deadline = Instant::now() + timeout;
+  let finished = loop {
+    match child.try_wait() {
+      Ok(Some(_)) => break true,
+      Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(25)),
+      _ => break false,
+    }
+  };
+  // Stopped late, it is not waited on further: a helper it started may hold the pipe open a while longer,
+  // and the reader thread ends by itself when that closes.
+  if !finished { let _ = child.kill(); let _ = child.wait(); return Err(Error::Timeout); }
+  let _ = writer.join();
+  let stdout = reader.join().map_err(|_| Error::CodeFailed)?;
+  code_reply(&stdout)
+}
+
+/// Whether Claude Code is on this Mac at the saved path (or, failing that, where it is found now).
+fn code_program(app: Option<&AppHandle>) -> Option<PathBuf> {
+  let saved = settings::get().claude.claude_code.map(PathBuf::from).filter(|path| executable(path));
+  saved.or_else(|| app.and_then(|app| remember_claude_code(app, find_claude_code())).map(PathBuf::from))
+}
+
 // ---------- the key ----------
 
 extern "C" {
@@ -259,23 +362,33 @@ fn key_shape(key: &str) -> Result<&str, String> {
   Ok(key)
 }
 
-/// The key and model, when Claude is connected.
-fn connected() -> Result<(String, ClaudeModel), Error> {
+/// The way to Claude and the model, when Claude is connected.
+fn route() -> Result<(Route, ClaudeModel), Error> {
   let claude = settings::get().claude;
   if !claude.enabled { return Err(Error::NoKey); }
-  Ok((saved_key().ok_or(Error::NoKey)?, claude.model))
+  let route = match claude.via {
+    ClaudeVia::Api => Route::Api { endpoint: MESSAGES.into(), key: saved_key().ok_or(Error::NoKey)? },
+    ClaudeVia::ClaudeCode => Route::Code { program: claude.claude_code.map(PathBuf::from).filter(|path| executable(path)).ok_or(Error::NoClaudeCode)? },
+  };
+  Ok((route, claude.model))
 }
 
 static APP: OnceLock<AppHandle> = OnceLock::new();
 
-/// At launch: a saved key turns Claude back on (a loaded settings file never does), and Claude Code
-/// is looked for when no working path is known.
+/// At launch: Claude is on when its way still works, a saved key or Claude Code still at its path (a
+/// loaded settings file never turns it on by itself), and Claude Code is looked for when no working
+/// path is known.
 pub fn init(app: &AppHandle) {
   let _ = APP.set(app.clone());
-  if unsafe { dictate_keychain_exists() } {
-    if let Err(e) = settings::update(app, &json!({ "claude": { "enabled": true } })) { log::warn!("claude: {e}"); }
+  let claude = settings::get().claude;
+  let enabled = match claude.via {
+    ClaudeVia::Api => unsafe { dictate_keychain_exists() },
+    ClaudeVia::ClaudeCode => claude.claude_code.as_deref().is_some_and(|path| executable(Path::new(path))),
+  };
+  if enabled != claude.enabled {
+    if let Err(e) = settings::update(app, &json!({ "claude": { "enabled": enabled } })) { log::warn!("claude: {e}"); }
   }
-  if settings::get().claude.claude_code.is_none_or(|path| !executable(Path::new(&path))) {
+  if claude.claude_code.is_none_or(|path| !executable(Path::new(&path))) {
     let app = app.clone();
     std::thread::spawn(move || { remember_claude_code(&app, find_claude_code()); });
   }
@@ -287,8 +400,8 @@ fn notice(message: &str) {
 
 /// For the blocking calls below, which run on worker threads, never inside an async task.
 fn blocking(request: &Request, timeout: Duration) -> Result<String, Error> {
-  let (key, _) = connected()?;
-  tauri::async_runtime::block_on(call(MESSAGES, &key, request, timeout))
+  let (route, _) = route()?;
+  tauri::async_runtime::block_on(ask(&route, request, timeout))
 }
 
 // ---------- polish, summaries, titles ----------
@@ -357,11 +470,11 @@ pub(crate) enum Outcome { Type(String), Show(String) }
 
 /// What a spoken command comes to: with a selection, its replacement; without one, text to type for a
 /// "write …" request or an answer to show.
-async fn command(endpoint: &str, key: &str, model: ClaudeModel, instruction: &str, selection: &str, app_name: &str) -> Result<Outcome, Error> {
+async fn command(route: &Route, model: ClaudeModel, instruction: &str, selection: &str, app_name: &str) -> Result<Outcome, Error> {
   if !selection.trim().is_empty() {
-    return call(endpoint, key, &transform_request(instruction, selection, app_name, model), COMMAND_TIME).await.map(Outcome::Type);
+    return ask(route, &transform_request(instruction, selection, app_name, model), COMMAND_TIME).await.map(Outcome::Type);
   }
-  let reply = call(endpoint, key, &spoken_request(instruction, app_name, model), COMMAND_TIME).await?;
+  let reply = ask(route, &spoken_request(instruction, app_name, model), COMMAND_TIME).await?;
   let Ok(parsed) = serde_json::from_str::<Value>(&reply) else { return Ok(Outcome::Show(reply)) };
   let text = parsed["text"].as_str().map(str::trim).filter(|text| !text.is_empty()).ok_or(Error::Empty)?.to_owned();
   Ok(if parsed["reply"] == "write" { Outcome::Type(text) } else { Outcome::Show(text) })
@@ -414,7 +527,7 @@ extern "C" fn dictate_command(request: *const c_char, instruction: *const c_char
   emit_command(json!({ "request": request, "phase": "thinking", "instruction": instruction }));
   tauri::async_runtime::spawn_blocking(move || {
     let app_name = context::get(&request).app_name;
-    let result = connected().and_then(|(key, model)| tauri::async_runtime::block_on(command(MESSAGES, &key, model, &instruction, &selection, &app_name)));
+    let result = route().and_then(|(route, model)| tauri::async_runtime::block_on(command(&route, model, &instruction, &selection, &app_name)));
     if dismissed(&request) { return; }
     match result {
       Ok(Outcome::Type(text)) => { type_result(&request, &text); emit_command(json!({ "request": request, "phase": "done" })); }
@@ -469,33 +582,55 @@ pub async fn claude_insert(app: AppHandle, request: String, text: String) -> Res
 #[tauri::command]
 pub fn claude_dismiss(request: String) { keep(&DISMISSED, request); }
 
-// ---------- the key, from the Claude page ----------
+// ---------- the connection, from the Claude page ----------
 
 /// Tests a pasted key with a one-token request to the chosen model, and only then keeps it in the
-/// Keychain and turns Claude on.
+/// Keychain and turns Claude on, by the API.
 #[tauri::command]
 pub async fn claude_save_key(app: AppHandle, key: String) -> Result<settings::Settings, String> {
   let key = key_shape(&key)?.to_owned();
   check(MESSAGES, &key, settings::get().claude.model).await.map_err(|e| e.to_string())?;
   let stored = CString::new(key).map_err(|_| "Invalid key".to_owned())?;
   if !unsafe { dictate_keychain_set(stored.as_ptr()) } { return Err("Couldn’t save the key in your Keychain.".into()); }
-  settings::update(&app, &json!({ "claude": { "enabled": true } }))
+  settings::update(&app, &json!({ "claude": { "enabled": true, "via": "api" } }))
 }
 
-/// The page's Test: a one-token request with the saved key and the chosen model. Answers how long it took.
+/// The page's Test: a one-word request the way Claude is connected, with the chosen model. Answers how
+/// long it took.
 #[tauri::command]
 pub async fn claude_test() -> Result<u64, String> {
-  let model = settings::get().claude.model;
-  let key = tauri::async_runtime::spawn_blocking(saved_key).await.map_err(|e| e.to_string())?.ok_or_else(|| Error::NoKey.to_string())?;
+  let (route, model) = tauri::async_runtime::spawn_blocking(route).await.map_err(|e| e.to_string())?.map_err(|e| e.to_string())?;
   let started = Instant::now();
-  check(MESSAGES, &key, model).await.map_err(|e| e.to_string())?;
+  probe(&route, model).await.map_err(|e| e.to_string())?;
   Ok(started.elapsed().as_millis() as u64)
 }
 
+/// Removes the key. Claude stays on only if it is connected through Claude Code instead.
 #[tauri::command]
 pub fn claude_remove_key(app: AppHandle) -> Result<settings::Settings, String> {
   if !unsafe { dictate_keychain_delete() } { return Err("Couldn’t remove the key from your Keychain.".into()); }
-  settings::update(&app, &json!({ "claude": { "enabled": false } }))
+  let claude = settings::get().claude;
+  let enabled = claude.via == ClaudeVia::ClaudeCode && claude.claude_code.as_deref().is_some_and(|path| executable(Path::new(path)));
+  settings::update(&app, &json!({ "claude": { "enabled": enabled } }))
+}
+
+/// Connects through the Claude Code on this Mac: a one-word request with the chosen model proves it is
+/// there and signed in, and only then is Claude turned on that way.
+#[tauri::command]
+pub async fn claude_connect_code(app: AppHandle) -> Result<settings::Settings, String> {
+  let model = settings::get().claude.model;
+  let finder = app.clone();
+  let program = tauri::async_runtime::spawn_blocking(move || code_program(Some(&finder))).await.map_err(|e| e.to_string())?
+    .ok_or("Claude Code isn’t installed on this Mac. Install it and sign in, then try again.")?;
+  probe(&Route::Code { program: program.clone() }, model).await.map_err(|e| e.to_string())?;
+  settings::update(&app, &json!({ "claude": { "enabled": true, "via": "claudeCode", "claudeCode": program.display().to_string() } }))
+}
+
+/// Back from Claude Code: Claude stays on only if a key is saved to fall back to.
+#[tauri::command]
+pub fn claude_disconnect_code(app: AppHandle) -> Result<settings::Settings, String> {
+  let enabled = unsafe { dictate_keychain_exists() };
+  settings::update(&app, &json!({ "claude": { "enabled": enabled, "via": "api" } }))
 }
 
 /// Where to make a key, in the browser.
@@ -550,10 +685,12 @@ fn kept_claude_code(saved: Option<String>, found: Option<PathBuf>) -> Option<Str
 
 /// Saves what a search came to, so the Claude page never shows a path that doesn't run.
 fn remember_claude_code(app: &AppHandle, found: Option<PathBuf>) -> Option<String> {
-  let saved = settings::get().claude.claude_code;
-  let kept = kept_claude_code(saved.clone(), found);
-  if kept != saved {
-    if let Err(e) = settings::update(app, &json!({ "claude": { "claudeCode": kept } })) { log::warn!("claude code: {e}"); }
+  let claude = settings::get().claude;
+  let kept = kept_claude_code(claude.claude_code.clone(), found);
+  // Connected through Claude Code, Claude is on exactly while a program is there.
+  let enabled = if claude.via == ClaudeVia::ClaudeCode { kept.is_some() } else { claude.enabled };
+  if kept != claude.claude_code || enabled != claude.enabled {
+    if let Err(e) = settings::update(app, &json!({ "claude": { "claudeCode": kept, "enabled": enabled } })) { log::warn!("claude code: {e}"); }
   }
   kept
 }
@@ -752,11 +889,71 @@ mod tests {
       let request = title_request("a note", ClaudeModel::Haiku);
       assert_eq!(run(call(&url, KEY, &request, Duration::from_secs(5))), Err(expected), "HTTP {status}");
     }
-    for error in [Error::NoKey, Error::BadKey, Error::Forbidden, Error::Billing, Error::Model, Error::TooLong, Error::Rejected, Error::RateLimited, Error::Busy, Error::Offline, Error::Timeout, Error::Refused, Error::Cut, Error::Broken, Error::Empty] {
+    for error in [Error::NoKey, Error::BadKey, Error::Forbidden, Error::Billing, Error::Model, Error::TooLong, Error::Rejected, Error::RateLimited, Error::Busy, Error::Offline, Error::Timeout, Error::Refused, Error::Cut, Error::Broken, Error::Empty, Error::NoClaudeCode, Error::NotSignedIn, Error::CodeFailed] {
       let sentence = error.to_string();
       assert!(sentence.ends_with('.') && sentence.chars().next().unwrap().is_uppercase(), "{sentence}");
       assert!(!sentence.contains(['—', '–']) && !sentence.contains("HTTP") && !sentence.contains("error"), "{sentence}");
     }
+  }
+
+  /// A stand-in `claude` on this Mac: a script that keeps what it was given in `dir` and prints `reply`
+  /// after `delay`, as Claude Code prints in `--output-format json`.
+  fn fake_claude(dir: &Path, reply: &str, delay: &str) -> PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::write(dir.join("reply.json"), reply).unwrap();
+    let program = dir.join("claude");
+    let script = format!("#!/bin/sh\nprintf '%s\\n' \"$@\" > '{d}/args'\ncat > '{d}/stdin'\n{delay}\ncat '{d}/reply.json'\n", d = dir.display());
+    std::fs::write(&program, script).unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
+    program
+  }
+  fn code_result(result: &str, is_error: bool) -> String {
+    json!({ "type": "result", "subtype": if is_error { "error_during_execution" } else { "success" }, "is_error": is_error, "result": result, "stop_reason": "end_turn" }).to_string()
+  }
+
+  #[test]
+  fn claude_code_is_run_once_per_request_with_the_text_on_stdin_and_nothing_of_the_persons_setup() {
+    let dir = std::env::temp_dir().join(format!("dictate-ai-code-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let program = fake_claude(&dir, &code_result("Hello there, world.", false), "");
+    let request = polish_request("hello there world", Style::Formal, "Mail", ClaudeModel::Sonnet);
+    let route = Route::Code { program: program.clone() };
+    assert_eq!(run(ask(&route, &request, Duration::from_secs(10))), Ok("Hello there, world.".into()));
+    let args: Vec<String> = std::fs::read_to_string(dir.join("args")).unwrap().lines().map(str::to_owned).collect();
+    let after = |flag: &str| args.iter().position(|arg| arg == flag).map(|at| args[at + 1].as_str());
+    assert!(args.contains(&"-p".to_owned()));
+    assert_eq!((after("--output-format"), after("--model"), after("--effort"), after("--tools"), after("--setting-sources")), (Some("json"), Some("claude-sonnet-5-5"), Some("low"), Some(""), Some("")));
+    assert!(args.contains(&"--no-session-persistence".to_owned()) && args.contains(&"--strict-mcp-config".to_owned()));
+    assert_eq!(after("--system-prompt"), Some(request.system.as_str()));
+    assert!(after("--json-schema").is_none());
+    assert_eq!(std::fs::read_to_string(dir.join("stdin")).unwrap(), request.user); // the person's words, never on the command line
+    // A schema goes along for a command, as JSON.
+    run(ask(&route, &spoken_request("what is two and two", "", ClaudeModel::Haiku), Duration::from_secs(10))).unwrap();
+    let args = std::fs::read_to_string(dir.join("args")).unwrap();
+    assert!(args.contains("--json-schema\n{\"additionalProperties\":false"), "{args}");
+    // What it prints reads as the API's answers do.
+    for (reply, expected) in [
+      (code_result("Not logged in · Please run /login", true), Err(Error::NotSignedIn)),
+      (code_result("You have hit your usage limit for today", true), Err(Error::RateLimited)),
+      (code_result("Something odd", true), Err(Error::CodeFailed)),
+      (code_result("", false), Err(Error::Empty)),
+      ("not json at all".into(), Err(Error::Broken)),
+      (json!({ "type": "result", "is_error": false, "result": "I can’t", "stop_reason": "refusal" }).to_string(), Err(Error::Refused)),
+      (code_result("Four.", false), Ok("Four.".into())),
+    ] {
+      fake_claude(&dir, &reply, "");
+      assert_eq!(run(ask(&route, &title_request("a note", ClaudeModel::Haiku), Duration::from_secs(10))), expected, "{reply}");
+    }
+    // One that never answers is stopped at the timeout.
+    fake_claude(&dir, &code_result("late", false), "sleep 5");
+    let started = Instant::now();
+    assert_eq!(run(ask(&route, &title_request("a note", ClaudeModel::Haiku), Duration::from_millis(300))), Err(Error::Timeout));
+    assert!(started.elapsed() < Duration::from_secs(3));
+    // No program at the path is its own answer, one that sends the person to Settings.
+    assert_eq!(run(ask(&Route::Code { program: dir.join("missing") }, &title_request("a note", ClaudeModel::Haiku), Duration::from_secs(1))), Err(Error::NoClaudeCode));
+    assert!(Error::NoClaudeCode.needs_settings() && Error::NotSignedIn.needs_settings() && !Error::CodeFailed.needs_settings());
+    let _ = std::fs::remove_dir_all(&dir);
   }
 
   #[test]
@@ -819,7 +1016,8 @@ mod tests {
       (200, message("Plain words", "end_turn")),
       (200, message(&json!({ "reply": "answer", "text": " " }).to_string(), "end_turn")),
     ]);
-    let ask = |instruction: &str, selection: &str| run(command(&url, KEY, ClaudeModel::Haiku, instruction, selection, "Notes"));
+    let route = Route::Api { endpoint: url.clone(), key: KEY.into() };
+    let ask = |instruction: &str, selection: &str| run(command(&route, ClaudeModel::Haiku, instruction, selection, "Notes"));
     assert_eq!(ask("fix the grammar", "teh cat sat"), Ok(Outcome::Type("The cat sat.".into())));
     assert!(seen.recv().unwrap().1["output_config"].get("format").is_none());
     assert_eq!(ask("write a thank-you note to Maria", ""), Ok(Outcome::Type("Thanks for lunch, Maria!".into())));

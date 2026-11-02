@@ -1,8 +1,9 @@
 import type { Mock } from '.';
 
 // In a browser: the Anthropic key, Claude Code and the answer card's actions. A key containing "bad" is
-// refused, as Anthropic would; any other key shaped like one connects. `?claude=on` starts connected,
-// `?claudecode=none` is a Mac without Claude Code, and `?insert=fail` an Insert whose app has quit.
+// refused, as Anthropic would; any other key shaped like one connects. `?claude=on` starts connected with
+// a key and `?claude=code` through Claude Code; `?claudecode=none` is a Mac without Claude Code and
+// `?claudecode=out` one where it isn't signed in; `?insert=fail` an Insert whose app has quit.
 const later = (ms: number) => new Promise(done => setTimeout(done, ms));
 const CLAUDE_CODE = '/Users/you/.local/bin/claude';
 // The programs on this pretend Mac.
@@ -12,8 +13,11 @@ export function register(mock: Mock) {
   const query = new URLSearchParams(location.search);
   let saved = query.get('claude') === 'on';
   const installed = query.get('claudecode') !== 'none';
-  // As at launch: a saved key turns Claude on, and Claude Code is found where its installer puts it.
-  mock.update({ claude: { enabled: saved, claudeCode: installed ? CLAUDE_CODE : null } });
+  const signedIn = query.get('claudecode') !== 'out';
+  const viaCode = query.get('claude') === 'code' && installed;
+  // As at launch: a saved key or Claude Code at its path turns Claude on, and Claude Code is found where
+  // its installer puts it.
+  mock.update({ claude: { enabled: saved || viaCode, via: viaCode ? 'claudeCode' : 'api', claudeCode: installed ? CLAUDE_CODE : null } });
 
   mock.handle('claude_save_key', async ({ key }) => {
     const pasted = typeof key === 'string' ? key.trim() : '';
@@ -21,14 +25,23 @@ export function register(mock: Mock) {
     await later(900);
     if (pasted.includes('bad')) throw 'Anthropic didn’t accept the key. Check it and paste it again.';
     saved = true;
-    return mock.update({ claude: { enabled: true } });
+    return mock.update({ claude: { enabled: true, via: 'api' } });
   });
+  mock.handle('claude_connect_code', async () => {
+    await later(1200);
+    const program = mock.settings().claude.claudeCode;
+    if (!program || !PROGRAMS.includes(program)) throw 'Claude Code isn’t installed on this Mac. Install it and sign in, then try again.';
+    if (!signedIn) throw 'Claude Code isn’t signed in. Run claude in Terminal and sign in, then try again.';
+    return mock.update({ claude: { enabled: true, via: 'claudeCode' } });
+  });
+  mock.handle('claude_disconnect_code', () => mock.update({ claude: { enabled: saved, via: 'api' } }));
   mock.handle('claude_test', async () => {
-    await later(700);
-    if (!saved) throw 'Connect Claude in Settings first.';
-    return 420 + Math.round(Math.random() * 500);
+    const claude = mock.settings().claude;
+    await later(claude.via === 'claudeCode' ? 1800 : 700);
+    if (!claude.enabled) throw 'Connect Claude in Settings first.';
+    return (claude.via === 'claudeCode' ? 1600 : 420) + Math.round(Math.random() * 500);
   });
-  mock.handle('claude_remove_key', () => { saved = false; return mock.update({ claude: { enabled: false } }); });
+  mock.handle('claude_remove_key', () => { saved = false; const claude = mock.settings().claude; return mock.update({ claude: { enabled: claude.via === 'claudeCode' && claude.enabled } }); });
   mock.handle('claude_open_console', () => { open('https://console.anthropic.com/settings/keys', '_blank', 'noopener'); });
   mock.handle('claude_insert', async () => {
     await later(300);
