@@ -77,7 +77,7 @@ export function Shortcuts({ settings, update }: PageProps) {
         <Tile stack title="Key to hold" detail={<>Hold <Kbd>{key.glyph}</Kbd> and speak: your words type where the cursor is. {aside}</>}>
           <KeyPicker value={keys.dictate} down={down} onChange={dictate => void update({ shortcuts: { dictate } })} />
         </Tile>
-        <Tile title="Hands-free" detail={<>Double-tap <Kbd>{key.glyph}</Kbd> to keep listening without holding it, for up to a minute. Tap it again to send, or press Escape to cancel.</>}>
+        <Tile title="Hands-free" detail={<>Double-tap <Kbd>{key.glyph}</Kbd> to keep listening without holding it, for up to 10 minutes. Tap it again to send, or press Escape to cancel.</>}>
           <Toggle label="Hands-free" checked={keys.handsFree} onChange={handsFree => void update({ shortcuts: { handsFree } })} />
         </Tile>
         <Tile title="Talk to Claude" detail={keys.command === 'off' ? <>Off. Choose a key to hold with <Kbd>{key.glyph}</Kbd> to talk to Claude.</>

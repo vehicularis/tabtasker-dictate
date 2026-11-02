@@ -59,3 +59,9 @@ bool tt_chord_matches(uint16_t key_code, uint64_t flags, uint16_t chord_key, uin
 }
 
 size_t tt_taps_size(void) { return sizeof(TTTaps); }
+
+size_t tt_hold_limit(bool long_session) { return (long_session ? 10 : 1) * 60 * 16000; }
+
+// Two minutes, or twice as long as it took to say: the speed a one-minute hold always needed, so a
+// ten-minute session whose tail is still untranscribed gets the time it needs too.
+double tt_words_timeout(size_t samples) { double said = samples / 16000.0; return said * 2 > 120 ? said * 2 : 120; }

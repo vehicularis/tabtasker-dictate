@@ -180,6 +180,10 @@ fn length(seconds: u64) -> String {
   }
 }
 
+/// A meeting Claude didn't name is called for when it began, "Meeting 2026-11-02 14.05": the notes
+/// template can leave the date and time out of the file name.
+fn untitled(stamp: &str) -> String { format!("Meeting {stamp}") }
+
 /// When the meeting was and how long it ran, under its title: "2026-11-02 14:05 · 47 min".
 fn dateline(stamp: &str, samples: u64) -> String {
   let at = match stamp.split_once(' ') { Some((date, time)) => format!("{date} {}", time.replace('.', ":")), None => stamp.to_owned() };
@@ -500,7 +504,7 @@ extern "C" fn dictate_meeting_stopping() {
   closing(&job);
 }
 
-/// On the main thread: a meeting asked for while the last one closed couldn't start.
+/// On the main thread: a meeting asked for couldn't start, from its shortcut or once the last one closed.
 #[no_mangle]
 extern "C" fn dictate_meeting_unstarted() {
   if let (Some(app), Some(why)) = (APP.get(), start_problem()) { let _ = app.emit("dictate-notice", json!({ "message": why })); }
@@ -666,9 +670,8 @@ fn finish(job: &Job, at: &Progress, recovered: bool) -> serde_json::Value {
   let claude = settings.claude.enabled && settings.meetings.summarize;
   if claude { emit(saving_payload(job, "Writing the summary")); }
   let summary = if claude { ai::summarize(ai::Kind::Meeting, &plain) } else { None };
-  // The file name already starts with the date and time.
   let title = if claude { ai::title(&plain) } else { None }.map(|title| title.trim().to_owned()).filter(|title| !title.is_empty())
-    .unwrap_or_else(|| "Meeting".into());
+    .unwrap_or_else(|| untitled(&job.spool.header.stamp));
   let length = SOURCES.iter().map(|source| job.len(*source)).max().unwrap_or(0);
   let body = document(&dateline(&job.spool.header.stamp, length), summary.as_deref(), &markdown);
   match notes::save_markdown(notes::Kind::Meeting, &title, &body, &job.spool.header.stamp, &[("duration".into(), clock(length))]) {
@@ -843,6 +846,14 @@ mod tests {
     assert_eq!(length(3600), "1 h");
     assert_eq!(length(3900), "1 h 5 min");
     assert_eq!(dateline("2026-11-02 14.05", 47 * 60 * 16000), "2026-11-02 14:05 · 47 min");
+  }
+
+  #[test]
+  fn a_meeting_claude_didnt_name_is_called_for_when_it_began() {
+    let stamp = "2026-11-02 14.05";
+    assert_eq!(untitled(stamp), "Meeting 2026-11-02 14.05");
+    // The default template keeps it whole in the file name.
+    assert_eq!(notes::file_stem("{date} {title}", &untitled(stamp), notes::stamp(stamp).unwrap()), "2026-11-02 Meeting 2026-11-02 14.05");
   }
 
   #[test]
