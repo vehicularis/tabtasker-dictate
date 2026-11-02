@@ -63,9 +63,10 @@ func squircle(_ rect: CGRect, radius r: CGFloat) -> CGPath {
 // CoreGraphics' y runs up and the mark's down, so the group is flipped and every number below is the SVG's.
 let tileTop = CGColor(srgbRed: 0.235, green: 0.239, blue: 0.255, alpha: 1)  // #3c3d41
 let tileBottom = CGColor(srgbRed: 0.094, green: 0.094, blue: 0.106, alpha: 1) // #18181b
-// The whole otter, 50 units tall, at 72 % of the tile and centred (the mark's own placement runs the body off the bottom).
-let unit: CGFloat = 1024 * 0.72 / 50
-let markOrigin = CGPoint(x: 512, y: 512)
+// Placed exactly as Business places its mark: the tile is 64 units and the otter's group sits at translate(32 47)
+// scale(1.3), so the head's top is 23 % down the tile, the otter is 53 % of it wide, and the body runs off the bottom.
+let unit: CGFloat = 1024 / 64 * 1.3
+let markOrigin = CGPoint(x: 512, y: 1024 - 47 * 1024 / 64)
 /// A path drawn in the group's units, placed on the grid given (the 1024 one unless told otherwise).
 func inMark(origin: CGPoint = markOrigin, unit u: CGFloat = unit, _ draw: (CGMutablePath) -> Void) -> CGPath {
   let path = CGMutablePath(); draw(path)
@@ -162,7 +163,7 @@ func appIcon(_ size: Int) -> CGImage {
 func trayIcon(_ size: Int) -> CGImage {
   image(size) { ctx, s in
     ctx.scaleBy(x: s / 36, y: s / 36)
-    let origin = CGPoint(x: 18, y: 18), u: CGFloat = 0.66 // the whole otter, 33 px tall, centred
+    let origin = CGPoint(x: 18, y: 6), u: CGFloat = 0.92 // as the app icon: 0.92 px a unit on the 36 grid, the head's top at y 29, the body running off the bottom
     ctx.setFillColor(grey(0))
     ctx.addPath(inMark(origin: origin, unit: u) { otterBars($0, pitch: 3.25, width: 2.1) }); ctx.fillPath() // eight bars, 1.4 px wide at @2x
   }

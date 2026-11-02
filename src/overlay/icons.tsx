@@ -52,9 +52,9 @@ export const Logo = ({ size = 18 }: { size?: number }) => {
     </defs>
     <rect x="1" y="1" width="26" height="26" rx="6.2" fill={`url(#${id}-grey)`} />
     <rect x="1.25" y="1.25" width="25.5" height="25.5" rx="5.95" fill="none" stroke="#fff" strokeOpacity=".12" strokeWidth=".5" />
-    {/* The whole otter, 50 units tall, at 21 of the tile's 26 and centred, as the app icon. The clip is on its own group:
-        on a transformed one it would be read in the mark's coordinates. */}
-    <g clipPath={`url(#${id}-tile)`}><g transform="translate(14 14) scale(.42)">
+    {/* Placed as Business places its mark: its tile is 64 units and this one 26; the group sits at (32 47) scaled 1.3, the body running off
+        the bottom. The clip is on its own group: on a transformed one it would be read in the mark's coordinates. */}
+    <g clipPath={`url(#${id}-tile)`}><g transform="translate(14 20.094) scale(.52813)">
       <g fill="#f3f4f6">{BARS.map(bar => <rect key={bar.x} x={bar.x} y={bar.y} width="2.1" height={bar.h} rx="1.05" />)}</g>
     </g></g>
   </svg>;
