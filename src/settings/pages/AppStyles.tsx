@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { invoke } from '../../bridge';
-import type { AppStyle, PageProps, Style } from '../../store';
+import { sendsByDefault, type AppStyle, type PageProps, type Style } from '../../store';
 import { Button, Icon, PageHeader, Section, Select, Tile, TileGroup, Toggle } from '../../ui';
 import './speech.css';
 
@@ -107,8 +107,9 @@ export function AppStyles({ settings, update }: PageProps) {
         </Tile>
       </TileGroup>
     </Section>
-    <Section title="Apps" note={claude ? 'Polish asks Claude to tidy your words in that app, within a few seconds. Your own words stand if it can’t.'
-      : <>Claude can also polish your words in the apps you choose. <button type="button" className="link" onClick={() => { location.hash = 'claude'; }}>Connect Claude</button></>}>
+    <Section title="Apps" note={<>Send presses Return once your words are typed, as in a chat: on by default in Slack, Messages, WhatsApp, Teams, Telegram, Discord and Signal. Saying “send” at the end sends one message anywhere.
+      {claude ? ' Polish asks Claude to tidy your words in that app, within a few seconds; your own words stand if it can’t.'
+        : <> Claude can also polish your words in the apps you choose. <button type="button" className="link" onClick={() => { location.hash = 'claude'; }}>Connect Claude</button></>}</>}>
       <TileGroup label="Apps">
         <Tile title={picking ? 'Add an app' : `${apps.styles.length} ${apps.styles.length === 1 ? 'app' : 'apps'}`} stack={picking}>
           {picking
@@ -117,6 +118,7 @@ export function AppStyles({ settings, update }: PageProps) {
         </Tile>
         {apps.styles.map(app => <Tile key={app.bundleId} title={<AppName name={app.name} icon={icon(app.bundleId)} />}>
           <Select label={`Style in ${app.name}`} value={app.style} options={STYLES} onChange={style => set(app.bundleId, { style })} />
+          <span className="labelled"><span>Send</span><Toggle label={`Send with Return in ${app.name}`} checked={app.send ?? sendsByDefault(app.bundleId)} onChange={send => set(app.bundleId, { send })} /></span>
           {claude && <span className="labelled"><span>Polish</span><Toggle label={`Polish in ${app.name}`} checked={app.polish} onChange={polish => set(app.bundleId, { polish })} /></span>}
           <Button variant="quiet" small icon="trash" aria-label={`Remove ${app.name}`} onClick={() => update({ apps: { styles: apps.styles.filter(other => other.bundleId !== app.bundleId) } })} />
         </Tile>)}

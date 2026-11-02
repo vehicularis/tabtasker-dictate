@@ -29,6 +29,9 @@ export function General({ settings, update }: PageProps) {
           : `Hidden. To come back here, open TabTasker Dictate again from Finder or Spotlight${settings.appearance.idle === 'dots' ? ', or right-click the dots' : ''}.`}>
           <Toggle label="Menu bar icon" checked={icon} onChange={menuBarIcon => void update({ general: { menuBarIcon } })} />
         </Tile>
+        <Tile title="Show in the Dock" detail={settings.general.showInDock ? 'Always in the Dock; clicking the icon opens Settings.' : 'In the Dock only while Settings is open.'}>
+          <Toggle label="Show in the Dock" checked={settings.general.showInDock} onChange={showInDock => void update({ general: { showInDock } })} />
+        </Tile>
       </TileGroup>
     </Section>
     <Section title="Listening" note={problem}>

@@ -194,6 +194,7 @@ typedef NS_ENUM(NSUInteger, TTVoicePhase) { TTVoiceIdle, TTVoiceListening, TTVoi
 @property NSEventModifierFlags commandFlag;
 @property (copy) NSDictionary<NSString *, NSArray<NSNumber *> *> *chords;
 @property BOOL handsFree, liveTyping, sounds;
+@property BOOL sendAfter; // Return once this hold's words are typed (a chat app, or a spoken "send")
 @property double soundVolume; // 0 to 1
 @property (copy) NSString *startSound, *stopSound; // names in /System/Library/Sounds
 // A hold that speaks to Claude, and a session a double tap keeps listening without the key.
@@ -422,7 +423,7 @@ static void TTVoiceBringForward(NSRunningApplication *app, void (^then)(BOOL fro
   self.audio = nil;
   if (self.request) dictate_cancel(self.request.UTF8String);
   [self settleTyped];
-  self.request = nil; self.dictating = NO; self.noting = NO; self.commanding = NO; self.selection = nil; self.app = nil;
+  self.request = nil; self.dictating = NO; self.noting = NO; self.commanding = NO; self.selection = nil; self.app = nil; self.sendAfter = NO;
   self.phase = TTVoiceIdle;
 }
 // What this hold typed is in the field now, finished or not; unless the person moved on, the next hold
@@ -582,8 +583,11 @@ static void TTVoicePlaySound(NSString *name, double volume) {
   if (!AXIsProcessTrusted()) { [self fail:@"Turn on Accessibility to type"]; return; }
   [self retype:body];
   // A click elsewhere stops the typing for good; what was said is still the last transcript.
+  BOOL whole = self.typed.length && [self.typed isEqualToString:[self.lead stringByAppendingString:body]];
   if (!self.typed.length) dictate_ui_notice("Nothing to type into here. Paste last transcript has your words.");
-  else if (![self.typed isEqualToString:[self.lead stringByAppendingString:body]]) dictate_ui_notice("Stopped typing when you moved on. Paste last transcript has it all.");
+  else if (!whole) dictate_ui_notice("Stopped typing when you moved on. Paste last transcript has it all.");
+  // Sending: Return, after every word went in and only where they went.
+  if (whole && self.sendAfter) TTVoicePostKey(36, nil);
   [self cancel];
 }
 // A spoken command, with the selection and the app it was said over, for Claude. Its answer comes back
@@ -1128,6 +1132,11 @@ void dictate_model_status(const char *message, int status) {
   voice.modelReady = status == 1; voice.modelPreparing = status == 0;
   voice.modelMessage = @(message);
   if (status < 0 && voice.phase == TTVoiceIdle) dictate_ui_error(message);
+}
+// Whether Return follows this hold's words, decided by Rust (the app's setting or a spoken "send") just
+// before the words arrive through dictate_result.
+void dictate_result_sends(const char *request, bool send) {
+  if (request && [voice.request isEqual:@(request)]) voice.sendAfter = send;
 }
 void dictate_draft_result(const char *request, const char *text) {
   if (![voice.request isEqual:@(request)] || voice.phase != TTVoiceListening) return;

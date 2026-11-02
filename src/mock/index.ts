@@ -28,7 +28,7 @@ export type Mock = {
 // The same as settings.rs's defaults.
 const DEFAULTS: Settings = {
   version: 1,
-  general: { menuBarIcon: true },
+  general: { menuBarIcon: true, showInDock: false },
   shortcuts: { dictate: 'fn', handsFree: true, command: 'control', note: null, meeting: null, pasteLast: null },
   dictation: { language: 'auto', translateToEnglish: false, liveTyping: true, removeFillers: true, sounds: true, soundVolume: 0.3, startSound: 'Tink', stopSound: 'Pop', model: 'turbo' },
   vocabulary: { words: [], replacements: [], learn: true, suggestions: [] },
@@ -74,12 +74,12 @@ const listOf = (item: Check): Check => value => Array.isArray(value) && value.ev
 const folder: Check = value => value === null || (typeof value === 'string' && value.startsWith('/') && !value.includes('\0'));
 const chord: Check = value => value === null || (object(value) && chordProblem(value as Chord) === null);
 const SCHEMA: Record<string, Record<string, Check>> = {
-  general: { menuBarIcon: bool },
+  general: { menuBarIcon: bool, showInDock: bool },
   shortcuts: { dictate: oneOf('fn', 'rightCommand', 'rightOption', 'rightControl', 'rightShift'), handsFree: bool, command: oneOf('control', 'option', 'command', 'shift', 'off'), note: chord, meeting: chord, pasteLast: chord },
   dictation: { language: value => value === 'auto' || LANGUAGES.has(value as string), translateToEnglish: bool, liveTyping: bool, removeFillers: bool, sounds: bool,
     soundVolume: value => typeof value === 'number' && Number.isFinite(value), startSound: oneOf(...SOUNDS), stopSound: oneOf(...SOUNDS), model: oneOf('turbo', 'small') },
   vocabulary: { words: listOf(text), replacements: listOf(pair => object(pair) && text(pair.from) && text(pair.to)), learn: bool, suggestions: listOf(text) },
-  apps: { styles: listOf(app => object(app) && text(app.bundleId) && text(app.name) && STYLES.includes(app.style as string) && (app.polish === undefined || bool(app.polish))), defaultStyle: oneOf(...STYLES) },
+  apps: { styles: listOf(app => object(app) && text(app.bundleId) && text(app.name) && STYLES.includes(app.style as string) && (app.polish === undefined || bool(app.polish)) && (app.send == null || bool(app.send))), defaultStyle: oneOf(...STYLES) },
   notes: { folder, fileName: value => typeof value === 'string' && !/[/:\0]/.test(value) && !value.trimStart().startsWith('.'), frontmatter: bool, dailyNote: bool, tags: listOf(text), claudeTitle: bool, claudeActions: bool },
   meetings: { folder, systemAudio: bool, summarize: bool, you: text, others: text },
   claude: { enabled: bool, via: oneOf('api', 'claudeCode'), model: oneOf('claude-haiku-5-5', 'claude-sonnet-5-5', 'claude-opus-5-5'), commands: bool, claudeCode: folder, projectFolder: folder },

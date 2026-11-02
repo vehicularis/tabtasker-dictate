@@ -76,6 +76,7 @@ const PROMPT_TOKENS: usize = 200;
 extern "C" {
   fn dictate_model_status(message: *const c_char, status: i32);
   fn dictate_result(request: *const c_char, text: *const c_char, error: *const c_char);
+  fn dictate_result_sends(request: *const c_char, send: bool);
   fn dictate_draft_result(request: *const c_char, text: *const c_char);
   fn dictate_learn_watch(text: *const c_char);
   fn dictate_learn_stop();
@@ -703,14 +704,21 @@ extern "C" fn dictate_audio(id: *const c_char, samples: *const f32, count: usize
     state.job.lock().unwrap().take();
     if cancelled.load(Ordering::Relaxed) || !state.enabled.load(Ordering::Relaxed) { return; }
     let result = result.map(|text| settle(&id, &text, pcm.len()));
+    let ctx = context::get(&id);
+    // Return follows the words when the app is one for messages, or when "send" ended what was said.
+    let (result, send) = match result {
+      Ok(text) if ctx.mode.types() => { let (text, spoken) = text::without_send(&text); let send = spoken || settings::get().apps.send_for(&ctx.bundle_id); (Ok(text), send) }
+      other => (other, false),
+    };
     // The words just typed are watched for a correction, which may teach the vocabulary a word.
-    let learn = context::get(&id).mode.types() && settings::get().vocabulary.learn;
+    let learn = ctx.mode.types() && settings::get().vocabulary.learn;
     let id = CString::new(id).unwrap_or_default();
     let (text, error) = match result {
       Ok(text) => (Some(CString::new(text.replace('\0', "")).unwrap_or_default()), None),
       Err(error) => (None, Some(CString::new(error).unwrap_or_default())),
     };
     let _ = app.run_on_main_thread(move || unsafe {
+      dictate_result_sends(id.as_ptr(), send);
       dictate_result(id.as_ptr(), text.as_ref().map_or(std::ptr::null(), |text| text.as_ptr()), error.as_ref().map_or(std::ptr::null(), |error| error.as_ptr()));
       if let Some(text) = text.as_ref().filter(|text| learn && !text.is_empty()) { dictate_learn_watch(text.as_ptr()); }
     });

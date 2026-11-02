@@ -68,7 +68,7 @@ button { font: inherit; color: inherit; }
 .pill button:hover { background: var(--surface-3); }
 .layer:is([data-edge='left'], [data-edge='right']) .pill { flex-direction: column; }
 /* The key's hint, beside the pill while you point at it, clear of the pill at every size. */
-.label { --clear: calc(50% + 36px * var(--scale) + 10px); position: absolute; top: 50%; left: var(--clear); display: flex; white-space: nowrap; font-size: 12.5px; pointer-events: none; transform: translate(-4px, -50%); opacity: 0; transition: opacity .15s, transform .3s var(--ease); }
+.label { --clear: calc(50% + 53px * var(--scale) + 10px); position: absolute; top: 50%; left: var(--clear); display: flex; white-space: nowrap; font-size: 12.5px; pointer-events: none; transform: translate(-4px, -50%); opacity: 0; transition: opacity .15s, transform .3s var(--ease); }
 .label > span { display: flex; align-items: center; gap: 5px; padding: 4px 11px 4px 4px; border-radius: 14px; color: var(--ink-2); }
 .label kbd { padding: 1px 6px; border-radius: 9px; background: color-mix(in srgb, var(--ink) 10%, transparent); font: inherit; font-weight: 600; color: var(--ink); }
 .layer[data-mode='hover']:not([data-card]) .spot:not(:has(.menu)) .label { opacity: 1; transform: translate(0, -50%); transition-delay: .25s; }

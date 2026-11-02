@@ -310,6 +310,13 @@ pub(crate) fn recent_changed(app: &AppHandle) {
 }
 
 /// The menu bar icon, shown or hidden from General as it changes.
+/// General › Show in the Dock: the app as a regular one, with a Dock icon that opens Settings, or back to
+/// the menu bar only (unless Settings is open, which keeps the Dock icon until it closes).
+pub(crate) fn show_in_dock(app: &AppHandle, on: bool) {
+  let policy = if on || app.get_webview_window(SETTINGS).is_some() { ActivationPolicy::Regular } else { ActivationPolicy::Accessory };
+  if let Err(e) = app.set_activation_policy(policy) { log::warn!("dock: {e}"); }
+}
+
 pub(crate) fn show_tray(app: &AppHandle, visible: bool) {
   if let Some(tray) = app.tray_by_id("dictate") {
     if let Err(e) = tray.set_visible(visible) { log::warn!("menu bar icon: {e}"); }
@@ -413,7 +420,8 @@ pub fn run() {
     })
     .on_menu_event(|app, event| menu_event(app, event.id().as_ref()))
     .on_window_event(|window, event| {
-      if window.label() == SETTINGS && matches!(event, WindowEvent::Destroyed) {
+      // Settings closed: back to the menu bar only, unless the Dock icon is wanted all along.
+      if window.label() == SETTINGS && matches!(event, WindowEvent::Destroyed) && !settings::get().general.show_in_dock {
         let _ = window.app_handle().set_activation_policy(ActivationPolicy::Accessory);
       }
     })

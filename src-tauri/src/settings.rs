@@ -28,9 +28,11 @@ pub struct Settings {
 pub struct General {
   /// Hidden, the app is still reached by opening it again from Finder or Spotlight, or from the dots.
   pub menu_bar_icon: bool,
+  /// An icon in the Dock as well, which opens Settings; otherwise only while Settings is open.
+  pub show_in_dock: bool,
 }
 impl Default for General {
-  fn default() -> Self { Self { menu_bar_icon: true } }
+  fn default() -> Self { Self { menu_bar_icon: true, show_in_dock: false } }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -127,7 +129,19 @@ pub enum Style { #[default] Default, Casual, Formal, Code, Raw }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AppStyle { pub bundle_id: String, pub name: String, pub style: Style, #[serde(default)] pub polish: bool }
+pub struct AppStyle {
+  pub bundle_id: String, pub name: String, pub style: Style, #[serde(default)] pub polish: bool,
+  /// Press Return once the words are typed, as sending a message. None is the app's own default: on in
+  /// chat apps (`CHAT_APPS`), off elsewhere.
+  #[serde(default)] pub send: Option<bool>,
+}
+
+/// Apps where what you dictate is a message to send, so Return follows the words unless the app's style
+/// says otherwise.
+pub const CHAT_APPS: [&str; 10] = [
+  "com.tinyspeck.slackmacgap", "com.apple.MobileSMS", "net.whatsapp.WhatsApp", "com.microsoft.teams2", "com.microsoft.teams",
+  "ru.keepcoder.Telegram", "com.tdesktop.Telegram", "com.hnc.Discord", "com.facebook.archon", "com.signal.desktop",
+];
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -136,6 +150,11 @@ impl Apps {
   /// The style for the app with `bundle_id`, and whether Claude polishes there.
   pub fn style_for(&self, bundle_id: &str) -> (Style, bool) {
     self.styles.iter().find(|app| app.bundle_id.eq_ignore_ascii_case(bundle_id)).map_or((self.default_style, false), |app| (app.style, app.polish))
+  }
+  /// Whether Return follows the words in the app with `bundle_id`: its own setting, else on for chat apps.
+  pub fn send_for(&self, bundle_id: &str) -> bool {
+    let chosen = self.styles.iter().find(|app| app.bundle_id.eq_ignore_ascii_case(bundle_id)).and_then(|app| app.send);
+    chosen.unwrap_or_else(|| CHAT_APPS.iter().any(|chat| chat.eq_ignore_ascii_case(bundle_id)))
   }
 }
 
@@ -253,7 +272,7 @@ const MAX_WORD: usize = 64;
 const MAX_TEXT: usize = 200;
 
 fn default_styles() -> Vec<AppStyle> {
-  let app = |bundle_id: &str, name: &str, style| AppStyle { bundle_id: bundle_id.into(), name: name.into(), style, polish: false };
+  let app = |bundle_id: &str, name: &str, style| AppStyle { bundle_id: bundle_id.into(), name: name.into(), style, polish: false, send: None };
   vec![
     app("com.apple.Terminal", "Terminal", Style::Code), app("com.googlecode.iterm2", "iTerm", Style::Code),
     app("com.mitchellh.ghostty", "Ghostty", Style::Code), app("dev.warp.Warp-Stable", "Warp", Style::Code),
@@ -449,6 +468,7 @@ pub fn apply(app: &AppHandle, settings: &Settings) {
   app.set_theme(match settings.appearance.theme { Theme::System => None, Theme::Light => Some(tauri::Theme::Light), Theme::Dark => Some(tauri::Theme::Dark) });
   let _ = app.emit("dictate-settings", settings);
   crate::show_tray(app, settings.general.menu_bar_icon);
+  crate::show_in_dock(app, settings.general.show_in_dock);
   crate::recent_changed(app); // the notes folder may have moved
 }
 
@@ -517,6 +537,20 @@ mod tests {
   }
 
   #[test]
+  fn return_follows_the_words_in_chat_apps_unless_the_app_says_otherwise() {
+    let base = Settings::default();
+    assert!(base.apps.send_for("com.tinyspeck.slackmacgap") && base.apps.send_for("COM.APPLE.MobileSMS"));
+    assert!(!base.apps.send_for("com.apple.mail") && !base.apps.send_for(""));
+    let chosen = base.patched(&json!({ "apps": { "styles": [
+      { "bundleId": "com.tinyspeck.slackmacgap", "name": "Slack", "style": "casual", "polish": false, "send": false },
+      { "bundleId": "com.apple.mail", "name": "Mail", "style": "formal", "polish": false, "send": true },
+      { "bundleId": "com.apple.Notes", "name": "Notes", "style": "default", "polish": false },
+    ] } }));
+    assert!(!chosen.apps.send_for("com.tinyspeck.slackmacgap") && chosen.apps.send_for("com.apple.mail") && !chosen.apps.send_for("com.apple.Notes"));
+    assert_eq!(serde_json::to_value(&chosen.apps.styles[2]).unwrap()["send"], Value::Null); // an older file's entry keeps the default
+  }
+
+  #[test]
   fn only_rust_chooses_how_claude_is_reached() {
     let base = Settings::default();
     assert_eq!(base.patched(&json!({ "claude": { "via": "claudeCode" } })).claude.via, ClaudeVia::ClaudeCode);
@@ -531,7 +565,7 @@ mod tests {
   fn defaults_are_the_documented_ones_in_camel_case() {
     let value = serde_json::to_value(Settings::default()).unwrap();
     assert_eq!(value["version"], 1);
-    assert_eq!(value["general"], json!({ "menuBarIcon": true }));
+    assert_eq!(value["general"], json!({ "menuBarIcon": true, "showInDock": false }));
     assert_eq!(value["shortcuts"], json!({ "dictate": "fn", "handsFree": true, "command": "control", "note": null, "meeting": null, "pasteLast": null }));
     assert_eq!(value["dictation"], json!({ "language": "auto", "translateToEnglish": false, "liveTyping": true, "removeFillers": true, "sounds": true, "soundVolume": 0.3, "startSound": "Tink", "stopSound": "Pop", "model": "turbo" }));
     assert_eq!(value["vocabulary"], json!({ "words": [], "replacements": [], "learn": true, "suggestions": [] }));
