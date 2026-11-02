@@ -22,26 +22,31 @@ static NSRunningApplication *TTHistoryAppBelow(void) {
   return nil;
 }
 
-// On the main thread. 0 when the words are on their way, 1 without Accessibility, 2 with no app to type into.
-int dictate_history_type(const char *text) {
-  if (!text || !*text) return 2;
-  if (!AXIsProcessTrusted()) return 1;
+typedef void (*TTHistoryTyped)(void *context, int status, const char *app);
+
+// On the main thread. Calls `done` once with 0 when the words were typed, 1 without Accessibility,
+// 2 with no app to type into, or 3 when that app didn't come forward, with the app's name.
+void dictate_history_type(const char *text, TTHistoryTyped done, void *context) {
+  if (!text || !*text) { done(context, 2, NULL); return; }
+  if (!AXIsProcessTrusted()) { done(context, 1, NULL); return; }
   NSRunningApplication *target = TTHistoryAppBelow();
-  if (!target) return 2;
+  if (!target) { done(context, 2, NULL); return; }
   NSString *words = @(text);
   NSNotificationCenter *center = NSWorkspace.sharedWorkspace.notificationCenter;
   __block id observer = nil;
-  __block BOOL done = NO;
+  __block BOOL finished = NO;
   void (^type)(void) = ^{
-    if (done) return;
-    done = YES;
+    if (finished) return;
+    finished = YES;
     if (observer) { [center removeObserver:observer]; observer = nil; }
     // Typing into whatever else came forward would put the words in the wrong place.
-    if (NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier == target.processIdentifier) dictate_type_text(words.UTF8String);
+    if (NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier != target.processIdentifier) { done(context, 3, target.localizedName.UTF8String); return; }
+    dictate_type_text(words.UTF8String);
+    done(context, 0, NULL);
   };
   // The app's window takes key a moment after the app turns active.
   void (^settle)(void) = ^{ dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 150 * NSEC_PER_MSEC), dispatch_get_main_queue(), type); };
-  if (target.active) { settle(); return 0; }
+  if (target.active) { settle(); return; }
   observer = [center addObserverForName:NSWorkspaceDidActivateApplicationNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note) {
     NSRunningApplication *app = note.userInfo[NSWorkspaceApplicationKey];
     if (app.processIdentifier == target.processIdentifier) settle();
@@ -49,5 +54,4 @@ int dictate_history_type(const char *text) {
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC), dispatch_get_main_queue(), type);
   if (@available(macOS 14.0, *)) [NSApp yieldActivationToApplication:target];
   [target activateWithOptions:0];
-  return 0;
 }

@@ -18,6 +18,14 @@ const KEY: Record<DictateKey, string> = { fn: 'fn', rightCommand: 'right ⌘', r
 const MODE: Partial<Record<HoldMode, string>> = { note: 'Note', command: 'Command', handsfree: 'Hands-free' };
 const DAY = 86_400_000;
 const PAGE = 100;
+/// How long each Keep holds on to the words, as history.rs prunes them; null is for good.
+const AGE: Record<Keep, number | null> = { off: 0, day: DAY, week: 7 * DAY, month: 30 * DAY, forever: null };
+const FOR: Record<Keep, string> = { off: '', day: ' for a day', week: ' for a week', month: ' for a month', forever: '' };
+/// What search looks through: a note shows no app, since it goes to a file.
+const searchable = (entry: HistoryEntry) => entry.mode === 'note' ? entry.text : `${entry.text} ${entry.appName}`;
+/// Focus for after a confirm closes, which would otherwise drop it to the page.
+const refocus = (selector: string) => requestAnimationFrame(() => document.querySelector<HTMLElement>(selector)?.focus());
+const KEEP_SELECT = 'select[aria-label="Keep what you said"]';
 
 const count = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
 const localDay = (atMs: number) => Math.floor((atMs - new Date(atMs).getTimezoneOffset() * 60_000) / DAY);
@@ -53,6 +61,8 @@ export function History({ settings, update }: PageProps) {
   const [query, setQuery] = useState('');
   const [shown, setShown] = useState(PAGE);
   const [clearing, setClearing] = useState(false);
+  /// A shorter Keep waiting on a confirm, with how many kept dictations it removes.
+  const [narrowing, setNarrowing] = useState<{ keep: Keep; removes: number } | null>(null);
   const [toast, setToast] = useState<{ message: string; error?: boolean } | null>(null);
   const list = useRef<HTMLDivElement>(null);
   const keep = settings.history.keep;
@@ -69,7 +79,7 @@ export function History({ settings, update }: PageProps) {
   const hideToast = useCallback(() => setToast(null), []);
 
   const words = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
-  const matches = (entries ?? []).filter(entry => words.every(word => `${entry.text} ${entry.appName}`.toLocaleLowerCase().includes(word)));
+  const matches = (entries ?? []).filter(entry => words.every(word => searchable(entry).toLocaleLowerCase().includes(word)));
   const today = stats?.today ?? localDay(Date.now());
 
   const remove = (entry: HistoryEntry) => {
@@ -82,7 +92,23 @@ export function History({ settings, update }: PageProps) {
   };
   const clear = () => {
     setClearing(false);
-    void invoke('history_clear').then(refresh).catch(error => fail(error, 'Couldn’t clear history'));
+    void invoke('history_clear').then(() => {
+      refresh();
+      setToast({ message: 'History cleared' });
+      refocus(KEEP_SELECT);
+    }).catch(error => fail(error, 'Couldn’t clear history'));
+  };
+  // A shorter Keep removes words at once and for good, so it asks first, as Clear does.
+  const choose = (next: Keep) => {
+    const age = AGE[next];
+    const before = age === null ? -Infinity : Date.now() - age;
+    const removes = (entries ?? []).filter(entry => entry.atMs < before).length;
+    if (removes) setNarrowing({ keep: next, removes }); else void update({ history: { keep: next } });
+  };
+  const narrow = (confirmed: boolean) => {
+    if (confirmed && narrowing) void update({ history: { keep: narrowing.keep } });
+    setNarrowing(null);
+    refocus(KEEP_SELECT);
   };
   const copy = (entry: HistoryEntry) => void copyText(entry.text).then(() => setToast({ message: 'Copied' })).catch(() => fail(null, 'Couldn’t copy that'));
   const type = (entry: HistoryEntry) => void invoke('history_type', { at: entry.atMs }).catch(error => fail(error, 'Couldn’t type that'));
@@ -115,14 +141,20 @@ export function History({ settings, update }: PageProps) {
     </>}
     <Section title="History" note="Word counts and times are always kept for your stats. Everything stays on this Mac.">
       <TileGroup>
-        <Tile title="Keep what you said" detail="Older dictations are removed for good.">
-          <Select label="Keep what you said" value={keep} options={KEEP} onChange={keep => update({ history: { keep } })} />
-        </Tile>
-        <Tile title={clearing ? 'Clear all of your history?' : 'Clear history'} detail="Removes everything you said from this Mac. Your stats stay.">
+        {narrowing
+          ? <Tile title={narrowing.keep === 'off' ? 'Stop keeping what you say?' : `Keep what you said${FOR[narrowing.keep]}?`}
+            detail={`Removes ${count(narrowing.removes, 'dictation')} for good. Your stats stay.`}>
+            <Button variant="quiet" onClick={() => narrow(false)} autoFocus>Cancel</Button>
+            <Button variant="danger" onClick={() => narrow(true)}>Remove</Button>
+          </Tile>
+          : <Tile title="Keep what you said" detail="Older dictations are removed for good.">
+            <Select label="Keep what you said" value={keep} options={KEEP} onChange={choose} />
+          </Tile>}
+        <Tile title={clearing ? 'Clear all of your history?' : 'Clear history'} detail="Removes what you said from your history on this Mac. Saved notes and your stats stay.">
           {clearing
-            ? <><Button variant="quiet" onClick={() => setClearing(false)} autoFocus>Cancel</Button>
+            ? <><Button variant="quiet" onClick={() => { setClearing(false); refocus('[data-action="clear"]'); }} autoFocus>Cancel</Button>
               <Button variant="danger" onClick={clear}>Clear</Button></>
-            : <Button variant="danger" disabled={!entries?.length} onClick={() => setClearing(true)}>Clear…</Button>}
+            : <Button variant="danger" data-action="clear" disabled={!entries?.length} onClick={() => setClearing(true)}>Clear…</Button>}
         </Tile>
       </TileGroup>
     </Section>
@@ -131,7 +163,9 @@ export function History({ settings, update }: PageProps) {
         What you say isn’t kept, so there’s nothing to search. Your stats still count every word.
       </EmptyState>
       : !entries.length
-        ? <EmptyState icon="history" title="Nothing here yet">Hold {KEY[settings.shortcuts.dictate]} and speak in any app. What you say shows up here.</EmptyState>
+        ? stats?.dictations
+          ? <EmptyState icon="history" title="Nothing kept right now">What you say next shows up here{FOR[keep]}. Your stats still count every word.</EmptyState>
+          : <EmptyState icon="history" title="Nothing here yet">Hold {KEY[settings.shortcuts.dictate]} and speak in any app. What you say shows up here.</EmptyState>
         : <section className="history-list" aria-label="What you said">
           <label className="search history-search">
             <Icon name="search" size={15} />
@@ -237,11 +271,12 @@ function Item({ entry, words, onCopy, onType, onDelete }: {
   const [open, setOpen] = useState(false);
   const long = entry.text.length > LONG;
   const time = new Date(entry.atMs).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  const where = [entry.mode !== 'note' && entry.appName, MODE[entry.mode]].filter(Boolean).join(' · ');
+  const app = entry.mode === 'note' ? '' : entry.appName;
+  const where = [app, MODE[entry.mode]].filter(Boolean).join(' · ');
   return <article className="history-entry" data-at={entry.atMs} data-folded={long && !open || undefined} aria-label={`${time}${where ? `, ${where}` : ''}`}>
     <p className="text">{marked(entry.text, words)}</p>
     <div className="meta">
-      <span><time dateTime={new Date(entry.atMs).toISOString()}>{time}</time>{where && ` · ${where}`} · {count(entry.words, 'word')}</span>
+      <span><time dateTime={new Date(entry.atMs).toISOString()}>{time}</time>{app && <> · {marked(app, words)}</>}{MODE[entry.mode] && ` · ${MODE[entry.mode]}`} · {count(entry.words, 'word')}</span>
       {long && <button type="button" className="link fold" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? 'Show less' : 'Show all'}</button>}
       <span className="actions">
         <Button variant="quiet" small icon="copy" aria-label="Copy" title="Copy" onClick={() => onCopy(entry)} />

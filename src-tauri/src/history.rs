@@ -4,7 +4,7 @@
 use crate::settings::{self, Keep};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::ffi::{c_char, CString};
+use std::ffi::{c_char, c_void, CStr, CString};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard, OnceLock};
@@ -45,9 +45,12 @@ const TOP_APPS: usize = 5;
 
 /// The entries in `path`, oldest first, and whether the file is clean. A line that isn't an entry (a
 /// crash mid-write, an edit by hand) is skipped; a file without its last newline would glue the next
-/// entry onto it, so it isn't clean either.
-fn load(path: &Path) -> (Vec<Entry>, bool) {
-  let Ok(bytes) = std::fs::read(path) else { return (Vec::new(), true) };
+/// entry onto it, so it isn't clean either. A missing file is empty; one that can't be read is an error.
+fn load(path: &Path) -> std::io::Result<(Vec<Entry>, bool)> {
+  let bytes = match std::fs::read(path) {
+    Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok((Vec::new(), true)),
+    read => read?,
+  };
   let mut clean = bytes.is_empty() || bytes.ends_with(b"\n");
   let mut entries = Vec::new();
   for line in bytes.split(|byte| *byte == b'\n').filter(|line| !line.iter().all(u8::is_ascii_whitespace)) {
@@ -57,7 +60,7 @@ fn load(path: &Path) -> (Vec<Entry>, bool) {
     }
   }
   entries.sort_by_key(|entry| entry.at_ms);
-  (entries, clean)
+  Ok((entries, clean))
 }
 
 fn lines(entries: &[Entry]) -> Vec<u8> {
@@ -193,13 +196,30 @@ fn stats(entries: &[Entry], now_ms: u64, day: impl Fn(u64) -> i64) -> Stats {
 // is a few MB); fold old entries into daily totals if that ever shows.
 #[derive(Default)]
 struct Store {
+  /// None while the file on disk couldn't be read, so it is never written over.
   file: Option<PathBuf>,
   entries: Vec<Entry>,
-  /// What the last prune went by: the setting and the day. Either changing prunes again.
-  pruned: Option<(Keep, u64)>,
 }
 
 impl Store {
+  /// The history in `file`, rewritten clean if it had to skip lines, and pruned.
+  fn open(file: PathBuf, keep: Keep, now_ms: u64) -> Self {
+    let mut store = match load(&file) {
+      Ok((entries, clean)) => {
+        if !clean { log::warn!("history: left out lines in {} that aren’t dictations", file.display()); }
+        let store = Store { file: Some(file), entries };
+        if !clean { store.save(); }
+        store
+      }
+      Err(e) => {
+        log::warn!("history: couldn’t read {}, so this session isn’t saved: {e}", file.display());
+        Store::default()
+      }
+    };
+    store.prune_now(keep, now_ms);
+    store
+  }
+
   fn save(&self) {
     if let Some(file) = &self.file {
       if let Err(e) = rewrite(file, &self.entries) { log::warn!("history: {e}"); }
@@ -207,22 +227,25 @@ impl Store {
   }
 
   fn prune_now(&mut self, keep: Keep, now_ms: u64) {
-    let by = Some((keep, now_ms / DAY_MS));
-    if self.pruned == by { return; }
-    self.pruned = by;
     if prune(&mut self.entries, keep, now_ms) { self.save(); }
   }
 
-  /// Keeps `entry`, without its words when History keeps none, and answers it as kept.
-  fn add(&mut self, mut entry: Entry, keep: Keep, now_ms: u64) -> Entry {
-    self.prune_now(keep, now_ms);
-    // The time is the entry's id, so two in the same millisecond still get one each.
-    if let Some(newest) = self.entries.last() { entry.at_ms = entry.at_ms.max(newest.at_ms + 1); }
+  /// Keeps `entry`, without its words when History keeps none, and answers it as kept. It only
+  /// appends, since a dictation waits on it before it is typed; pruning is left to reads and the timer.
+  fn add(&mut self, mut entry: Entry, keep: Keep) -> Entry {
+    // The time is the entry's id, so one that lands on a taken millisecond moves to the next free one.
+    // The clock is trusted otherwise: one entry from a clock once set ahead mustn't drag the rest along.
+    let at = loop {
+      match self.entries.binary_search_by_key(&entry.at_ms, |kept| kept.at_ms) {
+        Ok(_) => entry.at_ms += 1,
+        Err(at) => break at,
+      }
+    };
     if keep == Keep::Off { entry.text.clear(); }
     if let Some(file) = &self.file {
       if let Err(e) = append(file, &entry) { log::warn!("history: couldn’t save a dictation: {e}"); }
     }
-    self.entries.push(entry.clone());
+    self.entries.insert(at, entry.clone());
     entry
   }
 
@@ -238,9 +261,12 @@ impl Store {
 
   /// The entries with words, newest first.
   fn kept(&self) -> Vec<Entry> { self.entries.iter().rev().filter(|entry| !entry.text.is_empty()).cloned().collect() }
+
+  /// The newest entry with words, for Paste Last Transcript.
+  fn newest(&self) -> Option<Entry> { self.entries.iter().rev().find(|entry| !entry.text.trim().is_empty()).cloned() }
 }
 
-static STORE: Mutex<Store> = Mutex::new(Store { file: None, entries: Vec::new(), pruned: None });
+static STORE: Mutex<Store> = Mutex::new(Store { file: None, entries: Vec::new() });
 static APP: OnceLock<AppHandle> = OnceLock::new();
 /// The newest entry, for Paste Last Transcript. It keeps the words even while History keeps none,
 /// until the app quits or History is cleared.
@@ -250,16 +276,14 @@ fn store() -> MutexGuard<'static, Store> { STORE.lock().unwrap_or_else(|e| e.int
 fn last_slot() -> MutexGuard<'static, Option<Entry>> { LAST.lock().unwrap_or_else(|e| e.into_inner()) }
 fn keep() -> Keep { settings::get().history.keep }
 
-/// Reads the history at launch and prunes it, then checks every hour, so a day never passes without a prune.
+/// Reads the history at launch and prunes it. Every read prunes again, and so does a check each hour,
+/// so words never outstay Keep by more than an hour.
 pub fn init(app: &AppHandle) -> Result<(), String> {
   let file = app.path().app_data_dir().map_err(|e| e.to_string())?.join("history.jsonl");
-  let (entries, clean) = load(&file);
   {
     let mut store = store();
-    *store = Store { file: Some(file.clone()), entries, pruned: None };
-    if !clean { log::warn!("history: left out lines in {} that aren’t dictations", file.display()); store.save(); }
-    store.prune_now(keep(), now_ms());
-    *last_slot() = store.entries.iter().rev().find(|entry| !entry.text.trim().is_empty()).cloned();
+    *store = Store::open(file, keep(), now_ms());
+    *last_slot() = store.newest();
   }
   let _ = APP.set(app.clone());
   std::thread::spawn(|| loop {
@@ -273,17 +297,12 @@ pub fn init(app: &AppHandle) -> Result<(), String> {
 /// words isn't one.
 pub fn record(entry: Entry) {
   if entry.words == 0 { return; }
-  let kept = store().add(entry.clone(), keep(), now_ms());
+  let kept = store().add(entry.clone(), keep());
   if !entry.text.trim().is_empty() { *last_slot() = Some(Entry { text: entry.text, ..kept.clone() }); }
   if let Some(app) = APP.get() { let _ = app.emit("dictate-history", serde_json::json!({ "entry": kept })); }
 }
 
 pub fn last() -> Option<Entry> { last_slot().clone() }
-
-fn forget_last(at_ms: Option<u64>) {
-  let mut last = last_slot();
-  if last.as_ref().is_some_and(|entry| at_ms.is_none_or(|at| entry.at_ms == at)) { *last = None; }
-}
 
 // ---------- what the History page asks for ----------
 
@@ -305,31 +324,49 @@ pub fn history_stats() -> Stats {
 /// Forgets what was said at `at`; it still counts in the stats.
 #[tauri::command]
 pub fn history_delete(at: u64) {
-  store().forget(Some(at));
-  forget_last(Some(at));
+  let mut store = store();
+  store.forget(Some(at));
+  let mut last = last_slot();
+  if last.as_ref().is_some_and(|entry| entry.at_ms == at) { *last = store.newest(); }
 }
 
 /// Forgets everything said; the stats stay.
 #[tauri::command]
 pub fn history_clear() {
   store().forget(None);
-  forget_last(None);
+  *last_slot() = None;
 }
+
+type Typed = tokio::sync::oneshot::Sender<(i32, String)>;
 
 extern "C" {
-  fn dictate_history_type(text: *const c_char) -> i32;
+  fn dictate_history_type(text: *const c_char, done: extern "C" fn(*mut c_void, i32, *const c_char), context: *mut c_void);
 }
 
-/// Types what was said at `at` into the app that was in front before Settings.
+/// Native's answer to `dictate_history_type`, called once on the main thread.
+extern "C" fn history_typed(context: *mut c_void, status: i32, app: *const c_char) {
+  let done = unsafe { Box::from_raw(context.cast::<Typed>()) };
+  let app = if app.is_null() { String::new() } else { unsafe { CStr::from_ptr(app) }.to_string_lossy().into_owned() };
+  let _ = done.send((status, app));
+}
+
+/// Types what was said at `at` into the app that was in front before Settings, and answers once it
+/// has, or why it couldn't.
 #[tauri::command]
 pub async fn history_type(app: AppHandle, at: u64) -> Result<(), String> {
   let text = store().entries.iter().find(|entry| entry.at_ms == at && !entry.text.is_empty()).map(|entry| entry.text.replace('\0', ""));
   let text = CString::new(text.ok_or("That dictation is no longer kept")?).map_err(|e| e.to_string())?;
-  let (done, result) = tokio::sync::oneshot::channel();
-  app.run_on_main_thread(move || { let _ = done.send(unsafe { dictate_history_type(text.as_ptr()) }); }).map_err(|e| e.to_string())?;
-  match result.await.map_err(|e| e.to_string())? {
+  let (done, result): (Typed, _) = tokio::sync::oneshot::channel();
+  app.run_on_main_thread(move || {
+    let context = Box::into_raw(Box::new(done)).cast::<c_void>();
+    unsafe { dictate_history_type(text.as_ptr(), history_typed, context) }
+  }).map_err(|e| e.to_string())?;
+  let (status, target) = result.await.map_err(|e| e.to_string())?;
+  match status {
     0 => Ok(()),
     1 => Err("Turn on Accessibility to type".into()),
+    3 if !target.is_empty() => Err(format!("Couldn’t bring {target} forward, so nothing was typed")),
+    3 => Err("Couldn’t bring that app forward, so nothing was typed".into()),
     _ => Err("Open the app to type into, then try again".into()),
   }
 }
@@ -385,33 +422,93 @@ mod tests {
   }
 
   #[test]
-  fn the_store_prunes_each_day_and_when_keep_changes() {
-    let file = temp("daily");
+  fn keep_holds_to_the_hour_whatever_pruned_earlier() {
+    let file = temp("rolling");
     let mut store = Store { file: Some(file.clone()), ..Store::default() };
-    store.add(said(NOON - 2 * H, 2, 1.0, "Notes"), Keep::Day, NOON - 2 * H);
-    store.prune_now(Keep::Day, NOON + 2 * H);
+    store.add(said(NOON, 2, 1.0, "Notes"), Keep::Day);
+    // A prune earlier the same UTC day, and every hour since, must not hold the words past a day.
+    store.prune_now(Keep::Day, NOON + 12 * H);
+    for hour in 13..24 { store.prune_now(Keep::Day, NOON + hour * H); }
     assert_eq!(store.kept().len(), 1);
-    store.prune_now(Keep::Day, NOON + DAY_MS);
-    assert!(store.kept().is_empty(), "the next day prunes");
-    assert!(load(&file).0[0].text.is_empty(), "and saves the prune");
+    store.prune_now(Keep::Day, NOON + DAY_MS + 60_000);
+    assert!(store.kept().is_empty(), "gone a minute after a day");
+    assert!(load(&file).unwrap().0[0].text.is_empty(), "and saves the prune");
 
-    store.add(said(NOON + DAY_MS + H, 2, 1.0, "Notes"), Keep::Week, NOON + DAY_MS + H);
+    store.add(said(NOON + DAY_MS + H, 2, 1.0, "Notes"), Keep::Week);
+    store.prune_now(Keep::Week, NOON + DAY_MS + 2 * H);
     assert_eq!(store.kept().len(), 1);
-    store.prune_now(Keep::Off, NOON + DAY_MS + H);
-    assert!(store.kept().is_empty(), "choosing Don't keep prunes at once");
+    store.prune_now(Keep::Off, NOON + DAY_MS + 2 * H);
+    assert!(store.kept().is_empty(), "choosing Don’t keep prunes at once");
     let _ = std::fs::remove_dir_all(file.parent().unwrap());
+  }
+
+  #[test]
+  fn a_dictation_only_appends() {
+    let file = temp("append");
+    let mut store = Store { file: Some(file.clone()), ..Store::default() };
+    store.add(said(NOON - 3 * DAY_MS, 2, 1.0, "Mail"), Keep::Day);
+    let before = std::fs::read(&file).unwrap();
+    store.add(said(NOON, 3, 1.0, "Mail"), Keep::Day);
+    assert_eq!(store.kept().len(), 2, "the old words wait for the next read or the timer");
+    assert!(std::fs::read(&file).unwrap().starts_with(&before), "the file is only added to");
+    let _ = std::fs::remove_dir_all(file.parent().unwrap());
+  }
+
+  #[test]
+  fn times_follow_the_clock_and_stay_unique() {
+    let mut store = Store::default();
+    store.add(said(NOON + 365 * DAY_MS, 1, 1.0, "Mail"), Keep::Week);
+    let now = store.add(said(NOON, 2, 1.0, "Mail"), Keep::Week);
+    assert_eq!(now.at_ms, NOON, "an entry from a clock once set ahead doesn’t move the next");
+    assert_eq!(stats_of(&store.entries).words_today, 2);
+    let same = store.add(said(NOON, 3, 1.0, "Mail"), Keep::Week);
+    assert_eq!(same.at_ms, NOON + 1, "a taken millisecond moves to the next free one");
+    assert_eq!(store.entries.iter().map(|entry| entry.at_ms).collect::<Vec<_>>(), [NOON, NOON + 1, NOON + 365 * DAY_MS], "oldest first");
+    store.prune_now(Keep::Day, NOON + 3 * DAY_MS);
+    assert_eq!(store.kept().iter().map(|entry| entry.at_ms).collect::<Vec<_>>(), [NOON + 365 * DAY_MS]);
+  }
+
+  #[test]
+  fn a_file_that_cant_be_read_is_never_written_over() {
+    use std::os::unix::fs::PermissionsExt;
+    let file = temp("unreadable");
+    let mut store = Store { file: Some(file.clone()), ..Store::default() };
+    for i in 0..3 { store.add(said(NOON + i, 2, 1.0, "Mail"), Keep::Week); }
+    std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o000)).unwrap();
+    let mut store = Store::open(file.clone(), Keep::Week, NOON + H);
+    let at = store.add(said(NOON + H, 1, 1.0, "Mail"), Keep::Week).at_ms;
+    store.forget(Some(at));
+    store.prune_now(Keep::Off, NOON + H);
+    std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o644)).unwrap();
+    assert_eq!(load(&file).unwrap().0.len(), 3);
+    let _ = std::fs::remove_dir_all(file.parent().unwrap());
+  }
+
+  #[test]
+  fn deleting_the_newest_pastes_the_one_before() {
+    let older = said(NOON - H, 2, 1.0, "Mail");
+    let newest = said(NOON, 3, 1.0, "Mail");
+    *store() = Store { file: None, entries: vec![older.clone(), newest.clone()] };
+    *last_slot() = Some(newest.clone());
+    history_delete(newest.at_ms);
+    assert_eq!(last(), Some(older.clone()));
+    history_delete(NOON - 2 * H);
+    assert_eq!(last(), Some(older), "another delete leaves it");
+    history_clear();
+    assert_eq!(last(), None);
+    *store() = Store::default();
   }
 
   #[test]
   fn no_words_are_written_while_history_keeps_none() {
     let file = temp("off");
     let mut store = Store { file: Some(file.clone()), ..Store::default() };
-    let kept = store.add(said(NOON, 3, 1.5, "Slack"), Keep::Off, NOON);
+    let kept = store.add(said(NOON, 3, 1.5, "Slack"), Keep::Off);
     assert!(kept.text.is_empty());
     assert_eq!(kept.words, 3);
     let saved = std::fs::read_to_string(&file).unwrap();
     assert!(!saved.contains("word "), "{saved}");
-    assert_eq!(load(&file).0[0].words, 3);
+    assert_eq!(load(&file).unwrap().0[0].words, 3);
     let _ = std::fs::remove_dir_all(file.parent().unwrap());
   }
 
@@ -419,17 +516,17 @@ mod tests {
   fn entries_round_trip_and_delete_keeps_the_numbers() {
     let file = temp("round-trip");
     let mut store = Store { file: Some(file.clone()), ..Store::default() };
-    let first = store.add(said(NOON, 2, 1.0, "Mail"), Keep::Week, NOON);
-    let second = store.add(Entry { text: "line one\nline \"two\" ✓".into(), ..said(NOON, 4, 2.0, "Mail") }, Keep::Week, NOON);
+    let first = store.add(said(NOON, 2, 1.0, "Mail"), Keep::Week);
+    let second = store.add(Entry { text: "line one\nline \"two\" ✓".into(), ..said(NOON, 4, 2.0, "Mail") }, Keep::Week);
     assert_eq!(second.at_ms, first.at_ms + 1, "each entry its own time");
-    assert_eq!(load(&file), (store.entries.clone(), true));
+    assert_eq!(load(&file).unwrap(), (store.entries.clone(), true));
 
     store.forget(Some(first.at_ms));
     assert_eq!(store.kept(), vec![second]);
-    assert_eq!(load(&file).0[0].text, "");
+    assert_eq!(load(&file).unwrap().0[0].text, "");
     store.forget(None);
     assert!(store.kept().is_empty());
-    assert_eq!(load(&file).0.iter().map(|entry| entry.words).collect::<Vec<_>>(), [2, 4]);
+    assert_eq!(load(&file).unwrap().0.iter().map(|entry| entry.words).collect::<Vec<_>>(), [2, 4]);
     let _ = std::fs::remove_dir_all(file.parent().unwrap());
   }
 
@@ -439,22 +536,23 @@ mod tests {
     let newer = serde_json::to_string(&said(NOON, 2, 1.0, "Mail")).unwrap();
     let older = serde_json::to_string(&said(NOON - H, 1, 1.0, "Mail")).unwrap();
     std::fs::write(&file, format!("{newer}\nnot json\n\n{{\"atMs\":\"soon\"}}\n[1,2]\n\u{0}\n{older}\n{{\"atMs\":5,\"wor")).unwrap();
-    let (entries, clean) = load(&file);
+    let (entries, clean) = load(&file).unwrap();
     assert!(!clean);
     assert_eq!(entries.iter().map(|entry| entry.at_ms).collect::<Vec<_>>(), [NOON - H, NOON], "oldest first");
 
     // Rewritten clean, so the next entry isn't glued to the cut-off line.
-    let mut store = Store { file: Some(file.clone()), entries, pruned: None };
+    let mut store = Store { file: Some(file.clone()), entries };
     store.save();
-    store.add(said(NOON + H, 3, 1.0, "Mail"), Keep::Week, NOON + H);
-    let (entries, clean) = load(&file);
+    store.add(said(NOON + H, 3, 1.0, "Mail"), Keep::Week);
+    let (entries, clean) = load(&file).unwrap();
     assert!(clean);
     assert_eq!(entries.len(), 3);
 
     // Unknown fields and missing ones are fine; a missing file is empty and clean.
     std::fs::write(&file, "{\"atMs\":7,\"words\":2,\"future\":true}\n").unwrap();
-    assert_eq!(load(&file), (vec![Entry { at_ms: 7, words: 2, ..Entry::default() }], true));
-    assert_eq!(load(&file.with_extension("missing")), (Vec::new(), true));
+    assert_eq!(load(&file).unwrap(), (vec![Entry { at_ms: 7, words: 2, ..Entry::default() }], true));
+    assert_eq!(load(&file.with_extension("missing")).unwrap(), (Vec::new(), true));
+    assert!(load(file.parent().unwrap()).is_err(), "one that can’t be read isn’t empty");
     let _ = std::fs::remove_dir_all(file.parent().unwrap());
   }
 
