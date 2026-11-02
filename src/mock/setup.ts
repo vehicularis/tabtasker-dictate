@@ -5,8 +5,9 @@ import type { DictateKey } from '../store';
 // - `?status=new` starts as a Mac never set up; `&mic=denied` as one that said no to the microphone, and
 //   `&globe=emoji` as one whose globe key opens emoji.
 // - Asking for a permission grants it a moment later, as if done in System Settings.
-// - The dictate key is the real key on this keyboard (right ⌘, ⌥, ⌃ or ⇧). Browsers never see fn, so `
-//   stands in for it. Once voice is ready, a hold types a sentence into the focused field.
+// - On the setup page and the overlay's setup previews only, the dictate key is the real key on this
+//   keyboard (right ⌘, ⌥, ⌃ or ⇧). Browsers never see fn, so ` stands in for it. Once voice is ready, a
+//   hold types a sentence into the focused field. Everywhere else the keys type as usual.
 const CODES: Record<DictateKey, string> = { fn: 'Backquote', rightCommand: 'MetaRight', rightOption: 'AltRight', rightControl: 'ControlRight', rightShift: 'ShiftRight' };
 const SAID = 'Remind me to call Maria at three tomorrow.';
 
@@ -25,6 +26,7 @@ export function register(mock: Mock) {
   });
 
   let since = 0;
+  const setup = () => location.pathname.endsWith('/settings.html') ? location.hash === '#setup' : !!params.get('preview')?.startsWith('setup');
   const isKey = (event: KeyboardEvent) => event.code === CODES[mock.settings().shortcuts.dictate]
     && (event.code !== 'Backquote' || !(event.metaKey || event.ctrlKey || event.altKey));
   const release = () => {
@@ -39,7 +41,7 @@ export function register(mock: Mock) {
     }
   };
   addEventListener('keydown', event => {
-    if (!isKey(event)) return;
+    if (!isKey(event) || !setup()) return;
     if (event.code === 'Backquote') event.preventDefault();
     if (since) return;
     since = performance.now();

@@ -4,7 +4,7 @@ import { Claude } from '../settings/pages/Claude';
 import { Meetings } from '../settings/pages/Meetings';
 import { Notes } from '../settings/pages/Notes';
 import { setupDone, tilde, updateSettings, useSettings, useStatus, type CommandKey, type DictateKey, type PageProps, type Patch, type Settings, type Status } from '../store';
-import { Button, Icon, Kbd, ProgressBar, Segmented, Select, Toast, type IconName } from '../ui';
+import { Button, Icon, Kbd, ProgressBar, Segmented, Select, Toast, Toggle, type IconName } from '../ui';
 import { Globe, KEY_NAMES, Keyboard } from './Keyboard';
 import './onboarding.css';
 
@@ -21,37 +21,36 @@ const STEPS: { id: StepId; name: string; icon: Glyph }[] = [
 ];
 // A hold this long is a hold, not a tap: the same as the overlay's key test.
 const HOLD_MS = 350;
-// How long after the key is let go its last words may still arrive.
-const SETTLE_MS = 10_000;
+// How long after a hold is let go its last words may still arrive: long enough for Whisper's final pass,
+// short enough that typing by hand afterwards doesn't count.
+const SETTLE_MS = 4_000;
 
 const ask = (kind: string) => void invoke('request', { kind }).catch(() => {});
 const voiceReady = (status: Status) => status.enabled && status.modelReady;
 
 /// What still stands between this Mac and dictating, with the step that fixes it.
 const missing = (status: Status) => ([
-  ['microphone', 'Microphone access', status.microphone !== 'allowed'],
+  ['microphone', 'microphone access', status.microphone !== 'allowed'],
   ['accessibility', 'Accessibility', !status.accessibility],
-  ['model', 'The speech model', !voiceReady(status)],
+  ['model', 'the speech model', !voiceReady(status)],
 ] as [StepId, string, boolean][]).filter(([, , open]) => open);
 
-type Key = { down: boolean; tested: boolean; speaking: () => boolean };
+type Key = { down: boolean; tested: boolean };
 
 /// The dictate key as the native side reports it (`dictate-fn` follows the chosen key). It counts as
 /// tested once held and let go, and a newly chosen key is tested again.
 function useDictateKey(chosen: DictateKey | undefined): Key {
   const [down, setDown] = useState(false);
   const [tested, setTested] = useState<DictateKey | null>(null);
-  const since = useRef(0), released = useRef(-SETTLE_MS), key = useRef(chosen);
+  const since = useRef(0), key = useRef(chosen);
   key.current = chosen;
   useEffect(() => listen<{ down: boolean }>('dictate-fn', event => {
     setDown(event.down);
     if (event.down) { since.current = performance.now(); return; }
     if (since.current && performance.now() - since.current > HOLD_MS) setTested(key.current ?? null);
     since.current = 0;
-    released.current = performance.now();
   }), []);
-  const speaking = useCallback(() => since.current > 0 || performance.now() - released.current < SETTLE_MS, []);
-  return { down, tested: !!chosen && tested === chosen, speaking };
+  return { down, tested: !!chosen && tested === chosen };
 }
 
 type Sheet = 'claude' | 'meetings' | 'notes';
@@ -66,7 +65,7 @@ export function Onboarding() {
   const settings = useSettings();
   const [status] = useStatus(1000);
   const [at, setAt] = useState(0);
-  const [practiced, setPracticed] = useState(false);
+  const [practiced, setPracticed] = useState<DictateKey | null>(null);
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const dictateKey = useDictateKey(settings?.shortcuts.dictate);
@@ -81,8 +80,25 @@ export function Onboarding() {
     if (!main.current?.contains(document.activeElement)) main.current?.querySelector<HTMLElement>('h1')?.focus();
   }, [at]);
 
+  // Marks which way the step has more to scroll to, for the fade at that edge.
+  const loaded = !!settings && !!status;
+  useEffect(() => {
+    const step = main.current;
+    if (!step) return;
+    const mark = () => {
+      const more = [step.scrollTop > 1 && 'up', step.scrollTop + step.clientHeight < step.scrollHeight - 1 && 'down'].filter(Boolean).join(' ');
+      if (more) step.dataset.more = more; else delete step.dataset.more;
+    };
+    const resized = new ResizeObserver(mark);
+    resized.observe(step);
+    if (step.firstElementChild) resized.observe(step.firstElementChild);
+    step.addEventListener('scroll', mark, { passive: true });
+    return () => { resized.disconnect(); step.removeEventListener('scroll', mark); };
+  }, [at, loaded]);
+
   if (!settings || !status) return <div className="onboarding" />;
   const step = STEPS[at];
+  const chosen = settings.shortcuts.dictate;
   const go = (id: StepId) => setAt(STEPS.findIndex(candidate => candidate.id === id));
   const ready = (id: StepId) => {
     switch (id) {
@@ -90,19 +106,20 @@ export function Onboarding() {
       case 'accessibility': return status.accessibility;
       case 'key': return dictateKey.tested;
       case 'model': return voiceReady(status);
-      case 'try': return practiced;
+      case 'try': return practiced === chosen;
       default: return true;
     }
   };
   // Steps with nothing to do count once passed; the others as soon as they are true, even ahead.
   const done = (id: StepId, i: number) => ready(id) && (i < at || !['welcome', 'extras', 'done'].includes(id));
-  const props: Step = { status, settings, update, dictateKey, practiced, onPracticed: () => setPracticed(true), go, open: setSheet };
+  const props: Step = { status, settings, update, dictateKey, practiced: practiced === chosen, onPracticed: () => setPracticed(chosen), go, open: setSheet };
   const last = at === STEPS.length - 1;
   const finished = setupDone(status);
   const [title, Body] = BODIES[step.id];
 
   return <div className="onboarding">
     <div className="titlebar" data-tauri-drag-region />
+    {!last && <Button variant="quiet" small className="setup-leave" onClick={() => { location.hash = 'general'; }}>Open Settings</Button>}
     <nav className="setup-progress" aria-label="Setup steps">
       <ol>
         {STEPS.map((candidate, i) => <li key={candidate.id}>
@@ -208,11 +225,12 @@ function ChooseKey({ status, settings, update, dictateKey, go }: Step) {
         : <>Try it now: hold <Kbd>{name}</Kbd> for a moment, then let go.</>}
     </p>
     {globe && <ul className="ui-tiles setup-tiles">
-      <Row icon="globe" title={`Your globe key ${globe}`} detail={<>That gets in the way of holding fn. In Keyboard settings, set <b>Press <Globe size={11} /> key to</b> to <b>Do Nothing</b>.</>}>
+      <Row icon="globe" title={`Your globe key ${globe}`} detail={<>That gets in the way of fn. Set <b>Press <Globe size={11} /> key to</b> to <b>Do Nothing</b>.</>}>
         <Button onClick={() => ask('keyboard')}>Open Keyboard Settings</Button>
       </Row>
     </ul>}
-    {!status.accessibility ? <p className="setup-note">Until Accessibility is on, your key is heard only while this window is in front. <button type="button" className="link" onClick={() => go('accessibility')}>Turn it on</button></p>
+    {chosen === 'rightControl' && <p className="setup-note">Right ⌃ is only on some external keyboards. Apple’s have the arrow keys there.</p>}
+    {!status.accessibility ? <p className="setup-note">Until Accessibility is on, your key works only while this window is in front. <button type="button" className="link" onClick={() => go('accessibility')}>Turn it on</button></p>
       : settings.shortcuts.handsFree && <p className="setup-note">Double-tap it to keep listening without holding. Tap again to finish.</p>}
   </>;
 }
@@ -251,21 +269,27 @@ function Model({ status, settings, update }: Step) {
 
 function TryIt({ status, settings, dictateKey, practiced, onPracticed, go }: Step) {
   const [text, setText] = useState('');
+  const box = useRef<HTMLTextAreaElement>(null);
+  // Text counts only while a hold that began in the box lasts, and for a moment after it: a tap, a hold
+  // somewhere else and typing by hand don't pass.
+  const counts = useRef({ since: 0, until: 0 });
+  useEffect(() => listen<{ down: boolean }>('dictate-fn', ({ down }) => {
+    const now = performance.now(), { since } = counts.current;
+    if (down) counts.current = document.activeElement === box.current ? { since: now, until: Infinity } : { since: 0, until: 0 };
+    else counts.current = { since: 0, until: since && now - since > HOLD_MS ? now + SETTLE_MS : 0 };
+  }), []);
   const name = KEY_NAMES[settings.shortcuts.dictate];
   const needs = missing(status);
   if (needs.length) return <>
-    <p className="lead">A practice box is waiting here. First, finish what it needs:</p>
-    <ul className="ui-tiles setup-tiles">
-      {needs.map(([id, label]) => <Row key={id} icon="minus" title={label}><Button onClick={() => go(id)}>Finish</Button></Row>)}
-    </ul>
+    <p className="lead">A practice box is waiting here. First, finish what it needs.</p>
+    <Left needs={needs} go={go} />
   </>;
   return <>
     <p className="lead">Click in the box, hold <Kbd>{name}</Kbd> and say something. Let go, and your words appear.</p>
-    <textarea className="setup-practice" aria-label="Practice" autoFocus placeholder={`Hold ${name} and talk…`} value={text} spellCheck={false}
+    <textarea ref={box} className="setup-practice" aria-label="Practice" autoFocus placeholder={`Hold ${name} and talk…`} value={text} spellCheck={false}
       onChange={event => {
         setText(event.target.value);
-        // Words that arrive with the key, not typed by hand.
-        if (dictateKey.speaking() && /\p{L}/u.test(event.target.value)) onPracticed();
+        if (performance.now() < counts.current.until && /\p{L}/u.test(event.target.value)) onPracticed();
       }} />
     <p className="setup-status" role="status" data-ok={practiced || undefined}>
       {practiced ? <><Icon name="check" size={16} />That’s it. It works the same in every app.</>
@@ -274,7 +298,7 @@ function TryIt({ status, settings, dictateKey, practiced, onPracticed, go }: Ste
   </>;
 }
 
-function Extras({ status, settings, open }: Step) {
+function Extras({ status, settings, update, open }: Step) {
   const connected = settings.claude.enabled;
   return <>
     <p className="lead">All optional, and in Settings whenever you want them.</p>
@@ -283,8 +307,9 @@ function Extras({ status, settings, open }: Step) {
         {connected && <Allowed>Connected</Allowed>}
         <Button onClick={() => open('claude')}>{connected ? 'Open' : 'Connect…'}</Button>
       </Row>
-      <Row icon="meeting" title="Record meetings" detail="You and the others on a call, transcribed on this Mac. macOS asks to allow system audio the first time you record.">
-        <Button onClick={() => open('meetings')}>Set up…</Button>
+      <Row icon="meeting" title="Record the others in meetings" detail="Their side of a call, from this Mac’s audio. macOS asks you to allow it the first time you record.">
+        <Toggle label="Record the others in meetings" checked={settings.meetings.systemAudio} onChange={systemAudio => void update({ meetings: { systemAudio } })} />
+        <Button onClick={() => open('meetings')}>Meetings…</Button>
       </Row>
       <Row icon="folder" title="Notes folder" detail={<span className="setup-path">{tilde(settings.notes.folder ?? status.notes, status.home)}</span>}>
         <Button onClick={() => open('notes')}>Change…</Button>
@@ -309,9 +334,7 @@ function Done({ status, settings, go }: Step) {
   return <>
     {needs.length ? <>
       <p className="lead">A few things are left before your words can type. Finish them now, or later from Settings.</p>
-      <ul className="ui-tiles setup-tiles">
-        {needs.map(([id, label]) => <Row key={id} icon="minus" title={label}><Button onClick={() => go(id)}>Finish</Button></Row>)}
-      </ul>
+      <Left needs={needs} go={go} />
     </> : <p className="lead">Here are the ways in. Settings has the rest.</p>}
     <ul className="ui-tiles setup-tiles setup-ways" aria-label="Ways in">
       {ways.map(([what, how]) => <li key={what} className="ui-tile"><span className="what"><span className="title">{what}</span></span><span className="how">{how}</span></li>)}
@@ -357,6 +380,15 @@ function Row({ icon, title, detail, children }: { icon: Glyph; title: ReactNode;
     <span className="what"><span className="title">{title}</span>{detail && <span className="detail">{detail}</span>}</span>
     {children && <span className="control">{children}</span>}
   </li>;
+}
+
+/// What is left, as one row: Finish starts at the first of it, and Continue walks through the rest.
+function Left({ needs, go }: { needs: ReturnType<typeof missing>; go: (id: StepId) => void }) {
+  const labels = needs.map(([, label]) => label);
+  const list = labels.length > 1 ? `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}` : labels[0];
+  return <ul className="ui-tiles setup-tiles">
+    <Row icon="minus" title="Still to do" detail={`${list[0].toUpperCase()}${list.slice(1)}.`}><Button onClick={() => go(needs[0][0])}>Finish</Button></Row>
+  </ul>;
 }
 
 const Allowed = ({ children }: { children: ReactNode }) => <span className="state" data-on><Icon name="check" size={14} />{children}</span>;

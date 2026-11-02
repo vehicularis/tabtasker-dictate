@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { invoke } from '../../bridge';
 import { resetSettings, useStatus, type PageProps } from '../../store';
 import { Button, Icon, PageHeader, Section, Select, Tile, TileGroup, Toggle } from '../../ui';
@@ -10,6 +10,10 @@ export function General({ settings, update }: PageProps) {
   const [resetting, setResetting] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [reset, setReset] = useState<string | null>(null);
+  // Leaving the confirm swaps its buttons for Reset…, which takes the focus back.
+  const resetId = useId(), refocus = useRef(false);
+  useEffect(() => { if (!resetting && refocus.current) { refocus.current = false; document.getElementById(resetId)?.focus(); } }, [resetting, resetId]);
+  const confirm = (open: boolean) => { refocus.current = !open; setResetting(open); };
   const run = (work: Promise<unknown>, failed: string) => { setProblem(null); void work.then(refresh).catch(() => setProblem(failed)); };
   const icon = settings.general.menuBarIcon;
   const mic = status?.microphone;
@@ -29,11 +33,13 @@ export function General({ settings, update }: PageProps) {
     </Section>
     <Section title="Listening" note={problem}>
       <TileGroup>
-        <Tile title="Microphone" detail={status ? `In use: ${status.inputInUse}` : undefined}>
+        <Tile title="Microphone" detail={!status ? undefined : mic === 'allowed' ? `In use: ${status.inputInUse}` : 'Allow microphone access under Setup first.'}>
           <Select label="Microphone" value={status?.input ?? ''} options={[{ value: '', label: 'Automatic' }, ...(status?.inputs ?? []).map(input => ({ value: input.id, label: input.name }))]}
             onChange={id => run(invoke('set_input', { id: id || null }), 'Couldn’t change the microphone')} />
         </Tile>
-        <Tile title="Pause dictation" detail="The microphone and Whisper stay off until you turn this off again. Your model is kept.">
+        <Tile title="Pause dictation" detail={status && !status.enabled
+          ? 'Dictation is off. Turn this off to start it; the speech model downloads first if it isn’t on this Mac.'
+          : 'The microphone and Whisper stay off until you turn this off again. Your model is kept.'}>
           <Toggle label="Pause dictation" checked={!!status && !status.enabled} disabled={!status}
             onChange={paused => run(invoke('set_enabled', { enabled: !paused }), 'Couldn’t change dictation')} />
         </Tile>
@@ -41,11 +47,11 @@ export function General({ settings, update }: PageProps) {
     </Section>
     <Section title="Setup">
       <TileGroup>
-        <Tile title="Microphone access" detail={mic === 'allowed' ? 'Allowed. It is on only while you hold your key or take a note.'
+        <Tile title="Microphone access" detail={!status ? undefined : mic === 'allowed' ? 'Allowed. It is on only while you hold your key or take a note.'
           : mic === 'denied' ? 'Off. In Privacy & Security › Microphone, turn on TabTasker Dictate.' : 'Not asked yet.'}>
           {mic === 'allowed' ? <State>Allowed</State> : status && <Button onClick={() => ask('microphone')}>{mic === 'denied' ? 'Open System Settings' : 'Allow'}</Button>}
         </Tile>
-        <Tile title="Accessibility" detail={status?.accessibility ? 'On. Your key works in every app and your words type there.'
+        <Tile title="Accessibility" detail={!status ? undefined : status.accessibility ? 'On. Your key works in every app and your words type there.'
           : 'Off. In Privacy & Security › Accessibility, turn on TabTasker Dictate.'}>
           {status?.accessibility ? <State>On</State> : status && <Button onClick={() => ask('accessibility')}>Open System Settings</Button>}
         </Tile>
@@ -54,18 +60,20 @@ export function General({ settings, update }: PageProps) {
         </Tile>
       </TileGroup>
     </Section>
-    <Section title="Reset" note={reset}>
+    <Section title="Reset">
       <TileGroup>
         <Tile title={resetting ? 'Reset all settings?' : 'Reset all settings'} detail="Every setting goes back to how it was at first launch. Your notes and the speech model stay.">
           {resetting
-            ? <><Button variant="quiet" autoFocus onClick={() => setResetting(false)}>Cancel</Button>
+            ? <><Button variant="quiet" autoFocus onClick={() => confirm(false)}>Cancel</Button>
               <Button variant="danger" onClick={() => {
-                setResetting(false); setReset(null);
+                confirm(false); setReset(null);
                 void resetSettings().then(() => setReset('Settings are back to how they were at first launch.')).catch(() => setReset('Couldn’t reset settings.'));
               }}>Reset</Button></>
-            : <Button variant="danger" onClick={() => { setReset(null); setResetting(true); }}>Reset…</Button>}
+            : <Button id={resetId} variant="danger" onClick={() => { setReset(null); confirm(true); }}>Reset…</Button>}
         </Tile>
       </TileGroup>
+      {/* Always there, so VoiceOver reads the outcome when it fills in. */}
+      <p className="ui-section-note" role="status">{reset}</p>
     </Section>
   </>;
 }

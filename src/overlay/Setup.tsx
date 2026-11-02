@@ -67,6 +67,9 @@ function Ways({ notes, name }: { notes: string; name: string }) {
 // The right-hand corner is the left one mirrored, so its fade runs the other way.
 const RIGHT: CSSProperties = { alignItems: 'flex-end', WebkitMaskImage: 'linear-gradient(270deg, #000 50%, transparent 92%)', maskImage: 'linear-gradient(270deg, #000 50%, transparent 92%)' };
 
+const ARROWS: CSSProperties = { display: 'flex', alignItems: 'flex-end', gap: 6 };
+const HALF: CSSProperties = { width: 32, height: 19, fontSize: 8 };
+
 // The corner of a Mac keyboard with your key; it is also the tester. `.fn` marks the key under test.
 function Keyboard({ chosen, down }: { chosen: DictateKey; down: boolean }) {
   if (chosen === 'fn') return <div className="keys" data-down={down || undefined} aria-hidden="true">
@@ -84,7 +87,11 @@ function Keyboard({ chosen, down }: { chosen: DictateKey; down: boolean }) {
     </div>
     <div className="krow">
       <i className="k" style={{ width: 96 }} /><i className={k('rightCommand', true)}><b>⌘</b><span>command</span></i>
-      <i className={k('rightOption')}><b>⌥</b><span>option</span></i><i className={k('rightControl')}><b>⌃</b><span>control</span></i>
+      <i className={k('rightOption')}><b>⌥</b><span>option</span></i>
+      {/* Apple's keyboards have the arrow keys here; right ⌃ only when it is the key, as on an external one. */}
+      {chosen === 'rightControl' ? <i className={k('rightControl')}><b>⌃</b><span>control</span></i> : <span style={ARROWS}>
+        <i className="k" style={HALF}>◀</i><span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><i className="k" style={HALF}>▲</i><i className="k" style={HALF}>▼</i></span><i className="k" style={HALF}>▶</i>
+      </span>}
     </div>
   </div>;
 }

@@ -19,7 +19,7 @@ type Page = { route: string; title: string; icon: IconName; Page: ComponentType<
 // The sidebar, in groups. Search also matches the keywords: what each page lets you change.
 const GROUPS: Page[][] = [
   [
-    { route: 'general', title: 'General', icon: 'general', Page: General, keywords: 'open at login startup microphone input pause reset set up' },
+    { route: 'general', title: 'General', icon: 'general', Page: General, keywords: 'open at login startup microphone input pause reset set up menu bar icon tray accessibility permissions privacy' },
     { route: 'shortcuts', title: 'Shortcuts', icon: 'keyboard', Page: Shortcuts, keywords: 'fn key dictate hands-free double tap command modifier chord note meeting paste last' },
   ],
   [
