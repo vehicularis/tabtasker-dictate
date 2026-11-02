@@ -114,20 +114,32 @@ fn prune(entries: &mut [Entry], keep: Keep, now_ms: u64) -> bool {
 
 // ---------- local days ----------
 
-/// macOS's `struct tm`: nine ints, then the offset from UTC in seconds and the zone's name.
+/// macOS's `struct tm`. The one declaration of it and of localtime_r in the crate: a second one with
+/// another signature is a clashing extern.
 #[repr(C)]
-struct Tm { _fields: [i32; 9], gmtoff: std::ffi::c_long, _zone: *const c_char }
+pub(crate) struct Tm {
+  pub sec: i32, pub min: i32, pub hour: i32, pub mday: i32, pub mon: i32, pub year: i32,
+  _wday: i32, _yday: i32, _isdst: i32, pub gmtoff: i64, _zone: *const c_char,
+}
 extern "C" {
   fn localtime_r(time: *const i64, out: *mut Tm) -> *mut Tm;
+}
+
+/// `secs` in the Mac's time zone; all zeros, which reads as UTC, when it has no local time.
+pub(crate) fn local(secs: i64) -> Tm {
+  // SAFETY: Tm matches macOS's struct tm, all zeros is a valid one, and localtime_r only writes into it.
+  unsafe {
+    let mut tm: Tm = std::mem::zeroed();
+    if localtime_r(&secs, &mut tm).is_null() { tm = std::mem::zeroed(); }
+    tm
+  }
 }
 
 /// The day `at_ms` falls on in the Mac's time zone, as days since 1970-01-01 there. The offset is the
 /// one in force at that moment, so days on either side of a daylight saving change stay whole.
 pub fn local_day(at_ms: u64) -> i64 {
   let secs = (at_ms / 1000) as i64;
-  let mut tm = Tm { _fields: [0; 9], gmtoff: 0, _zone: std::ptr::null() };
-  let offset = if unsafe { localtime_r(&secs, &mut tm) }.is_null() { 0 } else { tm.gmtoff as i64 };
-  (secs + offset).div_euclid(86_400)
+  (secs + local(secs).gmtoff).div_euclid(86_400)
 }
 
 // ---------- stats ----------
