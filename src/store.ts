@@ -31,7 +31,7 @@ export type HoldMode = 'dictate' | 'note' | 'command' | 'handsfree';
 export type HistoryEntry = { atMs: number; mode: HoldMode; bundleId: string; appName: string; words: number; seconds: number; text: string };
 export type Events = {
   'dictate-settings': Settings;
-  'dictate-command': { request: string; phase: 'thinking' | 'answer' | 'error'; text?: string; instruction?: string };
+  'dictate-command': { request: string; phase: 'thinking' | 'answer' | 'done' | 'error'; text?: string; instruction?: string };
   'dictate-meeting': { state: 'recording' | 'saving' | 'saved' | 'error'; since?: number; path?: string; message?: string };
   'dictate-hands-free': { locked: boolean };
   'dictate-history': { entry: HistoryEntry };
