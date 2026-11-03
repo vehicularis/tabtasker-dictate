@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { leave } from '../ui/motion';
 
@@ -12,10 +12,14 @@ export type Anchor = HTMLElement | (() => DOMRect | null);
 /// by a press anywhere else. A press inside never takes the caret out of the text (`keep`), so the
 /// command a row runs acts on the selection the person made. Opened from the keyboard (`focus`), it
 /// takes the keyboard: arrows walk the rows, `cols` across when it is a grid.
-export function Menu({ anchor, onClose, label, children, className = '', focus = false, cols = 1, keep = true, plain = false }: {
+export function Menu({ anchor, onClose, label, children, className = '', focus = false, cols = 1, keep = true, plain = false, role = 'menu', minWidth }: {
   anchor: Anchor; onClose: () => void; label: string; children: ReactNode; className?: string; focus?: boolean; cols?: number; keep?: boolean;
   /** The bubble's own surface instead of the inverted tray: for a field, not a menu. */
   plain?: boolean;
+  /** 'listbox' for a Select's choices. */
+  role?: 'menu' | 'listbox';
+  /** At least as wide as the field that opened it. */
+  minWidth?: number;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [at, setAt] = useState<{ left: number; top: number } | null>(null);
@@ -71,8 +75,8 @@ export function Menu({ anchor, onClose, label, children, className = '', focus =
     const next = event.key === 'Home' ? 0 : event.key === 'End' ? rows.length - 1 : now < 0 ? 0 : Math.max(0, Math.min(rows.length - 1, now + (step ?? 0)));
     rows[next].focus();
   };
-  return createPortal(<div ref={hold} className={`${plain ? 'ed-float' : 'ed-menu'} ${className}`} role={plain ? 'dialog' : 'menu'} aria-label={label}
-    style={at ?? { left: -9999, top: -9999 }} onMouseDown={keep ? event => { if (!(event.target as HTMLElement).closest('input')) event.preventDefault(); } : undefined} onKeyDown={walk}>
+  return createPortal(<div ref={hold} className={`${plain ? 'ed-float' : 'ed-menu'} ${className}`} role={plain ? 'dialog' : role} aria-label={label}
+    style={{ ...(at ?? { left: -9999, top: -9999 }), '--anchor-width': minWidth && `${minWidth}px` } as CSSProperties} onMouseDown={keep ? event => { if (!(event.target as HTMLElement).closest('input')) event.preventDefault(); } : undefined} onKeyDown={walk}>
     {children}
   </div>, document.body);
 }

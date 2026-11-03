@@ -24,7 +24,7 @@
 .ed-menu { --m-ink: var(--window); --m-dim: color-mix(in srgb, var(--window) 60%, transparent); --m-fill: color-mix(in srgb, var(--window) 10%, transparent); --m-line: color-mix(in srgb, var(--window) 15%, transparent);
   --m-accent: #93c5fd; --m-danger: #ff9999;
   --m-cast: 0 0 0 7px color-mix(in srgb, var(--shadow-ink) 6%, transparent), 0 2px 6px 6px color-mix(in srgb, var(--shadow-ink) 8%, transparent), 0 12px 28px -2px color-mix(in srgb, var(--shadow-ink) 18%, transparent);
-  position: fixed; z-index: 60; box-sizing: border-box; min-width: 208px; max-height: calc(100vh - 40px); overflow-y: auto; padding: 4px; border-radius: 14px;
+  position: fixed; z-index: 60; box-sizing: border-box; min-width: max(208px, var(--anchor-width, 0px)); max-height: calc(100vh - 40px); overflow-y: auto; padding: 4px; border-radius: 14px;
   font: 14px/1.4 var(--font); color: var(--m-ink); background: color-mix(in srgb, var(--ink) 95%, var(--window)); box-shadow: 0 0 0 6px var(--ink), var(--m-cast);
   color-scheme: dark; scrollbar-width: thin; animation: var(--ed-pop); }
 /* Every menu and popover grows out of what opened it (Menu.tsx sets the origin) as Business's do: fade-in-0 and
@@ -32,7 +32,8 @@
 :root { --ed-pop: fade-in var(--quick) var(--ease) backwards, pop-in var(--quick) var(--ease) backwards; }
 .ed-menu-item { display: flex; align-items: center; gap: 10px; width: 100%; box-sizing: border-box; padding: 6px 10px; border: 0; border-radius: 10px; font: 14px/1.43 var(--font); text-align: left; white-space: nowrap;
   color: inherit; background: none; cursor: pointer; transition: background-color var(--quick) var(--ease); }
-.ed-menu-item:is(:hover, :focus-visible) { outline: none; background: var(--m-fill); }
+/* .ed-menu in front, so it outweighs ui.css's focus ring whichever sheet loads last (main.tsx loads this one first). */
+.ed-menu .ed-menu-item:is(:hover, :focus-visible) { outline: none; background: var(--m-fill); }
 .ed-menu-item .ui-icon { color: var(--m-dim); }
 .ed-menu-item.danger, .ed-menu-item.danger .ui-icon { color: var(--m-danger); }
 .ed-menu-item:disabled { opacity: .5; pointer-events: none; }
@@ -161,8 +162,9 @@
 .ed-body img[data-src=''] { display: none; }
 /* Code block: the language picker in the top-right corner, on hover (CodeBlockView). */
 .ed-codeblock { position: relative; }
-.ed-codeblock-lang { position: absolute; top: .4rem; right: .4rem; z-index: 1; padding: .1rem .3rem; border: 0; border-radius: 6px; font: 11.2px var(--font); color: var(--ink-2); background: var(--window); box-shadow: var(--elev-raised); opacity: 0; transition: opacity var(--quick) var(--ease); }
-.ed-codeblock:hover .ed-codeblock-lang, .ed-codeblock-lang:focus { opacity: 1; }
+.ed-codeblock-lang { position: absolute; top: .4rem; right: .4rem; z-index: 1; opacity: 0; transition: opacity var(--quick) var(--ease); }
+.ed-codeblock-lang .ui-select { height: 22px; gap: 4px; padding: 0 5px 0 8px; border-radius: 6px; font-size: 11.2px; color: var(--ink-2); background: var(--window); }
+.ed-codeblock:hover .ed-codeblock-lang, .ed-codeblock-lang:focus-within, .ed-codeblock-lang:has([aria-expanded='true']) { opacity: 1; }
 .ed-body.compact .ed-codeblock-lang { display: none; }
 
 /* ---------- the Atlas page (RichEditor's .ib-rich + the page's .prose) ---------- */
