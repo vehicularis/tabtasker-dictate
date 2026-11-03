@@ -44,7 +44,7 @@ pub fn run() {
       speech::speech_models, speech::prepare_model, speech::vocabulary_fit, text::list_apps,
       history::history_list, history::history_stats, history::history_delete, history::history_clear, history::history_type,
       ai::claude_save_key, ai::claude_test, ai::claude_remove_key, ai::claude_open_console, ai::claude_insert, ai::claude_dismiss,
-      ai::claude_code_find, ai::claude_code_set, ai::claude_connect_code, ai::claude_connect_local, ai::claude_disconnect, ai::claude_ask,
+      ai::claude_code_find, ai::claude_code_set, ai::claude_connect_code, ai::claude_connect_local, ai::claude_connect_open_ai, ai::claude_disconnect, ai::claude_ask,
       mcp::agents_status, mcp::agents_add,
       meetings::meeting_state, meetings::meeting_recover, meetings::meeting_reveal, meetings::meeting_privacy,
     ])

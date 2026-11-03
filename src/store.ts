@@ -8,7 +8,11 @@ export type DictateKey = 'fn' | 'rightCommand' | 'rightOption' | 'rightControl' 
 export type CommandKey = 'control' | 'option' | 'command' | 'shift' | 'off';
 export type ClaudeModel = 'claude-haiku-5-5' | 'claude-sonnet-5-5' | 'claude-opus-5-5';
 /// Anthropic's API with your own key, the Claude Code on this Mac with your Claude account, or a model on this Mac behind Ollama.
-export type ClaudeVia = 'api' | 'claudeCode' | 'local';
+export type ClaudeVia = 'api' | 'claudeCode' | 'local' | 'openAi';
+/// What the connected AI is called on its answer card, and the glyph beside it: Claude by name when it is Claude,
+/// otherwise the model the person named, or just AI.
+export const aiName = (claude: { via: ClaudeVia; openAiModel: string; localModel: string }) => claude.via === 'openAi' ? claude.openAiModel || 'AI' : claude.via === 'local' ? claude.localModel || 'AI' : 'Claude';
+export const aiIcon = (claude: { via: ClaudeVia }): 'claude' | 'agents' => claude.via === 'api' || claude.via === 'claudeCode' ? 'claude' : 'agents';
 /// The Mac's own alert sounds, which the cues are chosen from (settings.rs SOUNDS).
 export const SOUNDS = ['Basso', 'Blow', 'Bottle', 'Frog', 'Funk', 'Glass', 'Hero', 'Morse', 'Ping', 'Pop', 'Purr', 'Sosumi', 'Submarine', 'Tink'] as const;
 export type Keep = 'off' | 'day' | 'week' | 'month' | 'forever';
@@ -28,7 +32,7 @@ export type Settings = {
   apps: { styles: AppStyle[]; defaultStyle: Style };
   notes: { folder: string | null; fileName: string; frontmatter: boolean; dailyNote: boolean; tags: string[]; claudeTitle: boolean; claudeActions: boolean };
   meetings: { folder: string | null; systemAudio: boolean; summarize: boolean; you: string; others: string; speakers: boolean; decisions: boolean; actionItems: boolean };
-  claude: { enabled: boolean; via: ClaudeVia; model: ClaudeModel; effort: 'low' | 'medium' | 'high'; commands: boolean; claudeCode: string | null; localEndpoint: string; localModel: string };
+  claude: { enabled: boolean; via: ClaudeVia; model: ClaudeModel; effort: 'low' | 'medium' | 'high'; commands: boolean; claudeCode: string | null; localEndpoint: string; localModel: string; openAiEndpoint: string; openAiModel: string };
   agents: { mcp: boolean; shareHistory: boolean; shareNotes: boolean; shareMeetings: boolean; allowWrite: boolean };
   history: { keep: Keep };
   appearance: { theme: Theme; edge: Edge; size: Size; idle: 'dots' | 'hidden'; hint: boolean; pill: PillButton[]; margin: number; avoidDock: boolean };

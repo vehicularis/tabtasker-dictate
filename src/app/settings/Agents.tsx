@@ -145,7 +145,7 @@ export function Agents({ settings, update }: PageProps) {
   const copy = () => void navigator.clipboard.writeText(usable).then(() => setCopied(true), () => setCopied(false));
 
   return <>
-    <GroupHeader title="Reading your notes">Let Claude Code and Claude Desktop read your notes and meetings. If you connected Claude Code above, it’s already set up.</GroupHeader>
+    <GroupHeader title="Reading your notes">Let agents read your notes and meetings: Claude Code, Claude Desktop and any app that speaks MCP. If you connected Claude Code above, it’s already set up.</GroupHeader>
     <Section title="Server" note="What an agent reads is sent to its model, like anything else you share with it.">
       <TileGroup>
         <Tile title="Answer agents">
