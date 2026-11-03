@@ -1,5 +1,5 @@
 /* ---------- the pane: the page, raised, over the column's inner edge ---------- */
-.content { position: relative; z-index: 1; flex: 1; min-width: 0; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; border-radius: 20px; background: var(--shell-canvas); box-shadow: var(--elev-raised); }
+.content { position: relative; z-index: 1; flex: 1; min-width: 0; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; border-radius: 20px; background: var(--shell-canvas); box-shadow: var(--elev-raised); container-type: inline-size; } /* a container, so a page can reach its full width (About's painting) */
 /* A page arriving (a place, a tab, a settings page, a note opening) rises 4 points as it fades in, once. Nothing
    inside it cascades after it. */
 .page, .editor-pane > :is(.editor-top, .editor-page, .empty-pane) { animation: fade-in var(--quick) var(--ease) backwards, rise-in var(--slow) var(--ease) backwards; }
