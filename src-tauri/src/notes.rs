@@ -223,7 +223,10 @@ fn recent_in(dir: &Path, n: usize) -> Vec<NoteRef> {
 /// One file the Library shows: where it is, what it is called, when it last changed, and a taste of it.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct LibraryItem { pub path: String, pub title: String, pub kind: &'static str, pub modified_ms: u64, pub words: usize, pub excerpt: String }
+pub struct LibraryItem { pub path: String, pub title: String, pub kind: &'static str, pub modified_ms: u64, pub words: usize, pub excerpt: String, pub archived: bool }
+
+/// The folder archived notes and meetings move to, inside their own folder: still plain files, out of the list.
+const ARCHIVE: &str = "Archive";
 
 /// The text after any front matter.
 fn past_front_matter(text: &str) -> &str {
@@ -259,7 +262,7 @@ pub(crate) fn excerpt_of(text: &str) -> String {
   out
 }
 
-fn library_in(dir: &Path, kind: &'static str, out: &mut Vec<LibraryItem>) {
+fn library_in(dir: &Path, kind: &'static str, archived: bool, out: &mut Vec<LibraryItem>) {
   let Ok(entries) = std::fs::read_dir(dir) else { return };
   for entry in entries.flatten() {
     let path = entry.path();
@@ -269,16 +272,17 @@ fn library_in(dir: &Path, kind: &'static str, out: &mut Vec<LibraryItem>) {
     if meta.len() > 8 << 20 { continue; } // not a note
     let modified = meta.modified().ok().and_then(|at| at.duration_since(UNIX_EPOCH).ok()).map_or(0, |age| age.as_millis() as u64);
     let text = std::fs::read_to_string(&path).unwrap_or_default();
-    out.push(LibraryItem { path: path.display().to_string(), title: title_of(&text, &stem), kind, modified_ms: modified, words: body_words(&text).count(), excerpt: excerpt_of(&text) });
+    out.push(LibraryItem { path: path.display().to_string(), title: title_of(&text, &stem), kind, modified_ms: modified, words: body_words(&text).count(), excerpt: excerpt_of(&text), archived });
   }
 }
 
-/// Every note and meeting file, newest first. Meetings saved inside the notes folder (the default,
-/// `Meetings/`) are found once, as meetings: each folder is read at its top level only.
+/// Every note and meeting file, newest first, the archived ones marked. Meetings saved inside the notes folder
+/// (the default, `Meetings/`) are found once, as meetings: each folder, and its `Archive/`, is read at its top
+/// level only.
 pub fn library() -> Vec<LibraryItem> {
   let mut items = Vec::new();
-  if let Ok(dir) = notes_dir() { library_in(&dir, "note", &mut items); }
-  if let Ok(dir) = meetings_dir() { library_in(&dir, "meeting", &mut items); }
+  if let Ok(dir) = notes_dir() { library_in(&dir, "note", false, &mut items); library_in(&dir.join(ARCHIVE), "note", true, &mut items); }
+  if let Ok(dir) = meetings_dir() { library_in(&dir, "meeting", false, &mut items); library_in(&dir.join(ARCHIVE), "meeting", true, &mut items); }
   items.sort_by(|a, b| b.modified_ms.cmp(&a.modified_ms).then_with(|| a.title.cmp(&b.title)));
   items
 }
@@ -427,6 +431,44 @@ pub fn note_attach(path: String, name: String, data: String) -> Result<String, S
   Err("Couldn’t find a free name for the picture".into())
 }
 
+/// `file` into the `Archive/` folder beside it, or back out to its folder, with its pictures (they live in
+/// `attachments/<name>/` next to it and are linked by that relative path, so they move with it and keep their
+/// folder name). Refused, with nothing moved, when the other side already has a file or a pictures folder of
+/// that name. The file where it is now.
+fn archive_move(file: &Path, archived: bool) -> Result<PathBuf, String> {
+  let dir = file.parent().ok_or("That file isn’t there any more.")?;
+  let inside = dir.file_name().is_some_and(|name| name == ARCHIVE);
+  let target_dir = match (archived, inside) {
+    (true, false) => dir.join(ARCHIVE),
+    (false, true) => dir.parent().ok_or("That file isn’t there any more.")?.to_owned(),
+    _ => return Ok(file.to_owned()),
+  };
+  let name = file.file_name().ok_or("That file isn’t there any more.")?;
+  let stem = clean(&file.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default());
+  let target = target_dir.join(name);
+  let (pictures, pictures_to) = (dir.join("attachments").join(&stem), target_dir.join("attachments").join(&stem));
+  let moving_pictures = !stem.is_empty() && pictures.is_dir();
+  if target.symlink_metadata().is_ok() || (moving_pictures && pictures_to.symlink_metadata().is_ok()) {
+    return Err(if archived { "The archive has one by this name already. Rename this one first." } else { "There is one by this name already. Rename it first." }.into());
+  }
+  std::fs::create_dir_all(&target_dir).map_err(|e| format!("Couldn’t make the Archive folder: {e}"))?;
+  if moving_pictures {
+    if let Some(parent) = pictures_to.parent() { std::fs::create_dir_all(parent).map_err(|e| format!("Couldn’t move its pictures: {e}"))?; }
+    std::fs::rename(&pictures, &pictures_to).map_err(|e| format!("Couldn’t move its pictures: {e}"))?;
+  }
+  if let Err(e) = std::fs::rename(file, &target) {
+    if moving_pictures { let _ = std::fs::rename(&pictures_to, &pictures); }
+    return Err(format!("Couldn’t move it: {e}"));
+  }
+  Ok(target)
+}
+
+/// A note or meeting into its folder's archive, or back out of it; where it is now.
+#[tauri::command]
+pub fn note_archive(path: String, archived: bool) -> Result<String, String> {
+  Ok(archive_move(&in_library(&path)?, archived)?.display().to_string())
+}
+
 /// Moves a note or meeting to the Trash, under a name that is free there, where it can come back from.
 #[tauri::command]
 pub fn note_delete(path: String) -> Result<(), String> {
@@ -570,6 +612,25 @@ pub async fn choose_folder(window: tauri::WebviewWindow, message: Option<String>
 
 #[cfg(test)]
 mod tests {
+  #[test]
+  fn archiving_moves_the_file_and_its_pictures_into_archive_and_back() {
+    let root = std::env::temp_dir().join(format!("dictate-archive-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("attachments/Plan")).unwrap();
+    std::fs::write(root.join("Plan.md"), "![](attachments/Plan/a.png)").unwrap();
+    std::fs::write(root.join("attachments/Plan/a.png"), "png").unwrap();
+    let archived = archive_move(&root.join("Plan.md"), true).unwrap();
+    assert_eq!(archived, root.join("Archive/Plan.md"));
+    assert!(root.join("Archive/attachments/Plan/a.png").is_file() && !root.join("attachments/Plan").exists());
+    assert_eq!(archive_move(&archived, true).unwrap(), archived, "archiving twice leaves it where it is");
+    std::fs::write(root.join("Plan.md"), "a new one").unwrap();
+    assert!(archive_move(&archived, false).is_err(), "never over a file of the same name");
+    std::fs::remove_file(root.join("Plan.md")).unwrap();
+    assert_eq!(archive_move(&archived, false).unwrap(), root.join("Plan.md"));
+    assert!(root.join("attachments/Plan/a.png").is_file());
+    let _ = std::fs::remove_dir_all(&root);
+  }
+
   use super::*;
 
   #[test]
@@ -599,8 +660,8 @@ mod tests {
     std::fs::write(dir.join("notes.txt"), "not markdown").unwrap();
     std::fs::write(dir.join("Meetings").join("Design review.md"), "# Design review\n\n**You** 00:00:01 Hello everyone\n").unwrap();
     let mut items = Vec::new();
-    library_in(&dir, "note", &mut items);
-    library_in(&dir.join("Meetings"), "meeting", &mut items);
+    library_in(&dir, "note", false, &mut items);
+    library_in(&dir.join("Meetings"), "meeting", false, &mut items);
     let mut titles: Vec<(&str, &str)> = items.iter().map(|item| (item.kind, item.title.as_str())).collect();
     titles.sort();
     assert_eq!(titles, vec![("meeting", "Design review"), ("note", "Call the venue"), ("note", "Plain")]);

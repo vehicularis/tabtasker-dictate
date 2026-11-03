@@ -49,6 +49,17 @@
 .layer { --out: calc(17px * var(--scale)); }
 .layer[data-mode='hover'] { --out: calc(4px * var(--scale)); }
 .layer:is([data-mode='listening'], [data-mode='thinking']) { --out: calc(-8px * var(--scale)); }
+/* While you point, the spot keeps the pointer everywhere that started the hover: 16 px round the spot (the
+   dots' own reach) and the 13 px it slid in by toward the edge, where the resting dots' halo was. Without it
+   a pointer at the screen's edge starts the hover on the dots, falls off it as the spot slides in and the
+   pill springs up from 60 %, and starts it again as the dots come back: the flicker. A hit for the window too
+   (data-hit), so the native pointer test agrees with the page's. Under the dots and the pill, which keep
+   their clicks. */
+.keep { display: none; position: absolute; inset: -16px; }
+.layer[data-mode='hover'] .keep { display: block; }
+.layer[data-edge='bottom'] .keep { bottom: calc(-16px - 13px * var(--scale)); }
+.layer[data-edge='left'] .keep { left: calc(-16px - 13px * var(--scale)); }
+.layer[data-edge='right'] .keep { right: calc(-16px - 13px * var(--scale)); }
 /* A small glass capsule behind the dots, so they read on any wallpaper. */
 .capsule { position: absolute; width: 34px; height: 14px; border-radius: 7px; opacity: .9; transition: opacity .2s; }
 .layer:is([data-edge='left'], [data-edge='right']) .capsule { width: 14px; height: 34px; }
@@ -64,32 +75,32 @@
 .layer[data-loading] .dots i:nth-child(3) { animation-delay: .4s; }
 @keyframes loading { 0%, 100% { opacity: .35; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-2px); } }
 @media (prefers-reduced-motion: reduce) { .layer[data-loading] .dots i { animation: none; opacity: .6; } }
-.layer:is([data-mode='hover'], [data-mode='listening'], [data-mode='thinking']) .dots { opacity: 0; pointer-events: none; }
+/* While you talk the orb takes the dots' place. While you point, only the dots themselves fade, as Business's
+   do: the button and its halo stay under the pointer while the pill springs in from 60 %, or a pointer at the
+   screen's edge would leave the hover the moment it began, and the dots coming back would start it again. */
+.layer:is([data-mode='listening'], [data-mode='thinking']) .dots { opacity: 0; pointer-events: none; }
+.layer[data-mode='hover'] .dots i { opacity: 0; transform: scale(.5); transition: opacity .1s, transform .2s var(--ease); }
 
 .pill { position: absolute; display: flex; z-index: 1; gap: 4px; padding: 4px; border-radius: 19px; opacity: 0; pointer-events: none; transform: scale(.6); transition: opacity .15s, transform .25s var(--ease); }
 .layer[data-mode='hover'] .pill { opacity: 1; pointer-events: auto; transform: none; transition: opacity .15s .04s, transform .4s var(--spring) .04s; }
 .pill button { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; color: var(--ink); background: var(--surface); cursor: pointer; transition: background .15s; }
 .pill button:hover { background: var(--surface-3); }
 /* A meeting under way: a red dot on its button, breathing. */
-.pill button[data-recording]::after { content: ''; position: absolute; top: 3px; right: 3px; width: 7px; height: 7px; border-radius: 50%; background: #e5484d; box-shadow: 0 0 0 1.5px var(--surface); animation: breathe 1.8s ease-in-out infinite; }
+.pill button[data-recording]::after { content: ''; position: absolute; top: 3px; right: 3px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 1.5px var(--surface); animation: breathe 1.8s ease-in-out infinite; }
 .pill button { position: relative; }
 /* Business's whiteboard tiles: one light, fine edges, a quiet cast shadow, a small lift on hover. */
-.wb-tool-glyph { overflow: visible; transition: transform 180ms cubic-bezier(.2, .8, .2, 1); }
-.wb-glyph-object { filter: drop-shadow(0 1px .65px rgb(0 0 0 / .16)); }
-.pill button:hover .wb-tool-glyph { transform: translateY(-1px); }
-.pill button:active .wb-tool-glyph { transform: translateY(0) scale(.94); }
-@media (prefers-reduced-motion: reduce) { .wb-tool-glyph { transition: none; } .pill button .wb-tool-glyph { transform: none; } }
 .layer:is([data-edge='left'], [data-edge='right']) .pill { flex-direction: column; }
-/* The key's hint, beside the pill while you point at it, clear of the pill at every size. */
-.label { --clear: calc(50% + 74px * var(--scale) + 10px); /* half the four-button pill, then a gap */ position: absolute; top: 50%; left: var(--clear); display: flex; white-space: nowrap; font-size: 12.5px; pointer-events: none; transform: translate(-4px, -50%); opacity: 0; transition: opacity .15s, transform .3s var(--ease); }
+/* The key's hint, beside the pill while you point at its spoken note (Dock's data-hint), clear of the pill at every size. */
+.label { --half: calc(18px * var(--buttons, 4) + 2px); /* half the pill: 32 px buttons, 4 px apart, 4 px in */ --clear: calc(50% + var(--half) * var(--scale) + 10px); /* then a gap */ position: absolute; top: 50%; left: var(--clear); display: flex; white-space: nowrap; font-size: 12.5px; pointer-events: none; transform: translate(-4px, -50%); opacity: 0; transition: opacity .15s, transform .3s var(--ease); }
 .label > span { display: flex; align-items: center; gap: 5px; padding: 4px 11px 4px 4px; border-radius: 14px; color: var(--ink-2); }
 .label kbd { padding: 1px 6px; border-radius: 9px; background: color-mix(in srgb, var(--ink) 10%, transparent); font: inherit; font-weight: 600; color: var(--ink); }
-.layer[data-mode='hover']:not([data-card]) .spot:not(:has(.menu)) .label { opacity: 1; transform: translate(0, -50%); transition-delay: .25s; }
-.layer:is([data-edge='left'], [data-edge='right']) .label { --clear: calc(50% + 19px * var(--scale) + 10px); }
-.layer[data-edge='right'] .label { left: auto; right: var(--clear); transform: translate(4px, -50%); }
-/* On a side edge the dock is a row, and a meeting pill would sit exactly where the hint goes: the hint rises above the spot instead. */
-.layer:is([data-edge='left'], [data-edge='right']) .label { --clear: 50%; top: auto; bottom: calc(100% + 6px); left: 50%; right: auto; transform: translate(-50%, 4px); }
-.layer:is([data-edge='left'], [data-edge='right'])[data-mode='hover']:not([data-card]) .spot:not(:has(.menu)) .label { transform: translate(-50%, 0); }
+.layer[data-mode='hover']:not([data-card]) .spot[data-hint]:not(:has(.menu)) .label { opacity: 1; transform: translate(0, -50%); transition-delay: .1s; }
+/* On a side edge the dock is a row, and a meeting pill would sit exactly where the hint goes: the hint rises
+   above the tall pill instead (half of it, then a gap), against the screen's edge so none of it is cut off. */
+.layer:is([data-edge='left'], [data-edge='right']) .label { top: auto; bottom: calc(50% + var(--half) * var(--scale) + 8px); transform: translateY(4px); }
+.layer[data-edge='left'] .label { left: var(--out); right: auto; }
+.layer[data-edge='right'] .label { left: auto; right: var(--out); }
+.layer:is([data-edge='left'], [data-edge='right'])[data-mode='hover']:not([data-card]) .spot[data-hint]:not(:has(.menu)) .label { transform: none; }
 
 /* Appearance: the dots, pill and orb at three sizes; dots hidden until the key is held. */
 .layer[data-size='small'] { --scale: .82; }
@@ -98,10 +109,12 @@
 .layer[data-quiet] :is(.capsule, .dots, .pill) { display: none; }
 
 /* ---------- the right-click menu ---------- */
-.menu { --radius: 12px; --inset: 4px; position: absolute; bottom: calc(100% + 8px); left: 50%; z-index: 2; min-width: 232px; padding: var(--inset); border-radius: var(--radius); transform: var(--menu-at); animation: menu .2s var(--ease) both; }
-@keyframes menu { from { opacity: 0; transform: var(--menu-at) scale(.96); } }
-.layer[data-edge='left'] .spot > .menu { top: 50%; bottom: auto; left: calc(100% + 8px); }
-.layer[data-edge='right'] .spot > .menu { top: 50%; bottom: auto; left: auto; right: calc(100% + 8px); }
+/* It grows out of the dots (out of its row, for the microphones) over --quick, as every menu here does. */
+.menu { --radius: 12px; --inset: 4px; position: absolute; bottom: calc(100% + 8px); left: 50%; z-index: 2; min-width: 232px; padding: var(--inset); border-radius: var(--radius); transform: var(--menu-at); transform-origin: 50% 100%;
+  animation: fade-in var(--quick) var(--ease) backwards, menu var(--quick) var(--ease) backwards; }
+@keyframes menu { from { transform: var(--menu-at) scale(calc(1 - .04 * var(--motion))); } }
+.layer[data-edge='left'] .spot > .menu { top: 50%; bottom: auto; left: calc(100% + 8px); transform-origin: 0 50%; }
+.layer[data-edge='right'] .spot > .menu { top: 50%; bottom: auto; left: auto; right: calc(100% + 8px); transform-origin: 100% 50%; }
 .menu:focus { outline: none; }
 .menu button { display: flex; align-items: center; gap: 9px; width: 100%; height: 28px; padding: 0 10px 0 9px; border: 0; border-radius: calc(var(--radius) - var(--inset)); background: none; font-size: 13.5px; text-align: left; white-space: nowrap; cursor: default; }
 .menu button:is(:hover, :focus-visible, [aria-expanded='true']) { background: var(--surface-3); }
@@ -110,9 +123,10 @@
 .menu .chevron { width: 12px; height: 12px; margin: 0 -2px 0 auto; color: var(--ink-3); }
 .rule { display: block; height: 1px; margin: 4px 9px; background: var(--surface-3); }
 .sub { position: relative; }
-.submenu { --menu-at: translate(0); top: auto; bottom: calc(-1 * var(--inset)); left: calc(100% + var(--inset) + 6px); max-height: 70vh; overflow-y: auto; }
+.submenu { --menu-at: translate(0); top: auto; bottom: calc(-1 * var(--inset)); left: calc(100% + var(--inset) + 6px); max-height: 70vh; overflow-y: auto; transform-origin: 0 100%; }
 .layer[data-edge='right'] .submenu { left: auto; right: calc(100% + var(--inset) + 6px); }
-.layer:is([data-edge='left'], [data-edge='right']) .submenu { top: calc(-1 * var(--inset)); bottom: auto; }
+.layer:is([data-edge='left'], [data-edge='right']) .submenu { top: calc(-1 * var(--inset)); bottom: auto; transform-origin: 0 0; }
+.layer[data-edge='right'] .submenu { transform-origin: 100% 0; }
 /* Indented past the check column (row padding, icon, gap), under the names, as in a Mac menu. */
 .in-use { margin: 0; padding: 4px 10px 6px 34px; font-size: 12px; color: var(--ink-3); }
 .in-use span { display: block; font-size: 13px; color: var(--ink-2); }
@@ -126,21 +140,30 @@
 /* Transcribing: the orb breathes. */
 .layer[data-mode='thinking'] .orb { animation: breathe 1.8s ease-in-out infinite; }
 @keyframes breathe { 50% { scale: calc(var(--scale) * 1.06); } }
+@media (prefers-reduced-motion: reduce) { .pill button[data-recording]::after, .layer[data-mode='thinking'] .orb, .claude-wait i, .meeting-dot, .hands-free .live { animation: none; } }
+
+/* ---------- what comes out of the dots ---------- */
+/* A bubble, a card, a toast: each comes out of the dots, up from them on the bottom edge and out sideways from
+   them on a side, on the spring the pill opens on; the fade beside it is quicker, so it is never a ghost that
+   moves. Going, it falls back toward them on --ease-in (motion.ts leave). */
+.layer { --from-x: 0px; --from-y: 8px; --origin: 50% 100%; --leave: translateY(4px) scale(.96); }
+.layer[data-edge='left'] { --from-x: -8px; --from-y: 0px; --origin: 0 50%; --leave: translateX(-4px) scale(.96); }
+.layer[data-edge='right'] { --from-x: 8px; --from-y: 0px; --origin: 100% 50%; --leave: translateX(4px) scale(.96); }
+:is(.said, .toast, .learned, .card, .claude-bubble, .claude-send, .meeting-pill, .hands-free) { transform-origin: var(--origin); animation: fade-in var(--quick) var(--ease) backwards, emerge var(--pop) var(--spring) backwards; }
+@keyframes emerge { from { translate: calc(var(--from-x) * var(--motion)) calc(var(--from-y) * var(--motion)); scale: calc(1 - .04 * var(--motion)); } }
 
 /* ---------- the bubble, the saved note and the toast ---------- */
-.said { box-sizing: border-box; max-width: 380px; margin: 0; padding: 7px 12px 8px; border: 0; border-radius: 14px; font-size: 14px; text-align: left; animation: pop .25s var(--ease) both; }
+.said { box-sizing: border-box; max-width: 380px; margin: 0; padding: 7px 12px 8px; border: 0; border-radius: var(--radius-section); font-size: 14px; text-align: left; }
 .said small { display: block; margin-bottom: 1px; font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
 .said span { display: -webkit-box; overflow: hidden; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
 .saved { cursor: pointer; }
-.toast { margin: 0; padding: 6px 12px; border-radius: 12px; font-size: 14px; animation: pop .25s both; }
-@keyframes pop { from { opacity: 0; transform: scale(.6); } }
-.learned { display: flex; align-items: center; gap: 6px; box-sizing: border-box; max-width: 380px; padding: 6px 6px 6px 14px; border-radius: 22px; animation: pop .25s var(--ease) both; }
+.toast { margin: 0; padding: 6px 12px; border-radius: var(--radius-pill); font-size: 14px; }
+.learned { display: flex; align-items: center; gap: 6px; box-sizing: border-box; max-width: 380px; padding: 6px 6px 6px 14px; border-radius: var(--radius-pill); }
 .learned .what { margin-right: 6px; font-weight: 600; }
 .learned .what small { font-weight: 400; }
 
 /* ---------- the note's card and setup ---------- */
-.card { box-sizing: border-box; width: 400px; max-width: calc(100vw - 32px); padding: 12px 12px 12px 16px; border-radius: 20px; animation: settle .45s var(--spring) backwards; user-select: text; -webkit-user-select: text; }
-@keyframes settle { from { opacity: 0; transform: translateY(12px) scale(.96); } }
+.card { box-sizing: border-box; width: 400px; max-width: calc(100vw - 32px); padding: 12px 12px 12px 16px; border-radius: var(--radius-section); user-select: text; -webkit-user-select: text; }
 .head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 12.5px; }
 .name { display: flex; align-items: center; gap: 7px; font-weight: 600; color: var(--ink); }
 .head { cursor: grab; }

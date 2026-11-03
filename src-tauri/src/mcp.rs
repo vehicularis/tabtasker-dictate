@@ -537,7 +537,7 @@ fn read_json(path: &Path) -> Option<Value> { std::fs::read(path).ok().and_then(|
 
 fn desktop_config(home: &Path) -> PathBuf { home.join("Library/Application Support/Claude/claude_desktop_config.json") }
 
-/// The claude CLI: the path set on the Claude page, then the login shell's PATH, then where its installers put it.
+/// The claude CLI: the path set in Settings › Agents, then the login shell's PATH, then where its installers put it.
 fn find_claude(home: &Path, configured: Option<&str>) -> Option<PathBuf> {
   if let Some(path) = configured.map(PathBuf::from).filter(|path| path.is_file()) { return Some(path); }
   let shell = std::env::var("SHELL").ok().filter(|shell| shell.starts_with('/')).unwrap_or_else(|| "/bin/zsh".into());
@@ -689,7 +689,7 @@ pub async fn agents_add(target: String) -> Result<AgentsStatus, String> {
     let configured = crate::settings::get().claude.claude_code;
     match target.as_str() {
       "claudeCode" => {
-        let cli = find_claude(&home, configured.as_deref()).ok_or("Claude Code isn’t installed. If it is, set its path on the Claude page.")?;
+        let cli = find_claude(&home, configured.as_deref()).ok_or("Claude Code isn’t installed. If it is, set its path in Settings › Agents.")?;
         let now = added(read_json(&home.join(".claude.json")).as_ref().and_then(|code| code["mcpServers"].get(NAME)), &exe);
         add_to_claude_code(&cli, &exe, now)?;
       }

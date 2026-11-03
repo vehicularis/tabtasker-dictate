@@ -1,7 +1,8 @@
 //! Stickies: small notes that stay on the screen, each its own little window in one of the whiteboard's
 //! colours, typed into or dictated into (hold the key with its text focused). They are kept in
 //! `stickies.json` in the app data folder, saved whole on every change, and opened again at launch where
-//! they were. A sticky can become a note in the notes folder, and is gone when closed.
+//! they were. Closing one takes it off the screen and keeps it, on the Stickies page, until it is shown again,
+//! archived or deleted there. A sticky can become a note in the notes folder.
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::PathBuf;
@@ -28,10 +29,14 @@ pub struct Sticky {
   pub pinned: bool,
   /// Folded to its bar alone, its first words showing.
   pub folded: bool,
+  /// Off the screen: closed from its own window, kept on the Stickies page to show again.
+  pub closed: bool,
+  /// In the Stickies page's archive, out of the way; off the screen too.
+  pub archived: bool,
   pub created_ms: u64, pub updated_ms: u64,
 }
 impl Default for Sticky {
-  fn default() -> Self { Self { id: String::new(), text: String::new(), hue: "amber".into(), x: 120.0, y: 140.0, width: 240.0, height: 200.0, pinned: true, folded: false, created_ms: 0, updated_ms: 0 } }
+  fn default() -> Self { Self { id: String::new(), text: String::new(), hue: "amber".into(), x: 120.0, y: 140.0, width: 240.0, height: 200.0, pinned: true, folded: false, closed: false, archived: false, created_ms: 0, updated_ms: 0 } }
 }
 /// A folded sticky's height: its bar.
 const FOLDED: f64 = 30.0;
@@ -90,22 +95,50 @@ pub fn from_voice(app: &AppHandle, words: &str) {
   }
 }
 
-/// Brings a sticky's window forward (made again if it was closed by the system).
+/// One sticky changed in the file, by `id`; the sticky as it is now.
+fn change(app: &AppHandle, id: &str, edit: impl FnOnce(&mut Sticky)) -> Result<Sticky, String> {
+  let mut list = all(app);
+  let sticky = list.iter_mut().find(|sticky| sticky.id == id).ok_or("That sticky is gone.")?;
+  edit(sticky);
+  let sticky = sticky.clone();
+  changed(app, &list)?;
+  Ok(sticky)
+}
+
+/// Back on the screen and brought forward, from the Stickies page or the archive.
 #[tauri::command]
 pub fn sticky_show(app: AppHandle, id: String) -> Result<(), String> {
-  let sticky = all(&app).into_iter().find(|sticky| sticky.id == id).ok_or("That sticky is gone.")?;
+  let sticky = change(&app, &id, |sticky| { sticky.closed = false; sticky.archived = false; })?;
   open(&app, &sticky).map_err(|e| e.to_string())
 }
 
-/// At launch: every sticky back on the screen where it was.
-pub fn show_all(app: &AppHandle) {
-  for sticky in all(app) { if let Err(e) = open(app, &sticky) { log::warn!("sticky: {e}"); } }
+/// Off the screen, kept: the sticky's own close button.
+#[tauri::command]
+pub fn sticky_close(app: AppHandle, id: String) -> Result<(), String> {
+  change(&app, &id, |sticky| sticky.closed = true)?;
+  if let Some(window) = app.get_webview_window(&label(&id)) { let _ = window.close(); }
+  Ok(())
 }
+
+/// Into the archive, off the screen, or back out of it (still off the screen, ready to show).
+#[tauri::command]
+pub fn sticky_archive(app: AppHandle, id: String, archived: bool) -> Result<(), String> {
+  change(&app, &id, |sticky| { sticky.archived = archived; sticky.closed = true; })?;
+  if archived { if let Some(window) = app.get_webview_window(&label(&id)) { let _ = window.close(); } }
+  Ok(())
+}
+
+/// At launch: every sticky that was on the screen, back where it was.
+pub fn show_all(app: &AppHandle) {
+  for sticky in all(app).into_iter().filter(on_screen) { if let Err(e) = open(app, &sticky) { log::warn!("sticky: {e}"); } }
+}
+fn on_screen(sticky: &Sticky) -> bool { !sticky.closed && !sticky.archived }
 
 /// A new sticky, placed a step down and right of the last one so they never pile up exactly.
 pub fn create(app: &AppHandle, hue: Option<&str>, text: Option<&str>) -> Result<Sticky, String> {
   let mut list = all(app);
-  if list.len() >= MAX { return Err(format!("That’s {MAX} stickies already. Close one, or save one as a note.")); }
+  // The archive keeps what it is given; only the stickies in use count toward the limit.
+  if list.iter().filter(|sticky| !sticky.archived).count() >= MAX { return Err(format!("That’s {MAX} stickies already. Archive one, or save one as a note.")); }
   let mut bytes = [0u8; 6];
   ring::rand::SecureRandom::fill(&ring::rand::SystemRandom::new(), &mut bytes).map_err(|_| "Couldn’t make a sticky.".to_owned())?;
   let last = list.last().cloned();
@@ -113,7 +146,7 @@ pub fn create(app: &AppHandle, hue: Option<&str>, text: Option<&str>) -> Result<
   let now = now_ms();
   let sticky = Sticky {
     id: bytes.iter().map(|byte| format!("{byte:02x}")).collect(), text: text.unwrap_or_default().chars().take(MAX_TEXT).collect(),
-    hue: hue_or(hue, &["amber", "sky", "sage", "coral", "violet", "teal"][list.len() % 6]), x, y, width: 240.0, height: 200.0, pinned: true, folded: false, created_ms: now, updated_ms: now,
+    hue: hue_or(hue, ["amber", "sky", "sage", "coral", "violet", "teal"][list.len() % 6]), x, y, width: 240.0, height: 200.0, pinned: true, folded: false, closed: false, archived: false, created_ms: now, updated_ms: now,
   };
   list.push(sticky.clone());
   changed(app, &list)?;
@@ -194,7 +227,7 @@ pub fn sticky_fold(app: AppHandle, id: String, folded: bool) -> Result<Sticky, S
   Ok(kept)
 }
 
-/// Closed: the sticky is gone, window and record both.
+/// Deleted, from the Stickies page: window and record both, for good.
 #[tauri::command]
 pub fn sticky_remove(app: AppHandle, id: String) -> Result<(), String> {
   let list: Vec<Sticky> = all(&app).into_iter().filter(|sticky| sticky.id != id).collect();
@@ -228,5 +261,7 @@ mod tests {
     assert_eq!(hue_or(Some("plum"), "amber"), "plum");
     assert_eq!(hue_or(None, "sky"), "sky");
     assert_eq!(label("ab12"), "sticky-ab12");
+    assert!(!old[0].closed && !old[0].archived && on_screen(&old[0]), "an older file's stickies are all on the screen");
+    assert!(!on_screen(&Sticky { closed: true, ..old[0].clone() }) && !on_screen(&Sticky { archived: true, ..old[0].clone() }));
   }
 }

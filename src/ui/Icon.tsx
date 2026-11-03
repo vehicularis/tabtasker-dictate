@@ -40,6 +40,8 @@ const PATHS = {
   plus: <path d="M10 4.5v11M4.5 10h11" />,
   minus: <path d="M4.5 10h11" />,
   trash: <path d="M3.75 5.75h12.5M8 5.75v-1.5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1.5M5.25 5.75l.7 9.6a1.5 1.5 0 0 0 1.5 1.4h5.1a1.5 1.5 0 0 0 1.5-1.4l.7-9.6" />,
+  // A box with its lid: put away, kept.
+  archive: <><rect x="2.75" y="3.75" width="14.5" height="3.5" rx="1" /><path d="M4 7.25v7.5a1.5 1.5 0 0 0 1.5 1.5h9a1.5 1.5 0 0 0 1.5-1.5v-7.5M8.25 10.25h3.5" /></>,
   folder: <path d="M2.75 6.25a1.5 1.5 0 0 1 1.5-1.5h3.5l1.75 1.75h6.25a1.5 1.5 0 0 1 1.5 1.5v6.75a1.5 1.5 0 0 1-1.5 1.5H4.25a1.5 1.5 0 0 1-1.5-1.5z" />,
   mic: <><rect x="7.25" y="2.75" width="5.5" height="9" rx="2.75" /><path d="M4.75 9.75a5.25 5.25 0 0 0 10.5 0M10 15v2.25" /></>,
   shield: <path d="M10 2.75 16 5v4.5c0 3.9-2.6 6.6-6 7.75-3.4-1.15-6-3.85-6-7.75V5z" />,
@@ -63,6 +65,12 @@ const PATHS = {
   table: <><rect x="2.75" y="3.75" width="14.5" height="12.5" rx="1.5" /><path d="M2.75 8h14.5M2.75 12.25h14.5M8 8v8.25M12.5 8v8.25" /></>,
   image: <><rect x="2.75" y="3.75" width="14.5" height="12.5" rx="1.75" /><circle cx="7.25" cy="8" r="1.4" /><path d="m3.5 15.25 4.4-4.4a1 1 0 0 1 1.4 0l2.2 2.2 1.75-1.75a1 1 0 0 1 1.4 0l2.6 2.6" /></>,
   grip: <path d="M7.5 5h.01M12.5 5h.01M7.5 10h.01M12.5 10h.01M7.5 15h.01M12.5 15h.01" strokeWidth="2.2" />,
+  gripRow: <path d="M5 7.5h.01M10 7.5h.01M15 7.5h.01M5 12.5h.01M10 12.5h.01M15 12.5h.01" strokeWidth="2.2" />,
+  // Headings as Business's toolbar draws them, an H with its level beside it; plain text, a T.
+  h1: <path d="M3 4.75v10.5M10 4.75v10.5M3 10h7M13.5 11.4l1.6-.9v5" />,
+  h2: <path d="M3 4.75v10.5M10 4.75v10.5M3 10h7M13.3 11.3c.4-.75 2.3-1.1 2.65.1.3 1.1-2.5 2-2.65 3.35h2.85" />,
+  h3: <path d="M3 4.75v10.5M10 4.75v10.5M3 10h7M13.3 10.9c1.05-.5 2.55-.1 2.55 1 0 .65-.5 1.05-1.15 1.15.65.05 1.3.5 1.3 1.25 0 1.15-1.5 1.55-2.7.9" />,
+  text: <path d="M4.5 4.75h11M10 4.75v10.5" />,
   rowAdd: <><rect x="2.75" y="3.75" width="14.5" height="6" rx="1.25" /><path d="M10 12.5v4.5M7.75 14.75h4.5" /></>,
   colAdd: <><rect x="2.75" y="2.75" width="6" height="14.5" rx="1.25" /><path d="M12.5 10h4.5M14.75 7.75v4.5" /></>,
   rowRemove: <><rect x="2.75" y="3.75" width="14.5" height="6" rx="1.25" /><path d="M7.75 14.75h4.5" /></>,

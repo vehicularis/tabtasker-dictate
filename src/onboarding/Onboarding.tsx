@@ -5,6 +5,7 @@ import { Meetings } from '../app/pages/Meetings';
 import { Notes } from '../app/pages/Notes';
 import { setupDone, tilde, updateSettings, useSettings, useStatus, type CommandKey, type DictateKey, type PageProps, type Patch, type Settings, type Status } from '../store';
 import { Button, Icon, Kbd, ProgressBar, Segmented, Select, Toast, Toggle, type IconName } from '../ui';
+import { AccessGlyph, DownloadGlyph, ExtrasGlyph, GlobeGlyph, ICON_GLYPHS } from '../overlay/glyphs';
 import { Globe, KEY_NAMES, Keyboard } from './Keyboard';
 import './onboarding.css';
 
@@ -130,8 +131,8 @@ export function Onboarding() {
     </nav>
     <main ref={main} className="setup-step" key={step.id} aria-labelledby="setup-title">
       <div className="setup-body">
-        <span className="setup-icon"><Glyph name={step.icon} size={28} /></span>
-        <h1 id="setup-title" tabIndex={-1}>{step.id === 'done' && !finished ? 'Almost there' : title}</h1>
+        <span className="setup-icon"><Glyph name={step.icon} size={34} /></span>
+        <h1 id="setup-title" tabIndex={-1}>{step.id === 'done' && !finished ? 'Still to do' : title}</h1>
         <Body {...props} />
       </div>
     </main>
@@ -143,7 +144,7 @@ export function Onboarding() {
           <Button onClick={() => { location.hash = 'settings'; }}>Open Settings</Button>
           <Button variant="primary" onClick={closeWindow}>{finished ? 'Start dictating' : 'Close'}</Button>
         </> : ready(step.id)
-          ? <Button variant="primary" onClick={() => setAt(at + 1)}>{at === 0 ? 'Get started' : 'Continue'}</Button>
+          ? <Button variant="primary" onClick={() => setAt(at + 1)}>{at === 0 ? 'Start' : 'Continue'}</Button>
           : <Button onClick={() => setAt(at + 1)}>Skip for now</Button>}
       </span>
     </footer>
@@ -156,12 +157,8 @@ export function Onboarding() {
 
 function Welcome() {
   return <>
-    <p className="lead">Hold a key and talk. Your words type into any app as you say them, or become a note saved as Markdown.</p>
-    <ul className="ui-tiles setup-tiles">
-      <Row icon="keyboard" title="Types anywhere" detail="Mail, Slack, your code editor: any app with a place to type." />
-      <Row icon="shield" title="Stays on this Mac" detail="Whisper transcribes your voice here and it never leaves. No account, nothing to sign in to." />
-      <Row icon="claude" title="Claude, if you want it" detail="Optional. Once you connect it, Claude sees text only, never your voice." />
-    </ul>
+    <p className="lead">Hold a key and talk. Your words go into any app when you let go, or become a note saved as Markdown.</p>
+    <p className="lead">Whisper runs on this Mac and nothing you say leaves it. There is no account. Claude is optional and sees only text.</p>
   </>;
 }
 
@@ -307,8 +304,8 @@ function Extras({ status, settings, update, open }: Step) {
         {connected && <Allowed>Connected</Allowed>}
         <Button onClick={() => open('claude')}>{connected ? 'Open' : 'Connect…'}</Button>
       </Row>
-      <Row icon="meeting" title="Record the others in meetings" detail="Their side of a call, from this Mac’s audio. macOS asks you to allow it the first time you record.">
-        <Toggle label="Record the others in meetings" checked={settings.meetings.systemAudio} onChange={systemAudio => void update({ meetings: { systemAudio } })} />
+      <Row icon="meeting" title="Record the other side of calls" detail="Their side of a call, from this Mac’s audio. macOS asks you to allow it the first time you record.">
+        <Toggle label="Record the other side of calls" checked={settings.meetings.systemAudio} onChange={systemAudio => void update({ meetings: { systemAudio } })} />
         <Button onClick={() => open('meetings')}>Meetings…</Button>
       </Row>
       <Row icon="folder" title="Notes folder" detail={<span className="setup-path">{tilde(settings.notes.folder ?? status.notes, status.home)}</span>}>
@@ -329,7 +326,7 @@ function Done({ status, settings, go }: Step) {
   const ways: [string, ReactNode][] = [['Type where your cursor is', <>hold <Kbd>{name}</Kbd></>]];
   if (shortcuts.handsFree) ways.push(['Keep listening, hands-free', <>double-tap <Kbd>{name}</Kbd></>]);
   if (claude.enabled && claude.commands && shortcuts.command !== 'off') ways.push(['Talk to Claude', <>hold <Kbd>{name}</Kbd> with <Kbd>{COMMAND_GLYPHS[shortcuts.command]}</Kbd></>]);
-  ways.push(['Take a spoken note', shortcuts.note ? <Kbd>{shortcuts.note.label}</Kbd> : 'the note button on the dots']);
+  ways.push(['Speak a note', shortcuts.note ? <Kbd>{shortcuts.note.label}</Kbd> : 'the note button on the dots']);
   ways.push(['Record a meeting', shortcuts.meeting ? <Kbd>{shortcuts.meeting.label}</Kbd> : general.menuBarIcon ? 'the menu bar icon' : menu]);
   if (shortcuts.pasteLast) ways.push(['Paste the last transcript', <Kbd>{shortcuts.pasteLast.label}</Kbd>]);
   ways.push(['Settings and more', general.menuBarIcon ? 'the menu bar icon' : menu]);
@@ -337,8 +334,8 @@ function Done({ status, settings, go }: Step) {
     {needs.length ? <>
       <p className="lead">A few things are left before your words can type. Finish them now, or later from Settings.</p>
       <Left needs={needs} go={go} />
-    </> : <p className="lead">Here are the ways in. Settings has the rest.</p>}
-    <ul className="ui-tiles setup-tiles setup-ways" aria-label="Ways in">
+    </> : <p className="lead">What to press. Settings has the rest.</p>}
+    <ul className="ui-tiles setup-tiles setup-ways" aria-label="What to press">
       {ways.map(([what, how]) => <li key={what} className="ui-tile"><span className="what"><span className="title">{what}</span></span><span className="how">{how}</span></li>)}
     </ul>
   </>;
@@ -346,7 +343,7 @@ function Done({ status, settings, go }: Step) {
 
 const BODIES: Record<StepId, [string, ComponentType<Step>]> = {
   welcome: ['Talk instead of typing', Welcome], microphone: ['Your microphone', Microphone], accessibility: ['Accessibility', Accessibility],
-  key: ['Choose your key', ChooseKey], model: ['The speech model', Model], try: ['Try it', TryIt], extras: ['Extras', Extras], done: ['You’re all set', Done],
+  key: ['Choose your key', ChooseKey], model: ['The speech model', Model], try: ['Try it', TryIt], extras: ['Extras', Extras], done: ['Setup is done', Done],
 };
 
 // ---------- pieces ----------
@@ -365,8 +362,14 @@ function PageSheet({ sheet, settings, update, onClose }: PageProps & { sheet: Sh
 }
 
 type Glyph = IconName | 'access' | 'download' | 'globe';
-/// The design system's icons, plus the few only setup needs, drawn the same way.
+// Setup's own objects, beside the app's (ICON_GLYPHS): its steps and rows show glyphs, as the rest of the app does.
+const SETUP_GLYPHS: Partial<Record<Glyph, ComponentType<{ size?: number }>>> = { globe: GlobeGlyph, access: AccessGlyph, download: DownloadGlyph, plus: ExtrasGlyph };
+
+/// The object's glyph at about 1.3 times a line icon's size (it fills less of its box), or the design system's
+/// line icon, plus the few only setup needs, where there is no glyph.
 function Glyph({ name, size = 18 }: { name: Glyph; size?: number }) {
+  const Drawn = SETUP_GLYPHS[name] ?? (name in ICON_GLYPHS ? ICON_GLYPHS[name as IconName] : undefined);
+  if (Drawn) return <Drawn size={Math.round(size * 1.3)} />;
   if (name === 'globe') return <Globe size={size} />;
   if (name !== 'access' && name !== 'download') return <Icon name={name} size={size} />;
   return <svg className="ui-icon" width={size} height={size} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

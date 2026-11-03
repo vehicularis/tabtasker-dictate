@@ -18,7 +18,7 @@ button { appearance: none; -webkit-appearance: none; }
   font: 500 14px/1 var(--font); color: var(--ink); background: var(--secondary); box-shadow: var(--elev-raised); cursor: pointer; white-space: nowrap;
   transition: background var(--quick) var(--ease), box-shadow var(--quick) var(--ease), opacity var(--quick) var(--ease), transform var(--quick) var(--ease); }
 .ui-button:hover { box-shadow: var(--elev-raised-hover); }
-.ui-button:active { transform: translateY(.5px); box-shadow: var(--elev-well); }
+.ui-button:active { transform: translateY(.5px); box-shadow: var(--elev-well); transition-duration: 0s; } /* in at once, out on the curve */
 .ui-button.primary { color: var(--on-accent); background: var(--accent-button); box-shadow: var(--elev-control); }
 .ui-button.primary:hover { box-shadow: var(--elev-control-hover); }
 .ui-button.quiet { color: var(--ink-2); background: none; box-shadow: none; }
@@ -40,10 +40,13 @@ button { appearance: none; -webkit-appearance: none; }
 .ui-toggle:disabled { opacity: .5; cursor: default; }
 
 /* ---------- segmented: a faint track, the chosen segment a darker plate ---------- */
-.ui-segmented { display: inline-flex; flex: none; gap: 2px; padding: 2px; border-radius: 12px; background: color-mix(in srgb, var(--ink) 5%, transparent); }
-.ui-segmented button { height: 26px; padding: 0 11px; border: 0; border-radius: 10px; font: 500 13px/1 var(--font); color: var(--ink-2); background: none; cursor: pointer; white-space: nowrap; transition: background var(--quick) var(--ease), color var(--quick) var(--ease); }
+.ui-segmented { position: relative; display: inline-flex; flex: none; gap: 2px; padding: 2px; border-radius: 12px; background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.ui-segmented button { position: relative; height: 26px; padding: 0 11px; border: 0; border-radius: 10px; font: 500 13px/1 var(--font); color: var(--ink-2); background: none; cursor: pointer; white-space: nowrap; transition: background var(--quick) var(--ease), color var(--quick) var(--ease); }
 .ui-segmented button:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 5%, transparent); }
-.ui-segmented button[aria-checked='true'] { color: var(--ink); background: color-mix(in srgb, var(--ink) 11%, transparent); }
+.ui-segmented button[aria-checked='true'] { color: var(--ink); background: none; }
+/* The plate (controls.tsx cuts it to the chosen segment): it slides, as Business's thumb does, and under reduced
+   motion it is simply there. */
+.ui-segmented-plate { position: absolute; inset: 0; background: color-mix(in srgb, var(--ink) 11%, transparent); pointer-events: none; transition: clip-path var(--slow) var(--ease); }
 
 /* ---------- fields: select, text, recorder ---------- */
 .ui-select { position: relative; display: inline-flex; flex: none; align-items: center; }
@@ -110,8 +113,10 @@ button { appearance: none; -webkit-appearance: none; }
 .ui-tile.stack .control { max-width: none; }
 .ui-tile.dim .what { opacity: .5; }
 
-.ui-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 26px 20px; border-radius: var(--radius-row); text-align: center; background: var(--card); box-shadow: var(--elev-raised); }
-.ui-empty-icon { display: grid; place-items: center; width: 40px; height: 40px; margin-bottom: 4px; border-radius: 12px; color: var(--ink-2); background: var(--surface-2); box-shadow: var(--elev-well); }
+.ui-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 28px 20px; text-align: center; } /* no card: the glyph and the words are enough */
+.ui-empty-icon { display: grid; place-items: center; margin-bottom: 6px; color: var(--ink-2); } /* the glyph is the object: no tile behind it */
+/* The empty place's glyph, the one thing on it, springs into place as the page arrives. */
+:is(.ui-empty-icon, .empty-pane.first .empty-icon, .stickies-first > svg:first-child) { --pop-by: .12; animation: fade-in var(--quick) var(--ease) backwards, pop-in var(--pop) var(--spring) backwards; }
 .ui-empty strong { font-size: 14.5px; font-weight: 600; }
 .ui-empty p { max-width: 340px; margin: 0 0 6px; font-size: 13px; color: var(--ink-2); }
 
@@ -122,6 +127,8 @@ button { appearance: none; -webkit-appearance: none; }
 /* Still, it must not look like a third of the way: a faint full bar says "working". */
 @media (prefers-reduced-motion: reduce) { .ui-progress[data-unknown] i { width: 100%; opacity: .35; animation: none; } }
 
-.ui-toast { position: fixed; left: 50%; bottom: 20px; z-index: 10; max-width: 420px; margin: 0; padding: 9px 14px; border-radius: 12px; font-size: 14px; color: var(--ink); background: var(--popover); box-shadow: var(--elev-float); transform: translateX(-50%); animation: ui-toast var(--slow) var(--spring) both; }
+/* Up from the window's foot on the spring, and back down when it goes (motion.ts leave). */
+.ui-toast { --leave: translateY(4px) scale(.98); position: fixed; left: 50%; bottom: 20px; z-index: 10; max-width: 420px; margin: 0; padding: 9px 14px; border-radius: 12px; font-size: 14px; color: var(--ink); background: var(--popover); box-shadow: var(--elev-float);
+  translate: -50% 0; transform-origin: 50% 100%; animation: fade-in var(--quick) var(--ease) backwards, ui-toast var(--pop) var(--spring) backwards; }
 .ui-toast[data-error] { color: var(--on-danger); background: var(--danger-fill); }
-@keyframes ui-toast { from { opacity: 0; transform: translate(-50%, 8px) scale(.96); } }
+@keyframes ui-toast { from { transform: translateY(calc(8px * var(--motion))) scale(calc(1 - .04 * var(--motion))); } }

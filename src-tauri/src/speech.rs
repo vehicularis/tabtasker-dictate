@@ -69,7 +69,7 @@ struct Hold { id: String, language: Option<i32>, spoken: Option<i32>, heard: Opt
 /// Speech that ends this long before a live pass's audio does is all in that pass's words.
 const SETTLED: usize = 16000 * 3 / 10;
 static APP: OnceLock<AppHandle> = OnceLock::new();
-/// Where the voice models live, once the app is up: for other models that belong beside them.
+/// Where the speech models live, once the app is up: for other models that belong beside them.
 pub(crate) fn models_root() -> Option<PathBuf> { APP.get().map(|app| app.state::<LocalSpeech>().root.clone()) }
 /// A hold with nothing to send (silence, too short, unclear): the overlay ends it quietly.
 const UNHEARD: &str = "unheard";
@@ -125,7 +125,7 @@ fn verify_model(path: &Path, model: &Model) -> Result<(), String> {
   let mut buffer = [0; 64 * 1024];
   loop { let count = file.read(&mut buffer).map_err(|e| e.to_string())?; if count == 0 { break; } digest.update(&buffer[..count]); }
   let hash: String = digest.finish().as_ref().iter().map(|byte| format!("{byte:02x}")).collect();
-  if hash != model.sha256 { return Err("The voice model didn’t pass its check. Download it again.".into()); }
+  if hash != model.sha256 { return Err("The speech model didn’t pass its check. Download it again.".into()); }
   Ok(())
 }
 
@@ -142,27 +142,27 @@ pub(crate) async fn fetch(root: &Path, models: &'static [Model], cancel: &Atomic
   for model in models {
     if cancel.load(Ordering::Relaxed) { return Err("Voice model setup cancelled.".into()); }
     let path = root.join(model.name);
-    if let Some(dir) = path.parent() { std::fs::create_dir_all(dir).map_err(|e| format!("Couldn’t create voice model storage: {e}"))?; }
+    if let Some(dir) = path.parent() { std::fs::create_dir_all(dir).map_err(|e| format!("Couldn’t create speech model storage: {e}"))?; }
     let check = path.clone();
     if tauri::async_runtime::spawn_blocking(move || verify_model(&check, model)).await.map_err(|e| e.to_string())?.is_ok() { continue; }
     let client = download_client()?;
     let partial = path.with_extension("part");
     let result = async {
-      let mut response = client.get(model.url).send().await.map_err(|_| "Couldn’t download the voice model. Check your connection and try again.")?
-        .error_for_status().map_err(|_| "The voice model download is unavailable right now. Try again later.")?;
+      let mut response = client.get(model.url).send().await.map_err(|_| "Couldn’t download the speech model. Check your connection and try again.")?
+        .error_for_status().map_err(|_| "The speech model download is unavailable right now. Try again later.")?;
       if response.content_length().is_some_and(|bytes| bytes != model.bytes) { return Err("Voice model download has an unexpected size.".into()); }
-      let mut file = File::create(&partial).map_err(|e| format!("Couldn’t save the voice model: {e}"))?;
+      let mut file = File::create(&partial).map_err(|e| format!("Couldn’t save the speech model: {e}"))?;
       let mut bytes = 0u64;
       let mut last = Instant::now() - Duration::from_secs(1);
       loop {
         if cancel.load(Ordering::Relaxed) { return Err("Voice model setup cancelled.".into()); }
         let chunk = tokio::time::timeout(Duration::from_secs(30), response.chunk()).await
-          .map_err(|_| "The voice model download timed out. Try again.")?
-          .map_err(|_| "The voice model download was interrupted. Try again.")?;
+          .map_err(|_| "The speech model download timed out. Try again.")?
+          .map_err(|_| "The speech model download was interrupted. Try again.")?;
         let Some(chunk) = chunk else { break };
         bytes += chunk.len() as u64;
         if bytes > model.bytes { return Err("Voice model download is larger than expected.".into()); }
-        file.write_all(&chunk).map_err(|e| format!("Couldn’t save the voice model: {e}"))?;
+        file.write_all(&chunk).map_err(|e| format!("Couldn’t save the speech model: {e}"))?;
         if last.elapsed() >= Duration::from_millis(500) {
           let percent = (bytes * 100 / model.bytes) as u8;
           report(&format!("Downloading {} · {percent}%", model.label), Some(percent));
@@ -175,7 +175,7 @@ pub(crate) async fn fetch(root: &Path, models: &'static [Model], cancel: &Atomic
       let check = partial.clone();
       tauri::async_runtime::spawn_blocking(move || verify_model(&check, model)).await.map_err(|e| e.to_string())??;
       if cancel.load(Ordering::Relaxed) { return Err("Voice model setup cancelled.".into()); }
-      std::fs::rename(&partial, &path).map_err(|e| format!("Couldn’t install the voice model: {e}"))
+      std::fs::rename(&partial, &path).map_err(|e| format!("Couldn’t install the speech model: {e}"))
     }.await;
     if result.is_err() { let _ = std::fs::remove_file(&partial); }
     result?;
@@ -249,7 +249,7 @@ fn prepare(app: &AppHandle) {
         report(&format!("Loading {label} on this Mac…"), None);
         let (loading, stop) = (app.clone(), cancel.clone());
         tauri::async_runtime::spawn_blocking(move || load(&loading, &root, want, &stop)).await
-          .unwrap_or_else(|_| Err("Couldn’t load the local voice model.".into()))
+          .unwrap_or_else(|_| Err("Couldn’t load the local speech model.".into()))
       }
       Ok(()) => Err("Voice model setup was cancelled.".into()),
       error => error,
@@ -446,6 +446,31 @@ impl Ask {
 
 /// The vocabulary as Whisper's prompt, and how many words it holds: a comma list, newest first, with as
 /// many words as `fits`. It starts with a space, as the words would inside heard text.
+/// Whether `text` is Whisper reciting the vocabulary it was prompted with rather than what was said, as it can
+/// over near-silence (OpenWhispr dictionaryEchoFilter.js): nine in ten of its words or more are vocabulary,
+/// and it is shaped like the list: one word over and over, a short run ending in a comma, or three or more
+/// entries in the list's own order. A sentence that merely uses a few vocabulary words is none of these.
+fn echoes_prompt(text: &str, words: &[String]) -> bool {
+  let bare = |word: &str| word.trim_matches(|c: char| !c.is_alphanumeric()).to_lowercase();
+  let entries: Vec<String> = words.iter().map(|word| word.trim().to_lowercase()).filter(|word| !word.is_empty()).collect();
+  let known: std::collections::HashSet<String> = entries.iter().flat_map(|entry| entry.split_whitespace().map(bare).collect::<Vec<_>>()).filter(|word| !word.is_empty()).collect();
+  let said: Vec<String> = text.split_whitespace().map(bare).filter(|word| !word.is_empty()).collect();
+  let unique: std::collections::HashSet<&String> = said.iter().collect();
+  if unique.is_empty() || (unique.iter().filter(|word| known.contains(**word)).count() * 10) < unique.len() * 9 { return false; }
+  let repeated = unique.iter().any(|word| said.iter().filter(|other| other == word).count() >= 3);
+  let fragment = text.trim().ends_with(',') && text.trim().chars().count() <= 30;
+  let lower = text.to_lowercase();
+  let (mut from, mut in_order) = (0, 0);
+  for entry in &entries { if let Some(at) = lower[from..].find(entry.as_str()) { in_order += 1; from += at + entry.len(); } }
+  repeated || fragment || in_order >= 3
+}
+
+/// Too quiet to hold a word: even its loudest tenth of a second is below the level of a breath (OpenWhispr
+/// localSpeechGate.js, its first rule). Whisper is never asked there, where it would make words up.
+fn silent_audio(pcm: &[f32]) -> bool {
+  pcm.chunks(1_600).map(|window| (window.iter().map(|s| s * s).sum::<f32>() / window.len() as f32).sqrt()).fold(0.0, f32::max) < 0.002
+}
+
 fn prompt_text(words: &[String], fits: impl Fn(&str) -> bool) -> (String, usize) {
   let (mut text, mut count) = (String::new(), 0);
   for word in words.iter().map(|word| word.trim()).filter(|word| !word.is_empty() && !word.contains('\0')) {
@@ -485,6 +510,17 @@ fn load_vad(root: &Path) -> Result<WhisperVadContext, String> {
 
 /// Whisper, with the tokens of the vocabulary it was last given.
 struct Engine { whisper: WhisperContext, model: settings::Model, prompt: (Vec<String>, Vec<i32>) }
+
+/// Whisper's own test for a window nobody spoke in (openai/whisper transcribe.py, whisper.cpp, WhisperKit):
+/// the no-speech token likely *and* the words found unsure. A likely no-speech token alone is not silence:
+/// clear words after a pause score high on it too, and dropping them is "Didn't catch that" for nothing.
+fn silent(no_speech: f32, avg_logprob: f32) -> bool { no_speech > 0.6 && avg_logprob < -1.0 }
+
+/// The mean log probability of a segment's words, special tokens left out (they sort from end-of-text up).
+fn avg_logprob(segment: &whisper_rs::WhisperSegment<'_>, eot: i32) -> f32 {
+  let logs: Vec<f32> = (0..segment.n_tokens()).filter_map(|i| segment.get_token(i)).filter(|token| token.token_id() < eot).map(|token| token.token_data().plog).collect();
+  if logs.is_empty() { f32::NEG_INFINITY } else { logs.iter().sum::<f32>() / logs.len() as f32 }
+}
 impl Engine {
   fn load(root: &Path, model: settings::Model) -> Result<Self, String> {
     // Native debug logs can contain recognized tokens; keep speech out of app logs.
@@ -538,6 +574,14 @@ impl Engine {
   fn run(&mut self, pcm: &[f32], language: i32, ask: &Ask, cancelled: Arc<AtomicBool>, quick: bool) -> Result<String, String> {
     if cancelled.load(Ordering::Relaxed) { return Err("Voice command cancelled.".into()); }
     self.use_words(&ask.words);
+    let text = self.decode(pcm, language, ask, cancelled.clone(), quick, true)?;
+    // Over near-silence a prompted Whisper can recite the vocabulary instead of what was said (OpenWhispr
+    // #1454): heard again without it.
+    if !self.prompt.1.is_empty() && echoes_prompt(&text, &self.prompt.0) { return self.decode(pcm, language, ask, cancelled, quick, false); }
+    Ok(text)
+  }
+
+  fn decode(&mut self, pcm: &[f32], language: i32, ask: &Ask, cancelled: Arc<AtomicBool>, quick: bool, prompted: bool) -> Result<String, String> {
     let mut state = self.whisper.create_state().map_err(|_| "Not enough memory")?;
     let mut params = FullParams::new(if quick { SamplingStrategy::Greedy { best_of: 1 } } else { SamplingStrategy::BeamSearch { beam_size: 5, patience: -1.0 } });
     params.set_n_threads(threads() as i32);
@@ -545,9 +589,15 @@ impl Engine {
     params.set_audio_ctx(self.audio_ctx(pcm.len()));
     params.set_translate(ask.translate);
     params.set_no_context(true);
-    params.set_no_timestamps(true);
+    // Without timestamps whisper.cpp moves on a whole 30 s window when a decode ends early, and what was said in
+    // the rest of it is lost; past one window the timestamps say where to carry on.
+    params.set_no_timestamps(pcm.len() <= 28 * 16_000);
     params.set_suppress_nst(true);
-    if !self.prompt.1.is_empty() { params.set_tokens(&self.prompt.1); }
+    // OpenWhispr's thresholds for dictation (whisperServer.js, #1458): a decode this unsure is tried again
+    // warmer, which cut made-up endings ("Thank you for watching") from 2.25 % to 0.06 % of its dictations.
+    params.set_entropy_thold(2.8);
+    params.set_logprob_thold(-1.25);
+    if prompted && !self.prompt.1.is_empty() { params.set_tokens(&self.prompt.1); }
     params.set_print_special(false); params.set_print_progress(false); params.set_print_realtime(false); params.set_print_timestamps(false);
     let mut abort = Abort { cancelled: cancelled.clone(), started: Instant::now(), piece: None };
     // The callback borrows this stack value only for the synchronous full() call.
@@ -555,8 +605,9 @@ impl Engine {
     state.full(params, pcm).map_err(|_| "Couldn’t understand that")?;
     if cancelled.load(Ordering::Relaxed) { return Err("Voice command cancelled.".into()); }
     let mut text = String::new();
+    let eot = self.whisper.token_eot();
     for segment in state.as_iter() {
-      if segment.no_speech_probability() > 0.6 { return Err(UNHEARD.into()); }
+      if silent(segment.no_speech_probability(), avg_logprob(&segment, eot)) { continue; } // that window, not the whole hold
       text.push_str(&segment.to_string());
     }
     let text = text.trim().to_owned();
@@ -585,7 +636,8 @@ impl Engine {
     state.full(params, pcm).map_err(|_| "Couldn’t understand that")?;
     // Timestamps are in hundredths of a second.
     let samples = |at: i64| (at.max(0) as usize * 160).min(pcm.len());
-    Ok(state.as_iter().filter(|segment| segment.no_speech_probability() <= 0.6).filter_map(|segment| {
+    let eot = self.whisper.token_eot();
+    Ok(state.as_iter().filter(|segment| !silent(segment.no_speech_probability(), avg_logprob(segment, eot))).filter_map(|segment| {
       let text = segment.to_string().trim().to_owned();
       (!text.is_empty()).then(|| Segment { start: samples(segment.start_timestamp()), end: samples(segment.end_timestamp()), text })
     }).collect())
@@ -614,8 +666,9 @@ impl LocalSpeech {
   /// at all, so a short or quiet last word still counts.
   fn speech_end(&self, pcm: &[f32]) -> Result<usize, String> {
     validate_audio(pcm)?;
+    if silent_audio(pcm) { return Err(UNHEARD.into()); }
     let mut vad = self.vad.lock().unwrap();
-    let vad = vad.as_mut().ok_or("Voice is still loading")?;
+    let vad = vad.as_mut().ok_or("The speech model is still loading.")?;
     vad.detect_speech(pcm).map_err(|_| "Couldn’t understand that")?;
     let speech = vad.segments_from_probabilities(WhisperVadParams::default()).map_err(|_| "Couldn’t understand that")?;
     if speech.num_segments() == 0 { return Err(UNHEARD.into()); }
@@ -649,7 +702,7 @@ impl LocalSpeech {
   fn finish(&self, id: &str, pcm: &[f32], cancelled: Arc<AtomicBool>) -> Result<String, String> {
     if self.long(id, pcm.len()) {
       let mut engine = self.engine_now();
-      return self.note_finish(engine.as_mut().ok_or("Voice is still loading")?, id, 0, pcm, cancelled);
+      return self.note_finish(engine.as_mut().ok_or("The speech model is still loading.")?, id, 0, pcm, cancelled);
     }
     let end = self.speech_end(pcm)? + SETTLED;
     let heard = || self.hold(id, |hold| hold.heard.clone()).filter(|(samples, _)| *samples >= end).map(|(_, text)| text);
@@ -659,7 +712,7 @@ impl LocalSpeech {
     }
     let mut engine = self.engine_now();
     if let Some(text) = heard() { return Ok(text); }
-    self.pass(engine.as_mut().ok_or("Voice is still loading")?, id, pcm, cancelled, false)
+    self.pass(engine.as_mut().ok_or("The speech model is still loading.")?, id, pcm, cancelled, false)
   }
 
   /// Whether a hold of `samples` finishes as a long session, piece by piece: a hands-free one that is
@@ -809,11 +862,11 @@ pub struct Segment { pub start: usize, pub end: usize, pub text: String }
 /// Dictation comes first: a release waiting for the engine, Pause, Quit or `opts.cancel` stops the
 /// piece with `INTERRUPTED`. Silence answers no segments.
 pub fn transcribe_piece(pcm: &[f32], opts: PieceOptions) -> Result<Vec<Segment>, String> {
-  let app = APP.get().ok_or("Voice is still loading")?;
+  let app = APP.get().ok_or("The speech model is still loading.")?;
   if pcm.len() > 30 * 16000 || pcm.iter().any(|sample| !sample.is_finite()) { return Err("Invalid audio".into()); }
   if validate_audio(pcm).is_err() { return Ok(Vec::new()); }
   let state: &'static LocalSpeech = app.state::<LocalSpeech>().inner();
-  if !state.enabled.load(Ordering::Relaxed) { return Err("Voice is off".into()); }
+  if !state.enabled.load(Ordering::Relaxed) { return Err("Dictation is paused.".into()); }
   let ask = Ask::now();
   let language = match opts.language.as_deref() {
     None => ask.language,
@@ -824,7 +877,7 @@ pub fn transcribe_piece(pcm: &[f32], opts: PieceOptions) -> Result<Vec<Segment>,
   let stopped = || cancelled.load(Ordering::Relaxed) || state.piece_yields();
   let mut engine = state.engine.lock().unwrap_or_else(|e| e.into_inner());
   if stopped() { return Err(INTERRUPTED.into()); }
-  let engine = engine.as_mut().ok_or("Voice is still loading")?;
+  let engine = engine.as_mut().ok_or("The speech model is still loading.")?;
   let language = match language { Some(language) => language, None => engine.detect(pcm)?.0 };
   if stopped() { return Err(INTERRUPTED.into()); }
   let abort = Abort { cancelled: cancelled.clone(), started: Instant::now(), piece: Some(state) };

@@ -23,3 +23,19 @@ void dictate_choose_folder(void *window, const char *message, const char *start,
   if (parent.isVisible) [panel beginSheetModalForWindow:parent completionHandler:finish];
   else finish([panel runModal]);
 }
+
+// The window's title bar, as TabTasker Business's: an empty compact toolbar, so AppKit itself makes the bar
+// 40 points tall and centres the traffic lights in it (without one they sit 4 points above the tabs). Nothing
+// moves the buttons after AppKit, so they cannot jump on a resize. Hidden in full screen, where AppKit would
+// otherwise show an empty band over the page. At creation and on every resize, which also comes with full screen.
+void dictate_window_toolbar(void *window) {
+  NSWindow *native = (__bridge NSWindow *)window;
+  if (!NSThread.isMainThread) { dispatch_async(dispatch_get_main_queue(), ^{ dictate_window_toolbar((__bridge void *)native); }); return; }
+  if (!native.toolbar) {
+    native.toolbarStyle = NSWindowToolbarStyleUnifiedCompact; // the style first: under the default one the toolbar is 66 points for a moment
+    native.titlebarSeparatorStyle = NSTitlebarSeparatorStyleNone;
+    native.toolbar = [[NSToolbar alloc] init];
+  }
+  BOOL visible = !(native.styleMask & NSWindowStyleMaskFullScreen);
+  if (native.toolbar.visible != visible) native.toolbar.visible = visible;
+}

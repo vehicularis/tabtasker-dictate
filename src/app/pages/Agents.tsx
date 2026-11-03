@@ -49,7 +49,7 @@ const COPY: Record<Target, { name: string; about: string; added: string; missing
     name: 'Claude Code',
     about: 'Lets Claude Code use your notes and meetings in every project.',
     added: 'Added for every project. Start a new session to use it.',
-    missing: 'Not found. If it is installed, set its path on the Claude page.',
+    missing: 'Not found. If it is installed, set its path in Settings › Agents.',
     confirm: 'Runs “claude mcp add” for your user, so every project can use it.',
   },
   claudeDesktop: {

@@ -1,14 +1,23 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { KEY_NAMES } from '../../overlay/Dock';
 import { createGlass, flatWave, paintInside, type Glass } from '../../overlay/glass';
-import { LibraryGlyph, NoteGlyph, SettingsGlyph } from '../../overlay/glyphs';
+import { LibraryGlyph, MeetingGlyph, NoteGlyph, SettingsGlyph, StickyGlyph, WriteGlyph } from '../../overlay/glyphs';
 import { isDark } from '../../ui/theme';
-import type { Edge, PageProps, Patch, Settings, Size, Theme } from '../../store';
-import { PageHeader, Section, Segmented, Slider, Tile, TileGroup, Toggle } from '../../ui';
+import { PILL_BUTTONS, type Edge, type PageProps, type Patch, type PillButton, type Settings, type Size, type Theme } from '../../store';
+import { PageHeader, reduced, Section, Segmented, Slider, Tile, TileGroup, timing, Toggle } from '../../ui';
 
 const THEMES: { value: Theme; label: string }[] = [{ value: 'system', label: 'Automatic' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }];
 const EDGES: { value: Edge; label: string }[] = [{ value: 'left', label: 'Left' }, { value: 'bottom', label: 'Bottom' }, { value: 'right', label: 'Right' }];
 const SIZES: { value: Size; label: string }[] = [{ value: 'small', label: 'Small' }, { value: 'medium', label: 'Medium' }, { value: 'large', label: 'Large' }];
+// The pill's buttons as Appearance names them, with their glyph for the preview.
+const BUTTONS: Record<PillButton, { title: string; detail: string; glyph: ReactNode }> = {
+  note: { title: 'Speak a note', detail: 'Click and talk. When you stop, it is saved and opens in the window.', glyph: <NoteGlyph size={18} /> },
+  write: { title: 'Write a note', detail: 'A new note in the window, to type into.', glyph: <WriteGlyph size={18} /> },
+  sticky: { title: 'A sticky', detail: 'A new sticky on the screen.', glyph: <StickyGlyph size={18} /> },
+  meeting: { title: 'A meeting', detail: 'Start and stop recording the room or a call.', glyph: <MeetingGlyph size={18} /> },
+  library: { title: 'Your notes', detail: 'The window with your notes, meetings and stickies.', glyph: <LibraryGlyph size={18} /> },
+  settings: { title: 'Settings', detail: 'These settings. They are in the dots’ menu too.', glyph: <SettingsGlyph size={18} /> },
+};
 type Moment = 'idle' | 'hover' | 'talking';
 const MOMENTS: { value: Moment; label: string }[] = [{ value: 'idle', label: 'Idle' }, { value: 'hover', label: 'Pointing' }, { value: 'talking', label: 'Talking' }];
 
@@ -39,17 +48,27 @@ export function Appearance({ settings, update }: PageProps) {
         <Tile title="When idle" detail={`Hidden shows nothing until you hold ${key}.`}>
           <Segmented label="When idle" value={look.idle} options={[{ value: 'dots', label: 'Dots' }, { value: 'hidden', label: 'Hidden' }]} onChange={idle => change({ idle }, 'idle')} />
         </Tile>
-        <Tile title="Hint" detail={`Shows “${key} hold to type” beside the dots when you point at them.`}>
-          <Toggle label="Hint" checked={look.hint} onChange={hint => change({ hint }, 'hover')} />
+        <Tile title="Hint" detail={look.pill.includes('note') ? `Shows “${key} hold to type” while you point at the spoken note on the dots.` : `Shows while you point at the spoken note, which is off under Buttons on the dots.`} dim={!look.pill.includes('note')}>
+          <Toggle label="Hint" checked={look.hint} disabled={!look.pill.includes('note')} onChange={hint => change({ hint }, 'hover')} />
         </Tile>
       </TileGroup>
     </Section>
-    <Section title="Position" note="With Stay clear of the Dock on, the dots never sit under the Dock or the menu bar, whatever the margin. A Dock that hides itself keeps its strip too, so it never slides out over them.">
+    <Section title="Buttons on the dots" note="Point at the dots to open them. Right-click the dots for everything, whatever is here.">
+      <TileGroup>
+        {PILL_BUTTONS.map(name => {
+          const on = look.pill.includes(name);
+          return <Tile key={name} title={BUTTONS[name].title} detail={BUTTONS[name].detail}>
+            <Toggle label={BUTTONS[name].title} checked={on} disabled={on && look.pill.length === 1} onChange={next => change({ pill: PILL_BUTTONS.filter(button => button === name ? next : look.pill.includes(button)) }, 'hover')} />
+          </Tile>;
+        })}
+      </TileGroup>
+    </Section>
+    <Section title="Position">
       <TileGroup>
         <Tile title="Margin" detail="How far the dots sit from the edge of the screen. At 0 they touch it.">
           <Slider label="Margin" min={0} max={120} step={2} value={look.margin} format={value => `${value} pt`} onChange={margin => change({ margin })} />
         </Tile>
-        <Tile title="Stay clear of the Dock" detail={look.avoidDock ? 'The dots keep above the Dock, hidden or not, and below the menu bar.' : 'The dots use the whole screen; the Dock can cover them.'}>
+        <Tile title="Stay clear of the Dock" detail={look.avoidDock ? 'Keeps the dots above the Dock and below the menu bar.' : 'The Dock can cover the dots.'}>
           <Toggle label="Stay clear of the Dock" checked={look.avoidDock} onChange={avoidDock => change({ avoidDock })} />
         </Tile>
       </TileGroup>
@@ -57,10 +76,10 @@ export function Appearance({ settings, update }: PageProps) {
   </>;
 }
 
-// A MacBook with the dots on its screen, drawn from the settings as they are now. The window shows what the
-// moment does: a reply waiting for words, then the words arriving while the orb listens.
-// The orb as the overlay draws it, in miniature: the same glass and the same bars, following a voice the
-// preview makes up while the moment is Talking.
+// A MacBook with the dots on its screen, drawn from the settings as they are now: a reply waiting for words.
+// The orb as the overlay draws it, in miniature: the same glass, writing out what a made-up voice says while
+// the moment is Talking, as the real one does until you let go.
+const SAID = 'Thursday works. Can we take the bigger room?';
 function LiveOrb({ talking }: { talking: boolean }) {
   const host = useRef<HTMLSpanElement>(null);
   useEffect(() => {
@@ -83,7 +102,8 @@ function LiveOrb({ talking }: { talking: boolean }) {
       energy += (target - energy) * .2;
       const time = 1.9 + (still ? 0 : t * 2.4);
       glass.draw(time, isDark() ? [.09, .1, .11] : [.97, .97, .97], energy, 4, 0);
-      paintInside(inside, 'bars', energy, time, 0, accent);
+      const ink = getComputedStyle(box).getPropertyValue('--orb-ink').trim() || '#f4efe6';
+      paintInside(inside, talking ? 'caret' : 'bars', energy, time, 0, talking ? ink : accent, talking ? SAID.slice(0, still ? SAID.length : Math.floor(t * 30) % (SAID.length + 30)) : '');
       frame = requestAnimationFrame(draw);
     };
     frame = requestAnimationFrame(draw);
@@ -94,8 +114,22 @@ function LiveOrb({ talking }: { talking: boolean }) {
 
 function Preview({ look, keyName, moment, onMoment }: { look: Settings['appearance']; keyName: string; moment: Moment; onMoment: (moment: Moment) => void }) {
   const hidden = look.idle === 'hidden' && moment === 'idle';
-  const said = { idle: hidden ? `Nothing shows until you hold ${keyName}` : 'The dots wait at the edge', hover: look.hint ? 'Pointing opens the buttons and the hint' : 'Pointing opens the buttons', talking: `While you hold ${keyName}, your words type where the cursor is` }[moment];
-  return <figure className="look" data-edge={look.edge} data-size={look.size} data-moment={moment} data-quiet={look.idle === 'hidden' || undefined}>
+  const said = { idle: hidden ? `Nothing shows until you hold ${keyName}` : 'The dots wait at the edge', hover: look.hint ? 'Pointing opens the buttons and the hint' : 'Pointing opens the buttons', talking: `While you hold ${keyName}, the orb writes what you say. It goes in at the cursor when you let go` }[moment];
+  // A new edge or size: the dots travel there from where they are, on the spring the real ones land on when dropped.
+  const dock = useRef<HTMLSpanElement>(null), at = useRef<{ x: number; y: number } | null>(null);
+  useLayoutEffect(() => {
+    const el = dock.current;
+    if (!el) return;
+    const moving = el.getAnimations().find(running => running.id === 'edge');
+    const [tx = 0, ty = 0] = moving ? getComputedStyle(el).translate.split(' ').map(value => parseFloat(value) || 0) : [];
+    const was = at.current && { x: at.current.x + tx, y: at.current.y + ty }; // mid-way, from where it is on the screen
+    moving?.cancel();
+    at.current = { x: el.offsetLeft, y: el.offsetTop };
+    const dx = was ? was.x - at.current.x : 0, dy = was ? was.y - at.current.y : 0;
+    if (reduced() || Math.abs(dx) + Math.abs(dy) < 1) return;
+    el.animate({ translate: [`${dx}px ${dy}px`, '0 0'] }, { ...timing('--pop', '--spring'), id: 'edge' });
+  }, [look.edge, look.size]);
+  return <figure className="look" style={{ '--buttons': look.pill.length } as CSSProperties} data-edge={look.edge} data-size={look.size} data-moment={moment} data-quiet={look.idle === 'hidden' || undefined}>
     <div className="look-mac" role="img" aria-label={`The dots at the ${look.edge} edge, ${look.size}. ${said}.`}>
       <div className="look-screen" aria-hidden="true">
         <div className="look-menubar">
@@ -114,13 +148,13 @@ function Preview({ look, keyName, moment, onMoment }: { look: Settings['appearan
           <div className="look-field"><span>Subject:</span>Re: Thursday’s review</div>
           <div className="look-body">
             <p>Hi Maria,</p>
-            <p>{moment === 'talking' && <>Thursday works. Can we take the bigger room, and send me the floor plan before lunch?</>}<i className="look-caret" /></p>
+            <p><i className="look-caret" /></p>
             <blockquote><span>On 1 Nov 2026, Maria Lopez wrote:</span>Does Thursday at 10 still work for the design review? I can book a room.</blockquote>
           </div>
         </div>
-        <span className="look-dock">
+        <span ref={dock} className="look-dock">
           <span className="look-dots"><i /><i /><i /></span>
-          <span className="look-pill"><i><NoteGlyph size={18} /></i><i><LibraryGlyph size={18} /></i><i><SettingsGlyph size={18} /></i></span>
+          <span className="look-pill">{look.pill.map(name => <i key={name}>{BUTTONS[name].glyph}</i>)}</span>
           <LiveOrb talking={moment === 'talking'} />
           {look.hint && <span className="look-hint"><kbd>{keyName}</kbd>hold to type</span>}
           <svg className="look-pointer" viewBox="0 0 12 18"><path d="M1 1v14l3.6-3.4 2.3 5.4 2.3-1-2.3-5.3H12z" /></svg>

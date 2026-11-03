@@ -21,7 +21,7 @@ use std::path::PathBuf;
 use std::sync::{atomic::{AtomicBool, Ordering}, Mutex, OnceLock};
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::TrayIconBuilder;
-use tauri::{ActivationPolicy, AppHandle, Emitter, LogicalPosition, Manager, RunEvent, TitleBarStyle, WebviewUrl, WebviewWindowBuilder, WindowEvent, Wry};
+use tauri::{ActivationPolicy, AppHandle, Emitter, Manager, RunEvent, TitleBarStyle, WebviewUrl, WebviewWindowBuilder, WindowEvent, Wry};
 
 const OVERLAY: &str = "overlay";
 const MAIN: &str = "main";
@@ -39,6 +39,7 @@ extern "C" {
   fn dictate_open_at_login(set: i32) -> bool;
   fn dictate_request(kind: *const c_char);
   fn dictate_overlay_attach(window: *mut c_void);
+  fn dictate_window_toolbar(window: *mut c_void);
   fn dictate_overlay_layout(json: *const c_char);
   fn dictate_type_text(text: *const c_char);
   fn dictate_meeting(action: *const c_char) -> bool;
@@ -267,8 +268,9 @@ fn show_main(app: &AppHandle, route: Option<&str>) -> tauri::Result<()> {
   let window = WebviewWindowBuilder::new(app, MAIN, WebviewUrl::App(format!("app.html#{}", route.unwrap_or("notes")).into()))
     .title("TabTasker Dictate")
     .inner_size(1040.0, 700.0).min_inner_size(840.0, 580.0).center()
-    .title_bar_style(TitleBarStyle::Overlay).hidden_title(true).traffic_light_position(LogicalPosition::new(12.0, 22.0)) // centred on the page's 40-point title bar: Tauri keeps the buttons 10 pt up inside a container it makes `y` taller, so their centre lands at y - 2
+    .title_bar_style(TitleBarStyle::Overlay).hidden_title(true) // the lights where AppKit puts them, centred on the page's 40-point bar by its toolbar (panels.m)
     .build()?;
+  if let Ok(native) = window.ns_window() { unsafe { dictate_window_toolbar(native) }; }
   // The frame's colour behind the page, as Business's window: the page paints the same, so the window's
   // edge is the frame's and a resize never shows anything else.
   let dark = matches!(window.theme(), Ok(tauri::Theme::Dark));
@@ -313,9 +315,20 @@ fn app_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
     &PredefinedMenuItem::cut(app, None)?, &PredefinedMenuItem::copy(app, None)?, &PredefinedMenuItem::paste(app, None)?,
     &PredefinedMenuItem::select_all(app, None)?,
   ])?;
-  let window = Submenu::with_items(app, "Window", true, &[&PredefinedMenuItem::minimize(app, None)?, &PredefinedMenuItem::close_window(app, None)?])?;
+  // The tabs, as Business's menu bar has them: File opens and closes, Window walks and moves. The page takes
+  // the same keys first (App.tsx); an item acts only on one it left, a sticky in front for one (Close Tab).
+  let item = |id: &str, title: &str, keys: &str| MenuItem::with_id(app, id, title, true, Some(keys));
+  let file = Submenu::with_items(app, "File", true, &[
+    &item("tab:new", "New Tab", "CmdOrCtrl+T")?, &item("tab:reopen", "Reopen Closed Tab", "CmdOrCtrl+Shift+T")?, &separator()?,
+    &item("tab:close", "Close Tab", "CmdOrCtrl+W")?, &item("tab:window", "Close Window", "CmdOrCtrl+Shift+W")?,
+  ])?;
+  let window = Submenu::with_items(app, "Window", true, &[
+    &PredefinedMenuItem::minimize(app, None)?, &PredefinedMenuItem::maximize(app, None)?, &separator()?,
+    &item("tab:prev", "Show Previous Tab", "Ctrl+Shift+Tab")?, &item("tab:next", "Show Next Tab", "Ctrl+Tab")?, &separator()?,
+    &item("tab:left", "Move Tab Left", "CmdOrCtrl+Alt+Shift+Left")?, &item("tab:right", "Move Tab Right", "CmdOrCtrl+Alt+Shift+Right")?,
+  ])?;
   window.set_as_windows_menu_for_nsapp()?;
-  Menu::with_items(app, &[&main, &edit, &window])
+  Menu::with_items(app, &[&main, &file, &edit, &window])
 }
 
 /// The tray's Recent Notes, and the files its items open.
@@ -406,7 +419,22 @@ fn first_run(app: &AppHandle, status: &serde_json::Value) {
 }
 
 /// The tray's and the app menu's items, by id. Tauri hands every menu's events to one handler.
+/// A tab item from the menu bar, for the window in front: a sticky closes (and is kept, as its own × keeps it),
+/// the main window's page does the rest with its tabs.
+fn tab_menu(app: &AppHandle, action: &str) {
+  let front = app.webview_windows().into_values().find(|window| window.is_focused().unwrap_or(false));
+  if let Some(sticky) = front.as_ref().and_then(|window| window.label().strip_prefix("sticky-").map(str::to_owned)) {
+    if action == "close" || action == "window" { let _ = stickies::sticky_close(app.clone(), sticky); }
+    return;
+  }
+  if let Some(main) = app.get_webview_window(MAIN) {
+    if action == "window" && front.as_ref().is_some_and(|window| window.label() == MAIN) { let _ = main.close(); return; }
+    let _ = main.emit("dictate-tab", action);
+  }
+}
+
 fn menu_event(app: &AppHandle, id: &str) {
+  if let Some(action) = id.strip_prefix("tab:") { return tab_menu(app, action); }
   match id {
     "note" => { let _ = app.run_on_main_thread(|| unsafe { dictate_request(c"note".as_ptr()) }); }
     // The note card, with the keyboard in it; its Open in the editor button makes a file of it.
@@ -481,16 +509,6 @@ impl log::Log for FileLog {
   fn flush(&self) {}
 }
 
-#[cfg(test)]
-mod log_tests {
-  #[test]
-  fn the_log_stamps_utc_time_from_seconds() {
-    assert_eq!(super::utc_stamp(0), "1970-01-01T00:00:00Z");
-    assert_eq!(super::utc_stamp(1_793_192_709), "2026-10-28T13:05:09Z");
-    assert_eq!(super::utc_stamp(951_782_400), "2000-02-29T00:00:00Z", "a leap day");
-  }
-}
-
 pub fn run() {
   if log::set_logger(Box::leak(Box::new(FileLog::open()))).is_ok() { log::set_max_level(log::LevelFilter::Info); } // one logger for the process's life
   log::info!("TabTasker Dictate {} starting", env!("CARGO_PKG_VERSION"));
@@ -500,7 +518,7 @@ pub fn run() {
       status, set_enabled, set_input, set_open_at_login, request, layout, meeting, open_app, paste_last, play_sound,
       notes::save_note, notes::show_notes, notes::notes_folder, notes::preview_note, notes::choose_folder, notes::library_list, notes::library_open,
       notes::note_read, notes::note_write, notes::note_new, notes::note_delete, notes::note_attach, note_open,
-      stickies::sticky_list, stickies::sticky_get, stickies::sticky_new, stickies::sticky_update, stickies::sticky_remove, stickies::sticky_to_note, stickies::sticky_show, stickies::sticky_pin, stickies::sticky_fold, settings::get_settings, settings::update_settings, settings::reset_settings,
+      stickies::sticky_list, stickies::sticky_get, stickies::sticky_new, stickies::sticky_update, stickies::sticky_remove, stickies::sticky_to_note, stickies::sticky_show, stickies::sticky_close, stickies::sticky_archive, notes::note_archive, stickies::sticky_pin, stickies::sticky_fold, settings::get_settings, settings::update_settings, settings::reset_settings,
       speech::speech_models, speech::prepare_model, speech::vocabulary_fit, text::list_apps,
       history::history_list, history::history_stats, history::history_delete, history::history_clear, history::history_type,
       ai::claude_save_key, ai::claude_test, ai::claude_remove_key, ai::claude_open_console, ai::claude_insert, ai::claude_dismiss,
@@ -535,6 +553,10 @@ pub fn run() {
       if window.label() == MAIN && matches!(event, WindowEvent::Destroyed) && !settings::get().general.show_in_dock {
         let _ = window.app_handle().set_activation_policy(ActivationPolicy::Accessory);
       }
+      // The title bar's toolbar follows the window into and out of full screen.
+      if window.label() == MAIN && matches!(event, WindowEvent::Resized(_)) {
+        if let Ok(native) = window.ns_window() { unsafe { dictate_window_toolbar(native) }; }
+      }
       // A sticky moved or resized comes back where it was left.
       if window.label().starts_with("sticky-") && matches!(event, WindowEvent::Moved(_) | WindowEvent::Resized(_)) { stickies::frame_changed(window.app_handle(), window.label()); }
     })
@@ -546,4 +568,14 @@ pub fn run() {
       RunEvent::Reopen { .. } => { if let Err(e) = show_main(app, None) { log::warn!("settings: {e}"); } }
       _ => {}
     });
+}
+
+#[cfg(test)]
+mod log_tests {
+  #[test]
+  fn the_log_stamps_utc_time_from_seconds() {
+    assert_eq!(super::utc_stamp(0), "1970-01-01T00:00:00Z");
+    assert_eq!(super::utc_stamp(1_793_192_709), "2026-10-28T13:05:09Z");
+    assert_eq!(super::utc_stamp(951_782_400), "2000-02-29T00:00:00Z", "a leap day");
+  }
 }

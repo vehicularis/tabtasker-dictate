@@ -98,7 +98,7 @@ export function Notes({ settings, update }: PageProps) {
     <PageHeader icon="note" title="Notes">Spoken notes are saved as Markdown files in a folder you choose.</PageHeader>
 
     <Section title="Folder" note={folderProblem ?? (notes.folder
-      ? <>Notes are saved here from now on; notes already saved stay where they are. <button type="button" className="link" onClick={() => void update({ notes: { folder: null } })}>Use the default folder</button></>
+      ? <>New notes are saved here. Notes already saved stay where they are. <button type="button" className="link" onClick={() => void update({ notes: { folder: null } })}>Use the default folder</button></>
       : 'Any folder works. Choose one inside an Obsidian vault and your notes show up in Obsidian.')}>
       <TileGroup label="Notes folder">
         <Tile title={<span className="notes-folder"><Icon name="folder" size={16} />{name}</span>} detail={path && <span className="notes-path">{tilde(path, status?.home)}</span>}>
@@ -133,9 +133,9 @@ export function Notes({ settings, update }: PageProps) {
       </TileGroup>
     </Section>
 
-    <Section title="Front matter">
+    <Section title="For Obsidian">
       <TileGroup>
-        <Tile title="Front matter" detail="A YAML header with when the note was made, its tags and “TabTasker Dictate” as its source.">
+        <Tile title="Front matter" detail="Adds the date, the tags and “TabTasker Dictate” as the source at the top of the file.">
           <Toggle label="Front matter" checked={notes.frontmatter} onChange={frontmatter => update({ notes: { frontmatter } })} />
         </Tile>
         {notes.frontmatter && <Tile title="Tags" detail="Added to every note, so you can find them all in Obsidian." stack>

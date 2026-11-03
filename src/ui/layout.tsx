@@ -1,9 +1,14 @@
 import { useEffect, type ReactNode } from 'react';
+import { ICON_GLYPHS } from '../overlay/glyphs';
 import { Icon, type IconName } from './Icon';
+import { leave } from './motion';
+
+/// An object's icon as its glyph (overlay/glyphs.tsx), or the line icon where it has none.
+const Picture = ({ icon, size, line }: { icon: IconName; size: number; line: number }) => { const Glyph = ICON_GLYPHS[icon]; return Glyph ? <Glyph size={size} /> : <Icon name={icon} size={line} />; };
 
 export function PageHeader({ icon, title, children }: { icon: IconName; title: string; children?: ReactNode }) {
   return <header className="ui-page-header">
-    <h1><Icon name={icon} size={20} />{title}</h1>
+    <h1><Picture icon={icon} size={26} line={20} />{title}</h1>
     {children && <p>{children}</p>}
   </header>;
 }
@@ -35,7 +40,7 @@ export function Tile({ title, detail, children, stack, dim }: { title: ReactNode
 
 export function EmptyState({ icon, title, children, action }: { icon: IconName; title: string; children?: ReactNode; action?: ReactNode }) {
   return <div className="ui-empty">
-    <span className="ui-empty-icon"><Icon name={icon} size={22} /></span>
+    <span className="ui-empty-icon"><Picture icon={icon} size={44} line={26} /></span>
     <strong>{title}</strong>
     {children && <p>{children}</p>}
     {action}
@@ -53,5 +58,5 @@ export function ProgressBar({ value, label }: { value: number | null; label: str
 /// A short message at the bottom of the window that goes after a few seconds.
 export function Toast({ message, onDone, error }: { message: string; onDone: () => void; error?: boolean }) {
   useEffect(() => { const timer = setTimeout(onDone, 3200); return () => clearTimeout(timer); }, [message, onDone]);
-  return <p className="ui-toast" role={error ? 'alert' : 'status'} data-error={error || undefined}>{message}</p>;
+  return <p ref={leave} className="ui-toast" role={error ? 'alert' : 'status'} data-error={error || undefined}>{message}</p>;
 }

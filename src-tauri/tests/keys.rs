@@ -36,6 +36,8 @@ extern "C" {
   fn tt_taps_size() -> usize;
   fn tt_hold_limit(long_session: bool) -> usize;
   fn tt_words_timeout(samples: usize) -> f64;
+  fn tt_types_instead(chromium: bool, plain_layout: bool, units: usize, one_line: bool) -> bool;
+  fn tt_restore_at(pressed_at: f64, read_at: f64) -> f64;
 }
 
 fn code(key: u32) -> u16 { unsafe { tt_key_code(key) } }
@@ -144,4 +146,18 @@ fn a_chord_matches_its_key_and_exact_modifiers() {
   assert!(!chord(n, COMMAND, n, option_command));
   assert!(!chord(46, option_command, n, option_command));
   assert!(chord(96, FUNCTION, 96, 0)); // F5 alone, with fn held for it
+}
+
+#[test]
+fn words_are_pasted_except_one_line_into_a_chromium_browser_on_a_plain_layout() {
+  unsafe {
+    assert!(tt_types_instead(true, true, 40, true), "Chrome, plain layout, one line: typed");
+    assert!(!tt_types_instead(false, true, 40, true), "anywhere else: pasted");
+    assert!(!tt_types_instead(true, false, 40, true), "an input method would compose the keys");
+    assert!(!tt_types_instead(true, true, 40, false), "a line break is pasted");
+    assert!(!tt_types_instead(true, true, 1, true) && !tt_types_instead(true, true, 2001, true), "one character, or past 2,000");
+    assert_eq!(tt_restore_at(10.0, 0.0), 10.45, "not read yet: 450 ms after the paste");
+    assert_eq!(tt_restore_at(10.0, 10.1), 10.45, "read quickly: still 450 ms");
+    assert!((tt_restore_at(10.0, 11.0) - 11.05).abs() < 1e-9, "read late: 50 ms after the read");
+  }
 }

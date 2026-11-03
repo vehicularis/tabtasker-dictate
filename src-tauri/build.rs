@@ -11,7 +11,7 @@ fn main() {
   // step (-nodefaultlibs) leaves out; clang says where the library for this Xcode is.
   let runtime = std::process::Command::new("xcrun").args(["clang", "--print-libgcc-file-name", "-mmacosx-version-min=13.0"]).output().expect("xcrun clang");
   println!("cargo:rustc-link-arg={}", String::from_utf8_lossy(&runtime.stdout).trim());
-  for framework in ["AppKit", "ApplicationServices", "AVFoundation", "CoreAudio", "AudioToolbox", "ServiceManagement", "Security", "CoreMedia", "ScreenCaptureKit"] {
+  for framework in ["AppKit", "ApplicationServices", "AVFoundation", "CoreAudio", "AudioToolbox", "ServiceManagement", "Security", "CoreMedia", "ScreenCaptureKit", "Carbon"] {
     println!("cargo:rustc-link-lib=framework={framework}");
   }
   tauri_build::build()

@@ -77,7 +77,7 @@ fn speaker_names(lines: &[Line], you: &str, others: &str) -> std::collections::H
   let mut n = 0;
   for line in heard {
     let key = (line.source, line.speaker);
-    if !names.contains_key(&key) { n += 1; names.insert(key, format!("Person {n}")); }
+    names.entry(key).or_insert_with(|| { n += 1; format!("Person {n}") });
   }
   names
 }
@@ -580,11 +580,11 @@ fn transcribe(pcm: &[f32]) -> Result<Vec<speech::Segment>, Trouble> {
   };
   speech::transcribe_piece(pcm, options).map_err(|error| match error.as_str() {
     speech::INTERRUPTED => Trouble::Interrupted,
-    "Voice is off" => Trouble::Waiting("Turn voice back on to finish the transcript"),
+    "Dictation is paused." => Trouble::Waiting("Turn dictation back on to finish the transcript."),
     "Couldn’t understand that" => Trouble::Unreadable,
     _ => {
       log::warn!("meeting: a piece waits: {error}");
-      Trouble::Waiting("Waiting for voice to finish the transcript")
+      Trouble::Waiting("Waiting for the speech model to finish the transcript.")
     }
   })
 }
@@ -604,7 +604,7 @@ fn step(job: &Job, source: Source, at: &mut Progress, retry: &mut Vec<Gap>, fail
     None => (at.done[i], job.len(source).saturating_sub(at.done[i]), job.ended.load(Ordering::SeqCst)),
   };
   if left == 0 { return Ok(false); }
-  let pcm = job.spool.read(source, from, (left as usize).min(PIECE)).map_err(|e| { log::warn!("meeting: {e}"); Trouble::Waiting("Waiting for voice to finish the transcript") })?;
+  let pcm = job.spool.read(source, from, (left as usize).min(PIECE)).map_err(|e| { log::warn!("meeting: {e}"); Trouble::Waiting("Waiting for the speech model to finish the transcript.") })?;
   let Some(cut) = cut(&pcm, last && left as usize <= PIECE) else { return Ok(false) };
   let piece = &pcm[..cut];
   let to = from + cut as u64;

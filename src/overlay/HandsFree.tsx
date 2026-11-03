@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { invoke, listen } from '../bridge';
 import { useSettings, type DictateKey, type Events } from '../store';
 import { X } from './icons';
+import { leave } from '../ui/motion';
 import { PREVIEW } from './preview';
 import './hands-free.css';
 
@@ -25,13 +26,13 @@ export function HandsFree() {
   const seconds = Math.min(LIMIT, Math.max(0, Math.floor((Date.now() - since) / 1000)));
   const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
   const ask = (kind: 'send' | 'cancel') => void invoke('request', { kind }).catch(() => {});
-  return <div className="glass hands-free" data-glass data-hit role="group" aria-label="Hands-free">
+  return <div ref={leave} className="glass hands-free" data-glass data-hit role="group" aria-label="Hands-free">
     <i className="live" aria-hidden="true" />
     <span className="what">
       <b>Hands-free <time>{clock(seconds)} of {clock(LIMIT)}</time></b>
-      <small>Tap <kbd>{KEY[settings.shortcuts.dictate]}</kbd> to send, <kbd>esc</kbd> to cancel</small>
+      <small>Tap <kbd>{KEY[settings.shortcuts.dictate]}</kbd> to finish, <kbd>esc</kbd> to cancel</small>
     </span>
     <button type="button" className="tool" aria-label="Cancel" title="Cancel" onClick={() => ask('cancel')}><X /></button>
-    <button type="button" className="btn primary" onClick={() => ask('send')}>Send</button>
+    <button type="button" className="btn primary" onClick={() => ask('send')}>Finish</button>
   </div>;
 }

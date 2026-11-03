@@ -22,8 +22,10 @@ pub fn without_send(text: &str) -> (String, bool) {
   let trimmed = text.trim_end();
   let body = trimmed.trim_end_matches(['.', '!', '?', ',', '…']).trim_end();
   for phrase in ["send message", "send it", "send"] {
-    if body.len() <= phrase.len() { continue; } // "send" alone is a word to type, not an order
-    let (head, tail) = body.split_at(body.len() - phrase.len());
+    let at = body.len().saturating_sub(phrase.len());
+    // "send" alone is a word to type, not an order; a cut inside a letter ("Kapıyı kapat") can't be one
+    if at == 0 || !body.is_char_boundary(at) { continue; }
+    let (head, tail) = body.split_at(at);
     if tail.eq_ignore_ascii_case(phrase) && head.ends_with(|c: char| c.is_whitespace() || c == ',' || c == '.') {
       let kept = head.trim_end().trim_end_matches([',', ';', ':']).trim_end();
       if kept.is_empty() { continue; }
@@ -577,6 +579,7 @@ mod tests {
     assert_eq!(without_send("send"), ("send".into(), false));
     assert_eq!(without_send("Godsend"), ("Godsend".into(), false));
     assert_eq!(without_send("Thursday works."), ("Thursday works.".into(), false));
+    assert_eq!(without_send("Kapıyı kapat"), ("Kapıyı kapat".into(), false));
   }
 
   fn pair(from: &str, to: &str) -> Replacement { Replacement { from: from.into(), to: to.into() } }

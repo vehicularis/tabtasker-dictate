@@ -26,7 +26,7 @@ const COMMAND_KEYS: { value: CommandKey; label: string }[] = [
 ];
 
 type ChordName = 'note' | 'meeting' | 'pasteLast' | 'writeNote' | 'sticky';
-const CHORDS: [ChordName, string][] = [['note', 'Start or stop a note'], ['meeting', 'Start or stop a meeting'], ['pasteLast', 'Paste last transcript'], ['writeNote', 'Write a note'], ['sticky', 'New sticky']];
+const CHORDS: [ChordName, string][] = [['note', 'Speak a note'], ['meeting', 'Start or stop a meeting'], ['pasteLast', 'Paste last transcript'], ['writeNote', 'Write a note'], ['sticky', 'New sticky']];
 
 // Shortcuts a chord must not take: macOS's own, by the names System Settings gives them, then the ones
 // nearly every app has. The app reports which of macOS's are on, with any the person added; a browser
@@ -65,8 +65,8 @@ export function Shortcuts({ settings, update }: PageProps) {
   const down = useKeyDown();
   const system = reserved(status);
   const record = (name: ChordName) => async (chord: Chord | null) => (await update({ shortcuts: { [name]: chord } }))?.shortcuts[name];
-  const claude = keys.command === 'off' ? null : !settings.claude.enabled ? <>Needs Claude. <a className="link" href="#claude">Connect Claude</a></>
-    : !settings.claude.commands ? <>Commands are off. <a className="link" href="#claude">Claude settings</a></> : null;
+  const claude = keys.command === 'off' ? null : !settings.claude.enabled ? <>Needs Claude. <a className="link" href="#settings/agents">Agents settings</a></>
+    : !settings.claude.commands ? <>Commands are off. <a className="link" href="#settings/agents">Agents settings</a></> : null;
   const aside = keys.dictate === 'fn' ? 'Pressed with another key, fn still does what it always did.'
     : keys.dictate === 'rightControl' ? 'Mac laptops have no right Control key, so this one needs an external keyboard.'
     : 'Typing with it still works: pressed with another key, it is a shortcut, not dictation.';
@@ -77,7 +77,7 @@ export function Shortcuts({ settings, update }: PageProps) {
         <Tile stack title="Key to hold" detail={<>Hold <Kbd>{key.glyph}</Kbd> and speak: your words type where the cursor is. {aside}</>}>
           <KeyPicker value={keys.dictate} down={down} onChange={dictate => void update({ shortcuts: { dictate } })} />
         </Tile>
-        <Tile title="Hands-free" detail={<>Double-tap <Kbd>{key.glyph}</Kbd> to keep listening without holding it, for up to 10 minutes. Tap it again to send, or press Escape to cancel.</>}>
+        <Tile title="Hands-free" detail={<>Double-tap <Kbd>{key.glyph}</Kbd> to keep listening without holding it, for up to 10 minutes. Tap it again to finish, or press Escape to cancel.</>}>
           <Toggle label="Hands-free" checked={keys.handsFree} onChange={handsFree => void update({ shortcuts: { handsFree } })} />
         </Tile>
         <Tile title="Talk to Claude" detail={keys.command === 'off' ? <>Off. Choose a key to hold with <Kbd>{key.glyph}</Kbd> to talk to Claude.</>
@@ -87,8 +87,8 @@ export function Shortcuts({ settings, update }: PageProps) {
       </TileGroup>
     </Section>
     <Section title="Anywhere on your Mac" note={status && !status.accessibility
-      ? <>These need Accessibility, which is off. <a className="link" href="#general">Turn it on in General</a>.</>
-      : 'Click a shortcut, then press the keys. Escape cancels; Delete clears it.'}>
+      ? <>These need Accessibility, which is off. <a className="link" href="#settings">Turn it on in General</a>.</>
+      : 'Click a shortcut, then press the keys. Escape cancels. Delete clears it.'}>
       <TileGroup>
         {CHORDS.map(([name, title]) => <Tile key={name} title={title}>
           <KeyRecorder label={title} value={keys[name]} onChange={record(name)}
