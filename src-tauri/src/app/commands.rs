@@ -110,6 +110,15 @@ pub(crate) fn play_sound(app: AppHandle, name: String, volume: f64) -> Result<()
 #[tauri::command]
 pub(crate) fn quit(app: AppHandle) { app.exit(0); }
 
+/// Opens one of TabTasker's own pages in the browser (the Business site, the privacy policy, the terms,
+/// the source): nothing else, so a page can never send the browser somewhere of its own choosing.
+#[tauri::command]
+pub(crate) fn open_site(url: String) -> Result<(), String> {
+  const SITES: [&str; 3] = ["https://business.tabtasker.com", "https://tabtasker.com", "https://github.com/vehicularis/tabtasker-dictate"];
+  if !SITES.iter().any(|site| url == *site || url.starts_with(&format!("{site}/"))) { return Err("Not one of TabTasker's pages".into()); }
+  std::process::Command::new("/usr/bin/open").arg(&url).spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
 /// A note or meeting, opened in the app's window on its own page.
 #[tauri::command]
 pub(crate) fn note_open(app: AppHandle, path: String) -> Result<(), String> { windows::show_note(&app, &path) }

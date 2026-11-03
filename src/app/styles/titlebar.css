@@ -26,4 +26,8 @@
 .bar-end { display: flex; flex: none; align-items: center; gap: 8px; margin-left: 12px; }
 .titlebar-help { position: relative; display: inline-flex; flex: none; align-items: center; gap: 6px; height: 28px; padding: 0 8px; border: 0; border-radius: 6px; font: 500 12px/1 var(--font); color: var(--ink-2); background: none; cursor: pointer; -webkit-app-region: no-drag; transition: background var(--quick) var(--ease), color var(--quick) var(--ease); }
 .titlebar-help:hover { color: var(--ink); background: var(--surface-2); }
+/* TabTasker Business, beside Help: the otter, the name, and out it goes. */
+.titlebar-site { display: inline-flex; flex: none; align-items: center; gap: 6px; height: 28px; padding: 0 8px 0 6px; border: 0; border-radius: 6px; font: 500 12px/1 var(--font); color: var(--ink-2); background: none; cursor: pointer; -webkit-app-region: no-drag; transition: background var(--quick) var(--ease), color var(--quick) var(--ease); }
+.titlebar-site:hover { color: var(--ink); background: var(--surface-2); }
+.titlebar-site svg:last-child { color: var(--ink-3); }
 .titlebar-help[aria-pressed='true'] { color: var(--accent-ink); background: var(--accent-fill); }

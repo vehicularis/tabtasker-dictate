@@ -11,3 +11,9 @@
 .notices p { margin: 0; }
 .notices:focus-visible { outline-offset: 6px; border-radius: 2px; }
 .about-foot { margin: 0; font-size: 13px; text-align: center; color: var(--ink-3); }
+/* The policy and the terms: a term in ink, its words beside it, nothing else. */
+.legal { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 2px 0; font-size: 13px; line-height: 1.5; user-select: text; -webkit-user-select: text; }
+.legal > div { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 12px; }
+.legal dt { margin: 0; font-weight: 600; color: var(--ink); }
+.legal dd { margin: 0; color: var(--ink-2); }
+@media (width < 560px) { .legal > div { grid-template-columns: 1fr; gap: 2px; } }
