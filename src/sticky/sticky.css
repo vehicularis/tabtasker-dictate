@@ -1,46 +1,36 @@
-/* A sticky, as TabTasker Business draws a sticker (boardColor.ts hueSurface): paper is the hue mixed into
-   the surface (30 % on white; 26 % on a dark surface at night), ink is the hue mixed into the text colour
-   (20 %; 34 % at night). It fills its transparent window; a thin bar in a deeper tint drags it. */
-/* The page's own rules live in page.css, so this file can be borrowed by the Help page for a real sticky. */
-.sticky { --paper: color-mix(in srgb, var(--hue) 30%, #ffffff); --ink: color-mix(in srgb, var(--hue) 20%, #17181b); --bar: color-mix(in srgb, var(--hue) 44%, #ffffff); --dim: color-mix(in srgb, var(--ink) 55%, transparent);
-  display: flex; flex-direction: column; box-sizing: border-box; height: 100%; border-radius: 6px; color: var(--ink); background: var(--paper); box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--ink) 18%, transparent); }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .sticky { --paper: color-mix(in srgb, var(--hue) 26%, #1d2126); --ink: color-mix(in srgb, var(--hue) 34%, #e9ebee); --bar: color-mix(in srgb, var(--hue) 40%, #1d2126); }
-}
-:root[data-theme='dark'] .sticky { --paper: color-mix(in srgb, var(--hue) 26%, #1d2126); --ink: color-mix(in srgb, var(--hue) 34%, #e9ebee); --bar: color-mix(in srgb, var(--hue) 40%, #1d2126); }
-.sticky-bar { position: relative; display: flex; flex: none; align-items: center; gap: 6px; height: 30px; padding: 0 5px 0 8px; border-radius: 6px 6px 0 0; background: var(--bar); cursor: grab; user-select: none; -webkit-user-select: none; }
-.sticky[data-folded] .sticky-bar { border-radius: 6px; }
+/* A sticky is one sheet of paper. Its colour is Business's sticker recipe (boardColor.ts hueSurface: the hue mixed
+   into white, 30 %; the ink, the hue mixed into near black, 20 %), but at night it stays paper: the same light sheet,
+   dimmed into a warm grey rather than mixed into the dark, since a sticky sits on top of other windows and is there
+   to be seen. No band, no outline of controls: the top edge is where it is dragged, and its tools show there only
+   while the pointer is over it (or one has the keyboard). */
+/* The page's own rules live in page.css, so this file can be borrowed by the Stickies and Help pages for a real sticky. */
+.sticky { --paper: color-mix(in srgb, var(--hue) 30%, #ffffff); --ink: color-mix(in srgb, var(--hue) 20%, #17181b); --dim: color-mix(in srgb, var(--ink) 55%, transparent);
+  display: flex; flex-direction: column; box-sizing: border-box; height: 100%; border-radius: 6px; color: var(--ink); background: var(--paper); color-scheme: light;
+  box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--ink) 16%, transparent); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .sticky { --paper: color-mix(in srgb, var(--hue) 44%, #e3ded5); } }
+:root[data-theme='dark'] .sticky { --paper: color-mix(in srgb, var(--hue) 44%, #e3ded5); }
+.sticky-bar { position: relative; display: flex; flex: none; align-items: center; gap: 6px; height: 30px; padding: 0 4px 0 14px; border-radius: 6px 6px 0 0; cursor: grab; user-select: none; -webkit-user-select: none; }
+.sticky[data-folded] .sticky-bar { border-radius: 6px; } /* folded, the window is this edge alone (stickies.rs FOLDED) */
 .sticky-bar:active { cursor: grabbing; }
-.sticky-swatch-wrap { position: relative; display: flex; flex: none; }
-.sticky-swatch { width: 14px; height: 14px; padding: 0; border: 0; border-radius: 50%; background: var(--hue); box-shadow: inset 0 0 0 .5px rgb(0 0 0 / .25), 0 0 0 2px color-mix(in srgb, #fff 55%, transparent); cursor: pointer; transition: transform var(--quick) var(--ease); }
-.sticky-swatch:hover { transform: scale(1.1); }
-/* The colours: dots on a small card under the swatch, as Business's colour picker hangs its swatches under its trigger.
-   It grows out of the swatch over --quick and fades back into it (motion.ts leave), as the window's menus do. */
-.sticky-picker { position: absolute; top: calc(100% + 8px); left: -6px; z-index: 6; display: grid; grid-template-columns: repeat(4, 18px); gap: 9px; padding: 9px; border-radius: 10px; background: var(--popover, #fff); box-shadow: var(--elev-float); cursor: default;
-  transform-origin: 13px -8px; animation: fade-in var(--quick) var(--ease) backwards, pop-in var(--quick) var(--ease) backwards; }
-.sticky-picker .sticky-hue { width: 18px; height: 18px; }
-.sticky-picker .sticky-hue[aria-checked='true'] { box-shadow: 0 0 0 2px var(--popover, #fff), 0 0 0 3.5px var(--hue); }
-.sticky-picker .sticky-hue:hover { transform: scale(1.12); }
-.sticky-hue { width: 14px; height: 14px; padding: 0; border: 0; border-radius: 50%; background: var(--hue); box-shadow: inset 0 0 0 .5px rgb(0 0 0 / .25); cursor: pointer; transition: transform var(--quick) var(--ease), box-shadow var(--quick) var(--ease); }
-.sticky-hue[aria-checked='true'] { box-shadow: 0 0 0 2px var(--popover, #fff), 0 0 0 3.5px var(--hue); }
 .sticky-peek { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; color: var(--ink); }
-.sticky-tools { display: flex; flex: none; gap: 1px; margin-left: auto; }
-.sticky-tool { display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 6px; color: var(--dim); background: none; cursor: pointer; }
-.sticky-tool:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 10%, transparent); }
+.sticky-tools { display: flex; flex: none; gap: 1px; margin-left: auto; opacity: 0; transition: opacity var(--quick) var(--ease); }
+.sticky:hover .sticky-tools, .sticky-tools:focus-within { opacity: 1; }
+.sticky-tool { display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 6px; color: var(--dim); background: none; cursor: pointer; transition: color var(--quick) var(--ease), background-color var(--quick) var(--ease); }
+.sticky-tool:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 9%, transparent); }
 .sticky-tool[data-on] { color: var(--ink); }
 .sticky-tool:disabled { opacity: .35; cursor: default; }
-/* The words: the Text editor, compact, in the paper's ink. */
+/* The words: the Text editor, compact, in the paper's ink, starting just under the edge. */
 .sticky .ed { flex: 1; min-height: 0; }
 .sticky .ed-content { overflow-y: auto; scrollbar-width: thin; }
 .sticky .ed-body { color: inherit; caret-color: var(--ink); }
-.sticky .ed-body.compact { font: 500 14px/1.45 var(--font); }
+.sticky .ed-body.compact { padding: 0 14px 14px; font: 400 15px/1.5 var(--font); }
 .sticky .ed-body p.is-editor-empty:first-child::before { color: var(--dim); }
 .sticky .ed-body a { color: var(--ink); text-decoration-color: var(--dim); }
-.sticky .ed-body :is(code, pre) { background: color-mix(in srgb, var(--ink) 9%, transparent); }
+.sticky .ed-body :is(code, pre) { background: color-mix(in srgb, var(--ink) 8%, transparent); }
 .sticky .ed-body blockquote { border-left-color: color-mix(in srgb, var(--ink) 25%, transparent); color: var(--dim); }
-.sticky .ed-body ul[data-type='taskList'] li > label input { accent-color: var(--hue); }
-.sticky-problem { margin: 0; padding: 4px 12px 8px; font-size: 12px; color: #a3261e; }
-/* The right-click menu: the colours in a row, then the sticky's own doings. It grows from the click (Sticky.tsx). */
+.sticky .ed-body ul[data-type='taskList'] li > label input { accent-color: color-mix(in srgb, var(--hue) 60%, var(--ink)); }
+.sticky-problem { margin: 0; padding: 4px 14px 8px; font-size: 12px; color: #a3261e; }
+/* The menu (⋯ or a right-click): the colours in a row, then the sticky's own doings. It grows from where it was opened (Sticky.tsx). */
 .sticky-menu { position: fixed; z-index: 5; display: flex; flex-direction: column; min-width: 180px; max-height: calc(100vh - 8px); padding: 6px; border-radius: 12px; background: var(--popover); color: var(--ink-menu, #202020); box-shadow: var(--elev-float); overflow-y: auto;
   animation: fade-in var(--quick) var(--ease) backwards, pop-in var(--quick) var(--ease) backwards; }
 .sticky-menu { --ink-menu: #202020; }
@@ -49,11 +39,10 @@
 .sticky-menu button[role^='menuitem']:not(.sticky-hue):hover { background: color-mix(in srgb, var(--ink-menu) 8%, transparent); }
 .sticky-menu button:disabled { opacity: .4; cursor: default; }
 .sticky-menu .tick { display: inline-block; width: 14px; font-size: 12px; }
-/* The colours in the menu are the dots they are, not rows (the rows' rule leaves them alone), laid out as the
-   swatch's own picker lays them out: four to a row, the chosen one ringed. */
+/* The colours in the menu are the dots they are, not rows (the rows' rule leaves them alone): four to a row, the chosen one ringed. */
 .sticky-menu-hues { display: grid; grid-template-columns: repeat(4, 18px); gap: 9px; padding: 6px 9px 9px; }
-.sticky-menu .sticky-hue { width: 18px; height: 18px; }
-.sticky-menu .sticky-hue[aria-checked='true'] { box-shadow: 0 0 0 2px var(--popover, #fff), 0 0 0 3.5px var(--hue); }
-.sticky-menu .sticky-hue:hover { transform: scale(1.12); }
+.sticky-hue { width: 18px; height: 18px; padding: 0; border: 0; border-radius: 50%; background: var(--hue); box-shadow: inset 0 0 0 .5px rgb(0 0 0 / .25); cursor: pointer; transition: transform var(--quick) var(--ease), box-shadow var(--quick) var(--ease); }
+.sticky-hue[aria-checked='true'] { box-shadow: 0 0 0 2px var(--popover, #fff), 0 0 0 3.5px var(--hue); }
+.sticky-hue:hover { transform: scale(1.12); }
 .sticky-menu-rule { display: block; height: 1px; margin: 3px 6px; background: color-mix(in srgb, var(--ink-menu) 12%, transparent); }
 .sticky :is(button, [tabindex]):focus-visible { outline: 2px solid var(--dim); outline-offset: 1px; }

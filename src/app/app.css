@@ -276,46 +276,41 @@ button, input, select { font-family: var(--font); }
 .people .chip.renaming { display: inline-flex; align-items: center; padding: 0 6px; }
 .people .chip.renaming input { width: 120px; border: 0; outline: 0; background: none; font: inherit; color: var(--ink); }
 
-/* ---------- stickies: the window's cards are the stickers themselves (sticky.css has the same recipe) ---------- */
-/* The Stickies page: the title with New sticky beside it, the two views, then the stickies in groups. */
-.stickies-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
-.stickies-top .ui-page-header { margin-bottom: 18px; }
-.stickies-top > .ui-button { margin-top: 2px; }
-.stickies-views { margin: 0 0 22px; }
-.stickies-group { margin: 0 0 26px; }
-.stickies-heading { display: flex; align-items: baseline; gap: 8px; margin: 0 2px 10px; font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
-.stickies-heading span { font-variant-numeric: tabular-nums; letter-spacing: 0; }
-.stickies-none { margin: 8px 2px; font-size: 13.5px; color: var(--ink-3); }
+/* ---------- stickies: each one the sticky itself (sticky.css: its paper, its bar, its tools), with only what the page needs on top ---------- */
+.page.wide { max-width: 1040px; }
+/* The title, then the archive switch and New sticky on its line. No words under it: the stickies say what they are. */
+.stickies-top { display: flex; align-items: center; gap: 12px; margin: 0 0 26px; }
+.stickies-top .ui-page-header { flex: 1; margin: 0; }
+.stickies-group { margin: 0 0 34px; }
+.stickies-heading { margin: 0 0 12px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.stickies-none { margin: 8px 0; font-size: 13.5px; color: var(--ink-3); }
+.stickies-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(208px, 1fr)); align-items: start; gap: 22px 18px; }
 /* A sticky closed, shown, archived or restored travels to where it now is and the others make room (motion.ts
-   useFlip): a card that leaves the view shrinks a little as it fades, a heading only fades. The other view fades in. */
+   useFlip): one that leaves the view shrinks a little as it fades, a heading only fades. The other view fades in. */
 .stickies-heading, .stickies-none { --enter: none; --leave: none; }
 .stickies-view { animation: fade-in var(--quick) var(--ease) backwards; }
-/* A question in place of a card's buttons, or the editor's: it fades in where the buttons were. */
-.sticky-card-ask, .ask-confirm { animation: fade-in var(--quick) var(--ease) backwards; }
 .stickies-first { display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 420px; margin: 18vh auto 0; text-align: center; font-size: 14px; line-height: 1.5; color: var(--ink-2); }
 .stickies-first strong { margin-top: 6px; font: 500 19px/1.3 var(--font-display); color: var(--ink); }
 .stickies-first p { margin: 0 0 10px; }
-.stickies-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
-.sticky-card { --paper: color-mix(in srgb, var(--hue) 30%, #ffffff); --sticker-ink: color-mix(in srgb, var(--hue) 20%, #17181b); --bar: color-mix(in srgb, var(--hue) 44%, #ffffff); --dim: color-mix(in srgb, var(--sticker-ink) 55%, transparent);
-  display: flex; flex-direction: column; min-height: 160px; border-radius: 6px; color: var(--sticker-ink); background: var(--paper); box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--sticker-ink) 18%, transparent), 0 1px 4px rgb(0 0 0 / .12); transition: box-shadow var(--quick) var(--ease), translate var(--quick) var(--ease); }
-.sticky-card:hover { box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--sticker-ink) 18%, transparent), 0 6px 16px -6px rgb(0 0 0 / .3); translate: 0 -1px; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .sticky-card { --paper: color-mix(in srgb, var(--hue) 26%, #1d2126); --sticker-ink: color-mix(in srgb, var(--hue) 34%, #e9ebee); --bar: color-mix(in srgb, var(--hue) 40%, #1d2126); } }
-:root[data-theme='dark'] .sticky-card { --paper: color-mix(in srgb, var(--hue) 26%, #1d2126); --sticker-ink: color-mix(in srgb, var(--hue) 34%, #e9ebee); --bar: color-mix(in srgb, var(--hue) 40%, #1d2126); }
-.sticky-card-bar { display: flex; align-items: center; gap: 8px; height: 26px; padding: 0 4px 0 8px; border-radius: 6px 6px 0 0; background: var(--bar); }
-.sticky-card-swatch { width: 12px; height: 12px; border-radius: 50%; background: var(--hue); box-shadow: inset 0 0 0 .5px rgb(0 0 0 / .25), 0 0 0 2px color-mix(in srgb, #fff 55%, transparent); }
-.sticky-card-state { flex: 1; font-size: 11.5px; color: var(--dim); }
-.sticky-card-tool { display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 22px; min-width: 22px; padding: 0 4px; border: 0; border-radius: 6px; font: 500 12.5px/1 var(--font); color: var(--dim); background: none; appearance: none; -webkit-appearance: none; cursor: pointer; }
-.sticky-card-tool.wide { padding: 0 8px; }
-.sticky-card-tool:hover { color: var(--sticker-ink); background: color-mix(in srgb, var(--sticker-ink) 10%, transparent); }
-.sticky-card-tool:disabled { opacity: .35; cursor: default; background: none; }
-.sticky-face { display: flex; align-items: flex-start; flex: 1; min-height: 90px; padding: 10px 12px; border: 0; background: none; color: inherit; text-align: left; font: 500 14px/1.45 var(--font); cursor: pointer; }
-.sticky-words { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 5; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
-.sticky-empty { color: var(--dim); }
-.sticky-card footer { display: flex; align-items: center; gap: 2px; padding: 2px 4px 5px; }
-.sticky-card[data-closed] .sticky-face { opacity: .72; } /* off the screen */
+/* The paper keeps the shape it has on the screen. One on the screen floats as its window does; one closed lies flat. */
+.sticky-card { height: auto; aspect-ratio: var(--shape); box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--ink) 18%, transparent), var(--elev-float); transition: box-shadow var(--quick) var(--ease), translate var(--quick) var(--ease); }
+.sticky-card:not([data-closed]):hover { translate: 0 -2px; }
+.sticky-card[data-closed] { box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--ink) 18%, transparent); }
+.sticky-card[data-folded] { aspect-ratio: auto; }
+.sticky-card .sticky-bar { cursor: default; }
+.sticky-card .sticky-peek { padding: 0; border: 0; font-family: var(--font); text-align: left; background: none; cursor: pointer; }
+/* The words as the sticky's editor sets them (sticky.css), under the same edge. */
+.sticky-face { display: flex; flex-direction: column; justify-content: flex-start; flex: 1; min-height: 0; overflow: hidden; padding: 0 14px 14px; border: 0; border-radius: 0 0 6px 6px; color: inherit; background: none; text-align: left; font: 400 15px/1.5 var(--font); white-space: pre-wrap; overflow-wrap: anywhere; cursor: pointer;
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent); }
 .sticky-face:disabled { cursor: default; }
-.sticky-card-tool.danger { color: var(--danger); }
-.sticky-card-ask { flex: 1; padding: 0 4px; font-size: 12px; color: var(--sticker-ink); }
+.sticky-empty { color: var(--dim); }
+/* Delete for good, asked in the bar where its tools were. */
+.sticky-card-ask { display: flex; flex: 1; align-items: center; justify-content: flex-end; gap: 2px; min-width: 0; font-size: 12px; white-space: nowrap; color: var(--ink); animation: fade-in var(--quick) var(--ease) backwards; }
+.sticky-card-ask .sticky-card-word:first-of-type { margin-left: 6px; }
+.sticky-card-word { height: 22px; padding: 0 7px; border: 0; border-radius: 6px; font: 500 12px/1 var(--font); color: var(--dim); background: none; cursor: pointer; }
+.sticky-card-word:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 10%, transparent); }
+.sticky-card-word.danger { color: var(--danger); }
+.ask-confirm { animation: fade-in var(--quick) var(--ease) backwards; }
 
 /* ---------- the Help page: Business's annotated figures (GuideFigure), each a real screen in a well ---------- */
 .page.help { max-width: 760px; }

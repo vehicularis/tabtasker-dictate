@@ -47,22 +47,28 @@ export function Claude({ settings, update }: PageProps) {
       if (!found) setProblem('Claude Code isn’t installed on this Mac. Install it, then choose Find again.');
     }, error => setProblem(message(error, 'Couldn’t look for Claude Code.'))).finally(() => setFinding(false));
   };
+  // The way in use once connected, else the one being chosen: Haiku, Sonnet, Opus and effort are Claude's alone,
+  // so a local model (named under Connection) shows only what applies to it.
+  const [choosing, setChoosing] = useState<ClaudeVia>(claude.claudeCode ? 'claudeCode' : 'api');
+  const local = (claude.enabled ? claude.via : choosing) === 'local';
   const keys = settings.shortcuts;
   const commandsHow = keys.command === 'off'
     ? 'The command key is off in Shortcuts, so commands can’t be given.'
-    : `Hold ${DICTATE[keys.dictate]} with ${COMMAND[keys.command]} and say what to do. With text selected, Claude rewrites it. Without, it answers or writes at the cursor.`;
+    : `Hold ${DICTATE[keys.dictate]} with ${COMMAND[keys.command]} and say what to do. With text selected, ${local ? 'the model' : 'Claude'} rewrites it. Without, it answers or writes at the cursor.`;
 
   return <>
     <GroupHeader title="How it connects">Use Claude Code on this Mac, your own Anthropic key, or a model running on this Mac.</GroupHeader>
-    <Connection claude={claude} home={status?.home} />
-    <Section title="Model and effort" note={claude.enabled ? undefined : 'These take effect once a model is connected.'}>
+    <Connection claude={claude} home={status?.home} via={choosing} onVia={setChoosing} />
+    <Section title={local ? undefined : 'Model and effort'} note={claude.enabled ? undefined : local ? 'This takes effect once the model is connected.' : 'These take effect once a model is connected.'}>
       <TileGroup>
-        <Tile title="Model" detail={ABOUT[claude.model]}>
-          <Segmented label="Model" value={claude.model} options={MODELS} onChange={model => void update({ claude: { model } })} />
-        </Tile>
-        <Tile title="Effort" detail={claude.via === 'local' ? 'Claude only. A local model uses its own Ollama settings.' : { low: 'Low: quickest, best for polish while you type.', medium: 'Medium: a balance for titles, summaries and commands.', high: 'High: slowest, for long meetings and careful rewrites.' }[claude.effort]} dim={claude.via === 'local'}>
-          <Segmented label="Effort" value={claude.effort} options={[{ value: 'low', label: 'Low' }, { value: 'medium', label: 'Medium' }, { value: 'high', label: 'High' }]} onChange={effort => void update({ claude: { effort } })} />
-        </Tile>
+        {!local && <>
+          <Tile title="Model" detail={ABOUT[claude.model]}>
+            <Segmented label="Model" value={claude.model} options={MODELS} onChange={model => void update({ claude: { model } })} />
+          </Tile>
+          <Tile title="Effort" detail={{ low: 'Low: quickest, best for polish while you type.', medium: 'Medium: a balance for titles, summaries and commands.', high: 'High: slowest, for long meetings and careful rewrites.' }[claude.effort]}>
+            <Segmented label="Effort" value={claude.effort} options={[{ value: 'low', label: 'Low' }, { value: 'medium', label: 'Medium' }, { value: 'high', label: 'High' }]} onChange={effort => void update({ claude: { effort } })} />
+          </Tile>
+        </>}
         <Tile title="Commands" detail={commandsHow}>
           <Toggle label="Commands" checked={claude.commands} onChange={commands => void update({ claude: { commands } })} />
         </Tile>
@@ -85,14 +91,14 @@ const VIAS: { value: ClaudeVia; label: string }[] = [{ value: 'claudeCode', labe
 /// Two ways in: the Claude Code on this Mac, with the account signed in there, or a key pasted once,
 /// tested, then shown only as saved. Connected, the way in use shows with Test and a way out. Focus never
 /// falls back to the top of the page: it stays in the field while a key is tested, and moves with each step.
-function Connection({ claude, home }: { claude: Settings['claude']; home?: string }) {
+/// `via` is the way being chosen (Claude holds it: the model settings under this follow it). It starts on Claude
+/// Code when it is on this Mac, since there is nothing to paste.
+function Connection({ claude, home, via, onVia: setVia }: { claude: Settings['claude']; home?: string; via: ClaudeVia; onVia: (via: ClaudeVia) => void }) {
   const { enabled: connected, model } = claude;
   const id = useId();
   const [key, setKey] = useState('');
   const [endpoint, setEndpoint] = useState(claude.localEndpoint);
   const [localModel, setLocalModel] = useState(claude.localModel);
-  // Which way to offer first: Claude Code when it is on this Mac, since there is nothing to paste.
-  const [via, setVia] = useState<ClaudeVia>(claude.claudeCode ? 'claudeCode' : 'api');
   const [busy, setBusy] = useState<'connect' | 'test' | null>(null);
   const [removing, setRemoving] = useState(false);
   const [note, setNote] = useState<{ text: string; error?: boolean } | null>(null);
