@@ -9,7 +9,6 @@ pub mod speakers;
 use std::ffi::{c_char, CStr};
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
-use std::os::unix::fs::FileExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -290,11 +289,21 @@ impl Spool {
     OpenOptions::new().create(true).append(true).open(self.dir.join(source.file()))
   }
 
+  /// `count` samples from `from`, as floats: read a megabyte at a time, so a whole stream (a ten-hour meeting is
+  /// 1.2 GB on disk) never sits in memory twice over.
   fn read(&self, source: Source, from: u64, count: usize) -> Result<Vec<f32>, String> {
-    let file = File::open(self.dir.join(source.file())).map_err(|e| e.to_string())?;
-    let mut bytes = vec![0u8; count * 2];
-    file.read_exact_at(&mut bytes, from * 2).map_err(|e| e.to_string())?;
-    Ok(bytes.as_chunks::<2>().0.iter().map(|pair| i16::from_le_bytes(*pair) as f32 / 32768.0).collect())
+    let mut file = File::open(self.dir.join(source.file())).map_err(|e| e.to_string())?;
+    file.seek(SeekFrom::Start(from * 2)).map_err(|e| e.to_string())?;
+    let mut pcm = Vec::with_capacity(count);
+    let mut bytes = vec![0u8; (1 << 20).min(count * 2)];
+    let mut left = count * 2;
+    while left > 0 {
+      let take = bytes.len().min(left);
+      file.read_exact(&mut bytes[..take]).map_err(|e| e.to_string())?;
+      pcm.extend(bytes[..take].as_chunks::<2>().0.iter().map(|pair| i16::from_le_bytes(*pair) as f32 / 32768.0));
+      left -= take;
+    }
+    Ok(pcm)
   }
 
   /// How far each stream is transcribed, every line so far, and the audio that has no transcript. A
@@ -683,26 +692,35 @@ fn work(job: Arc<Job>) {
 }
 
 /// The lines with their voices told apart, stream by stream, over the whole recording (clustering wants
-/// all of a voice). Without the models, or when a stream fails, its lines keep their stream's label.
+/// all of a voice). The two streams run at once, each on its own thread, up to two hours apiece; past that, one
+/// after the other, since each wants its whole stream as floats (230 MB an hour) and the models a copy. Without
+/// the models, or when a stream fails, its lines keep their stream's label.
 fn with_speakers(job: &Job, lines: &[Line]) -> Vec<Line> {
   let mut lines = lines.to_vec();
   let Some(root) = speech::models_root() else { return lines };
   if !speakers::ready(&root) { log::info!("meeting: the speaker models aren’t downloaded yet, so lines are labelled by stream"); return lines; }
   emit(saving_payload(job, "Working out who said what"));
-  for source in SOURCES {
-    let len = job.len(source);
-    if len == 0 || !lines.iter().any(|line| line.source == source && !line.text.trim().is_empty()) { continue; }
-    let pcm = match job.spool.read(source, 0, len as usize) { Ok(pcm) => pcm, Err(e) => { log::warn!("meeting: couldn’t read the {source:?} stream for speakers: {e}"); continue; } };
+  let wanted: Vec<Source> = SOURCES.into_iter().filter(|source| job.len(*source) > 0 && lines.iter().any(|line| line.source == *source && !line.text.trim().is_empty())).collect();
+  let one = |source: Source| -> Option<Vec<speakers::Turn>> {
+    let pcm = match job.spool.read(source, 0, job.len(source) as usize) { Ok(pcm) => pcm, Err(e) => { log::warn!("meeting: couldn’t read the {source:?} stream for speakers: {e}"); return None; } };
     let began = Instant::now();
     match speakers::diarize(&root, &pcm) {
       Ok(turns) => {
         let voices = turns.iter().map(|turn| turn.speaker).collect::<std::collections::HashSet<_>>().len();
         log::info!("meeting: {source:?} stream: {voices} voice(s) in {} turns, {:.1}s", turns.len(), began.elapsed().as_secs_f32());
-        assign_speakers(&mut lines, source, &turns);
+        Some(turns)
       }
-      Err(e) => log::warn!("meeting: speakers in the {source:?} stream: {e}"),
+      Err(e) => { log::warn!("meeting: speakers in the {source:?} stream: {e}"); None }
     }
-  }
+  };
+  let together = wanted.len() > 1 && wanted.iter().all(|source| job.len(*source) < 2 * 3600 * RATE as u64);
+  let heard: Vec<(Source, Option<Vec<speakers::Turn>>)> = if together {
+    std::thread::scope(|scope| {
+      let threads: Vec<_> = wanted.iter().map(|&source| scope.spawn(move || (source, one(source)))).collect();
+      threads.into_iter().filter_map(|thread| thread.join().ok()).collect()
+    })
+  } else { wanted.iter().map(|&source| (source, one(source))).collect() };
+  for (source, turns) in heard { if let Some(turns) = turns { assign_speakers(&mut lines, source, &turns); } }
   lines
 }
 
