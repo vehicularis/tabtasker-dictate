@@ -105,7 +105,7 @@ export function Meetings({ settings, update }: PageProps) {
         <Tile title="Record the other side of calls" detail={systemDetail} dim={unsupported}>
           <Toggle label="Record the other side of calls" checked={meetings.systemAudio && !unsupported} disabled={unsupported} onChange={systemAudio => update({ meetings: { systemAudio } })} />
         </Tile>
-        {meetings.systemAudio && permission === 'denied' && <Tile title="System audio isn’t allowed" detail="Turn on TabTasker Dictate under System Audio Recording Only in Privacy & Security.">
+        {meetings.systemAudio && permission === 'denied' && <Tile title="System audio isn’t allowed" detail="Turn on TabTasker | Dictate under System Audio Recording Only in Privacy & Security.">
           <Button onClick={() => void invoke('meeting_privacy').catch(() => {})}>Open System Settings</Button>
         </Tile>}
         <Tile title="Summary" detail={settings.claude.enabled ? 'AI names the meeting and writes a summary of it.' : 'Connect AI in Agents to use this.'}>

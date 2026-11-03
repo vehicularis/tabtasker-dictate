@@ -27,7 +27,7 @@ function compose(notes: Notes, title: string, body: string, actions: string | nu
   const [hour, minute] = clock.split('.');
   const tags = notes.tags.map(tag).filter(Boolean);
   const header = notes.frontmatter
-    ? `---\ncreated: ${date}T${hour}:${minute}\n${tags.length ? `tags:\n${tags.map(one => `  - ${scalar(one)}\n`).join('')}` : 'tags: []\n'}source: TabTasker Dictate\n---\n\n`
+    ? `---\ncreated: ${date}T${hour}:${minute}\n${tags.length ? `tags:\n${tags.map(one => `  - ${scalar(one)}\n`).join('')}` : 'tags: []\n'}source: TabTasker | Dictate\n---\n\n`
     : '';
   const name = words(title), items = actions?.trim();
   const heading = notes.dailyNote ? `## ${hour}:${minute}${name ? ` ${name}` : ''}\n\n` : name ? `# ${name}\n\n` : '';

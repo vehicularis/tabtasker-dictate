@@ -52,7 +52,7 @@ const DEFAULTS: Settings = {
 
 const status: Status = {
   enabled: true, microphone: 'allowed', accessibility: true, modelReady: true, modelPreparing: false, modelMessage: '',
-  notes: '/Users/you/Documents/TabTasker Dictate', home: '/Users/you', globeKey: '', openAtLogin: true,
+  notes: '/Users/you/Documents/TabTasker | Dictate', home: '/Users/you', globeKey: '', openAtLogin: true,
   inputs: [{ id: 'built-in', name: 'MacBook Pro Microphone' }, { id: 'airpods', name: 'AirPods Pro' }], input: null, inputInUse: 'MacBook Pro Microphone',
 };
 // `?status=new` starts as a Mac that has never been set up, for the setup flow.

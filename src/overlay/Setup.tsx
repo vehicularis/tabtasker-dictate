@@ -14,7 +14,7 @@ export function Setup({ status, fnDown, fnTested, onClose }: { status: Status | 
   const name = KEY_NAMES[chosen];
   const ask = (kind: string) => { if (kind === 'accessibility') setAsked(true); void invoke('request', { kind }).catch(() => {}); };
   const full = () => { onClose(); void invoke('open_app', { route: 'setup' }).catch(() => {}); };
-  const notes = status?.notes.replace(/^\/Users\/[^/]+/, '~') ?? '~/Documents/TabTasker Dictate';
+  const notes = status?.notes.replace(/^\/Users\/[^/]+/, '~') ?? '~/Documents/TabTasker | Dictate';
   const ready = setupDone(status);
   const sheet = (title: string, body: ReactNode) => <article ref={leave} className="glass card setup" data-glass data-hit aria-label="Setup">
     <header className="head"><Logo size={28} /><strong>{title}</strong><button type="button" className="close" aria-label="Close" onClick={onClose}><X /></button></header>
@@ -40,7 +40,7 @@ export function Setup({ status, fnDown, fnTested, onClose }: { status: Status | 
           : keys === 'test' ? chosen === 'fn'
             ? <>Now hold <kbd>fn</kbd> to test it. If emoji open instead, set “Press <Globe /> key to” to Do Nothing in <button type="button" className="link" onClick={() => ask('keyboard')}>Keyboard settings</button>.</>
             : <>Now hold <kbd>{name}</kbd> to test it.</>
-          : asked ? 'If macOS asks, choose Open System Settings and turn on TabTasker Dictate. If it’s already on, remove it with − and add it back with +.'
+          : asked ? 'If macOS asks, choose Open System Settings and turn on TabTasker | Dictate. If it’s already on, remove it with − and add it back with +.'
           : `Dictate needs Accessibility to notice ${name} and type into other apps.`}
         action={(keys === 'active' || globe) && <button type="button" className="btn primary" onClick={() => ask(globe ? 'keyboard' : 'accessibility')}>Open System Settings</button>} />
       <Step index={3} status={model} name="Speech model"

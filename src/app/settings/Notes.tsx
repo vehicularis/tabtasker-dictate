@@ -93,7 +93,7 @@ export function Notes({ settings, update }: PageProps) {
   const remember = () => { const input = field.current; if (input) selection.current = [input.selectionStart ?? template.length, input.selectionEnd ?? template.length]; };
 
   const path = folder?.path ?? status?.notes;
-  const name = path?.split('/').filter(Boolean).pop() ?? 'TabTasker Dictate';
+  const name = path?.split('/').filter(Boolean).pop() ?? 'TabTasker | Dictate';
   return <>
     <PageHeader icon="note" title="Notes">Your notes are plain Markdown files in a folder you choose.</PageHeader>
 

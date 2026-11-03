@@ -62,7 +62,7 @@ export function HelpView({ settings }: { settings: Settings }) {
     ['⌘ ,', 'Open Settings'],
   ];
   return <>
-    <PageHeader icon="help" title="How TabTasker Dictate works">Talk instead of typing, in any app.</PageHeader>
+    <PageHeader icon="help" title="How TabTasker | Dictate works">Talk instead of typing, in any app.</PageHeader>
     <Figure title="On your screen" width={760} height={380} callouts={SCREEN}>
       <Desk>
         <Field label="Message to Maria" style={{ left: 48, top: 70, width: 380 }}><p className="demo-typed"><Caret /></p></Field>

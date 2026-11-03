@@ -35,7 +35,7 @@ export function Overlay() {
   const noteRequested = useRef(false);
   const [since, setSince] = useState(() => PREVIEW === 'listening' ? Date.now() - 83_000 : 0); // when the note's recording began
   const [, setClock] = useState(0);
-  const [saved, setSaved] = useState<string | null>(PREVIEW === 'saved' ? '/Users/you/Documents/TabTasker Dictate/2026-11-01 21.40 Call the venue about Thursday.md' : null);
+  const [saved, setSaved] = useState<string | null>(PREVIEW === 'saved' ? '/Users/you/Documents/TabTasker | Dictate/2026-11-01 21.40 Call the venue about Thursday.md' : null);
   const [toast, setToast] = useState<string | null>(null);
   // The setup steps, as a card by the dots: for something only the person can do, or when asked for.
   const [setup, setSetup] = useState(!!PREVIEW && PREVIEW in SETUP);
@@ -268,7 +268,7 @@ export function Overlay() {
       <HandsFree />
       <Learned />
       {toast && <p ref={leave} className="glass toast" data-glass role="status">{toast}</p>}
-      <Dock mode={mode} dots={dots} label="TabTasker Dictate" hint={settings.appearance.hint} quiet={quiet} level={level} typing={dictating} words={noting ? '' : live ?? ''}
+      <Dock mode={mode} dots={dots} label="TabTasker | Dictate" hint={settings.appearance.hint} quiet={quiet} level={level} typing={dictating} words={noting ? '' : live ?? ''}
         onHover={setHover} onGrab={grab} onDots={clickDots} onNote={takeNote} onWrite={writeNote} onSticky={newSticky} onMeeting={startMeeting} recording={!!meetings?.recording} onOpen={() => openApp('notes')} onSettings={openSettings} onOrb={() => { if (noting) takeNote(); }}
         onMenu={() => { if (phase === 'idle') { setMenu(true); refresh(); lookMeetings(); } }}
         menu={menu && <Menu status={status} mics={mics} meeting={!!meetings?.recording} onMics={setMics} onNote={() => { setMenu(false); takeNote(); }} onWriteNote={writeNote} onSticky={newSticky} onMeeting={startMeeting}
