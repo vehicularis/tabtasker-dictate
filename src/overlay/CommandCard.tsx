@@ -1,4 +1,5 @@
 import { useEffect, useState, type KeyboardEvent } from 'react';
+import { aiIcon, aiName, useSettings } from '../store';
 import { invoke, listen } from '../bridge';
 import { message } from '../lib/errors';
 import type { Events } from '../store';
@@ -68,6 +69,7 @@ export function CommandCard() {
     </div>;
   }
 
+  const settings = useSettings();
   const text = command.text ?? '';
   // Insert brings back the app the command was spoken in and types there, so the card waits for it.
   const insert = () => {
@@ -80,8 +82,8 @@ export function CommandCard() {
   const keys = (event: KeyboardEvent) => {
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); if (command.typed) copy(); else insert(); } else escape(event);
   };
-  return <article ref={leave} className="glass card claude-card" data-glass data-hit aria-label="Claude’s answer" onKeyDown={keys}>
-    <header className="head"><span className="name"><Icon name="claude" size={16} />Claude</span></header>
+  return <article ref={leave} className="glass card claude-card" data-glass data-hit aria-label={`${settings ? aiName(settings.claude) : 'AI'}’s answer`} onKeyDown={keys}>
+    <header className="head"><span className="name"><Icon name={settings ? aiIcon(settings.claude) : 'claude'} size={16} />{settings ? aiName(settings.claude) : 'AI'}</span></header>
     {command.instruction && <p className="claude-asked">{command.instruction}</p>}
     <div className="claude-answer" tabIndex={0} aria-label="Answer">{text}</div>
     <footer className="actions">

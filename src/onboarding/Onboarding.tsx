@@ -7,7 +7,7 @@ import { Caret, Desk, Dots, Field } from '../app/demo/Demo';
 import { Claude } from '../app/settings/Claude';
 import { Meetings } from '../app/settings/Meetings';
 import { Notes } from '../app/settings/Notes';
-import { setupDone, tilde, updateSettings, useSettings, useStatus, type DictateKey, type PageProps, type Patch, type Settings, type Status } from '../store';
+import { aiIcon, aiName, setupDone, tilde, updateSettings, useSettings, useStatus, type DictateKey, type PageProps, type Patch, type Settings, type Status } from '../store';
 import { Button, Icon, Kbd, ProgressBar, reduced, Segmented, Select, Toast, Toggle } from '../ui';
 import { Logo } from '../overlay/icons';
 import { Globe, Keyboard } from './Keyboard';
@@ -61,7 +61,7 @@ function useDictateKey(chosen: DictateKey | undefined): Key {
 }
 
 type Sheet = 'claude' | 'meetings' | 'notes';
-const SHEETS: Record<Sheet, [string, ComponentType<PageProps>]> = { claude: ['Claude', Claude], meetings: ['Meetings', Meetings], notes: ['Notes', Notes] };
+const SHEETS: Record<Sheet, [string, ComponentType<PageProps>]> = { claude: ['AI', Claude], meetings: ['Meetings', Meetings], notes: ['Notes', Notes] };
 
 /// The frame Onboarding puts round every step: its count, Back and Continue, and the part that scrolls (for
 /// the fade at the edge it scrolls on toward).
@@ -433,7 +433,7 @@ function TryIt({ status, settings, dictateKey, practiced, onPracticed, go, frame
 }
 
 const EXTRA_CAPTIONS: Record<Sheet, string> = {
-  claude: 'Claude’s answers show up by the dots, ready to insert where you were typing.',
+  claude: 'The AI’s answers show up by the dots, ready to insert where you were typing.',
   meetings: 'A meeting records until you stop it, both sides of a call included.',
   notes: 'Every note you speak is saved as a file in this folder.',
 };
@@ -447,7 +447,7 @@ function Extras({ status, settings, update, open, frame }: Step) {
     caption={EXTRA_CAPTIONS[shown]}>
     <ul className="setup-rows">
       <li {...row('claude')}>
-        <span className="setup-row-text"><span className="setup-row-title">Connect Claude</span>{!connected && <span className="setup-row-detail">Ask it questions, or let it tidy up what you say.</span>}</span>
+        <span className="setup-row-text"><span className="setup-row-title">Connect AI</span>{!connected && <span className="setup-row-detail">Ask it questions, or let it tidy up what you say.</span>}</span>
         <span className="setup-row-control">{connected && <Allowed>Connected</Allowed>}<Button onClick={() => open('claude')}>{connected ? 'Open' : 'Connect…'}</Button></span>
       </li>
       <li {...row('meetings')}>
@@ -468,8 +468,9 @@ function Extras({ status, settings, update, open, frame }: Step) {
 /// pill with its clock running, the bubble a saved note leaves.
 function Extra({ shown }: { shown: Sheet }) {
   const seconds = Math.floor(useLoop(3_600_000, 0, 1000) / 1000) + 754;
+  const settings = useSettings();
   if (shown === 'claude') return <article className="glass card claude-card">
-    <header className="head"><span className="name"><Icon name="claude" size={16} />Claude</span></header>
+    <header className="head"><span className="name"><Icon name={settings ? aiIcon(settings.claude) : 'claude'} size={16} />{settings ? aiName(settings.claude) : 'AI'}</span></header>
     <p className="claude-asked">How do I say “see you Thursday” in Spanish?</p>
     <div className="claude-answer">Nos vemos el jueves.</div>
     <footer className="actions"><span className="ask" /><button type="button" className="btn">Close</button><button type="button" className="btn">Copy</button><button type="button" className="btn primary">Insert</button></footer>
