@@ -11,12 +11,12 @@ const EDGES: { value: Edge; label: string }[] = [{ value: 'left', label: 'Left' 
 const SIZES: { value: Size; label: string }[] = [{ value: 'small', label: 'Small' }, { value: 'medium', label: 'Medium' }, { value: 'large', label: 'Large' }];
 // The pill's buttons as Appearance names them, with their glyph for the preview.
 const BUTTONS: Record<PillButton, { title: string; detail: string; glyph: ReactNode }> = {
-  note: { title: 'Speak a note', detail: 'Click and talk. When you stop, it is saved and opens in the window.', glyph: <NoteGlyph size={18} /> },
-  write: { title: 'Write a note', detail: 'A new note in the window, to type into.', glyph: <WriteGlyph size={18} /> },
-  sticky: { title: 'A sticky', detail: 'A new sticky on the screen.', glyph: <StickyGlyph size={18} /> },
-  meeting: { title: 'A meeting', detail: 'Start and stop recording the room or a call.', glyph: <MeetingGlyph size={18} /> },
-  library: { title: 'Your notes', detail: 'The window with your notes, meetings and stickies.', glyph: <LibraryGlyph size={18} /> },
-  settings: { title: 'Settings', detail: 'These settings. They are in the dots’ menu too.', glyph: <SettingsGlyph size={18} /> },
+  note: { title: 'Speak a note', detail: '', glyph: <NoteGlyph size={18} /> },
+  write: { title: 'Write a note', detail: '', glyph: <WriteGlyph size={18} /> },
+  sticky: { title: 'New sticky', detail: '', glyph: <StickyGlyph size={18} /> },
+  meeting: { title: 'Record a meeting', detail: '', glyph: <MeetingGlyph size={18} /> },
+  library: { title: 'Your notes', detail: '', glyph: <LibraryGlyph size={18} /> },
+  settings: { title: 'Settings', detail: '', glyph: <SettingsGlyph size={18} /> },
 };
 type Moment = 'idle' | 'hover' | 'talking';
 const MOMENTS: { value: Moment; label: string }[] = [{ value: 'idle', label: 'Idle' }, { value: 'hover', label: 'Pointing' }, { value: 'talking', label: 'Talking' }];
@@ -28,32 +28,32 @@ export function Appearance({ settings, update }: PageProps) {
   const [moment, setMoment] = useState<Moment>('idle');
   const change = (patch: Patch['appearance'], show?: Moment) => { if (show) setMoment(show); void update({ appearance: patch }); };
   return <>
-    <PageHeader icon="appearance" title="Appearance">How TabTasker Dictate looks on your screen.</PageHeader>
+    <PageHeader icon="appearance" title="Appearance">How Dictate looks on your screen.</PageHeader>
     <Preview look={look} keyName={key} moment={moment} onMoment={setMoment} />
     <Section>
       <TileGroup>
-        <Tile title="Theme" detail="For the dots and this window. Automatic follows your Mac.">
+        <Tile title="Theme">
           <Segmented label="Theme" value={look.theme} options={THEMES} onChange={theme => change({ theme })} />
         </Tile>
       </TileGroup>
     </Section>
     <Section title="The dots" note="You can also drag the dots to another edge.">
       <TileGroup>
-        <Tile title="Edge" detail="Where the dots sit on your screen.">
+        <Tile title="Edge">
           <Segmented label="Edge" value={look.edge} options={EDGES} onChange={edge => change({ edge })} />
         </Tile>
-        <Tile title="Size" detail="The dots, their buttons and the orb.">
+        <Tile title="Size">
           <Segmented label="Size" value={look.size} options={SIZES} onChange={size => change({ size })} />
         </Tile>
-        <Tile title="When idle" detail={`Hidden shows nothing until you hold ${key}.`}>
+        <Tile title="When idle" detail={`With Hidden, nothing shows until you hold ${key}.`}>
           <Segmented label="When idle" value={look.idle} options={[{ value: 'dots', label: 'Dots' }, { value: 'hidden', label: 'Hidden' }]} onChange={idle => change({ idle }, 'idle')} />
         </Tile>
-        <Tile title="Hint" detail={look.pill.includes('note') ? `Shows “${key} hold to type” while you point at the spoken note on the dots.` : `Shows while you point at the spoken note, which is off under Buttons on the dots.`} dim={!look.pill.includes('note')}>
+        <Tile title="Hint" detail={look.pill.includes('note') ? `Reminds you to hold ${key} when you point at the dots.` : 'Turn on Speak a note below to use this.'} dim={!look.pill.includes('note')}>
           <Toggle label="Hint" checked={look.hint} disabled={!look.pill.includes('note')} onChange={hint => change({ hint }, 'hover')} />
         </Tile>
       </TileGroup>
     </Section>
-    <Section title="Buttons on the dots" note="Point at the dots to open them. Right-click the dots for everything, whatever is here.">
+    <Section title="Buttons on the dots" note="Right-click the dots for everything, including what’s turned off here.">
       <TileGroup>
         {PILL_BUTTONS.map(name => {
           const on = look.pill.includes(name);
@@ -65,10 +65,10 @@ export function Appearance({ settings, update }: PageProps) {
     </Section>
     <Section title="Position">
       <TileGroup>
-        <Tile title="Margin" detail="How far the dots sit from the edge of the screen. At 0 they touch it.">
+        <Tile title="Margin">
           <Slider label="Margin" min={0} max={120} step={2} value={look.margin} format={value => `${value} pt`} onChange={margin => change({ margin })} />
         </Tile>
-        <Tile title="Stay clear of the Dock" detail={look.avoidDock ? 'Keeps the dots above the Dock and below the menu bar.' : 'The Dock can cover the dots.'}>
+        <Tile title="Stay clear of the Dock" detail={look.avoidDock ? undefined : 'The Dock can cover the dots.'}>
           <Toggle label="Stay clear of the Dock" checked={look.avoidDock} onChange={avoidDock => change({ avoidDock })} />
         </Tile>
       </TileGroup>
@@ -114,7 +114,7 @@ function LiveOrb({ talking }: { talking: boolean }) {
 
 function Preview({ look, keyName, moment, onMoment }: { look: Settings['appearance']; keyName: string; moment: Moment; onMoment: (moment: Moment) => void }) {
   const hidden = look.idle === 'hidden' && moment === 'idle';
-  const said = { idle: hidden ? `Nothing shows until you hold ${keyName}` : 'The dots wait at the edge', hover: look.hint ? 'Pointing opens the buttons and the hint' : 'Pointing opens the buttons', talking: `While you hold ${keyName}, the orb writes what you say. It goes in at the cursor when you let go` }[moment];
+  const said = { idle: hidden ? `Nothing shows until you hold ${keyName}` : 'The dots wait at the edge', hover: look.hint ? 'Pointing at the dots opens their buttons and a hint' : 'Pointing at the dots opens their buttons', talking: `As you talk, the orb shows your words. When you let go of ${keyName}, they’re typed at your cursor` }[moment];
   // A new edge or size: the dots travel there from where they are, on the spring the real ones land on when dropped.
   const dock = useRef<HTMLSpanElement>(null), at = useRef<{ x: number; y: number } | null>(null);
   useLayoutEffect(() => {

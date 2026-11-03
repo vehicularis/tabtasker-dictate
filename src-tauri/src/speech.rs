@@ -119,8 +119,8 @@ fn status(app: &AppHandle, message: &str, code: i32) {
 }
 
 fn verify_model(path: &Path, model: &Model) -> Result<(), String> {
-  let mut file = File::open(path).map_err(|_| "Voice model has not been downloaded.")?;
-  if file.metadata().map_err(|e| e.to_string())?.len() != model.bytes { return Err("Voice model size does not match.".into()); }
+  let mut file = File::open(path).map_err(|_| "The speech model isn’t downloaded yet.")?;
+  if file.metadata().map_err(|e| e.to_string())?.len() != model.bytes { return Err("The speech model is incomplete. Download it again.".into()); }
   let mut digest = Digest::new(&SHA256);
   let mut buffer = [0; 64 * 1024];
   loop { let count = file.read(&mut buffer).map_err(|e| e.to_string())?; if count == 0 { break; } digest.update(&buffer[..count]); }
@@ -140,28 +140,28 @@ fn download_client() -> Result<reqwest::Client, String> {
 /// a line for the person, and how much of the download is done while it is downloading.
 pub(crate) async fn fetch(root: &Path, models: &'static [Model], cancel: &AtomicBool, report: &(impl Fn(&str, Option<u8>) + Sync)) -> Result<(), String> {
   for model in models {
-    if cancel.load(Ordering::Relaxed) { return Err("Voice model setup cancelled.".into()); }
+    if cancel.load(Ordering::Relaxed) { return Err("Speech model setup was cancelled.".into()); }
     let path = root.join(model.name);
-    if let Some(dir) = path.parent() { std::fs::create_dir_all(dir).map_err(|e| format!("Couldn’t create speech model storage: {e}"))?; }
+    if let Some(dir) = path.parent() { std::fs::create_dir_all(dir).map_err(|e| format!("Couldn’t make a folder for the speech model: {e}"))?; }
     let check = path.clone();
     if tauri::async_runtime::spawn_blocking(move || verify_model(&check, model)).await.map_err(|e| e.to_string())?.is_ok() { continue; }
     let client = download_client()?;
     let partial = path.with_extension("part");
     let result = async {
       let mut response = client.get(model.url).send().await.map_err(|_| "Couldn’t download the speech model. Check your connection and try again.")?
-        .error_for_status().map_err(|_| "The speech model download is unavailable right now. Try again later.")?;
-      if response.content_length().is_some_and(|bytes| bytes != model.bytes) { return Err("Voice model download has an unexpected size.".into()); }
+        .error_for_status().map_err(|_| "The speech model can’t be downloaded right now. Try again later.")?;
+      if response.content_length().is_some_and(|bytes| bytes != model.bytes) { return Err("The download isn’t the size it should be. Try again.".into()); }
       let mut file = File::create(&partial).map_err(|e| format!("Couldn’t save the speech model: {e}"))?;
       let mut bytes = 0u64;
       let mut last = Instant::now() - Duration::from_secs(1);
       loop {
-        if cancel.load(Ordering::Relaxed) { return Err("Voice model setup cancelled.".into()); }
+        if cancel.load(Ordering::Relaxed) { return Err("Speech model setup was cancelled.".into()); }
         let chunk = tokio::time::timeout(Duration::from_secs(30), response.chunk()).await
           .map_err(|_| "The speech model download timed out. Try again.")?
           .map_err(|_| "The speech model download was interrupted. Try again.")?;
         let Some(chunk) = chunk else { break };
         bytes += chunk.len() as u64;
-        if bytes > model.bytes { return Err("Voice model download is larger than expected.".into()); }
+        if bytes > model.bytes { return Err("The download is bigger than it should be. Try again.".into()); }
         file.write_all(&chunk).map_err(|e| format!("Couldn’t save the speech model: {e}"))?;
         if last.elapsed() >= Duration::from_millis(500) {
           let percent = (bytes * 100 / model.bytes) as u8;
@@ -171,10 +171,10 @@ pub(crate) async fn fetch(root: &Path, models: &'static [Model], cancel: &Atomic
       }
       file.sync_all().map_err(|e| e.to_string())?;
       drop(file);
-      report("Verifying downloaded model…", None);
+      report("Checking the download…", None);
       let check = partial.clone();
       tauri::async_runtime::spawn_blocking(move || verify_model(&check, model)).await.map_err(|e| e.to_string())??;
-      if cancel.load(Ordering::Relaxed) { return Err("Voice model setup cancelled.".into()); }
+      if cancel.load(Ordering::Relaxed) { return Err("Speech model setup was cancelled.".into()); }
       std::fs::rename(&partial, &path).map_err(|e| format!("Couldn’t install the speech model: {e}"))
     }.await;
     if result.is_err() { let _ = std::fs::remove_file(&partial); }
@@ -190,14 +190,14 @@ pub(crate) async fn wait_cancelled(cancel: &AtomicBool) {
 pub(crate) async fn cancellable<T>(cancel: &AtomicBool, work: impl std::future::Future<Output = Result<T, String>>) -> Result<T, String> {
   tokio::select! {
     result = work => result,
-    _ = wait_cancelled(cancel) => Err("Voice model setup cancelled.".into()),
+    _ = wait_cancelled(cancel) => Err("Speech model setup was cancelled.".into()),
   }
 }
 
 #[no_mangle]
 extern "C" fn dictate_prepare_models() {
   let Some(app) = APP.get() else {
-    unsafe { dictate_model_status(c"Voice model storage is unavailable. Restart TabTasker Dictate and try again.".as_ptr(), -1); }
+    unsafe { dictate_model_status(c"Couldn’t set up the speech model. Quit Dictate and open it again.".as_ptr(), -1); }
     return;
   };
   app.state::<LocalSpeech>().enabled.store(true, Ordering::Relaxed);
@@ -237,7 +237,7 @@ fn prepare(app: &AppHandle) {
       step(&app, Some(Step { model: want, message: message.into(), percent, failed: false }));
       if !swapping { status(&app, message, 0); }
     };
-    report(&format!("Preparing {label}…"), None);
+    report(&format!("Getting {label} ready…"), None);
     let result = cancellable(&cancel, fetch(&root, files(want), &cancel, &report)).await;
     let cancelled = || cancel.load(Ordering::Relaxed);
     if cancelled() {
@@ -246,12 +246,12 @@ fn prepare(app: &AppHandle) {
     let result = match result {
       Ok(()) if !cancelled() => {
         for name in RETIRED { let _ = std::fs::remove_file(root.join(name)); }
-        report(&format!("Loading {label} on this Mac…"), None);
+        report(&format!("Loading {label}…"), None);
         let (loading, stop) = (app.clone(), cancel.clone());
         tauri::async_runtime::spawn_blocking(move || load(&loading, &root, want, &stop)).await
-          .unwrap_or_else(|_| Err("Couldn’t load the local speech model.".into()))
+          .unwrap_or_else(|_| Err("Couldn’t load the speech model.".into()))
       }
-      Ok(()) => Err("Voice model setup was cancelled.".into()),
+      Ok(()) => Err("Speech model setup was cancelled.".into()),
       error => error,
     };
     state.preparing.lock().unwrap().take();
@@ -285,12 +285,12 @@ fn load(app: &AppHandle, root: &Path, model: settings::Model, cancel: &AtomicBoo
   let state = app.state::<LocalSpeech>();
   // Declared first, so the new model is dropped before it is let go.
   let _loading = state.loading.lock().unwrap_or_else(|e| e.into_inner());
-  if !state.enabled.load(Ordering::Relaxed) { return Err("Voice commands are off.".into()); }
+  if !state.enabled.load(Ordering::Relaxed) { return Err("Dictation is paused.".into()); }
   let whisper = Engine::load(root, model)?;
   let vad = if state.vad.lock().unwrap().is_none() { Some(load_vad(root)?) } else { None };
   // Waits for a pass in flight: the old model goes only once nothing is using it.
   let mut engine = state.engine.lock().unwrap();
-  if !state.enabled.load(Ordering::Relaxed) || cancel.load(Ordering::Relaxed) { return Err("Voice model setup cancelled.".into()); }
+  if !state.enabled.load(Ordering::Relaxed) || cancel.load(Ordering::Relaxed) { return Err("Speech model setup was cancelled.".into()); }
   if let Some(vad) = vad { *state.vad.lock().unwrap() = Some(vad); }
   *engine = Some(whisper);
   *state.loaded.lock().unwrap() = Some(model);
@@ -302,12 +302,12 @@ fn ready(state: &LocalSpeech) -> String {
   let dictation = settings::get().dictation;
   let model = state.loaded.lock().unwrap().map_or("Whisper", |model| files(model)[0].label);
   let language = if dictation.translate_to_english { "translating to English".to_owned() } else {
-    pinned(&dictation.language).and_then(whisper_rs::get_lang_str_full).map_or_else(|| "automatic language detection".to_owned(), |name| {
+    pinned(&dictation.language).and_then(whisper_rs::get_lang_str_full).map_or_else(|| "any language".to_owned(), |name| {
       let mut chars = name.chars();
       chars.next().map_or_else(String::new, |first| first.to_uppercase().chain(chars).collect())
     })
   };
-  format!("{model} · {language} · audio stays on this Mac")
+  format!("{model} · {language}")
 }
 
 /// A download or load under way, or the one that failed, as Settings shows it.
@@ -347,7 +347,7 @@ pub fn speech_models(app: AppHandle) -> Models { models(&app.state()) }
 /// The chosen model again, after a download or load that failed.
 #[tauri::command]
 pub fn prepare_model(app: AppHandle) -> Result<(), String> {
-  if !app.state::<LocalSpeech>().enabled.load(Ordering::Relaxed) { return Err("Turn dictation on first".into()); }
+  if !app.state::<LocalSpeech>().enabled.load(Ordering::Relaxed) { return Err("Turn dictation on first.".into()); }
   prepare(&app);
   Ok(())
 }
@@ -532,7 +532,7 @@ impl Engine {
     let whisper = WhisperContext::new_with_params(path, parameters).or_else(|_| {
       let mut cpu = WhisperContextParameters::default(); cpu.use_gpu(false);
       WhisperContext::new_with_params(path, cpu)
-    }).map_err(|_| "Couldn’t load Whisper. Quit an app or two to free memory, then try again.")?;
+    }).map_err(|_| "Couldn’t load the speech model. Quit an app or two to free up memory, then try again.")?;
     Ok(Self { whisper, model, prompt: Default::default() })
   }
 
@@ -554,7 +554,7 @@ impl Engine {
   /// The language spoken in `pcm` and how sure Whisper is of it. It runs the encoder, about half the work
   /// of a pass.
   fn detect(&self, pcm: &[f32]) -> Result<(i32, f32), String> {
-    let mut state = self.whisper.create_state().map_err(|_| "Not enough memory")?;
+    let mut state = self.whisper.create_state().map_err(|_| "There isn’t enough free memory. Quit an app or two and try again.")?;
     // whisper.cpp takes a shorter audio context only from full(), and only after its own language
     // detection. A pass stopped before its encoder leaves the spectrogram and that context in place, so
     // detecting here encodes just the speech rather than all 30 s.
@@ -582,7 +582,7 @@ impl Engine {
   }
 
   fn decode(&mut self, pcm: &[f32], language: i32, ask: &Ask, cancelled: Arc<AtomicBool>, quick: bool, prompted: bool) -> Result<String, String> {
-    let mut state = self.whisper.create_state().map_err(|_| "Not enough memory")?;
+    let mut state = self.whisper.create_state().map_err(|_| "There isn’t enough free memory. Quit an app or two and try again.")?;
     let mut params = FullParams::new(if quick { SamplingStrategy::Greedy { best_of: 1 } } else { SamplingStrategy::BeamSearch { beam_size: 5, patience: -1.0 } });
     params.set_n_threads(threads() as i32);
     params.set_language(whisper_rs::get_lang_str(language));
@@ -612,7 +612,7 @@ impl Engine {
     }
     let text = text.trim().to_owned();
     if text.is_empty() { return Err(UNHEARD.into()); }
-    if text.chars().count() > 8000 { return Err("Too long, try shorter".into()); }
+    if text.chars().count() > 8000 { return Err("That was too long to type. Try a shorter one.".into()); }
     Ok(text)
   }
 
@@ -621,7 +621,7 @@ impl Engine {
     let own = prompt.map(str::trim).filter(|prompt| !prompt.is_empty()).map(|prompt| self.tokens(&format!(" {}", prompt.replace('\0', ""))));
     if own.is_none() { self.use_words(&ask.words); }
     let tokens = own.as_deref().unwrap_or(&self.prompt.1);
-    let mut state = self.whisper.create_state().map_err(|_| "Not enough memory")?;
+    let mut state = self.whisper.create_state().map_err(|_| "There isn’t enough free memory. Quit an app or two and try again.")?;
     let mut params = FullParams::new(SamplingStrategy::BeamSearch { beam_size: 5, patience: -1.0 });
     params.set_n_threads(threads() as i32);
     params.set_language(whisper_rs::get_lang_str(language));

@@ -65,30 +65,30 @@ export function Shortcuts({ settings, update }: PageProps) {
   const down = useKeyDown();
   const system = reserved(status);
   const record = (name: ChordName) => async (chord: Chord | null) => (await update({ shortcuts: { [name]: chord } }))?.shortcuts[name];
-  const claude = keys.command === 'off' ? null : !settings.claude.enabled ? <>Needs Claude. <a className="link" href="#settings/agents">Agents settings</a></>
-    : !settings.claude.commands ? <>Commands are off. <a className="link" href="#settings/agents">Agents settings</a></> : null;
-  const aside = keys.dictate === 'fn' ? 'Pressed with another key, fn still does what it always did.'
-    : keys.dictate === 'rightControl' ? 'Mac laptops have no right Control key, so this one needs an external keyboard.'
-    : 'Typing with it still works: pressed with another key, it is a shortcut, not dictation.';
+  const claude = keys.command === 'off' ? null : !settings.claude.enabled ? <>First, connect AI in <a className="link" href="#settings/agents">Agents settings</a>.</>
+    : !settings.claude.commands ? <>Turn on commands in <a className="link" href="#settings/agents">Agents settings</a>.</> : null;
+  const aside = keys.dictate === 'fn' ? 'Shortcuts that use it, like fn-E for emoji, still work.'
+    : keys.dictate === 'rightControl' ? 'Mac laptops don’t have a right Control key, so you’ll need an external keyboard.'
+    : 'It still works as usual when you press it with another key.';
   return <>
-    <PageHeader icon="keyboard" title="Shortcuts">The key you hold to talk, and shortcuts for everything else.</PageHeader>
+    <PageHeader icon="keyboard" title="Shortcuts">Pick the key you hold to talk, and set shortcuts for everything else.</PageHeader>
     <Section title="Dictate">
       <TileGroup>
-        <Tile stack title="Key to hold" detail={<>Hold <Kbd>{key.glyph}</Kbd> and speak: your words type where the cursor is. {aside}</>}>
+        <Tile stack title="Key to hold" detail={<>Hold <Kbd>{key.glyph}</Kbd> and talk. {aside}</>}>
           <KeyPicker value={keys.dictate} down={down} onChange={dictate => void update({ shortcuts: { dictate } })} />
         </Tile>
-        <Tile title="Hands-free" detail={<>Double-tap <Kbd>{key.glyph}</Kbd> to keep listening without holding it, for up to 10 minutes. Tap it again to finish, or press Escape to cancel.</>}>
+        <Tile title="Hands-free" detail={<>Double-tap <Kbd>{key.glyph}</Kbd> to talk without holding it, and tap again when you’re done.</>}>
           <Toggle label="Hands-free" checked={keys.handsFree} onChange={handsFree => void update({ shortcuts: { handsFree } })} />
         </Tile>
-        <Tile title="Talk to Claude" detail={keys.command === 'off' ? <>Off. Choose a key to hold with <Kbd>{key.glyph}</Kbd> to talk to Claude.</>
-          : <>Hold this with <Kbd>{key.glyph}</Kbd> and say what to do with the selected text, or ask a question. {claude}</>}>
-          <Select label="Talk to Claude" value={keys.command} options={COMMAND_KEYS} onChange={command => void update({ shortcuts: { command } })} />
+        <Tile title="Ask AI" detail={keys.command === 'off' ? <>Choose a key to hold with <Kbd>{key.glyph}</Kbd> when you want to ask AI something.</>
+          : <>Hold it with <Kbd>{key.glyph}</Kbd> to ask something, or to rewrite the text you’ve selected. {claude}</>}>
+          <Select label="Ask AI" value={keys.command} options={COMMAND_KEYS} onChange={command => void update({ shortcuts: { command } })} />
         </Tile>
       </TileGroup>
     </Section>
     <Section title="Anywhere on your Mac" note={status && !status.accessibility
-      ? <>These need Accessibility, which is off. <a className="link" href="#settings">Turn it on in General</a>.</>
-      : 'Click a shortcut, then press the keys. Escape cancels. Delete clears it.'}>
+      ? <>These need Accessibility access. <a className="link" href="#settings">Turn it on in General</a>.</>
+      : 'Click a shortcut and press the new keys, or press Delete to clear it.'}>
       <TileGroup>
         {CHORDS.map(([name, title]) => <Tile key={name} title={title}>
           <KeyRecorder label={title} value={keys[name]} onChange={record(name)}
@@ -96,7 +96,7 @@ export function Shortcuts({ settings, update }: PageProps) {
         </Tile>)}
       </TileGroup>
     </Section>
-    <Section title="Try it" note="Press any of them now to see it light up. Holding the key here dictates for real.">
+    <Section title="Try it" note="Press a shortcut to see it light up. Holding your key here dictates for real.">
       <Tester settings={settings} status={status} down={down} />
     </Section>
   </>;
@@ -189,10 +189,10 @@ function Tester({ settings, status, down }: { settings: Settings; status: Status
   }, [down]);
 
   const modifier = keys.command === 'off' ? null : MODIFIER[keys.command];
-  const commandOff = !modifier ? 'Off' : !settings.claude.enabled ? 'Needs Claude' : !settings.claude.commands ? 'Off' : undefined;
+  const commandOff = !modifier ? 'Off' : !settings.claude.enabled ? 'Needs AI' : !settings.claude.commands ? 'Off' : undefined;
   const command = !commandOff && !!modifier && down && modifier.codes.some(code => code !== key.code && codes.has(code));
   const chordOff = status && !status.accessibility ? 'Needs Accessibility' : undefined;
-  useEffect(() => { if (command) hear('command', 'Talk to Claude'); }, [command]);
+  useEffect(() => { if (command) hear('command', 'Ask AI'); }, [command]);
   useEffect(() => {
     const press = (event: KeyboardEvent) => {
       const chord = chordOf(event as unknown as ReactKeyboardEvent);
@@ -206,7 +206,7 @@ function Tester({ settings, status, down }: { settings: Settings; status: Status
   const rows: { id: string; title: string; keys: string[]; on: boolean; off?: string }[] = [
     { id: 'hold', title: 'Hold to talk', keys: [key.glyph], on: down },
     { id: 'double', title: 'Hands-free', keys: [key.glyph, key.glyph], on: flash === 'double', off: keys.handsFree ? undefined : 'Off' },
-    { id: 'command', title: 'Talk to Claude', keys: modifier ? [modifier.glyph, key.glyph] : [key.glyph], on: command, off: commandOff },
+    { id: 'command', title: 'Ask AI', keys: modifier ? [modifier.glyph, key.glyph] : [key.glyph], on: command, off: commandOff },
     ...CHORDS.map(([name, title]) => ({ id: name, title, keys: keys[name] ? [keys[name]!.label] : [], on: flash === name, off: keys[name] ? chordOff : 'Not set' })),
   ];
   return <>

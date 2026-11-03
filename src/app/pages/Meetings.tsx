@@ -34,7 +34,7 @@ export function Meetings({ settings, update }: PageProps) {
     setStartProblem(null);
     const action = recording ? 'stop' : 'start';
     void invoke<boolean>('meeting', { action }).then(changed => {
-      if (!changed && action === 'start') setStartProblem('Couldn’t start the meeting. Check that TabTasker Dictate can use the microphone.');
+      if (!changed && action === 'start') setStartProblem('Couldn’t start the meeting. Check that Dictate is allowed to use the microphone.');
       refresh();
     }, (error: unknown) => setStartProblem(typeof error === 'string' ? sentence(error) : 'Couldn’t start the meeting.'));
   };
@@ -50,12 +50,12 @@ export function Meetings({ settings, update }: PageProps) {
   };
   const confirm = (id: string) => { focusNext.current = `${base}-keep-${id}`; setDiscarding(id); };
   const keep = (id: string) => { focusNext.current = `${base}-discard-${id}`; setDiscarding(null); };
-  const reveal = (path: string) => void invoke('meeting_reveal', { path }).catch(() => setStartProblem('The meeting’s file has moved.'));
+  const reveal = (path: string) => void invoke('meeting_reveal', { path }).catch(() => setStartProblem('Couldn’t find that file. It may have been moved.'));
 
   // What the last meeting is doing after Stop or Save: saving, saved, or why it wasn't.
   const shown: MeetingEvent | null = outcome ?? (state?.saving.length ? { state: 'saving' } : null);
   const outcomeTile = (() => {
-    if (shown?.state === 'saving') return <Tile title={<span role="status">Saving the meeting</span>} detail={sentence(shown.message ?? 'Finishing the transcript')} />;
+    if (shown?.state === 'saving') return <Tile title={<span role="status">Saving the meeting</span>} detail={sentence(shown.message ?? 'Dictate is writing up the transcript')} />;
     if (shown?.state === 'saved' && shown.path) {
       const path = shown.path;
       return <Tile title={<span role="status">Meeting saved</span>} detail={<>{path.split('/').pop()?.replace(/\.md$/, '')}{shown.message && <><br />{shown.message}</>}</>}>
@@ -64,33 +64,33 @@ export function Meetings({ settings, update }: PageProps) {
     }
     if (shown?.state === 'error') {
       const message = sentence(shown.message ?? 'Something went wrong');
-      return <Tile title={<span role="alert">The meeting wasn’t saved</span>} detail={shown.leftover ? `${message} The recording is kept below.` : message} />;
+      return <Tile title={<span role="alert">The meeting wasn’t saved</span>} detail={shown.leftover ? `${message} You’ll find the recording below.` : message} />;
     }
     return null;
   })();
 
   const systemDetail = unsupported
-    ? 'Needs macOS 14.2 or later. On this Mac, meetings record your microphone only.'
-    : `Includes the Mac’s own sound, such as the other side of a call.${permission === 'notDetermined' ? ' macOS asks once, when the first meeting starts.' : ''}`;
+    ? 'This needs macOS 14.2 or later, so for now meetings only record your microphone.'
+    : permission === 'notDetermined' ? 'macOS asks for permission when your first meeting starts.' : undefined;
   return <>
-    <PageHeader icon="meeting" title="Meetings">Record a call or a room and get a transcript with who said what.</PageHeader>
+    <PageHeader icon="meeting" title="Meetings">Record a call or a conversation and get a transcript of who said what.</PageHeader>
     <Section note={startProblem ?? undefined}>
       <TileGroup>
         <Tile title={recording ? 'Recording a meeting' : 'Start a meeting'}
-          detail={recording?.since ? `Started at ${new Date(recording.since).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}. Stop it here or with Stop by the dots.`
-            : `Also from the meeting button on the dots, their menu, the menu bar${chord ? ` or ${chord}` : ''}. A pill by the dots shows the time and Stop.`}>
+          detail={recording?.since ? `You started recording at ${new Date(recording.since).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}.`
+            : `You can also start one from the dots${chord ? ` or with ${chord}` : ''}.`}>
           <Button id={`${base}-start`} variant={recording ? 'secondary' : 'primary'} disabled={!state} onClick={startOrStop}>{recording ? 'Stop' : 'Start'}</Button>
         </Tile>
         {outcomeTile}
       </TileGroup>
     </Section>
-    {leftovers.length > 0 && <Section title="Recordings kept" note={recoverProblem ?? 'These stopped before they were saved, or have parts that couldn’t be transcribed. Each is kept until you choose.'}>
+    {leftovers.length > 0 && <Section title="Recordings kept" note={recoverProblem ?? 'These didn’t finish saving, or have parts that couldn’t be transcribed. They’re kept until you save or discard them.'}>
       <TileGroup label="Recordings kept">
         {leftovers.map(leftover => {
           const confirming = discarding === leftover.id;
           const detail = confirming
-            ? (leftover.saved ? 'Discard the recording? The saved meeting stays.' : 'Discard this recording? It can’t be undone.')
-            : `${meetingLength(leftover.seconds)} · ${leftover.saved ? 'Saved, with parts not transcribed' : 'Not saved yet'}`;
+            ? (leftover.saved ? 'Discard the recording? Your saved meeting stays.' : 'Discard this recording? There’s no undo.')
+            : `${meetingLength(leftover.seconds)} · ${leftover.saved ? 'Saved, but parts weren’t transcribed' : 'Not saved yet'}`;
           return <Tile key={leftover.id} title={meetingWhen(leftover.sinceMs)} detail={detail}>
             {confirming
               ? <><Button id={`${base}-keep-${leftover.id}`} small onClick={() => keep(leftover.id)}>Keep</Button><Button small variant="danger" onClick={() => recover(leftover.id, false)}>Discard</Button></>
@@ -100,44 +100,44 @@ export function Meetings({ settings, update }: PageProps) {
         })}
       </TileGroup>
     </Section>}
-    <Section title="Recording" note="Your microphone has echo cancellation, so speakers work as well as headphones. Audio is transcribed on this Mac as the meeting goes, and kept safe until the file is saved.">
+    <Section title="Recording" note="You don’t need headphones, because Dictate cancels the echo from your speakers.">
       <TileGroup>
         <Tile title="Record the other side of calls" detail={systemDetail} dim={unsupported}>
           <Toggle label="Record the other side of calls" checked={meetings.systemAudio && !unsupported} disabled={unsupported} onChange={systemAudio => update({ meetings: { systemAudio } })} />
         </Tile>
-        {meetings.systemAudio && permission === 'denied' && <Tile title="System audio isn’t allowed" detail="Meetings record your microphone only. In Privacy & Security, turn on TabTasker Dictate under System Audio Recording Only.">
+        {meetings.systemAudio && permission === 'denied' && <Tile title="System audio isn’t allowed" detail="Turn on TabTasker Dictate under System Audio Recording Only in Privacy & Security.">
           <Button onClick={() => void invoke('meeting_privacy').catch(() => {})}>Open System Settings</Button>
         </Tile>}
-        <Tile title="Summary" detail={settings.claude.enabled ? 'Claude or your local model names the meeting and writes a summary under the title.' : 'Names the meeting and writes a summary under the title, once Claude or a local model is connected.'}>
+        <Tile title="Summary" detail={settings.claude.enabled ? 'AI names the meeting and writes a summary of it.' : 'Connect Claude or a local model in Agents to use this.'}>
           <Toggle label="Summary" checked={meetings.summarize} onChange={summarize => update({ meetings: { summarize } })} />
         </Tile>
-        <Tile title="Decisions" detail="A Decisions list in the summary." dim={!meetings.summarize}>
+        <Tile title="Decisions" dim={!meetings.summarize}>
           <Toggle label="Decisions" checked={meetings.decisions} disabled={!meetings.summarize} onChange={decisions => update({ meetings: { decisions } })} />
         </Tile>
-        <Tile title="Action items" detail="A to-do list of who does what, in the summary." dim={!meetings.summarize}>
+        <Tile title="Action items" dim={!meetings.summarize}>
           <Toggle label="Action items" checked={meetings.actionItems} disabled={!meetings.summarize} onChange={actionItems => update({ meetings: { actionItems } })} />
         </Tile>
       </TileGroup>
     </Section>
     <Section title="Transcript">
       <TileGroup>
-        <Tile title="Tell speakers apart" detail={meetings.speakers ? 'Each voice gets a label, Person 1, Person 2 and so on. Yours keeps your name. Two small models (47 MB) download the first time, and it all runs on this Mac after Stop.' : 'Lines are labelled by where they came from: your microphone, or the Mac’s sound.'}>
+        <Tile title="Tell speakers apart" detail={meetings.speakers ? 'Other voices are labelled Person 1, Person 2 and so on. The first time, this downloads 47 MB.' : 'Without this, everyone but you shares one label.'}>
           <Toggle label="Tell speakers apart" checked={meetings.speakers} onChange={speakers => update({ meetings: { speakers } })} />
         </Tile>
-        <Tile title="Your name" detail="How your lines are labelled."><TextField label="Your name" value={meetings.you} onCommit={you => update({ meetings: { you } })} /></Tile>
-        <Tile title="Everyone else" detail={meetings.speakers ? 'How the Mac’s sound is labelled when speakers can’t be told apart.' : 'How the Mac’s sound is labelled.'}><TextField label="Everyone else" value={meetings.others} onCommit={others => update({ meetings: { others } })} /></Tile>
+        <Tile title="Your name"><TextField label="Your name" value={meetings.you} onCommit={you => update({ meetings: { you } })} /></Tile>
+        <Tile title="Everyone else" detail={meetings.speakers ? 'Used when Dictate can’t tell voices apart.' : 'The label for everyone else on a call.'}><TextField label="Everyone else" value={meetings.others} onCommit={others => update({ meetings: { others } })} /></Tile>
       </TileGroup>
     </Section>
     <Section title="Where" note={problem ?? undefined}>
       <TileGroup>
-        <Tile title="Folder" detail={meetings.folder ? undefined : 'Empty keeps meetings in a Meetings folder inside your notes folder.'} stack>
+        <Tile title="Folder" detail={meetings.folder ? undefined : 'Leave this empty to keep meetings in your notes folder, under Meetings.'} stack>
           <TextField label="Meetings folder" monospace wide value={tilde(meetings.folder ?? '', home)} placeholder="Notes folder › Meetings" onCommit={typed => {
             const folder = folderPath(typed, home);
             if (folder === undefined) { setProblem('Use a full path, like ~/Meetings.'); return; }
             setProblem(null);
             update({ meetings: { folder } });
           }} />
-          {meetings.folder && <Button variant="quiet" onClick={() => update({ meetings: { folder: null } })}>Use default</Button>}
+          {meetings.folder && <Button variant="quiet" onClick={() => update({ meetings: { folder: null } })}>Use the default folder</Button>}
         </Tile>
       </TileGroup>
     </Section>

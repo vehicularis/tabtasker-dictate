@@ -27,7 +27,7 @@ const WATCH: Duration = Duration::from_secs(2);
 // ---------- where things are ----------
 
 fn home() -> Result<PathBuf, String> {
-  std::env::var_os("HOME").filter(|home| !home.is_empty()).map(PathBuf::from).ok_or_else(|| "No home folder".into())
+  std::env::var_os("HOME").filter(|home| !home.is_empty()).map(PathBuf::from).ok_or_else(|| "Couldn’t find your home folder.".into())
 }
 
 /// The app data folder, as Tauri names it from the bundle identifier.
@@ -609,7 +609,7 @@ fn add_to_claude_code(cli: &Path, exe: &Path, now: Added) -> Result<(), String> 
     Added::Elsewhere => { run_for(cli, &["mcp", "remove", "--scope", "user", NAME], &[&dir], limit).map_err(failed)?; }
     Added::No => {}
   }
-  let exe = exe.to_str().ok_or("The app’s path can’t be written down")?;
+  let exe = exe.to_str().ok_or("Dictate is in a folder agents can’t use. Move it to Applications and try again.")?;
   run_for(cli, &["mcp", "add", "--scope", "user", NAME, "--", exe, "--mcp"], &[&dir], limit).map(|_| ()).map_err(failed)
 }
 
@@ -631,7 +631,7 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 /// Adds this server to Claude Desktop's `mcpServers`, keeping every other key and server. A copy of
 /// the file as it was goes beside it first.
 fn add_to_desktop(config: &Path, exe: &Path) -> Result<(), String> {
-  let unreadable = "Claude Desktop’s settings file isn’t valid JSON, so it is left as it is. Fix or remove it in Claude Desktop, then try again.";
+  let unreadable = "Claude Desktop’s settings file is damaged, so Dictate left it alone. Fix or remove it, then try again.";
   let (mut root, existed) = match std::fs::read(config) {
     Ok(bytes) if bytes.iter().all(u8::is_ascii_whitespace) => (json!({}), true),
     Ok(bytes) => (serde_json::from_slice::<Value>(&bytes).map_err(|_| unreadable)?, true),
@@ -639,19 +639,19 @@ fn add_to_desktop(config: &Path, exe: &Path) -> Result<(), String> {
     Err(e) => return Err(format!("Couldn’t read Claude Desktop’s settings: {e}")),
   };
   let servers = root.as_object_mut().ok_or(unreadable)?.entry("mcpServers").or_insert_with(|| json!({}));
-  let servers = servers.as_object_mut().ok_or("Claude Desktop’s settings have “mcpServers” in a shape this app doesn’t know, so they are left as they are.")?;
+  let servers = servers.as_object_mut().ok_or("Claude Desktop’s settings aren’t laid out the way Dictate expects, so it left them alone.")?;
   if added(servers.get(NAME), exe) == Added::Yes { return Ok(()); }
   // An entry of ours keeps anything added to it by hand, such as env.
   let entry = servers.entry(NAME).or_insert_with(|| json!({}));
   if !entry.is_object() { *entry = json!({}); }
   entry["command"] = json!(exe);
   entry["args"] = json!(["--mcp"]);
-  let dir = config.parent().ok_or("No folder for Claude Desktop’s settings")?;
+  let dir = config.parent().ok_or("Couldn’t find Claude Desktop’s settings folder.")?;
   std::fs::create_dir_all(dir).map_err(|e| format!("Couldn’t make Claude Desktop’s settings folder: {e}"))?;
   if existed {
     let tm = local(now_ms() / 1000);
     let backup = format!("claude_desktop_config.json.backup-{:04}{:02}{:02}-{:02}{:02}{:02}", tm.year + 1900, tm.mon + 1, tm.mday, tm.hour, tm.min, tm.sec);
-    std::fs::copy(config, dir.join(backup)).map_err(|e| format!("Couldn’t keep a copy of Claude Desktop’s settings, so they are left as they are: {e}"))?;
+    std::fs::copy(config, dir.join(backup)).map_err(|e| format!("Couldn’t back up Claude Desktop’s settings, so Dictate didn’t change them: {e}"))?;
   }
   let mut json = serde_json::to_vec_pretty(&root).map_err(|e| e.to_string())?;
   json.push(b'\n');

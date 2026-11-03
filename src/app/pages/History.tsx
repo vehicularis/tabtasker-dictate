@@ -25,7 +25,7 @@ const FOR: Record<Keep, string> = { off: '', day: ' for a day', week: ' for a we
 const searchable = (entry: HistoryEntry) => entry.mode === 'note' ? entry.text : `${entry.text} ${entry.appName}`;
 /// Focus for after a confirm closes, which would otherwise drop it to the page.
 const refocus = (selector: string) => requestAnimationFrame(() => document.querySelector<HTMLElement>(selector)?.focus());
-const KEEP_SELECT = 'select[aria-label="Keep what you said"]';
+const KEEP_SELECT = '.ui-select[aria-label="Keep what you said"]';
 
 const count = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
 const localDay = (atMs: number) => Math.floor((atMs - new Date(atMs).getTimezoneOffset() * 60_000) / DAY);
@@ -69,8 +69,8 @@ export function History({ settings, update }: PageProps) {
 
   const fail = useCallback((error: unknown, fallback: string) => setToast({ message: typeof error === 'string' ? error : fallback, error: true }), []);
   const refresh = useCallback(() => {
-    void invoke<HistoryStats>('history_stats').then(setStats).catch(error => fail(error, 'Couldn’t read your stats'));
-    void invoke<HistoryEntry[]>('history_list').then(setEntries).catch(error => fail(error, 'Couldn’t read your history'));
+    void invoke<HistoryStats>('history_stats').then(setStats).catch(error => fail(error, 'Couldn’t load your stats'));
+    void invoke<HistoryEntry[]>('history_list').then(setEntries).catch(error => fail(error, 'Couldn’t load your history'));
   }, [fail]);
   // A change to Keep prunes on the next read, so read again.
   useEffect(refresh, [refresh, keep]);
@@ -96,7 +96,7 @@ export function History({ settings, update }: PageProps) {
       refresh();
       setToast({ message: 'History cleared' });
       refocus(KEEP_SELECT);
-    }).catch(error => fail(error, 'Couldn’t clear history'));
+    }).catch(error => fail(error, 'Couldn’t clear your history'));
   };
   // A shorter Keep removes words at once and for good, so it asks first, as Clear does.
   const choose = (next: Keep) => {
@@ -111,7 +111,7 @@ export function History({ settings, update }: PageProps) {
     refocus(KEEP_SELECT);
   };
   const copy = (entry: HistoryEntry) => void copyText(entry.text).then(() => setToast({ message: 'Copied' })).catch(() => fail(null, 'Couldn’t copy that'));
-  const type = (entry: HistoryEntry) => void invoke('history_type', { at: entry.atMs }).catch(error => fail(error, 'Couldn’t type that'));
+  const type = (entry: HistoryEntry) => void invoke('history_type', { at: entry.atMs }).catch(error => fail(error, 'Couldn’t type that again'));
 
   const visible = matches.slice(0, shown);
   const groups: { day: number; entries: HistoryEntry[] }[] = [];
@@ -121,7 +121,7 @@ export function History({ settings, update }: PageProps) {
   }
 
   return <>
-    <PageHeader icon="history" title="History & stats">What you dictated, and how much typing it saved.</PageHeader>
+    <PageHeader icon="history" title="History & stats">Everything you’ve dictated, and how much typing it’s saved you.</PageHeader>
     {stats && <>
       <Section title="Stats">
         <Figures stats={stats} />
@@ -129,28 +129,28 @@ export function History({ settings, update }: PageProps) {
       <Section title="Last 30 days">
         <Chart stats={stats} />
       </Section>
-      <Section title="Top apps" note={stats.apps.length ? 'Notes aren’t counted here: they go to a file, not an app.' : undefined}>
+      <Section title="Top apps" note={stats.apps.length ? 'Notes aren’t counted here, since they’re saved to a file.' : undefined}>
         <TileGroup label="Top apps">
           {stats.apps.length
             ? stats.apps.map(app => <Tile key={app.bundleId || app.name} title={app.name} detail={count(app.words, 'word')}>
               <Share part={app.words} of={stats.wordsTotal} label={`${app.name}’s share of your words`} />
             </Tile>)
-            : <Tile title="No apps yet" detail="The apps you dictate into show up here, with how much you said in each." dim />}
+            : <Tile title="No apps yet" detail="The apps you dictate into most will show up here." dim />}
         </TileGroup>
       </Section>
     </>}
-    <Section title="History" note="Word counts and times are always kept for your stats. Everything stays on this Mac.">
+    <Section title="History" note="Your stats count every word, even when what you said isn’t kept.">
       <TileGroup>
         {narrowing
           ? <Tile title={narrowing.keep === 'off' ? 'Stop keeping what you say?' : `Keep what you said${FOR[narrowing.keep]}?`}
-            detail={`Removes ${count(narrowing.removes, 'dictation')} for good. Your stats stay.`}>
+            detail={`This deletes ${count(narrowing.removes, 'dictation')} for good, but your stats stay.`}>
             <Button variant="quiet" onClick={() => narrow(false)} autoFocus>Cancel</Button>
             <Button variant="danger" onClick={() => narrow(true)}>Remove</Button>
           </Tile>
-          : <Tile title="Keep what you said" detail="Older dictations are removed for good.">
+          : <Tile title="Keep what you said" detail="Anything older is deleted for good.">
             <Select label="Keep what you said" value={keep} options={KEEP} onChange={choose} />
           </Tile>}
-        <Tile title={clearing ? 'Clear all of your history?' : 'Clear history'} detail="Removes what you said from your history on this Mac. Saved notes and your stats stay.">
+        <Tile title={clearing ? 'Clear all of your history?' : 'Clear history'} detail="Your saved notes and stats won’t be touched.">
           {clearing
             ? <><Button variant="quiet" onClick={() => { setClearing(false); refocus('[data-action="clear"]'); }} autoFocus>Cancel</Button>
               <Button variant="danger" onClick={clear}>Clear</Button></>
@@ -160,12 +160,12 @@ export function History({ settings, update }: PageProps) {
     </Section>
     {entries && (keep === 'off' && !entries.length
       ? <EmptyState icon="history" title="History is off" action={<Button onClick={() => update({ history: { keep: 'week' } })}>Keep for a week</Button>}>
-        What you say isn’t kept, so there’s nothing to search. Your stats still count every word.
+        What you say isn’t being kept, so there’s nothing to search.
       </EmptyState>
       : !entries.length
         ? stats?.dictations
-          ? <EmptyState icon="history" title="Nothing kept right now">What you say next shows up here{FOR[keep]}. Your stats still count every word.</EmptyState>
-          : <EmptyState icon="history" title="Nothing here yet">Hold {KEY[settings.shortcuts.dictate]} and speak in any app. What you say shows up here.</EmptyState>
+          ? <EmptyState icon="history" title="Nothing here right now">What you say next will show up here{FOR[keep]}.</EmptyState>
+          : <EmptyState icon="history" title="Nothing here yet">Hold {KEY[settings.shortcuts.dictate]} and talk in any app, and it’ll show up here.</EmptyState>
         : <section className="history-list" aria-label="What you said">
           <label className="search history-search">
             <Icon name="search" size={15} />
@@ -194,8 +194,8 @@ function Figures({ stats }: { stats: HistoryStats }) {
     { label: 'Words today', value: stats.wordsToday.toLocaleString() },
     { label: 'Words in total', value: stats.wordsTotal.toLocaleString() },
     { label: 'Day streak', value: stats.streak.toLocaleString(), unit: stats.streak === 1 ? 'day' : 'days' },
-    { label: 'Average speed', ...(stats.wpm > 0 ? { value: Math.round(stats.wpm).toLocaleString(), unit: 'wpm' } : { value: 'Not yet' }), hint: 'Words a minute as you speak' },
-    { label: 'Time saved', value: saved.value, unit: saved.unit, hint: 'Against typing at 40 wpm' },
+    { label: 'Average speed', ...(stats.wpm > 0 ? { value: Math.round(stats.wpm).toLocaleString(), unit: 'wpm' } : { value: 'Not yet' }), hint: 'How fast you talk' },
+    { label: 'Time saved', value: saved.value, unit: saved.unit, hint: 'Compared with typing at 40 wpm' },
     { label: 'Dictations', value: stats.dictations.toLocaleString() },
   ];
   return <dl className="stats-figures">
@@ -223,7 +223,7 @@ function Chart({ stats }: { stats: HistoryStats }) {
     event.preventDefault();
     setPicked(Math.min(days.length - 1, Math.max(0, next)));
   };
-  return <div className="stats-chart" tabIndex={0} role="group" aria-label="Words each day, last 30 days. Use the arrow keys to read each day." aria-describedby={readout}
+  return <div className="stats-chart" tabIndex={0} role="group" aria-label="Words each day for the last 30 days. Use the arrow keys to go through the days." aria-describedby={readout}
     onKeyDown={keys} onFocus={() => setPicked(picked ?? days.length - 1)} onBlur={() => setPicked(null)} onMouseLeave={() => setPicked(null)}>
     <p id={readout} className="stats-readout" aria-live="polite">
       {picked == null

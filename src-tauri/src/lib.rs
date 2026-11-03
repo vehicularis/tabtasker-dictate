@@ -139,7 +139,7 @@ fn status_json() -> Option<String> {
 
 #[tauri::command]
 async fn status(app: AppHandle) -> Result<serde_json::Value, String> {
-  let json = on_main(&app, status_json).await?.ok_or("Voice settings are unavailable")?;
+  let json = on_main(&app, status_json).await?.ok_or("Couldn’t load your settings. Quit Dictate and open it again.")?;
   let mut value: serde_json::Value = serde_json::from_str(&json).map_err(|e| e.to_string())?;
   value["notes"] = serde_json::Value::String(notes::notes_dir()?.display().to_string());
   value["home"] = std::env::var("HOME").map_or(serde_json::Value::Null, serde_json::Value::String);
@@ -209,7 +209,7 @@ fn paste_last(app: AppHandle) {
       let Ok(text) = CString::new(entry.text) else { return };
       let _ = app.run_on_main_thread(move || unsafe { dictate_type_text(text.as_ptr()) });
     }
-    None => emit("dictate-notice", serde_json::json!({ "message": "Nothing to paste yet" })),
+    None => emit("dictate-notice", serde_json::json!({ "message": "There’s nothing to paste yet." })),
   }
 }
 
@@ -233,7 +233,7 @@ fn start_meeting(app: &AppHandle) {
   let app = app.clone();
   let _ = app.clone().run_on_main_thread(move || {
     if !unsafe { dictate_meeting(c"toggle".as_ptr()) } {
-      let why = meeting::start_problem().unwrap_or_else(|| "Couldn’t start the meeting".into());
+      let why = meeting::start_problem().unwrap_or_else(|| "Couldn’t start the meeting.".into());
       let _ = app.emit_to(OVERLAY, "dictate-notice", serde_json::json!({ "message": why }));
     }
   });

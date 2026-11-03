@@ -18,7 +18,7 @@ export function Sheet({ hue, folded, pinned, text, actions, children, ...rest }:
     <header className="sticky-bar" data-tauri-drag-region onDoubleClick={actions.fold}>
       {folded && <span className="sticky-peek" data-tauri-drag-region>{firstLine(text) || 'Empty sticky'}</span>}
       <span className="sticky-tools">
-        <button type="button" className="sticky-tool" data-on={pinned || undefined} title={pinned ? 'On top of everything. Click to let other windows cover it' : 'Behind other windows. Click to keep it on top'} aria-label={pinned ? 'Let other windows cover it' : 'Keep on top of everything'} aria-pressed={pinned} onClick={actions.pin}><Icon name={pinned ? 'pin' : 'pinOff'} size={14} /></button>
+        <button type="button" className="sticky-tool" data-on={pinned || undefined} title={pinned ? 'Let other windows cover it' : 'Keep on top of other windows'} aria-label={pinned ? 'Let other windows cover it' : 'Keep on top of other windows'} aria-pressed={pinned} onClick={actions.pin}><Icon name={pinned ? 'pin' : 'pinOff'} size={14} /></button>
         <button type="button" className="sticky-tool sticky-more" title="More" aria-label="More" aria-haspopup="menu" onClick={event => { const box = event.currentTarget.getBoundingClientRect(); actions.more({ x: box.left, y: box.bottom + 4 }); }}><Icon name="dots" size={14} /></button>
         <button type="button" className="sticky-tool" title="Close" aria-label="Close this sticky" onClick={actions.close}><Icon name="close" size={12} /></button>
       </span>

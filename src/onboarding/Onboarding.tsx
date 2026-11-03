@@ -6,6 +6,7 @@ import { Notes } from '../app/pages/Notes';
 import { setupDone, tilde, updateSettings, useSettings, useStatus, type CommandKey, type DictateKey, type PageProps, type Patch, type Settings, type Status } from '../store';
 import { Button, Icon, Kbd, ProgressBar, Segmented, Select, Toast, Toggle, type IconName } from '../ui';
 import { AccessGlyph, DownloadGlyph, ExtrasGlyph, GlobeGlyph, ICON_GLYPHS } from '../overlay/glyphs';
+import { Logo } from '../overlay/icons';
 import { Globe, KEY_NAMES, Keyboard } from './Keyboard';
 import './onboarding.css';
 
@@ -31,9 +32,9 @@ const voiceReady = (status: Status) => status.enabled && status.modelReady;
 
 /// What still stands between this Mac and dictating, with the step that fixes it.
 const missing = (status: Status) => ([
-  ['microphone', 'microphone access', status.microphone !== 'allowed'],
-  ['accessibility', 'Accessibility', !status.accessibility],
-  ['model', 'the speech model', !voiceReady(status)],
+  ['microphone', 'allow the microphone', status.microphone !== 'allowed'],
+  ['accessibility', 'turn on Accessibility', !status.accessibility],
+  ['model', 'download the speech model', !voiceReady(status)],
 ] as [StepId, string, boolean][]).filter(([, , open]) => open);
 
 type Key = { down: boolean; tested: boolean };
@@ -72,7 +73,7 @@ export function Onboarding() {
   const dictateKey = useDictateKey(settings?.shortcuts.dictate);
   const main = useRef<HTMLElement>(null);
   const hideToast = useCallback(() => setToast(null), []);
-  const update = useCallback((patch: Patch) => updateSettings(patch).catch(error => { setToast(typeof error === 'string' ? error : 'Couldn’t save that change'); return undefined; }), []);
+  const update = useCallback((patch: Patch) => updateSettings(patch).catch(error => { setToast(typeof error === 'string' ? error : 'Couldn’t save that change. Try again.'); return undefined; }), []);
 
   // A new step takes the focus, so the keyboard and VoiceOver start there; a field that asked for it keeps it.
   const moved = useRef(false);
@@ -131,7 +132,7 @@ export function Onboarding() {
     </nav>
     <main ref={main} className="setup-step" key={step.id} aria-labelledby="setup-title">
       <div className="setup-body">
-        <span className="setup-icon"><Glyph name={step.icon} size={34} /></span>
+        <span className="setup-icon">{step.id === 'welcome' ? <Logo size={64} /> : <Glyph name={step.icon} size={34} />}</span>
         <h1 id="setup-title" tabIndex={-1}>{step.id === 'done' && !finished ? 'Still to do' : title}</h1>
         <Body {...props} />
       </div>
@@ -155,10 +156,10 @@ export function Onboarding() {
 
 // ---------- the steps ----------
 
-function Welcome() {
+function Welcome({ settings }: Step) {
   return <>
-    <p className="lead">Hold a key and talk. Your words go into any app when you let go, or become a note saved as Markdown.</p>
-    <p className="lead">Whisper runs on this Mac and nothing you say leaves it. There is no account. Claude is optional and sees only text.</p>
+    <p className="lead">Hold {KEY_NAMES[settings.shortcuts.dictate]} and talk. When you let go, what you said is typed wherever your cursor is.</p>
+    <p className="lead">Everything happens on your Mac, so your voice never leaves it, and there’s no account to make.</p>
   </>;
 }
 
@@ -166,21 +167,21 @@ function Microphone({ status }: Step) {
   const mic = status.microphone;
   const [problem, setProblem] = useState<string | null>(null);
   return <>
-    <p className="lead">TabTasker Dictate listens only while you hold your key or take a note.</p>
+    <p className="lead">Dictate only listens while you’re holding your key or recording a note.</p>
     <ul className="ui-tiles setup-tiles">
-      <Row icon="mic" title="Microphone access" detail={mic === 'allowed' ? undefined : mic === 'denied' ? 'Turned off in System Settings.' : 'Not asked yet. macOS asks once: choose Allow.'}>
+      <Row icon="mic" title="Microphone access" detail={mic === 'allowed' ? undefined : mic === 'denied' ? 'It’s turned off in System Settings.' : 'When macOS asks, choose Allow.'}>
         {mic === 'allowed' ? <Allowed>Allowed</Allowed>
           : <Button variant="primary" onClick={() => ask('microphone')}>{mic === 'denied' ? 'Open System Settings' : 'Allow microphone'}</Button>}
       </Row>
-      {mic === 'allowed' && <Row icon="waveform" title="Listen with" detail={problem ?? `In use: ${status.inputInUse}`}>
+      {mic === 'allowed' && <Row icon="waveform" title="Listen with" detail={problem ?? `Right now that’s ${status.inputInUse}.`}>
         <Select label="Microphone" value={status.input ?? ''} options={[{ value: '', label: 'Automatic' }, ...status.inputs.map(input => ({ value: input.id, label: input.name }))]}
-          onChange={id => { setProblem(null); void invoke('set_input', { id: id || null }).catch(() => setProblem('Couldn’t change the microphone')); }} />
+          onChange={id => { setProblem(null); void invoke('set_input', { id: id || null }).catch(() => setProblem('Couldn’t change the microphone. Try again.')); }} />
       </Row>}
     </ul>
     {mic === 'denied' && <HowTo steps={[
       <>Click <b>Open System Settings</b>.</>,
       <>In <b>Privacy &amp; Security › Microphone</b>, turn on <b>TabTasker Dictate</b>.</>,
-      <>Come back here. This step updates by itself.</>,
+      <>Come back here, and this step updates on its own.</>,
     ]} />}
   </>;
 }
@@ -188,16 +189,16 @@ function Microphone({ status }: Step) {
 function Accessibility({ status }: Step) {
   const on = status.accessibility;
   return <>
-    <p className="lead">This lets TabTasker Dictate notice your key in any app and type your words where the cursor is.</p>
+    <p className="lead">Dictate needs this to notice your key and type into other apps.</p>
     <ul className="ui-tiles setup-tiles">
-      <Row icon="access" title="Accessibility" detail={on ? undefined : 'Off.'}>
+      <Row icon="access" title="Accessibility" detail={on ? undefined : 'It’s off right now.'}>
         {on ? <Allowed>On</Allowed> : <Button variant="primary" onClick={() => ask('accessibility')}>Open System Settings</Button>}
       </Row>
     </ul>
     {!on && <HowTo steps={[
-      <>Click <b>Open System Settings</b>. If macOS asks first, choose <b>Open System Settings</b> there.</>,
+      <>Click <b>Open System Settings</b>. If macOS asks first, choose <b>Open System Settings</b> there too.</>,
       <>In <b>Privacy &amp; Security › Accessibility</b>, turn on <b>TabTasker Dictate</b>.</>,
-      <>Still off here a few seconds later? Select <b>TabTasker Dictate</b>, remove it with <b>−</b>, then add it again with <b>+</b>.</>,
+      <>If it still says off after a few seconds, select <b>TabTasker Dictate</b>, remove it with <b>−</b> and add it back with <b>+</b>.</>,
     ]} />}
   </>;
 }
@@ -213,22 +214,22 @@ function ChooseKey({ status, settings, update, dictateKey, go }: Step) {
   const name = KEY_NAMES[chosen];
   const globe = chosen === 'fn' && status.globeKey ? GLOBE[status.globeKey] : null;
   return <>
-    <p className="lead">Hold it while you talk and let go when you’re done. Pick the one that is easiest to reach.</p>
+    <p className="lead">Hold it while you talk and let go when you’re done. Pick the one that’s easiest for you to reach.</p>
     <Segmented label="Key to hold" value={chosen} options={KEY_OPTIONS} onChange={dictate => void update({ shortcuts: { dictate } })} />
     <Keyboard chosen={chosen} down={dictateKey.down} />
     <p className="setup-status" role="status" data-ok={dictateKey.tested || undefined}>
-      {dictateKey.tested ? <><Icon name="check" size={16} />Works. Hold <Kbd>{name}</Kbd> whenever you want to talk.</>
+      {dictateKey.tested ? <><Icon name="check" size={16} />That works. Hold <Kbd>{name}</Kbd> whenever you want to talk.</>
         : dictateKey.down ? 'Keep holding, then let go.'
-        : <>Try it now: hold <Kbd>{name}</Kbd> for a moment, then let go.</>}
+        : <>Hold <Kbd>{name}</Kbd> for a moment, then let go to try it.</>}
     </p>
     {globe && <ul className="ui-tiles setup-tiles">
-      <Row icon="globe" title={`Your globe key ${globe}`} detail={<>That gets in the way of fn. Set <b>Press <Globe size={11} /> key to</b> to <b>Do Nothing</b>.</>}>
+      <Row icon="globe" title={`Your globe key ${globe}`} detail={<>That gets in the way of fn, so set <b>Press <Globe size={11} /> key to</b> to <b>Do Nothing</b>.</>}>
         <Button onClick={() => ask('keyboard')}>Open Keyboard Settings</Button>
       </Row>
     </ul>}
-    {chosen === 'rightControl' && <p className="setup-note">Right ⌃ is only on some external keyboards. Apple’s have the arrow keys there.</p>}
-    {!status.accessibility ? <p className="setup-note">Until Accessibility is on, your key works only while this window is in front. <button type="button" className="link" onClick={() => go('accessibility')}>Turn it on</button></p>
-      : settings.shortcuts.handsFree && <p className="setup-note">Double-tap it to keep listening without holding. Tap again to finish.</p>}
+    {chosen === 'rightControl' && <p className="setup-note">Only some external keyboards have a right ⌃, since Apple’s put the arrow keys there.</p>}
+    {!status.accessibility ? <p className="setup-note">Until Accessibility is on, your key only works while this window is in front. <button type="button" className="link" onClick={() => go('accessibility')}>Turn it on</button></p>
+      : settings.shortcuts.handsFree && <p className="setup-note">You can also double-tap it to keep listening without holding, then tap again to finish.</p>}
   </>;
 }
 
@@ -245,16 +246,16 @@ function Model({ status, settings, update }: Step) {
   const stalled = status.enabled && !ready && !preparing; // on, but the last download or load failed
   const percent = Number(/(\d+(?:\.\d+)?)%/.exec(status.modelMessage)?.[1] ?? NaN);
   return <>
-    <p className="lead">Whisper turns your speech into text right here on this Mac. It downloads once and then works offline.</p>
+    <p className="lead">This is what turns your voice into text, right on your Mac.</p>
     <ul className="ui-tiles setup-tiles">
-      <Row icon="globe" title="Language" detail="Pick yours to skip detection and get it right from the first word.">
+      <Row icon="globe" title="Language" detail="Choosing yours helps it get the first few words right.">
         <Select label="Language" value={language} options={languages} onChange={next => void update({ dictation: { language: next } })} />
       </Row>
-      <Row icon="waveform" title="Model" detail={model === 'turbo' ? 'Whisper large-v3 Turbo, about 875 MB: the most accurate.' : 'Whisper small: faster and lighter, a little less accurate.'}>
+      <Row icon="waveform" title="Model" detail={model === 'turbo' ? 'It’s the most accurate, at about 875 MB to download.' : 'It’s faster and lighter, but a little less accurate.'}>
         <Segmented label="Model" value={model} options={[{ value: 'turbo', label: 'Turbo' }, { value: 'small', label: 'Small' }]} onChange={next => void update({ dictation: { model: next } })} />
       </Row>
-      <Row icon={ready ? 'check' : 'download'} title={ready ? 'Ready' : preparing ? (/download/i.test(status.modelMessage) ? 'Downloading' : 'Getting it ready') : stalled ? 'The download stopped' : status.modelMessage ? 'Dictation is paused' : 'Not on this Mac yet'}
-        detail={<>{ready ? 'Whisper runs on this Mac.' : status.modelMessage || 'Downloaded once, then kept on this Mac.'}
+      <Row icon={ready ? 'check' : 'download'} title={ready ? 'Ready' : preparing ? (/download/i.test(status.modelMessage) ? 'Downloading' : 'Getting it ready') : stalled ? 'The download stopped' : status.modelMessage ? 'Dictation is paused' : 'Not downloaded yet'}
+        detail={<>{ready ? 'It works offline from now on.' : status.modelMessage || 'It downloads once and works offline after that.'}
           {preparing && <ProgressBar label="Speech model download" value={Number.isNaN(percent) ? null : percent / 100} />}</>}>
         {ready ? <Allowed>Ready</Allowed> : !preparing && <Button variant="primary" onClick={() => void invoke('set_enabled', { enabled: true }).catch(() => {})}>
           {stalled ? 'Try again' : status.modelMessage ? 'Turn on' : 'Download'}
@@ -278,19 +279,19 @@ function TryIt({ status, settings, dictateKey, practiced, onPracticed, go }: Ste
   const name = KEY_NAMES[settings.shortcuts.dictate];
   const needs = missing(status);
   if (needs.length) return <>
-    <p className="lead">A practice box is waiting here. First, finish what it needs.</p>
+    <p className="lead">Finish what’s left below, then you can practise here.</p>
     <Left needs={needs} go={go} />
   </>;
   return <>
-    <p className="lead">Click in the box, hold <Kbd>{name}</Kbd> and say something. Let go, and your words appear.</p>
+    <p className="lead">Click in the box, hold <Kbd>{name}</Kbd> and say something, then let go.</p>
     <textarea ref={box} className="setup-practice" aria-label="Practice" autoFocus placeholder={`Hold ${name} and talk…`} value={text} spellCheck={false}
       onChange={event => {
         setText(event.target.value);
         if (performance.now() < counts.current.until && /\p{L}/u.test(event.target.value)) onPracticed();
       }} />
     <p className="setup-status" role="status" data-ok={practiced || undefined}>
-      {practiced ? <><Icon name="check" size={16} />That’s it. It works the same in every app.</>
-        : dictateKey.down ? 'Listening…' : 'Try “Remind me to call Maria at three tomorrow.”'}
+      {practiced ? <><Icon name="check" size={16} />That’s it. It works the same way in every app.</>
+        : dictateKey.down ? 'Listening…' : 'Try saying “Remind me to call Maria at three tomorrow.”'}
     </p>
   </>;
 }
@@ -298,13 +299,13 @@ function TryIt({ status, settings, dictateKey, practiced, onPracticed, go }: Ste
 function Extras({ status, settings, update, open }: Step) {
   const connected = settings.claude.enabled;
   return <>
-    <p className="lead">All optional, and in Settings whenever you want them.</p>
+    <p className="lead">These are all optional, and you’ll find them in Settings later too.</p>
     <ul className="ui-tiles setup-tiles">
-      <Row icon="claude" title="Connect Claude" detail={connected ? 'Connected. Commands, polish and note titles are on.' : 'Commands, polish and note titles. Claude sees text only, never your voice.'}>
+      <Row icon="claude" title="Connect Claude" detail={connected ? undefined : 'Ask it questions, or let it tidy up what you say.'}>
         {connected && <Allowed>Connected</Allowed>}
         <Button onClick={() => open('claude')}>{connected ? 'Open' : 'Connect…'}</Button>
       </Row>
-      <Row icon="meeting" title="Record the other side of calls" detail="Their side of a call, from this Mac’s audio. macOS asks you to allow it the first time you record.">
+      <Row icon="meeting" title="Record the other side of calls" detail="macOS asks for permission the first time you record a call.">
         <Toggle label="Record the other side of calls" checked={settings.meetings.systemAudio} onChange={systemAudio => void update({ meetings: { systemAudio } })} />
         <Button onClick={() => open('meetings')}>Meetings…</Button>
       </Row>
@@ -324,17 +325,17 @@ function Done({ status, settings, go }: Step) {
   const name = KEY_NAMES[shortcuts.dictate];
   const needs = missing(status);
   const ways: [string, ReactNode][] = [['Type where your cursor is', <>hold <Kbd>{name}</Kbd></>]];
-  if (shortcuts.handsFree) ways.push(['Keep listening, hands-free', <>double-tap <Kbd>{name}</Kbd></>]);
-  if (claude.enabled && claude.commands && shortcuts.command !== 'off') ways.push(['Talk to Claude', <>hold <Kbd>{name}</Kbd> with <Kbd>{COMMAND_GLYPHS[shortcuts.command]}</Kbd></>]);
+  if (shortcuts.handsFree) ways.push(['Talk without holding', <>double-tap <Kbd>{name}</Kbd></>]);
+  if (claude.enabled && claude.commands && shortcuts.command !== 'off') ways.push(['Ask AI', <>hold <Kbd>{name}</Kbd> with <Kbd>{COMMAND_GLYPHS[shortcuts.command]}</Kbd></>]);
   ways.push(['Speak a note', shortcuts.note ? <Kbd>{shortcuts.note.label}</Kbd> : 'the note button on the dots']);
   ways.push(['Record a meeting', shortcuts.meeting ? <Kbd>{shortcuts.meeting.label}</Kbd> : general.menuBarIcon ? 'the menu bar icon' : menu]);
   if (shortcuts.pasteLast) ways.push(['Paste the last transcript', <Kbd>{shortcuts.pasteLast.label}</Kbd>]);
   ways.push(['Settings and more', general.menuBarIcon ? 'the menu bar icon' : menu]);
   return <>
     {needs.length ? <>
-      <p className="lead">A few things are left before your words can type. Finish them now, or later from Settings.</p>
+      <p className="lead">There are a few things left before you can dictate. Finish them now or later in Settings.</p>
       <Left needs={needs} go={go} />
-    </> : <p className="lead">What to press. Settings has the rest.</p>}
+    </> : <p className="lead">Here’s what to press. Everything else is in Settings.</p>}
     <ul className="ui-tiles setup-tiles setup-ways" aria-label="What to press">
       {ways.map(([what, how]) => <li key={what} className="ui-tile"><span className="what"><span className="title">{what}</span></span><span className="how">{how}</span></li>)}
     </ul>
@@ -342,8 +343,8 @@ function Done({ status, settings, go }: Step) {
 }
 
 const BODIES: Record<StepId, [string, ComponentType<Step>]> = {
-  welcome: ['Talk instead of typing', Welcome], microphone: ['Your microphone', Microphone], accessibility: ['Accessibility', Accessibility],
-  key: ['Choose your key', ChooseKey], model: ['The speech model', Model], try: ['Try it', TryIt], extras: ['Extras', Extras], done: ['Setup is done', Done],
+  welcome: ['Welcome to TabTasker Dictate', Welcome], microphone: ['Your microphone', Microphone], accessibility: ['Accessibility', Accessibility],
+  key: ['Choose your key', ChooseKey], model: ['The speech model', Model], try: ['Try it', TryIt], extras: ['Extras', Extras], done: ['You’re all set', Done],
 };
 
 // ---------- pieces ----------

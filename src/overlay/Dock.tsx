@@ -23,11 +23,11 @@ export function Dock({ mode, menu, dots, label, hint, hintShown = false, quiet, 
   const [onVoice, setOnVoice] = useState(false);
   useEffect(() => { if (mode !== 'hover') setOnVoice(false); }, [mode]); // a pill that closed under the pointer starts clear
   const button: Record<PillButton, ReactNode> = {
-    note: <button key="note" type="button" aria-label="Speak a note" title="Speak a note: click and talk" tabIndex={tab} onPointerEnter={() => setOnVoice(true)} onPointerLeave={() => setOnVoice(false)} onClick={onNote}><NoteGlyph /></button>,
-    write: <button key="write" type="button" aria-label="Write a note" title="Write a note: a new note in the window, to type into" tabIndex={tab} onClick={onWrite}><WriteGlyph /></button>,
+    note: <button key="note" type="button" aria-label="Speak a note" title="Speak a note" tabIndex={tab} onPointerEnter={() => setOnVoice(true)} onPointerLeave={() => setOnVoice(false)} onClick={onNote}><NoteGlyph /></button>,
+    write: <button key="write" type="button" aria-label="Write a note" title="Write a note" tabIndex={tab} onClick={onWrite}><WriteGlyph /></button>,
     sticky: <button key="sticky" type="button" aria-label="New sticky" title="New sticky" tabIndex={tab} onClick={onSticky}><StickyGlyph /></button>,
-    meeting: <button key="meeting" type="button" aria-label={recording ? 'Stop the meeting' : 'Start a meeting'} title={recording ? 'Stop the meeting' : 'Start a meeting: record the room or a call, with who said what'} data-recording={recording || undefined} tabIndex={tab} onClick={onMeeting}><MeetingGlyph /></button>,
-    library: <button key="library" type="button" aria-label="Your notes and meetings" title="Your notes, meetings and stickies" tabIndex={tab} onClick={onOpen}><LibraryGlyph /></button>,
+    meeting: <button key="meeting" type="button" aria-label={recording ? 'Stop the meeting' : 'Start a meeting'} title={recording ? 'Stop the meeting' : 'Record a meeting or a call'} data-recording={recording || undefined} tabIndex={tab} onClick={onMeeting}><MeetingGlyph /></button>,
+    library: <button key="library" type="button" aria-label="Open your notes" title="Open your notes" tabIndex={tab} onClick={onOpen}><LibraryGlyph /></button>,
     settings: <button key="settings" type="button" aria-label="Settings" title="Settings" tabIndex={tab} onClick={onSettings}><SettingsGlyph /></button>,
   };
   return <div className="spot" data-spot data-hint={hintShown || onVoice || undefined} style={{ '--buttons': pill.length } as CSSProperties} onPointerEnter={() => onHover(true)} onPointerLeave={() => onHover(false)}

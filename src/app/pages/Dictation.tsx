@@ -24,10 +24,10 @@ type Models = {
   models: { model: Model; bytes: number; downloaded: boolean }[];
 };
 const MODELS: Record<Model, { name: string; detail: string }> = {
-  turbo: { name: 'Large-v3 Turbo', detail: 'The most accurate.' },
-  small: { name: 'Small', detail: 'Faster and lighter, a little less accurate. Better at translating.' },
+  turbo: { name: 'Large-v3 Turbo', detail: 'Gets the most words right.' },
+  small: { name: 'Small', detail: 'Faster and better at translating, but makes more mistakes.' },
 };
-const megabytes = (bytes: number) => `${Math.round(bytes / 1e6)} MB`;
+const megabytes = (bytes: number) => bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : `${Math.round(bytes / 1e6)} MB`;
 const SOUND_OPTIONS = SOUNDS.map(name => ({ value: name, label: name }));
 const percent = (value: number) => `${Math.round(value * 100)}%`;
 
@@ -62,54 +62,54 @@ export function Dictation({ settings, update }: PageProps) {
   const play = (name: string) => invoke('play_sound', { name, volume: dictation.soundVolume }).catch(() => {});
 
   return <>
-    <PageHeader icon="waveform" title="Speech">How your speech becomes text. Whisper runs on this Mac.</PageHeader>
+    <PageHeader icon="waveform" title="Speech">How Dictate turns what you say into text.</PageHeader>
     <Section title="Language">
       <TileGroup>
-        <Tile title="Spoken language" detail={dictation.language === 'auto' ? 'Whisper works out the language each time. Pick yours to get the first words right.' : `Whisper always hears ${language}.`}>
+        <Tile title="Spoken language" detail={dictation.language === 'auto' ? 'Picking your language helps Dictate get the first few words right.' : `Dictate always expects ${language}.`}>
           <Select label="Language" value={dictation.language} options={options} onChange={language => update({ dictation: { language } })} />
         </Tile>
-        <Tile title="Translate to English" detail="Types English, whatever language you speak.">
+        <Tile title="Translate to English">
           <Toggle label="Translate to English" checked={dictation.translateToEnglish} onChange={translateToEnglish => update({ dictation: { translateToEnglish } })} />
         </Tile>
-        {dictation.translateToEnglish && dictation.model === 'turbo' && <Tile title="Small translates better" detail="Large-v3 Turbo isn’t trained to translate, so it often types what you said as you said it.">
+        {dictation.translateToEnglish && dictation.model === 'turbo' && <Tile title="Small translates better" detail="Large-v3 Turbo often skips the translation and types what you said.">
           <Button small onClick={() => update({ dictation: { model: 'small' } })}>Use Small</Button>
         </Tile>}
       </TileGroup>
     </Section>
     <Section title="Typing">
       <TileGroup>
-        <Tile title="Remove filler words" detail="Leaves out um, uh, er, ah and hmm. “Like” always stays.">
+        <Tile title="Remove filler words" detail="Leaves out the ums and uhs, but keeps “like”.">
           <Toggle label="Remove filler words" checked={dictation.removeFillers} onChange={removeFillers => update({ dictation: { removeFillers } })} />
         </Tile>
       </TileGroup>
     </Section>
     <Section title="Sounds">
       <TileGroup>
-        <Tile title="Start and stop sounds" detail="The Mac’s own sounds, one as listening starts and one as it stops.">
+        <Tile title="Start and stop sounds">
           <Toggle label="Sounds" checked={dictation.sounds} onChange={sounds => update({ dictation: { sounds } })} />
         </Tile>
-        <Tile title="Volume" detail="For both cues." dim={!dictation.sounds}>
+        <Tile title="Volume" dim={!dictation.sounds}>
           <Slider label="Volume" min={0} max={1} step={0.05} value={dictation.soundVolume} format={percent}
             onChange={soundVolume => { void update({ dictation: { soundVolume } }); }} />
         </Tile>
-        <Tile title="Start" detail="As listening begins." dim={!dictation.sounds}>
+        <Tile title="Start sound" dim={!dictation.sounds}>
           <Select label="Start sound" value={dictation.startSound} options={SOUND_OPTIONS} onChange={startSound => { void update({ dictation: { startSound } }); void play(startSound); }} />
           <Button small aria-label="Play the start sound" onClick={() => play(dictation.startSound)}>Play</Button>
         </Tile>
-        <Tile title="Stop" detail="As you let go." dim={!dictation.sounds}>
+        <Tile title="Stop sound" dim={!dictation.sounds}>
           <Select label="Stop sound" value={dictation.stopSound} options={SOUND_OPTIONS} onChange={stopSound => { void update({ dictation: { stopSound } }); void play(stopSound); }} />
           <Button small aria-label="Play the stop sound" onClick={() => play(dictation.stopSound)}>Play</Button>
         </Tile>
       </TileGroup>
     </Section>
     <Section title="Speech model" note={models && !models.enabled
-      ? 'Dictation is paused. The chosen model downloads when you turn it back on.'
-      : 'Each model is downloaded once and kept, so switching back needs no download.'}>
+      ? 'Dictation is paused, so the model will download when you turn it back on.'
+      : 'You only download each model once.'}>
       <TileGroup label="Speech model">
         {(['turbo', 'small'] as const).map(model => {
           const file = models?.models.find(one => one.model === model);
           const inUse = active === model;
-          return <Tile key={model} title={MODELS[model].name} detail={`${MODELS[model].detail}${file ? ` ${megabytes(file.bytes)}.` : ''}`}>
+          return <Tile key={model} title={MODELS[model].name} detail={`${MODELS[model].detail}${!file ? '' : file.downloaded ? ` It takes up ${megabytes(file.bytes)}.` : ` It’s a ${megabytes(file.bytes)} download.`}`}>
             {dictation.model === model
               ? <span className="state" data-on={inUse || undefined}>{inUse ? 'In use' : step && !step.failed ? 'Getting ready' : 'Chosen'}</span>
               : inUse
@@ -122,7 +122,7 @@ export function Dictation({ settings, update }: PageProps) {
           <div className="speech-progress" aria-live="polite">
             {step.failed ? <>
               <span className="line" data-failed>{step.message}</span>
-              <span className="why">{keeping ? `${keeping} is still in use.` : 'Dictation starts as soon as it is ready.'}</span>
+              <span className="why">{keeping ? `Dictate keeps using ${keeping} for now.` : 'You can dictate as soon as it’s ready.'}</span>
               <span className="actions">
                 <Button small variant="primary" disabled={retrying} onClick={retry}>Try again</Button>
                 {keeping && <Button small onClick={keep}>Keep {keeping}</Button>}
@@ -133,7 +133,7 @@ export function Dictation({ settings, update }: PageProps) {
                 {keeping && <Button small variant="quiet" onClick={keep}>Cancel</Button>}
               </div>
               <ProgressBar label={step.message} value={step.percent == null ? null : step.percent / 100} />
-              <span className="why">{keeping ? `${keeping} keeps working until ${chosen.name} is ready.` : 'Dictation starts as soon as it is ready.'}</span>
+              <span className="why">{keeping ? `${keeping} keeps working until ${chosen.name} is ready.` : 'You can dictate as soon as it’s ready.'}</span>
             </>}
           </div>
         </Tile>}

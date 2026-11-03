@@ -70,7 +70,7 @@ pub fn prepare_in_background() {
 /// Who spoke when in `samples` (16 kHz mono), as the models hear it. Blocking, and slow on a long
 /// meeting (about a tenth of its length); run it where waiting is fine.
 pub fn diarize(root: &Path, samples: &[f32]) -> Result<Vec<Turn>, String> {
-  if !ready(root) { return Err("The speaker models aren’t downloaded yet".into()); }
+  if !ready(root) { return Err("The speaker models aren’t downloaded yet.".into()); }
   let threads = std::thread::available_parallelism().map_or(4, |n| n.get().clamp(2, 6)) as i32;
   let config = OfflineSpeakerDiarizationConfig {
     segmentation: OfflineSpeakerSegmentationModelConfig {
@@ -81,9 +81,9 @@ pub fn diarize(root: &Path, samples: &[f32]) -> Result<Vec<Turn>, String> {
     clustering: FastClusteringConfig { num_clusters: -1, threshold: THRESHOLD, ..Default::default() },
     min_duration_on: 0.3, min_duration_off: 0.5,
   };
-  let diarizer = OfflineSpeakerDiarization::create(&config).ok_or("The speaker models couldn’t be loaded")?;
+  let diarizer = OfflineSpeakerDiarization::create(&config).ok_or("Couldn’t load the speaker models.")?;
   if diarizer.sample_rate() != RATE as i32 { return Err(format!("The speaker model wants {} Hz audio", diarizer.sample_rate())); }
-  let result = diarizer.process(samples).ok_or("Speakers couldn’t be told apart")?;
+  let result = diarizer.process(samples).ok_or("Couldn’t tell the speakers apart.")?;
   let mut turns: Vec<Turn> = result.sort_by_start_time().into_iter()
     .filter(|segment| segment.speaker >= 0 && segment.end > segment.start)
     .map(|segment| Turn { start: (segment.start * RATE) as u64, end: (segment.end * RATE) as u64, speaker: segment.speaker as u32 })

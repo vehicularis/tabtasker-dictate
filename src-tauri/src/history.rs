@@ -367,7 +367,7 @@ extern "C" fn history_typed(context: *mut c_void, status: i32, app: *const c_cha
 #[tauri::command]
 pub async fn history_type(app: AppHandle, at: u64) -> Result<(), String> {
   let text = store().entries.iter().find(|entry| entry.at_ms == at && !entry.text.is_empty()).map(|entry| entry.text.replace('\0', ""));
-  let text = CString::new(text.ok_or("That dictation is no longer kept")?).map_err(|e| e.to_string())?;
+  let text = CString::new(text.ok_or("That dictation isn’t in your history any more.")?).map_err(|e| e.to_string())?;
   let (done, result): (Typed, _) = tokio::sync::oneshot::channel();
   app.run_on_main_thread(move || {
     let context = Box::into_raw(Box::new(done)).cast::<c_void>();
@@ -376,10 +376,10 @@ pub async fn history_type(app: AppHandle, at: u64) -> Result<(), String> {
   let (status, target) = result.await.map_err(|e| e.to_string())?;
   match status {
     0 => Ok(()),
-    1 => Err("Turn on Accessibility to type".into()),
-    3 if !target.is_empty() => Err(format!("Couldn’t bring {target} forward, so nothing was typed")),
-    3 => Err("Couldn’t bring that app forward, so nothing was typed".into()),
-    _ => Err("Open the app to type into, then try again".into()),
+    1 => Err("Dictate needs Accessibility to type. Turn it on in System Settings.".into()),
+    3 if !target.is_empty() => Err(format!("Couldn’t switch to {target}, so nothing was typed.")),
+    3 => Err("Couldn’t switch to that app, so nothing was typed.".into()),
+    _ => Err("Open the app you want to type into, then try again.".into()),
   }
 }
 

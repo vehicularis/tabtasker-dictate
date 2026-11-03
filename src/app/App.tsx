@@ -54,7 +54,7 @@ const SETTINGS_GROUPS = [...new Set(SETTINGS.map(page => page.group))];
 const EXTRA: Record<string, Place> = {
   about: { route: 'about', title: 'About', icon: 'about' },
   help: { route: 'help', title: 'Help', icon: 'help' },
-  setup: { route: 'setup', title: 'Set up', icon: 'general' },
+  setup: { route: 'setup', title: 'Setup', icon: 'general' },
   settings: { route: 'settings', title: 'Settings', icon: 'general' },
 };
 
@@ -125,7 +125,7 @@ export function App() {
   const theme = settings?.appearance.theme;
   useEffect(() => { if (theme) applyTheme(theme); }, [theme]);
   const hideToast = useCallback(() => setToast(null), []);
-  const update = useCallback((patch: Patch) => updateSettings(patch).catch(error => { setToast(typeof error === 'string' ? error : 'Couldn’t save that change.'); return undefined; }), []);
+  const update = useCallback((patch: Patch) => updateSettings(patch).catch(error => { setToast(typeof error === 'string' ? error : 'Couldn’t save that change. Try again.'); return undefined; }), []);
 
   const go = useCallback((to: string) => setState(s => visit(s, to)), []);
   // Every tab action, from the keys, the menu bar (`dictate-tab`), the strip and a tab's menu. The tabs as they
@@ -213,7 +213,7 @@ export function App() {
   return <div className="window">
     <header className="titlebar" data-tauri-drag-region>
       <span className="bar-tools">
-        <button type="button" className="bar-tool" aria-label={column ? 'Hide the column' : 'Show the column'} title="Toggle sidebar" aria-pressed={column} disabled={!hasColumn} onClick={() => setColumn(open => !open)}><Icon name="sidebar" size={16} /></button>
+        <button type="button" className="bar-tool" aria-label={column ? 'Hide sidebar' : 'Show sidebar'} title="Show or hide the sidebar" aria-pressed={column} disabled={!hasColumn} onClick={() => setColumn(open => !open)}><Icon name="sidebar" size={16} /></button>
         <button type="button" className="bar-tool" aria-label="Back" title="Back (⌘[)" disabled={!tab.back.length} onClick={back}><Icon name="chevronLeft" size={16} /></button>
         <button type="button" className="bar-tool" aria-label="Forward" title="Forward (⌘])" disabled={!tab.forward.length} onClick={forward}><Icon name="chevronRight" size={16} /></button>
       </span>
@@ -235,21 +235,21 @@ export function App() {
             onMouseDown={event => { if (event.button === 1) event.preventDefault(); }} onAuxClick={event => { if (event.button === 1) closeTab(i); }}>
             <Icon name={p.icon} size={16} /><span className="tab-title">{title}</span>
           </button>
-          {tabs.length > 1 && <button type="button" className="tab-close" aria-label={`Close ${title}`} title="Close tab (⌘W)" onClick={() => closeTab(i)}><Icon name="close" size={12} /></button>}
+          {tabs.length > 1 && <button type="button" className="tab-close" aria-label={`Close ${title}`} title="Close Tab (⌘W)" onClick={() => closeTab(i)}><Icon name="close" size={12} /></button>}
         </div>; })}
-        <button type="button" className="bar-tool" aria-label="New tab" title="New tab (⌘T)" data-flip="new" onClick={() => newTab()}><Icon name="plus" size={16} /></button>
+        <button type="button" className="bar-tool" aria-label="New tab" title="New Tab (⌘T)" data-flip="new" onClick={() => newTab()}><Icon name="plus" size={16} /></button>
       </div>
       {tabMenu && tabs[tabMenu.index] && <Menu label="Tab" className="tab-menu" keep={false} anchor={() => new DOMRect(tabMenu.x, tabMenu.y, 0, 0)} onClose={() => setTabMenu(null)}>
-        <MenuItem onSelect={() => { setTabMenu(null); tabAction('new'); }}>New tab<kbd>⌘T</kbd></MenuItem>
-        <MenuItem onSelect={() => { setTabMenu(null); tabAction('duplicate', tabMenu.index); }}>Duplicate tab</MenuItem>
-        <MenuItem disabled={!closed.current.length} onSelect={() => { setTabMenu(null); tabAction('reopen'); }}>Reopen closed tab<kbd>⇧⌘T</kbd></MenuItem>
+        <MenuItem onSelect={() => { setTabMenu(null); tabAction('new'); }}>New Tab<kbd>⌘T</kbd></MenuItem>
+        <MenuItem onSelect={() => { setTabMenu(null); tabAction('duplicate', tabMenu.index); }}>Duplicate Tab</MenuItem>
+        <MenuItem disabled={!closed.current.length} onSelect={() => { setTabMenu(null); tabAction('reopen'); }}>Reopen Closed Tab<kbd>⇧⌘T</kbd></MenuItem>
         <MenuLine />
-        <MenuItem disabled={tabMenu.index === 0} onSelect={() => { setTabMenu(null); setState(s => moveTab(s, tabMenu.index, 0)); }}>Move to the start</MenuItem>
-        <MenuItem disabled={tabMenu.index === tabs.length - 1} onSelect={() => { setTabMenu(null); setState(s => moveTab(s, tabMenu.index, s.tabs.length - 1)); }}>Move to the end</MenuItem>
+        <MenuItem disabled={tabMenu.index === 0} onSelect={() => { setTabMenu(null); setState(s => moveTab(s, tabMenu.index, 0)); }}>Move to Start</MenuItem>
+        <MenuItem disabled={tabMenu.index === tabs.length - 1} onSelect={() => { setTabMenu(null); setState(s => moveTab(s, tabMenu.index, s.tabs.length - 1)); }}>Move to End</MenuItem>
         <MenuLine />
-        <MenuItem onSelect={() => { setTabMenu(null); tabAction('close', tabMenu.index); }}>Close tab<kbd>⌘W</kbd></MenuItem>
-        <MenuItem disabled={tabs.length < 2} onSelect={() => { setTabMenu(null); tabAction('close-others', tabMenu.index); }}>Close other tabs</MenuItem>
-        <MenuItem disabled={tabMenu.index === tabs.length - 1} onSelect={() => { setTabMenu(null); tabAction('close-right', tabMenu.index); }}>Close tabs to the right</MenuItem>
+        <MenuItem onSelect={() => { setTabMenu(null); tabAction('close', tabMenu.index); }}>Close Tab<kbd>⌘W</kbd></MenuItem>
+        <MenuItem disabled={tabs.length < 2} onSelect={() => { setTabMenu(null); tabAction('close-others', tabMenu.index); }}>Close Other Tabs</MenuItem>
+        <MenuItem disabled={tabMenu.index === tabs.length - 1} onSelect={() => { setTabMenu(null); tabAction('close-right', tabMenu.index); }}>Close Tabs to the Right</MenuItem>
       </Menu>}
       <span className="bar-end">
         <button type="button" className="titlebar-help" aria-label="Help" aria-pressed={place === 'help'} onClick={() => go('help')}><Icon name="help" size={16} /><span>Help</span></button>

@@ -51,9 +51,9 @@ const elapsed = (since: number) => {
   return `${h ? `${h}:${String(m).padStart(2, '0')}` : m}:${String(s).padStart(2, '0')}`;
 };
 const ONLY_MIC: Partial<Record<SystemSound, string>> = {
-  unsupported: 'Other people need macOS 14.2 or later.',
-  denied: 'System audio recording isn’t allowed.',
-  failed: 'The Mac’s sound couldn’t be recorded.',
+  unsupported: 'Recording the other side needs macOS 14.2 or later.',
+  denied: 'Dictate isn’t allowed to record your Mac’s sound.',
+  failed: 'Couldn’t record your Mac’s sound.',
 };
 
 // `?preview=meeting`, meeting-mic, meeting-saving, meeting-saved, meeting-partial, meeting-error,
@@ -126,7 +126,7 @@ export function MeetingPill() {
     });
   };
   const putOff = (id: string) => { const next = [...later, id]; setLater(next); setOutcome(null); look(next); };
-  const reveal = (path: string) => void invoke('meeting_reveal', { path }).catch(() => setOutcome({ state: 'error', message: 'The meeting has moved.' }));
+  const reveal = (path: string) => void invoke('meeting_reveal', { path }).catch(() => setOutcome({ state: 'error', message: 'Couldn’t find the meeting. It’s been moved or deleted.' }));
 
   // A meeting that just ended can still be saving while the next one records: both show.
   const live = (() => {
@@ -146,7 +146,7 @@ export function MeetingPill() {
     const title = discarding ? 'Discard this recording?' : leftover.saved ? 'A meeting has gaps' : 'A meeting wasn’t saved';
     return <div ref={leave} className="glass meeting-pill meeting-card" data-glass data-hit role="status">
       <span className="meeting-text"><span className="meeting-line"><b>{title}</b></span>
-        <small>{discarding ? (leftover.saved ? 'The saved meeting stays.' : 'It can’t be undone.') : `${meetingWhen(leftover.sinceMs)} · ${meetingLength(leftover.seconds)}`}</small></span>
+        <small>{discarding ? (leftover.saved ? 'The saved meeting stays as it is.' : 'You can’t undo this.') : `${meetingWhen(leftover.sinceMs)} · ${meetingLength(leftover.seconds)}`}</small></span>
       {discarding
         ? <><button type="button" className="btn" onClick={() => setDiscarding(false)}>Keep</button><button type="button" className="btn danger" onClick={() => recover(leftover.id, false)}>Discard</button></>
         : <><button type="button" className="btn" onClick={() => setDiscarding(true)}>Discard</button><button type="button" className="btn primary" onClick={() => recover(leftover.id, true)}>{leftover.saved ? 'Try again' : 'Save'}</button>
@@ -179,7 +179,7 @@ export function MeetingPill() {
       const kept = outcome.leftover;
       return <div ref={leave} className="glass meeting-pill meeting-card" data-glass data-hit role="alert">
         <span className="meeting-text"><span className="meeting-line"><b>{kept ? 'The meeting wasn’t saved' : outcome.message}</b></span>
-          {kept && <small>{outcome.message} The recording is kept.</small>}</span>
+          {kept && <small>{outcome.message} The recording’s still here, so you can try again.</small>}</span>
         {kept
           ? <><button type="button" className="btn" onClick={() => putOff(kept)}>Later</button><button type="button" className="btn primary" onClick={() => recover(kept, true)}>Try again</button></>
           : <button type="button" className="close" aria-label="Close" onClick={() => setOutcome(null)}><X /></button>}
