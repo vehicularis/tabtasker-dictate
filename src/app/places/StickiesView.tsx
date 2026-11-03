@@ -37,7 +37,7 @@ export function StickiesView({ onError }: { onError: (message: string) => void }
   useEffect(refresh, [refresh]);
   useEffect(() => { const off = listen('dictate-stickies', refresh); addEventListener('focus', refresh); return () => { off(); removeEventListener('focus', refresh); }; }, [refresh]);
   const act = (work: Promise<unknown>, failed: string) => void work.then(refresh, error => onError(message(error, failed)));
-  const make = () => act(invoke('sticky_new', {}), 'Couldn’t make a sticky.');
+  const make = () => act(invoke('sticky_new', {}), 'Couldn’t make a new sticky.');
   // A sticky closed, shown, archived, restored, deleted or new: each paper travels to where it now is.
   const shelf = useRef<HTMLDivElement>(null);
   useFlip(shelf, stickies);

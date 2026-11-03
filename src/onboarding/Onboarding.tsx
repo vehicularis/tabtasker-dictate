@@ -264,7 +264,7 @@ function Microphone({ status, frame }: Step) {
       <div className="setup-row">
         <span className="setup-row-text"><span className="setup-row-title">Listen with</span><span className="setup-row-detail">{problem ?? `Right now that’s ${status.inputInUse}.`}</span></span>
         <Select label="Microphone" value={status.input ?? ''} options={[{ value: '', label: 'Automatic' }, ...status.inputs.map(input => ({ value: input.id, label: input.name }))]}
-          onChange={id => { setProblem(null); void invoke('set_input', { id: id || null }).catch(() => setProblem('Couldn’t change the microphone. Try again.')); }} />
+          onChange={id => { setProblem(null); void invoke('set_input', { id: id || null }).catch(() => setProblem('Couldn’t switch to that microphone. Try again.')); }} />
       </div>
     </> : <>
       <span className="setup-action">

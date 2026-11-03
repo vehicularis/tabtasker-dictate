@@ -223,7 +223,7 @@ export function Overlay() {
       .catch((error: unknown) => setToast(message(error, 'Couldn’t start the meeting.')));
   };
   const hideForAnHour = () => { setMenu(false); setHidden(true); setTimeout(() => setHidden(false), 60 * 60 * 1000); };
-  const pickMic = (id: string | null) => { setMenu(false); void invoke('set_input', { id }).then(refresh).catch(() => setToast('Couldn’t change the microphone.')); };
+  const pickMic = (id: string | null) => { setMenu(false); void invoke('set_input', { id }).then(refresh).catch(() => setToast('Couldn’t switch to that microphone. Try again.')); };
   const login = () => { const on = !status?.openAtLogin; void invoke<boolean>('set_open_at_login', { enabled: on }).then(refresh).catch(() => setToast('Couldn’t change whether Dictate opens at login.')); };
   // A click on the dots: stops a note being taken, finishes setup, or opens the window.
   const clickDots = () => {
