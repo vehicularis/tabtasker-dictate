@@ -44,7 +44,11 @@ export type HistoryEntry = { atMs: number; mode: HoldMode; bundleId: string; app
 /// A sticky on the screen (stickies.rs), in one of the whiteboard's hues (boardColor.ts in TabTasker Business).
 export const STICKY_HUES = { amber: '#E0A23C', coral: '#DE7468', sage: '#5AA57A', sky: '#4A8CD2', violet: '#8878DC', slate: '#79838F', teal: '#3FA4A0', plum: '#B4629C' } as const;
 export type StickyHue = keyof typeof STICKY_HUES;
-export type Sticky = { id: string; text: string; hue: StickyHue; x: number; y: number; width: number; height: number; pinned: boolean; folded: boolean; closed: boolean; archived: boolean; createdMs: number; updatedMs: number };
+export type StickyTilt = 'none' | 'slight' | 'random';
+export type StickyWeight = 'regular' | 'bold';
+/// The sticker's sizes, from its menu: the window's points.
+export const STICKY_SIZES = { small: [200, 150], medium: [240, 200], large: [320, 260] } as const;
+export type Sticky = { id: string; text: string; hue: StickyHue; x: number; y: number; width: number; height: number; pinned: boolean; folded: boolean; closed: boolean; archived: boolean; title: string; titled: boolean; tilt: StickyTilt; weight: StickyWeight; createdMs: number; updatedMs: number };
 /// A note or meeting file as the Library lists it (notes.rs LibraryItem).
 export type LibraryItem = { path: string; title: string; kind: 'note' | 'meeting'; modifiedMs: number; words: number; excerpt: string; archived: boolean };
 /// A note or meeting in the editor (notes.rs NoteDoc): its title apart, its body as Markdown with no front matter or heading.
