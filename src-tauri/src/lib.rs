@@ -36,7 +36,7 @@ pub fn run() {
   log::info!("TabTasker Dictate {} starting", env!("CARGO_PKG_VERSION"));
   tauri::Builder::default()
     .invoke_handler(tauri::generate_handler![
-      commands::quit,
+      commands::quit, commands::open_site,
       commands::status, commands::set_enabled, commands::set_input, commands::set_open_at_login, commands::request, commands::layout, commands::meeting, commands::open_app, commands::paste_last, commands::play_sound,
       notes::save_note, notes::show_notes, notes::notes_folder, notes::preview_note, notes::choose_folder, notes::library_list, notes::library_open,
       notes::note_read, notes::note_write, notes::note_new, notes::note_delete, notes::note_attach, commands::note_open,

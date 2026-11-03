@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ComponentType } from 'react';
-import { closeWindow, listen } from '../bridge';
+import { closeWindow, invoke, listen } from '../bridge';
 import { message } from '../lib/errors';
 import { Menu, MenuItem, MenuLine } from '../editor/Menu';
 import { Onboarding } from '../onboarding/Onboarding';
@@ -253,6 +253,7 @@ export function App() {
         <MenuItem disabled={tabMenu.index === tabs.length - 1} onSelect={() => { setTabMenu(null); tabAction('close-right', tabMenu.index); }}>Close Tabs to the Right</MenuItem>
       </Menu>}
       <span className="bar-end">
+        <button type="button" className="titlebar-site" title="TabTasker Business: chat, docs, whiteboards, tasks and meetings for your team, at business.tabtasker.com" onClick={() => { void invoke('open_site', { url: 'https://business.tabtasker.com' }).catch(() => {}); }}><Logo size={16} /><span>TabTasker Business</span><Icon name="external" size={12} /></button>
         <button type="button" className="titlebar-help" aria-label="Help" aria-pressed={place === 'help'} onClick={() => go('help')}><Icon name="help" size={16} /><span>Help</span></button>
       </span>
     </header>
