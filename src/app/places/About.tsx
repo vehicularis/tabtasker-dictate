@@ -85,33 +85,31 @@ const AppIcon = ({ size = 112 }: { size?: number }) => <svg className="about-ico
   </g>
 </svg>;
 
-/// The Highlands in watercolour, drawn: a pale sky with the sun low in it, three ridges receding into mist, a loch
-/// taking the sky, a moor of heather in front. Each wash is a flat shape whose edge a little turbulence makes
-/// wobble as a wet brush does, laid over the paper with multiply so the washes deepen where they cross.
+/// The Highlands as an ink wash, in the page's own tones: a sky that is the page, a sun's warmth low in it, three
+/// ridges receding into mist, a loch taking the sky, a moor in front, every wash the ink mixed a little deeper into
+/// the canvas, so by night it is moonlit grey on grey and by day grey on white. Each wash is a flat shape whose
+/// edge a little turbulence makes wobble as a wet brush does.
 const Highlands = () => {
   const id = useId();
-  const wash = (d: string, fill: string, opacity: number, blur = 0) => <path d={d} fill={fill} opacity={opacity} filter={`url(#${id}-edge)`} style={blur ? { filter: `url(#${id}-edge) blur(${blur}px)` } : undefined} />;
+  const tone = (mix: number) => `color-mix(in srgb, var(--ink) ${mix}%, var(--shell-canvas))`;
+  const wash = (d: string, mix: number) => <path d={d} fill={tone(mix)} filter={`url(#${id}-edge)`} />;
   return <svg className="about-sky" viewBox="0 0 1200 360" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
     <defs>
-      <linearGradient id={`${id}-air`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#dde6ec" /><stop offset=".55" stopColor="#ecebe3" /><stop offset="1" stopColor="#f3e9d8" /></linearGradient>
-      <linearGradient id={`${id}-loch`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#b7c8d1" /><stop offset="1" stopColor="#dbe3e6" /></linearGradient>
-      <filter id={`${id}-edge`} x="-5%" y="-10%" width="110%" height="120%"><feTurbulence type="fractalNoise" baseFrequency=".012 .02" numOctaves="3" seed="7" result="n" /><feDisplacementMap in="SourceGraphic" in2="n" scale="16" xChannelSelector="R" yChannelSelector="G" /></filter>
-      <filter id={`${id}-soft`} x="-20%" y="-50%" width="140%" height="200%"><feGaussianBlur stdDeviation="14" /></filter>
+      <linearGradient id={`${id}-air`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="var(--shell-canvas)" /><stop offset=".62" stopColor={tone(5)} /><stop offset="1" stopColor={tone(3)} /></linearGradient>
+      <linearGradient id={`${id}-loch`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={tone(11)} /><stop offset="1" stopColor={tone(6)} /></linearGradient>
+      <filter id={`${id}-edge`} x="-5%" y="-10%" width="110%" height="120%"><feTurbulence type="fractalNoise" baseFrequency=".012 .02" numOctaves="3" seed="7" result="n" /><feDisplacementMap in="SourceGraphic" in2="n" scale="12" xChannelSelector="R" yChannelSelector="G" /></filter>
+      <filter id={`${id}-soft`} x="-20%" y="-50%" width="140%" height="200%"><feGaussianBlur stdDeviation="16" /></filter>
     </defs>
     <rect width="1200" height="360" fill={`url(#${id}-air)`} />
-    <circle cx="930" cy="78" r="58" fill="#f3d6a4" opacity=".7" filter={`url(#${id}-soft)`} />
-    <g style={{ mixBlendMode: 'multiply' }}>
-      {wash('M0 152 C110 114 220 96 340 130 C440 158 500 92 620 106 C720 118 790 70 900 98 C1000 120 1090 94 1200 122 L1200 360 L0 360 Z', '#a9bccb', .75)}
-      <ellipse cx="620" cy="188" rx="720" ry="22" fill="#ffffff" opacity=".55" filter={`url(#${id}-soft)`} />
-      {wash('M0 206 C90 180 180 150 300 176 C400 198 470 160 560 170 C660 182 740 140 860 164 C960 184 1060 150 1200 182 L1200 360 L0 360 Z', '#8f8ea6', .72)}
-      <rect x="0" y="238" width="1200" height="56" fill={`url(#${id}-loch)`} opacity=".95" />
-      <path d="M180 262 C300 258 420 266 520 262 M640 274 C760 270 900 276 1040 270" stroke="#ffffff" strokeOpacity=".6" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-      {wash('M0 252 C140 212 260 220 420 246 C470 254 520 268 560 292 L0 292 Z', '#7f8f66', .88)}
-      {wash('M640 290 C700 262 840 224 980 216 C1060 212 1130 226 1200 240 L1200 292 L640 292 Z', '#71815c', .88)}
-      {wash('M0 302 C200 282 380 298 600 288 C800 280 1000 300 1200 290 L1200 360 L0 360 Z', '#5f5566', .92)}
-      <g fill="#b48a4c" opacity=".55">{[70, 190, 330, 470, 610, 760, 905, 1050, 1150].map((x, i) => <ellipse key={x} cx={x} cy={318 + (i % 3) * 9} rx={14 + (i % 2) * 6} ry="4" />)}</g>
-      <g fill="#8c6b8e" opacity=".5">{[130, 270, 410, 540, 700, 830, 980, 1110].map((x, i) => <ellipse key={x} cx={x} cy={332 + (i % 2) * 8} rx="18" ry="5" />)}</g>
-    </g>
+    <circle cx="930" cy="84" r="54" fill="color-mix(in srgb, #e0a23c 42%, var(--shell-canvas))" opacity=".55" filter={`url(#${id}-soft)`} />
+    {wash('M0 152 C110 114 220 96 340 130 C440 158 500 92 620 106 C720 118 790 70 900 98 C1000 120 1090 94 1200 122 L1200 360 L0 360 Z', 10)}
+    <ellipse cx="620" cy="190" rx="720" ry="22" fill="var(--shell-canvas)" opacity=".5" filter={`url(#${id}-soft)`} />
+    {wash('M0 206 C90 180 180 150 300 176 C400 198 470 160 560 170 C660 182 740 140 860 164 C960 184 1060 150 1200 182 L1200 360 L0 360 Z', 17)}
+    <rect x="0" y="238" width="1200" height="56" fill={`url(#${id}-loch)`} />
+    <path d="M180 262 C300 258 420 266 520 262 M640 274 C760 270 900 276 1040 270" stroke="var(--shell-canvas)" strokeOpacity=".5" strokeWidth="2" strokeLinecap="round" fill="none" />
+    {wash('M0 252 C140 212 260 220 420 246 C470 254 520 268 560 292 L0 292 Z', 25)}
+    {wash('M640 290 C700 262 840 224 980 216 C1060 212 1130 226 1200 240 L1200 292 L640 292 Z', 23)}
+    {wash('M0 302 C200 282 380 298 600 288 C800 280 1000 300 1200 290 L1200 360 L0 360 Z', 36)}
   </svg>;
 };
 
