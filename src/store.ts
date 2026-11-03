@@ -17,7 +17,7 @@ export type Edge = 'bottom' | 'left' | 'right';
 export type Size = 'small' | 'medium' | 'large';
 export type AppStyle = { bundleId: string; name: string; style: Style; polish: boolean; send?: boolean | null };
 /// Apps where Return follows the words unless the app's style says otherwise (settings.rs CHAT_APPS).
-export const CHAT_APPS = ['com.tinyspeck.slackmacgap', 'com.apple.MobileSMS', 'net.whatsapp.WhatsApp', 'com.microsoft.teams2', 'com.microsoft.teams', 'ru.keepcoder.Telegram', 'com.tdesktop.Telegram', 'com.hnc.Discord', 'com.facebook.archon', 'com.signal.desktop'];
+const CHAT_APPS = ['com.tinyspeck.slackmacgap', 'com.apple.MobileSMS', 'net.whatsapp.WhatsApp', 'com.microsoft.teams2', 'com.microsoft.teams', 'ru.keepcoder.Telegram', 'com.tdesktop.Telegram', 'com.hnc.Discord', 'com.facebook.archon', 'com.signal.desktop'];
 export const sendsByDefault = (bundleId: string) => CHAT_APPS.some(chat => chat.toLowerCase() === bundleId.toLowerCase());
 export type Settings = {
   version: 1;

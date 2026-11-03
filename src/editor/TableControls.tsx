@@ -55,12 +55,12 @@ const moved = <T,>(items: T[], from: number, to: number): T[] | null => {
   next.splice(to, 0, ...next.splice(from, 1));
   return next;
 };
-export function moveRow(table: PMNode, from: number, to: number): PMNode | null {
+function moveRow(table: PMNode, from: number, to: number): PMNode | null {
   if (!isPlainGrid(table)) return null;
   const rows = moved(children(table), from, to);
   return rows && table.copy(Fragment.from(rows));
 }
-export function moveColumn(table: PMNode, from: number, to: number): PMNode | null {
+function moveColumn(table: PMNode, from: number, to: number): PMNode | null {
   if (!isPlainGrid(table)) return null;
   const rows: PMNode[] = [];
   for (const row of children(table)) {
@@ -71,9 +71,9 @@ export function moveColumn(table: PMNode, from: number, to: number): PMNode | nu
   return table.copy(Fragment.from(rows));
 }
 /** Which gap the pointer is over: 0 before the first band, `bands.length` after the last. */
-export const gapAt = (bands: Band[], pointer: number) => { for (let i = 0; i < bands.length; i++) if (pointer < (bands[i].start + bands[i].end) / 2) return i; return bands.length; };
+const gapAt = (bands: Band[], pointer: number) => { for (let i = 0; i < bands.length; i++) if (pointer < (bands[i].start + bands[i].end) / 2) return i; return bands.length; };
 /** The index a band lands on when it leaves `from` for `gap`: past the origin, the gaps close up by one. */
-export const dropIndex = (from: number, gap: number) => gap > from ? gap - 1 : gap;
+const dropIndex = (from: number, gap: number) => gap > from ? gap - 1 : gap;
 
 // ---- the controls ----
 

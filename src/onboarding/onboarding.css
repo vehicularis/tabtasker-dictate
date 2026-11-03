@@ -1,83 +1,154 @@
-/* Setup: the whole Settings window, a step at a time. The steps across the top, the step in the middle
-   (scrolling only when the window is small), Back and Continue at the bottom. */
-.onboarding { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; box-sizing: border-box; height: 100%; padding-top: 40px; background: var(--window); }
+/* Setup: the whole window, a step at a time. The steps down the left as contents, the step beside them (its
+   count, title, why and the one thing to do, Back and Continue at its foot), and the stage on the right: a
+   picture of your screen, on the overlay's wallpaper, drawn with the app's real parts. The step keeps its
+   width and the stage takes the rest; under 760 px the stage goes under the step. */
+.onboarding { display: grid; grid-template-columns: 100px 316px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); column-gap: 24px; box-sizing: border-box; height: 100%; padding: 54px 16px 16px 28px; background: var(--window); }
+.setup-leave { position: fixed; top: 7px; right: 12px; z-index: 2; }
 
-/* ---------- the steps across the top: a bar each, the current one longer and in the accent ---------- */
-.setup-progress { position: relative; z-index: 1; display: flex; justify-content: center; }
-.setup-progress ol { display: flex; gap: 2px; margin: 0; padding: 0; list-style: none; }
-.setup-progress button { display: grid; align-items: center; width: 26px; height: 18px; padding: 0 2px; border: 0; border-radius: 5px; background: none; cursor: pointer; transition: width var(--slow) var(--ease); }
-.setup-progress button::before { content: ''; height: 4px; border-radius: 2px; background: var(--surface-3); transition: background var(--slow) var(--ease); }
-.setup-progress button:hover::before { background: var(--ink-3); }
-.setup-progress button[data-done]::before { background: var(--ink-3); }
-.setup-progress button[aria-current] { width: 42px; }
-.setup-progress button[aria-current]::before { background: var(--accent); }
+/* ---------- the contents: every step's name, the current one in ink, the finished ones ticked ---------- */
+.setup-toc { position: relative; z-index: 1; margin-top: -5px; }
+.setup-toc ol { display: flex; flex-direction: column; gap: 1px; margin: 0; padding: 0; list-style: none; }
+.setup-toc button { display: flex; align-items: center; gap: 5px; width: calc(100% + 8px); height: 26px; margin-left: -8px; padding: 0 8px 0 6px; border: 0; border-radius: 7px; font: 13px/1 var(--font); color: var(--ink-3); background: none; text-align: left; white-space: nowrap; cursor: pointer;
+  transition: color var(--quick) var(--ease), background var(--quick) var(--ease); }
+.setup-toc button:hover { color: var(--ink); background: var(--surface-2); }
+.setup-toc button[data-done] { color: var(--ink-2); }
+.setup-toc button[aria-current] { color: var(--ink); font-weight: 600; }
+.setup-tick { display: grid; flex: none; place-items: center; width: 14px; color: var(--success); }
 
 /* ---------- the step ---------- */
-.setup-step { position: relative; z-index: 1; display: flex; overflow-y: auto; padding: 12px 40px; animation: fade-in var(--quick) var(--ease) backwards, setup-in var(--slow) var(--ease) backwards; }
-/* A step taller than the window fades out at the edge it scrolls on toward, so the rest is not a secret. */
-.setup-step[data-more='down'] { -webkit-mask: linear-gradient(#000 calc(100% - 40px), transparent); mask: linear-gradient(#000 calc(100% - 40px), transparent); }
-.setup-step[data-more='up'] { -webkit-mask: linear-gradient(transparent, #000 40px); mask: linear-gradient(transparent, #000 40px); }
-.setup-step[data-more='up down'] { -webkit-mask: linear-gradient(transparent, #000 40px, #000 calc(100% - 40px), transparent); mask: linear-gradient(transparent, #000 40px, #000 calc(100% - 40px), transparent); }
+.setup-step { position: relative; z-index: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; animation: fade-in var(--quick) var(--ease) backwards, setup-in var(--slow) var(--ease) backwards; }
 @keyframes setup-in { from { translate: 0 calc(6px * var(--motion)); } }
-/* Centred while it fits; from the top once it scrolls. */
-.setup-body { display: flex; flex-direction: column; align-items: center; gap: 14px; width: 100%; max-width: 580px; margin: auto; text-align: center; }
-.setup-icon { display: grid; place-items: center; color: var(--ink-2); } /* the step's glyph alone, no tile */
-.setup-body h1 { margin: 0 0 -6px; font: 500 28px/1.2 var(--font-display); letter-spacing: -.015em; }
+/* Room either side for the focus rings; a step taller than the window fades out at the edge it scrolls on toward. */
+.setup-scroll { flex: 1; min-height: 0; margin: 0 -8px; padding: 0 8px; overflow-y: auto; }
+.setup-scroll[data-more='down'] { -webkit-mask: linear-gradient(#000 calc(100% - 32px), transparent); mask: linear-gradient(#000 calc(100% - 32px), transparent); }
+.setup-scroll[data-more='up'] { -webkit-mask: linear-gradient(transparent, #000 32px); mask: linear-gradient(transparent, #000 32px); }
+.setup-scroll[data-more='up down'] { -webkit-mask: linear-gradient(transparent, #000 32px, #000 calc(100% - 32px), transparent); mask: linear-gradient(transparent, #000 32px, #000 calc(100% - 32px), transparent); }
+.setup-body { display: flex; flex-direction: column; align-items: flex-start; padding-bottom: 16px; }
+.setup-count { margin: 0 0 12px; font-size: 13px; line-height: 16px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.setup-body h1 { margin: 0 0 12px; font: 500 26px/1.2 var(--font-display); letter-spacing: -.015em; text-wrap: balance; }
 .setup-body h1:focus { outline: none; }
-.setup-body .lead { max-width: 460px; margin: 0; font-size: 15px; line-height: 1.5; color: var(--ink-2); }
-.setup-body .lead .ui-kbd, .setup-status .ui-kbd { margin: 0 1px; }
+/* Welcome: the app's icon beside its name, as an About window has it. */
+.setup-brand { display: flex; align-items: center; gap: 14px; }
+.setup-brand svg { flex: none; }
+.setup-why { max-width: 46ch; margin: 0 0 8px; font-size: 15px; line-height: 1.5; color: var(--ink-2); text-wrap: pretty; }
+.setup-why .ui-kbd, .setup-status .ui-kbd { margin: 0 1px; }
+.setup-do { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; width: 100%; margin-top: 16px; }
 
-.setup-tiles { width: 100%; max-width: 520px; margin: 4px 0 0; padding: 0; list-style: none; text-align: left; }
-.setup-tiles .ui-tile { min-height: 54px; }
-.setup-tiles .detail b { font-weight: 600; color: var(--ink); }
-.setup-tiles .detail .ui-progress { width: 100%; margin: 7px 0 3px; }
-.setup-tiles .detail .ui-icon { display: inline; vertical-align: -1px; }
-.setup-row-icon { display: grid; flex: none; place-items: center; width: 30px; height: 30px; color: var(--ink-2); }
+/* A button with a line beside it on what happens next. */
+.setup-action { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.setup-hint { font-size: 13px; line-height: 1.45; color: var(--ink-3); }
+/* A control with its name, as in Settings but on the page rather than in a card: the name and the control on
+   one line, and the line about it under both, so it doesn't wrap into a column of its own. */
+.setup-row, .setup-rows li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 16px; row-gap: 2px; width: 100%; box-sizing: border-box; }
+.setup-row-text { display: contents; }
+.setup-row-title { grid-column: 1; font-size: 14px; font-weight: 500; line-height: 1.35; color: var(--ink); }
+.setup-row-detail { grid-column: 1 / -1; font-size: 12.5px; line-height: 1.4; color: var(--ink-2); }
+.setup-row > :not(.setup-row-text), .setup-row-control { grid-column: 2; grid-row: 1; }
 .setup-path { font-family: var(--font-mono); font-size: 11.5px; word-break: break-all; }
+.setup-download { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%; }
+.setup-download .ui-progress { width: 100%; margin: 4px 0 2px; }
+.setup-download .ui-button { margin-top: 6px; }
 
 /* What to click in System Settings, numbered. */
-.setup-howto { display: flex; flex-direction: column; gap: 9px; width: 100%; max-width: 520px; box-sizing: border-box; margin: 2px 0 0; padding: 0 6px; list-style: none; counter-reset: howto; text-align: left; }
-.setup-howto li { display: flex; align-items: baseline; gap: 10px; font-size: 14px; line-height: 1.45; color: var(--ink-2); counter-increment: howto; }
+.setup-howto { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; counter-reset: howto; }
+.setup-howto li { display: flex; align-items: baseline; gap: 10px; font-size: 13.5px; line-height: 1.45; color: var(--ink-2); counter-increment: howto; }
 .setup-howto li::before { content: counter(howto); display: grid; flex: none; place-items: center; width: 20px; height: 20px; border-radius: 50%; font-size: 11px; font-weight: 600; line-height: 20px; color: var(--ink); background: var(--secondary); box-shadow: var(--elev-raised); }
-.setup-howto b { font-weight: 600; color: var(--ink); }
+.setup-howto b, .setup-callout b { font-weight: 600; color: var(--ink); }
 
-.setup-status { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 24px; margin: 0; font-size: 14px; color: var(--ink-2); }
+.setup-status { min-height: 24px; margin: 0; font-size: 14px; line-height: 1.6; color: var(--ink-2); }
 .setup-status[data-ok] { font-weight: 500; color: var(--ink); }
-.setup-note { max-width: 520px; margin: 0; font-size: 13px; line-height: 1.45; color: var(--ink-3); }
+.setup-status > .ui-icon { display: inline-block; margin-right: 6px; vertical-align: -3px; color: var(--success); }
+.setup-note { margin: 0; font-size: 13px; line-height: 1.45; color: var(--ink-3); }
+.setup-note .link { color: var(--accent-ink); }
+.setup-callout { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; font-size: 13.5px; line-height: 1.45; color: var(--ink-2); }
+.setup-callout p { margin: 0; }
+.setup-callout .ui-icon, .setup-callout svg { display: inline; vertical-align: -1px; }
 
+/* The dots' buttons, numbered as on the stage; pointing at one, or tabbing to it, picks out its button there. */
+.setup-buttons { display: flex; flex-direction: column; gap: 1px; width: calc(100% + 16px); margin: -4px -8px 0; padding: 0; list-style: none; }
+.setup-buttons li { display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 8px; border-radius: 8px; font-size: 14px; color: var(--ink); cursor: default; transition: background var(--quick) var(--ease); }
+.setup-buttons li[data-on] { background: var(--surface-2); }
+.setup-buttons li:focus-visible { outline-offset: -2px; }
+.setup-mark, .setup-marks b { display: inline-grid; flex: none; place-items: center; width: 20px; height: 20px; border-radius: 50%; font: 600 11px/1 var(--font); font-variant-numeric: tabular-nums; color: var(--on-accent); background: var(--accent-button); transition: opacity var(--quick) var(--ease); }
 
-/* ---------- the keyboard: the chosen key ringed, and the accent while it is held ---------- */
-.keyboard { display: flex; flex-direction: column; gap: 5px; margin: 2px 0; padding: 12px; border-radius: var(--radius-group); background: var(--surface); box-shadow: var(--elev-well); }
-.key-row { display: flex; gap: 5px; }
-.cap { position: relative; display: grid; flex: none; place-items: center; width: 38px; height: 36px; box-sizing: border-box; border-radius: 7px; font: 500 12px/1 var(--font); color: var(--ink-3); background: var(--card); box-shadow: var(--elev-raised);
-  transition: transform var(--quick) var(--ease), color var(--quick) var(--ease), background var(--quick) var(--ease), box-shadow var(--quick) var(--ease); }
-.cap[data-size='wide'] { width: 56px; }
-.cap[data-size='space'] { flex: 1; }
-.cap b { position: absolute; top: 5px; right: 6px; font-size: 11px; font-weight: 500; }
-.cap span { position: absolute; bottom: 5px; left: 5px; font-size: 8.5px; letter-spacing: -.01em; }
-.cap[data-letter] b { position: static; font-size: 12px; }
-.cap[data-chosen] { color: var(--accent-ink); box-shadow: var(--elev-raised), inset 0 0 0 1.5px var(--accent); }
-.cap[data-chosen] b { font-weight: 700; }
-.cap[data-down] { color: var(--on-accent); background: var(--accent-button); box-shadow: var(--elev-control); transform: translateY(1px); }
-/* The arrow keys, half height: ◀ and ▶ at the bottom, ▲ over ▼ between them. */
-.arrows { display: flex; flex: none; align-items: flex-end; gap: 5px; }
-.arrows > span { display: flex; flex-direction: column; gap: 2px; }
-.arrows .cap { width: 30px; height: 17px; border-radius: 5px; font-size: 7px; }
+/* The extras: plain rows, the one the stage shows picked out. */
+.setup-rows { display: flex; flex-direction: column; gap: 2px; width: calc(100% + 24px); margin: -6px -12px 0; padding: 0; list-style: none; }
+.setup-rows li { padding: 10px 12px 11px; border-radius: var(--radius-row); transition: background var(--quick) var(--ease); }
+.setup-rows li[data-shown] { background: var(--surface); }
+.setup-row-control { display: flex; align-items: center; gap: 8px; }
+.setup-more { grid-column: 1 / -1; justify-self: start; margin-top: 3px; font-size: 12.5px; }
 
-/* ---------- practice ---------- */
-.setup-practice { display: block; width: 100%; max-width: 520px; min-height: 112px; box-sizing: border-box; padding: 12px 14px; border: 0; border-radius: var(--radius-group); resize: none; font: 15px/1.5 var(--font); color: var(--ink); background: var(--card); box-shadow: var(--elev-raised); text-align: left; }
+/* ---------- Back and Continue, at the foot of the step ---------- */
+.setup-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 12px; }
+.setup-nav .end { display: flex; gap: 8px; }
+
+/* ---------- the stage: your screen, in a well, with a line under it ---------- */
+.setup-stage { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 0; margin: -6px 0 0 12px; animation: fade-in var(--slow) var(--ease) backwards; }
+.setup-screen { --desk: var(--wallpaper); position: relative; flex: 1; min-height: 0; overflow: hidden; border-radius: var(--radius-section); background: var(--wallpaper); box-shadow: var(--elev-well); }
+.setup-stage figcaption { min-height: 19px; margin: 0; padding: 0 4px; font-size: 13px; line-height: 1.45; color: var(--ink-2); text-wrap: pretty; }
+/* The field's cursor blinks as a Mac's does; still under reduced motion. The words that land fade in where it is. */
+.setup-screen .demo-caret { animation: setup-blink 1.06s steps(1) infinite; }
+@keyframes setup-blink { 50% { opacity: 0; } }
+.setup-landed { animation: fade-in var(--quick) var(--ease) backwards, rise-in var(--slow) var(--ease) backwards; }
+@media (prefers-reduced-motion: reduce) { .setup-screen .demo-caret { animation: none; } }
+
+/* A close-up, scaled to the stage (Zoom) and centred, a little above the middle as the eye likes it. */
+.setup-zoom { position: absolute; inset: 24px 24px 40px; }
+.setup-scene { position: absolute; left: 50%; top: 50%; transform-origin: 50% 50%; }
+
+/* The dots, opened, a number over each button (32 px, 4 px apart, 4 px in: overlay.css's pill), on a stalk down to it. */
+.setup-pill { position: absolute; inset: 0; }
+.setup-marks { position: absolute; left: 50%; bottom: 52px; display: flex; gap: 4px; margin: 0; padding: 0 4px; list-style: none; translate: -50% 0; }
+.setup-marks li { display: flex; flex-direction: column; align-items: center; gap: 0; width: 32px; transition: opacity var(--quick) var(--ease); }
+.setup-marks li::after { content: ''; width: 1.25px; height: 14px; background: var(--accent); }
+.setup-marks li[data-dim] { opacity: .25; }
+.setup-pill[data-active='0'] .pill button:nth-child(1), .setup-pill[data-active='1'] .pill button:nth-child(2), .setup-pill[data-active='2'] .pill button:nth-child(3),
+.setup-pill[data-active='3'] .pill button:nth-child(4), .setup-pill[data-active='4'] .pill button:nth-child(5), .setup-pill[data-active='5'] .pill button:nth-child(6) { background: var(--surface-3); }
+
+/* The practice box: the other app's field holds a real one. */
+.setup-practice { display: block; width: 100%; min-height: 92px; box-sizing: border-box; margin: 0; padding: 0; border: 0; resize: none; font: 17px/1.45 var(--font); color: var(--ink); background: none; }
 .setup-practice::placeholder { color: var(--ink-3); }
-.setup-practice:focus { box-shadow: var(--elev-well); }
+.setup-practice:disabled { opacity: .6; }
+.setup-screen .demo-field:has(.setup-practice:focus) { box-shadow: var(--elev-float), 0 0 0 3.5px color-mix(in srgb, var(--accent) 40%, transparent); }
 
-/* ---------- the ways in ---------- */
-.setup-ways .ui-tile { min-height: 42px; padding: 8px 14px; }
-.setup-ways .how { display: inline-flex; flex: none; align-items: center; gap: 4px; font-size: 13px; color: var(--ink-2); }
+/* The keys as they're set, on a card on the screen. */
+.setup-keys { display: flex; flex-direction: column; width: 340px; margin: 0; padding: 8px 18px; border-radius: var(--radius-section); list-style: none; background: var(--card); box-shadow: var(--elev-float); }
+.setup-keys li { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 42px; font-size: 14px; color: var(--ink); }
+.setup-keys li + li { box-shadow: inset 0 1px 0 var(--surface-2); }
+.setup-keys .how { display: inline-flex; flex: none; align-items: center; gap: 4px; font-size: 13px; color: var(--ink-2); }
 
-/* ---------- Back and Continue ---------- */
-.setup-nav { position: relative; z-index: 1; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 12px 24px 18px; }
-.setup-leave { position: fixed; top: 7px; right: 12px; z-index: 2; }
-.setup-nav .end { display: flex; justify-content: flex-end; gap: 8px; }
-.setup-count { font-size: 13px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+/* ---------- a narrow window: the stage under the step ---------- */
+@media (max-width: 760px) {
+  .onboarding { display: flex; flex-direction: column; gap: 22px; overflow-y: auto; padding: 50px 20px 20px; }
+  .setup-toc { margin: 0; }
+  .setup-toc ol { flex-direction: row; flex-wrap: wrap; gap: 2px 4px; }
+  .setup-toc button { width: auto; margin: 0; }
+  .setup-step { flex: none; }
+  .setup-scroll { overflow: visible; }
+  .setup-stage { flex: none; height: 360px; margin: 0; }
+}
+
+/* ---------- the keyboard: the chosen key ringed, and the accent while it is held (its own names: Shortcuts has a .cap) ---------- */
+.setup-keyboard { display: flex; flex-direction: column; gap: 5px; width: max-content; padding: 12px; border-radius: var(--radius-group); background: var(--surface); box-shadow: var(--elev-well); }
+.setup-key-row { display: flex; gap: 5px; }
+.setup-cap { position: relative; display: grid; flex: none; place-items: center; width: 38px; height: 36px; box-sizing: border-box; border-radius: 7px; font: 500 12px/1 var(--font); color: var(--ink-3); background: var(--card); box-shadow: var(--elev-raised);
+  transition: transform var(--quick) var(--ease), color var(--quick) var(--ease), background var(--quick) var(--ease), box-shadow var(--quick) var(--ease); }
+.setup-cap[data-size='wide'] { width: 56px; }
+.setup-cap[data-size='space'] { flex: 1; }
+.setup-cap b { position: absolute; top: 5px; right: 6px; font-size: 11px; font-weight: 500; }
+.setup-cap span { position: absolute; bottom: 5px; left: 5px; font-size: 8.5px; letter-spacing: -.01em; }
+.setup-cap[data-letter] b { position: static; font-size: 12px; }
+.setup-cap[data-chosen] { color: var(--accent-ink); box-shadow: var(--elev-raised), inset 0 0 0 1.5px var(--accent); }
+.setup-cap[data-chosen] b { font-weight: 700; }
+.setup-cap[data-down] { color: var(--on-accent); background: var(--accent-button); box-shadow: var(--elev-control); transform: translateY(1px); }
+/* The arrow keys, half height: ◀ and ▶ at the bottom, ▲ over ▼ between them. */
+.setup-arrows { display: flex; flex: none; align-items: flex-end; gap: 5px; }
+.setup-arrows > span { display: flex; flex-direction: column; gap: 2px; }
+.setup-arrows .setup-cap { width: 30px; height: 17px; border-radius: 5px; font-size: 7px; }
+
+/* On the stage it's a keyboard on the desk: a deck under the keys, lifted off the wallpaper, its legends easier to read. */
+.setup-screen .setup-keyboard { background: var(--secondary); box-shadow: var(--elev-float); }
+.setup-screen .setup-cap:not([data-chosen]) { color: var(--ink-2); }
 
 /* ---------- a settings page as a sheet over the setup ---------- */
 .setup-sheet { flex-direction: column; width: min(640px, calc(100vw - 48px)); max-width: none; max-height: calc(100vh - 48px); box-sizing: border-box; padding: 0; border: 0; border-radius: var(--radius-section); color: var(--ink); background: var(--window); box-shadow: var(--elev-float); }

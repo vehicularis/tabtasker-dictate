@@ -5,7 +5,7 @@ import { Icon } from '../ui/Icon';
 export const HUES = Object.keys(STICKY_HUES) as StickyHue[];
 /// A sticky's first line, as words: for the folded edge.
 export const firstLine = (text: string) => text.split('\n').map(line => line.replace(/^#+\s*|^[-*]\s+(\[[ x]\]\s*)?/g, '').replace(/[*_`]/g, '').trim()).find(Boolean) ?? '';
-export type SheetActions = { fold: () => void; pin: () => void; more: (at: { x: number; y: number }) => void; close: () => void };
+type SheetActions = { fold: () => void; pin: () => void; more: (at: { x: number; y: number }) => void; close: () => void };
 
 /// The sticky itself: one sheet of paper in its colour with the words on it, and nothing else until the pointer
 /// is over it. Then its top edge, where it is dragged, shows three tools: keep on top, more (the colours, fold, save

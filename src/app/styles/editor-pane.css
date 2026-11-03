@@ -1,0 +1,28 @@
+/* ---------- the editor pane ---------- */
+.editor-pane { display: flex; flex-direction: column; height: 100%; min-height: 0; min-width: 0; box-sizing: border-box; }
+.editor-top { display: flex; flex: none; align-items: center; gap: 4px; padding: 10px 14px 0 24px; font-size: 12.5px; color: var(--ink-3); }
+.editor-top .file { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ask-confirm { margin: 0 4px; color: var(--ink-2); }
+.note-state { margin-right: 6px; font-variant-numeric: tabular-nums; }
+.note-state[data-state='saved'] { color: var(--success); }
+.note-state[data-state='error'] { color: var(--danger); }
+.editor-page { display: flex; flex: 1; flex-direction: column; min-height: 0; width: min(760px, 100% - 48px); margin: 0 auto; }
+.note-title { flex: none; width: 100%; box-sizing: border-box; margin: 6px 0 2px; padding: 4px 0; border: 0; outline: 0; background: none; color: var(--ink); font: 600 28px/1.2 var(--font-display); letter-spacing: -.015em; }
+.note-title::placeholder { color: var(--ink-3); }
+.editor-page .ed { flex: 1; min-height: 0; }
+.editor-page .ed-bar { position: sticky; top: 0; z-index: 2; margin: 0 0 10px -4px; padding: 6px 4px; background: color-mix(in srgb, var(--shell-canvas) 92%, transparent); backdrop-filter: blur(12px); }
+.editor-page .ed-content { overflow-y: auto; padding-bottom: 30vh; scrollbar-width: thin; }
+.empty-pane { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; height: 100%; padding: 0 48px; color: var(--ink-3); text-align: center; font-size: 14px; line-height: 1.5; }
+.empty-pane p { max-width: 380px; margin: 0; }
+/* A place with nothing in it yet has the window to itself: what it is, and the one button to start. */
+.empty-pane.first { gap: 8px; color: var(--ink-2); }
+.empty-pane.first .empty-icon { display: grid; place-items: center; margin-bottom: 8px; color: var(--ink-2); } /* the glyph alone, no tile */
+.empty-pane.first strong { font: 500 19px/1.3 var(--font-display); color: var(--ink); }
+.empty-pane.first p { margin-bottom: 10px; }
+.empty-pane.first .meeting-strip { margin-top: 6px; }
+/* The people heard in a meeting, each a chip that renames them everywhere. */
+.people { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 2px 0 10px; color: var(--ink-3); }
+.people .chip { height: 24px; padding: 0 10px; border: 0; border-radius: var(--radius-pill); font: 500 12.5px/1 var(--font); color: var(--ink-2); background: var(--secondary); box-shadow: var(--elev-raised); cursor: text; }
+.people .chip:hover { color: var(--ink); box-shadow: var(--elev-raised-hover); }
+.people .chip.renaming { display: inline-flex; align-items: center; padding: 0 6px; }
+.people .chip.renaming input { width: 120px; border: 0; outline: 0; background: none; font: inherit; color: var(--ink); }

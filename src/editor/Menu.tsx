@@ -5,7 +5,7 @@ import { leave } from '../ui/motion';
 // Business's popover geometry (popover.tsx): a 6 px gap to the anchor, plus the tray ring drawn round the plate.
 const GAP = 6, TRAY = 6;
 
-export type Anchor = HTMLElement | (() => DOMRect | null);
+type Anchor = HTMLElement | (() => DOMRect | null);
 
 /// A menu or popover in Business's inverted tray (richEditor's dropdowns, the "More" popover, the "/"
 /// list): under its anchor, or over it when there is no room below, kept on screen, closed by Escape or

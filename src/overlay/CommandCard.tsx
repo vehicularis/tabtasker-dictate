@@ -1,11 +1,12 @@
 import { useEffect, useState, type KeyboardEvent } from 'react';
 import { invoke, listen } from '../bridge';
+import { message } from '../lib/errors';
 import type { Events } from '../store';
 import { Icon } from '../ui/Icon';
 import { X } from './icons';
 import { leave } from '../ui/motion';
 import { PREVIEW } from './preview';
-import './CommandCard.css';
+import './command-card.css';
 
 type Command = Events['dictate-command'];
 
@@ -15,8 +16,6 @@ const SAMPLES: Record<string, Command> = {
   'command-thinking': { request: 'preview', phase: 'thinking', instruction: 'Make this sound friendlier' },
   'command-error': { request: 'preview', phase: 'error', instruction: 'Summarize this', text: 'Too many requests for this key right now. Try again in a minute.' },
 };
-
-const failed = (error: unknown, fallback: string) => typeof error === 'string' ? error : fallback;
 
 async function copyText(text: string) {
   try { await navigator.clipboard.writeText(text); } catch {
@@ -75,7 +74,7 @@ export function CommandCard() {
     if (inserting) return;
     setInserting(true); setProblem(null); setCopied(false);
     void invoke('claude_insert', { request: command.request, text }).then(() => setCommand(null),
-      error => setProblem(failed(error, 'Couldn’t insert the answer. Copy it instead.'))).finally(() => setInserting(false));
+      error => setProblem(message(error, 'Couldn’t insert the answer. Copy it instead.'))).finally(() => setInserting(false));
   };
   const copy = () => { setProblem(null); void copyText(text).then(() => setCopied(true), () => setProblem('Couldn’t copy the answer. Try again.')); };
   const keys = (event: KeyboardEvent) => {

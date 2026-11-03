@@ -1,7 +1,7 @@
 fn main() {
-  // Every Objective-C file in src and the headers they share, so a new one needs no change here, only a
-  // `touch build.rs` to be picked up: watching all of src would rebuild the native code on every Rust edit.
-  let mut native: Vec<_> = std::fs::read_dir("src").expect("src").filter_map(|entry| entry.ok().map(|entry| entry.path()))
+  // Every Objective-C file in src/native and the headers they share, so a new one needs no change here,
+  // only a `touch build.rs` to be picked up.
+  let mut native: Vec<_> = std::fs::read_dir("src/native").expect("src/native").filter_map(|entry| entry.ok().map(|entry| entry.path()))
     .filter(|path| path.extension().is_some_and(|ext| ext == "m" || ext == "h")).collect();
   native.sort();
   let sources = native.iter().filter(|path| path.extension().is_some_and(|ext| ext == "m"));

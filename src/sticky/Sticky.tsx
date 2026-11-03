@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { invoke } from '../bridge';
+import { stamp } from '../lib/dates';
+import { message } from '../lib/errors';
+import { KEY_NAMES } from '../lib/keyNames';
 import { leave, reduced, timing } from '../ui/motion';
 import { STICKY_HUES, useSettings, type Sticky as Record, type StickyHue } from '../store';
-import { KEY_NAMES } from '../overlay/Dock';
 import { Editor } from '../editor/Editor';
 import { HUES, Sheet } from './Sheet';
 
 const id = new URLSearchParams(location.search).get('id') ?? '';
-/// The page's local "YYYY-MM-DD HH.mm", as a note's stamp is written.
-const stamp = () => { const d = new Date(), p = (n: number) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}.${p(d.getMinutes())}`; };
-const message = (error: unknown, fallback: string) => typeof error === 'string' ? error : fallback;
 // One sticky, in its own small window: a sheet of paper in its colour (Sheet). Its top edge drags it and, under
 // the pointer, shows keep on top (or behind other windows like any window), ⋯ and close; ⋯ and a right-click open
 // the same menu: the colours, fold (the edge alone, its first words showing), keep on top, save as a note, close.

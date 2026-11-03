@@ -16,7 +16,7 @@ export function Toggle({ checked, onChange, label, disabled }: { checked: boolea
   </button>;
 }
 
-export type Option<T extends string> = { value: T; label: string };
+type Option<T extends string> = { value: T; label: string };
 
 /// The chosen segment's plate is one layer under every segment, cut to the chosen one, so a new choice slides it
 /// across (ui.css) instead of lighting another.

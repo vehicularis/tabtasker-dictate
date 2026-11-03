@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ComponentType } from 'react';
 import { closeWindow, listen } from '../bridge';
+import { message } from '../lib/errors';
 import { Menu, MenuItem, MenuLine } from '../editor/Menu';
 import { Onboarding } from '../onboarding/Onboarding';
 import { PLACE_GLYPHS, SETTINGS_GLYPHS } from '../overlay/glyphs';
@@ -7,20 +8,20 @@ import { Logo } from '../overlay/icons';
 import { updateSettings, useSettings, type PageProps, type Patch } from '../store';
 import { applyTheme, Icon, leave, Toast, useFlip, type IconName } from '../ui';
 import { ColumnHead, ColumnResizer } from './Column';
-import { About } from './pages/About';
-import { Appearance } from './pages/Appearance';
-import { AppStyles } from './pages/AppStyles';
-import { Dictation } from './pages/Dictation';
-import { General } from './pages/General';
-import { History } from './pages/History';
-import { Meetings } from './pages/Meetings';
-import { Notes } from './pages/Notes';
-import { SettingsAI } from './pages/SettingsAI';
-import { Shortcuts } from './pages/Shortcuts';
-import { Vocabulary } from './pages/Vocabulary';
-import { HelpView } from './views/HelpView';
-import { NotePage, NotesColumn, useLibrary } from './views/NotesView';
-import { StickiesView } from './views/StickiesView';
+import { Appearance } from './settings/Appearance';
+import { AppStyles } from './settings/AppStyles';
+import { Dictation } from './settings/Dictation';
+import { General } from './settings/General';
+import { History } from './settings/History';
+import { Meetings } from './settings/Meetings';
+import { Notes } from './settings/Notes';
+import { SettingsAI } from './settings/SettingsAI';
+import { Shortcuts } from './settings/Shortcuts';
+import { Vocabulary } from './settings/Vocabulary';
+import { About } from './places/About';
+import { HelpView } from './places/HelpView';
+import { NotePage, NotesColumn, useLibrary } from './places/NotesView';
+import { StickiesView } from './places/StickiesView';
 import { closeTabs, cycleTabs, duplicateTab, moveTab, openTab, reopenTab, selectTab, useTabDrag, type Closed, type Tabs } from './tabs';
 
 // The app's one window, in TabTasker Business's Mac shell: a title bar across the top with the traffic
@@ -121,11 +122,10 @@ export function App() {
   // A tab opened or closed: the others and the plus slide to make room or close the gap.
   const strip = useRef<HTMLDivElement>(null);
   useFlip(strip, tabs.map(t => t.id).join());
-  // One element, two refs: the FLIP's and the drag's.
   const theme = settings?.appearance.theme;
   useEffect(() => { if (theme) applyTheme(theme); }, [theme]);
   const hideToast = useCallback(() => setToast(null), []);
-  const update = useCallback((patch: Patch) => updateSettings(patch).catch(error => { setToast(typeof error === 'string' ? error : 'Couldn’t save that change. Try again.'); return undefined; }), []);
+  const update = useCallback((patch: Patch) => updateSettings(patch).catch(error => { setToast(message(error, 'Couldn’t save that change. Try again.')); return undefined; }), []);
 
   const go = useCallback((to: string) => setState(s => visit(s, to)), []);
   // Every tab action, from the keys, the menu bar (`dictate-tab`), the strip and a tab's menu. The tabs as they
@@ -157,6 +157,7 @@ export function App() {
   useEffect(() => listen<string>('dictate-tab', action => tabAction(action)), [tabAction]);
   const drag = useTabDrag((from, to) => setState(s => moveTab(s, from, to)));
   const [tabMenu, setTabMenu] = useState<{ index: number; x: number; y: number } | null>(null);
+  // One element, two refs: the FLIP's and the drag's.
   const dragRef = drag.ref;
   const stripRef = useCallback((el: HTMLDivElement | null) => { strip.current = el; dragRef.current = el; }, [dragRef]);
   // The tab on screen is never scrolled out of the strip.

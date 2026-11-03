@@ -1,0 +1,20 @@
+/* The pictures of a screen that Help and setup draw with the overlay's real parts (Demo.tsx). */
+/* A desktop: a plain wallpaper, one tone a theme (no blobs), and the menu bar, for the parts that live on the screen rather than in the window.
+   The wallpaper is --desk, so a picture can hang another one (setup's stage uses the overlay's). */
+:root { --desk: #cdd5de; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) { --desk: #1b2129; } }
+:root[data-theme='dark'] { --desk: #1b2129; }
+.demo-desk { position: absolute; inset: 0; overflow: hidden; background: var(--desk); }
+.demo-menubar { position: absolute; inset: 0 0 auto; display: flex; align-items: center; justify-content: flex-end; gap: 12px; height: 26px; padding: 0 14px; font: 500 12.5px/1 -apple-system, BlinkMacSystemFont, system-ui, sans-serif; color: rgb(0 0 0 / .8); background: rgb(255 255 255 / .4); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .demo-menubar { color: rgb(255 255 255 / .88); background: rgb(0 0 0 / .3); } }
+:root[data-theme='dark'] .demo-menubar { color: rgb(255 255 255 / .88); background: rgb(0 0 0 / .3); }
+.demo-menubar time { font-variant-numeric: tabular-nums; }
+/* A text field in some other app, the words going in at its cursor. */
+.demo-field { position: absolute; display: flex; flex-direction: column; gap: 8px; box-sizing: border-box; padding: 14px 16px 18px; border-radius: 12px; color: var(--ink); background: var(--card); box-shadow: var(--elev-float); }
+.demo-field-label { font-size: 12.5px; color: var(--ink-3); }
+.demo-field p { margin: 0; font-size: 17px; line-height: 1.45; }
+.demo-caret { display: inline-block; width: 1.5px; height: 1.1em; margin-left: 1px; vertical-align: -.2em; background: var(--ink); }
+/* The real dots (overlay.css), each set in a layer of its own, pinned where the picture puts it rather than to the screen. */
+.layer.demo-dots { position: absolute; inset: auto; pointer-events: none; }
+.layer.demo-dots > *, .layer.demo-dots [data-hit] { pointer-events: none; }
+.demo-dots .dock { position: absolute; }

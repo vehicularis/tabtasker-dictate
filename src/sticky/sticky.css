@@ -34,7 +34,8 @@
 .sticky-menu { position: fixed; z-index: 5; display: flex; flex-direction: column; min-width: 180px; max-height: calc(100vh - 8px); padding: 6px; border-radius: 12px; background: var(--popover); color: var(--ink-menu, #202020); box-shadow: var(--elev-float); overflow-y: auto;
   animation: fade-in var(--quick) var(--ease) backwards, pop-in var(--quick) var(--ease) backwards; }
 .sticky-menu { --ink-menu: #202020; }
-@media (prefers-color-scheme: dark) { .sticky-menu { --ink-menu: #ededed; } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .sticky-menu { --ink-menu: #ededed; } }
+:root[data-theme='dark'] .sticky-menu { --ink-menu: #ededed; }
 .sticky-menu button[role^='menuitem']:not(.sticky-hue) { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px 0 6px; border: 0; border-radius: 7px; text-align: left; font: 13px/1 var(--font); color: var(--ink-menu); background: none; cursor: pointer; }
 .sticky-menu button[role^='menuitem']:not(.sticky-hue):hover { background: color-mix(in srgb, var(--ink-menu) 8%, transparent); }
 .sticky-menu button:disabled { opacity: .4; cursor: default; }
