@@ -3,7 +3,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { invoke } from '../../bridge';
 import type { PageProps } from '../../store';
 import { Button, Icon, Section, Tile, TileGroup, type IconName } from '../../ui';
-import icon from '../../../src-tauri/icons/128x128@2x.png';
+import { otterBars } from '../../overlay/icons';
 import licence from '../../../LICENSE?raw';
 import notices from '../../../THIRD_PARTY_NOTICES.txt?raw';
 
@@ -56,6 +56,34 @@ const TERMS: [string, string][] = [
   ['The marks', 'TabTasker, Dictate and the otter are Vehicularis’s marks. The licence covers the code, not them.'],
   ['The law', 'These terms are governed by the law of England and Wales.'],
 ];
+/// Apple's icon tile has continuous corners: the curve eases out of each straight edge over about 1.53 radii
+/// (design/icon.swift draws the same points). In radii from the corner, along the edge first and then into it.
+const CORNER: [number, number][] = [[1.52866483, 0], [1.08849323, 0], [0.86840689, 0], [0.66993427, 0.065496], [0.63149399, 0.074911], [0.37282392, 0.16905899], [0.16906013, 0.37282401], [0.07491176, 0.63149399], [0, 0.86840701], [0, 1.08849299], [0, 1.52866483]];
+const squircle = (size: number, r: number) => {
+  const corners: [number, number, number, number, boolean][] = [[size, size, -1, -1, false], [size, 0, -1, 1, true], [0, 0, 1, 1, false], [0, size, 1, -1, true]];
+  return corners.map(([cx, cy, sx, sy, swap], i) => {
+    const p = CORNER.map(([a, b]) => swap ? [cx + sx * b * r, cy + sy * a * r] : [cx + sx * a * r, cy + sy * b * r]).map(([x, y]) => `${x.toFixed(3)} ${y.toFixed(3)}`);
+    return `${i ? 'L' : 'M'}${p[0]}C${p[1]} ${p[2]} ${p[3]}L${p[4]}C${p[5]} ${p[6]} ${p[7]}C${p[8]} ${p[9]} ${p[10]}`;
+  }).join('') + 'Z';
+};
+const TILE = squircle(64, 64 * 0.2237);
+const BARS = otterBars(2, 1.3).sort((a, b) => a.x - b.x); // fourteen, left to right, as the app icon has them
+
+/// The app icon, drawn rather than pictured, so that under the pointer the otter does what it is: its bars
+/// rise and fall in a wave from left to right, the sound of a voice, and settle again when the pointer leaves.
+const AppIcon = ({ size = 112 }: { size?: number }) => <svg className="about-icon" width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">
+  <defs>
+    <linearGradient id="about-tile" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#3c3d41" /><stop offset="1" stopColor="#18181b" /></linearGradient>
+    <clipPath id="about-clip"><path d={TILE} /></clipPath>
+  </defs>
+  <path d={TILE} fill="url(#about-tile)" />
+  <g clipPath="url(#about-clip)">
+    <g transform="translate(32 47) scale(1.3)" fill="#ffffff">
+      {BARS.map((bar, i) => <rect key={i} className="about-bar" x={bar.x} y={bar.y} width={1.3} height={bar.h} rx=".65" style={{ animationDelay: `${i * 70}ms` }} />)}
+    </g>
+  </g>
+</svg>;
+
 const Legal = ({ rows }: { rows: [string, string][] }) => <dl className="legal">{rows.map(([term, words]) => <div key={term}><dt>{term}</dt><dd>{words}</dd></div>)}</dl>;
 
 export function About(_: PageProps) {
@@ -64,7 +92,7 @@ export function About(_: PageProps) {
   useEffect(() => { void invoke<string>('plugin:app|version').then(setVersion).catch(() => {}); }, []);
   return <>
     <header className="about">
-      <img src={icon} width="112" height="112" alt="" draggable={false} />
+      <AppIcon />
       <h1>TabTasker Dictate</h1>
       <p className="version">{version ? `Version ${version}` : ' '}</p>
       <p>Talk instead of typing, in any app.</p>

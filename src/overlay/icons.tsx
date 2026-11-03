@@ -25,7 +25,7 @@ const bodySpan = (x: number) => {
   return [bezier(-16, -22, -25, -25, t), bezier(15, 22, 25, 25, t)] as const;
 };
 const earSpan = (x: number) => { const dx = Math.abs(x) - 9; if (Math.abs(dx) > 4.5) return null; const h = Math.sqrt(4.5 * 4.5 - dx * dx); return [-22 - EAR_LIFT - h, -22 - EAR_LIFT + h] as const; };
-const otterBars = (pitch = 2, width = 1.3) => {
+export const otterBars = (pitch = 2, width = 1.3) => {
   const bars: { x: number; y: number; h: number }[] = [];
   for (let x = pitch / 2; x <= 13.5; x += pitch) for (const side of [-1, 1]) {
     const cx = side * x, body = bodySpan(cx), ear = earSpan(cx);
@@ -36,6 +36,29 @@ const otterBars = (pitch = 2, width = 1.3) => {
   return bars;
 };
 const BARS = otterBars(3.25, 2.1); // eight bars: enough at 28 points
+/// TabTasker Business's own mark, as its site serves it (apps/web/public/tabtasker-mark.svg): the otter on its
+/// night-blue tile. For the way out to Business, so it is Business's face, not Dictate's.
+export const BusinessMark = ({ size = 16 }: { size?: number }) => {
+  const id = useId();
+  return <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">
+    <defs>
+      <linearGradient id={`${id}-bg`} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#1e293b" /><stop offset=".55" stopColor="#0f172a" /><stop offset="1" stopColor="#020617" /></linearGradient>
+      <linearGradient id={`${id}-otter`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#ffffff" /><stop offset="1" stopColor="#cbd5e1" /></linearGradient>
+      <clipPath id={`${id}-tile`}><rect width="64" height="64" rx="14" /></clipPath>
+    </defs>
+    <g clipPath={`url(#${id}-tile)`}>
+      <rect width="64" height="64" fill={`url(#${id}-bg)`} />
+      <g transform="translate(32 47) scale(1.3)">
+        <circle cx="-9" cy="-22" r="4.5" fill="#ffffff" /><circle cx="9" cy="-22" r="4.5" fill="#ffffff" />
+        <path fill={`url(#${id}-otter)`} d="M-13 -16 C-13 -22 -7 -25 0 -25 C7 -25 13 -22 13 -16 L13 15 C13 22 7 25 0 25 C-7 25 -13 22 -13 15 Z" />
+        <circle cx="-9" cy="-22" r="2" fill="#0f172a" /><circle cx="9" cy="-22" r="2" fill="#0f172a" />
+        <circle cx="-5" cy="-15" r="1.6" fill="#0f172a" /><circle cx="5" cy="-15" r="1.6" fill="#0f172a" />
+        <ellipse cx="0" cy="-10" rx="1.7" ry="1.3" fill="#0f172a" />
+        <g fill="#0f172a"><circle cx="-3.5" cy="-8" r=".45" /><circle cx="-4.6" cy="-7" r=".45" /><circle cx="-3.5" cy="-6" r=".45" /><circle cx="3.5" cy="-8" r=".45" /><circle cx="4.6" cy="-7" r=".45" /><circle cx="3.5" cy="-6" r=".45" /></g>
+      </g>
+    </g>
+  </svg>;
+};
 export const Logo = ({ size = 18 }: { size?: number }) => {
   const id = useId();
   return <svg width={size} height={size} viewBox="0 0 28 28" aria-hidden="true">
