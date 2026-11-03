@@ -39,8 +39,12 @@
   --font: 'Source Sans 3', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --font-display: 'Stack Sans Headline', var(--font);
   --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
-  --ease: cubic-bezier(.22, 1, .36, 1); --spring: cubic-bezier(.34, 1.4, .64, 1);
-  --quick: 150ms; --slow: 250ms;
+  /* Motion, timed as Business times it (lib/ui/motion.ts): a thing arrives on --ease and leaves on --ease-in;
+     --quick for what changes in place or goes, --slow for what moves, --pop with --spring for what springs out of
+     something (the pill, a card by the dots). --motion scales every offset and scale: 0 under reduced motion,
+     so a slide becomes the fade it already carries. src/ui/motion.ts reads these same tokens for script. */
+  --ease: cubic-bezier(.22, 1, .36, 1); --ease-in: cubic-bezier(.4, 0, 1, 1); --spring: cubic-bezier(.34, 1.4, .64, 1);
+  --quick: 150ms; --slow: 250ms; --pop: 400ms; --motion: 1;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
@@ -85,6 +89,18 @@
 :root { accent-color: var(--accent); }
 ::selection { background: var(--selection); }
 
+/* The arrivals every surface shares: the fade on its own short tween, the movement beside it on its own curve,
+   so the fade never trails the move. Offsets and scales go through --motion. */
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes rise-in { from { translate: 0 calc(4px * var(--motion)); } }
+@keyframes pop-in { from { scale: calc(1 - var(--pop-by, .04) * var(--motion)); } }
+/* A copy fading out where something was (motion.ts): still inside, and out of the way. */
+[data-leaving], [data-leaving] * { animation: none !important; transition: none !important; }
+
+/* Reduce is not remove, Business's fourth rule: nothing moves (--motion is 0, a transition only changes colour and
+   opacity) and the fades stay, because a thing that fades is easier to follow than one that jumps. Loops stop:
+   each file names its own, and this stops any it missed after one turn. */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
+  :root { --motion: 0; }
+  *, *::before, *::after { transition-property: opacity, color, background-color, border-color, box-shadow, fill, stroke, text-decoration-color, outline-color !important; animation-iteration-count: 1 !important; }
 }

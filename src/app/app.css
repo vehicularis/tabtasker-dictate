@@ -28,6 +28,12 @@ button, input, select { font-family: var(--font); }
 .tabs { position: relative; display: flex; flex: 1; align-items: center; gap: 4px; min-width: 0; margin-left: 8px; overflow-x: auto; scrollbar-width: none; }
 .tabs::-webkit-scrollbar { display: none; }
 .tab { position: relative; display: flex; flex: 1; align-items: center; min-width: 96px; max-width: 224px; height: 28px; padding-right: 4px; border-radius: 10px; font-size: 13px; color: var(--ink-3); background: color-mix(in srgb, var(--ink) 5%, transparent); -webkit-app-region: no-drag; transition: background var(--quick), color var(--quick), box-shadow var(--quick); }
+/* A tab being dragged (tabs.ts useTabDrag): it comes up over its neighbours and follows the pointer; the others
+   slide aside and take no hover while they do, so nothing flickers under the pointer. */
+.tab[data-lifted] { z-index: 3; cursor: grabbing; box-shadow: var(--elev-float); }
+.tabs[data-tab-dragging] { cursor: grabbing; }
+.tabs[data-tab-dragging] .tab:not([data-lifted]) { pointer-events: none; }
+.tab-menu .ed-menu-item kbd { margin-left: auto; padding-left: 20px; font: 500 11.5px/1 var(--font); letter-spacing: .02em; opacity: .55; }
 .tab[aria-selected='false']:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 9%, transparent); }
 .tab[aria-selected='true'] { color: var(--ink); background: var(--tab-on); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ink) 5%, transparent), 0 1px 3px rgb(0 0 0 / .12); }
 .tab-select { display: flex; flex: 1; align-items: center; gap: 8px; min-width: 0; height: 100%; padding: 0 4px 0 10px; border: 0; border-radius: inherit; font: inherit; color: inherit; text-align: left; background: none; cursor: pointer; }
@@ -58,8 +64,13 @@ button, input, select { font-family: var(--font); }
 /* ---------- the column: Business's rail column (SidebarRail, CollapsiblePanel). A leaf raised beside the spine, rounded on its left,
    reaching 24 points under the pane; the frame's tone blends down its first 64 points. Its head is the place's name at 18 points with one
    action flush right; the search is a well under it; the rows scroll in groups under 10-point uppercase headings that fold ---------- */
-.column { display: flex; flex: none; flex-direction: column; width: calc(var(--column) + var(--overlap)); min-height: 0; box-sizing: border-box; margin-right: calc(-1 * var(--overlap)); padding: 8px calc(4px + var(--overlap)) 8px 4px; border-radius: 20px 0 0 20px; background-color: var(--shell-leaf); background-image: linear-gradient(to bottom, var(--shell-frame), transparent 64px); box-shadow: var(--elev-raised); user-select: none; -webkit-user-select: none; animation: column-in var(--slow) var(--ease) both; }
-@keyframes column-in { from { opacity: 0; translate: -8px 0; } }
+.column { display: flex; flex: none; flex-direction: column; width: calc(var(--column) + var(--overlap)); min-height: 0; box-sizing: border-box; margin-right: calc(-1 * var(--overlap)); padding: 8px calc(4px + var(--overlap)) 8px 4px; border-radius: 20px 0 0 20px; background-color: var(--shell-leaf); background-image: linear-gradient(to bottom, var(--shell-frame), transparent 64px); box-shadow: var(--elev-raised); user-select: none; -webkit-user-select: none;
+  --leave: translateX(-8px); animation: fade-in var(--quick) var(--ease) backwards, column-in var(--slow) var(--ease) backwards; }
+@keyframes column-in { from { translate: calc(-8px * var(--motion)) 0; } }
+/* The leaf comes in from the spine as Business's does, and goes back to it over the page, which already has the
+   room (motion.ts leave). What is in it changing (notes, meetings, settings; the list or the archive) fades. */
+.column[data-leaving] { z-index: 2; }
+.column > * { animation: fade-in var(--quick) var(--ease) backwards; }
 .column-head { display: flex; flex: none; align-items: center; gap: 4px; min-height: 40px; padding: 4px 12px; }
 .column-head h2 { flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 18px; font-weight: 550; line-height: 1.4; }
 .column-head .ui-button { height: 28px; min-width: 28px; border-radius: 6px; }
@@ -91,20 +102,26 @@ button, input, select { font-family: var(--font); }
 .column-row .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; line-height: 18px; }
 .column-row .d { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; line-height: 16px; color: var(--ink-3); }
 .list-item { display: block; }
+/* A note that is new rises into its place as Business's rows do, the ones under it gliding down (motion.ts
+   useFlip); one that went (archived, trashed) only fades, so its neighbours do not appear to flinch. */
+.list-item, .column-group-head { --enter: translateY(4px); --leave: none; }
+.column-group > .list-item { animation: fade-in var(--quick) var(--ease) backwards; } /* a day unfolded */
 .list-item .t { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; line-height: 18px; }
 .list-item .x { display: -webkit-box; margin-top: 1px; font-size: 12px; line-height: 1.35; color: var(--ink-2); -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .list-item[aria-current='true'] .x { color: inherit; opacity: .8; }
 .list-item .m { display: block; margin-top: 2px; font-size: 11px; line-height: 14px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.column-views { margin: 0 10px 8px; } .column-views .ui-segmented { display: flex; } .column-views .ui-segmented button { flex: 1; }
 .list-none { margin: 20px 12px; font-size: 12.5px; line-height: 1.45; color: var(--ink-3); text-align: center; }
 /* The record button in the column's head: a 28-point round with the mic; recording, a red stop square breathing. */
 .column-head .record, .column-head .record.only-icon { width: 28px; height: 28px; padding: 0; border-radius: 50%; }
-.record.on { color: #fff; background: #e5484d; box-shadow: var(--elev-control); }
+.record.on { color: var(--on-accent); background: var(--accent-button); box-shadow: var(--elev-control); }
 .record-stop { display: block; width: 10px; height: 10px; border-radius: 2px; background: #fff; animation: record-breathe 1.6s ease-in-out infinite; }
 @keyframes record-breathe { 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { .record-stop, .meeting-live i, .look-caret { animation: none; } }
 /* While a meeting runs, or recordings are kept: the time and the recordings, under the search. */
 .meeting-strip { display: flex; flex: none; flex-direction: column; gap: 6px; padding: 8px 12px 0; }
 .meeting-live { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
-.meeting-live i { width: 8px; height: 8px; border-radius: 50%; background: #e5484d; animation: record-breathe 1.6s ease-in-out infinite; }
+.meeting-live i { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: record-breathe 1.6s ease-in-out infinite; }
 .leftover { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); }
 .leftover > span { flex: 1 1 100%; }
 
@@ -117,8 +134,10 @@ button, input, select { font-family: var(--font); }
 
 /* ---------- the pane: the page, raised, over the column's inner edge ---------- */
 .content { position: relative; z-index: 1; flex: 1; min-width: 0; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; border-radius: 20px; background: var(--shell-canvas); box-shadow: var(--elev-raised); }
-.page { max-width: 640px; margin: 0 auto; padding: 30px 30px 36px; animation: page-in var(--slow) var(--ease) both; }
-@keyframes page-in { from { opacity: 0; transform: translateY(4px); } }
+/* A page arriving (a place, a tab, a settings page, a note opening) rises 4 points as it fades in, once. Nothing
+   inside it cascades after it. */
+.page, .editor-pane > :is(.editor-top, .editor-page, .empty-pane) { animation: fade-in var(--quick) var(--ease) backwards, rise-in var(--slow) var(--ease) backwards; }
+.page { max-width: 640px; margin: 0 auto; padding: 30px 30px 36px; }
 .pair { display: flex; gap: 6px; width: 100%; }
 .pair .ui-field { flex: 1; min-width: 0; }
 .labelled { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--ink-3); }
@@ -133,23 +152,23 @@ button, input, select { font-family: var(--font); }
 .about p { margin: 0; font-size: 14px; color: var(--ink-2); }
 .about .version { margin-bottom: 6px; font-size: 13px; color: var(--ink-3); font-variant-numeric: tabular-nums; user-select: text; -webkit-user-select: text; }
 .pledge { align-items: flex-start; gap: 12px; padding-top: 12px; padding-bottom: 12px; }
-.pledge-icon { display: grid; flex: none; place-items: center; width: 30px; height: 30px; border-radius: 9px; color: var(--ink-2); background: var(--surface-2); box-shadow: var(--elev-well); }
+.pledge-icon { display: grid; flex: none; place-items: center; width: 30px; height: 30px; color: var(--ink-3); }
 .notices { max-height: 240px; margin: 0; padding: 2px 2px 2px 0; overflow: auto; font: 11px/1.55 var(--font-mono); color: var(--ink-2); overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; }
 .notices p { margin: 0; }
 .notices:focus-visible { outline-offset: 6px; border-radius: 2px; }
 .about-foot { margin: 0; font-size: 13px; text-align: center; color: var(--ink-3); }
 
 /* ---------- Appearance: a MacBook with the dots on its screen ---------- */
-.look { --wall: radial-gradient(ellipse 75% 48% at 18% 104%, #8ea88f, rgb(142 168 143 / 0) 72%), radial-gradient(ellipse 85% 52% at 88% 108%, #a9b69a, rgb(169 182 154 / 0) 70%), linear-gradient(180deg, #a7c1da 0%, #d3dee6 56%, #e7e2d5 100%);
+.look { --wall: #cdd5de;
   --bar: rgb(246 246 248 / .62); --bar-ink: #1d1d1f; --glass: rgb(255 255 255 / .8); --lift: 0 6px 18px rgb(0 0 0 / .16), 0 1px 3px rgb(0 0 0 / .12);
   --win: #ffffff; --win-bar: #f3f3f4; --win-ink: #1d1d1f; --win-dim: #8a8a8e; --win-rule: rgb(0 0 0 / .08); --win-shadow: 0 10px 30px rgb(0 0 0 / .22), 0 0 0 .5px rgb(0 0 0 / .18);
   --metal: linear-gradient(#eeeff1 0%, #d6d7db 40%, #b3b5ba 100%); --metal-light: #ffffff; --metal-edge: #8e9095; --rim: #5d5e63; --orb-body: rgb(250 249 247 / .94);
   display: flex; flex-direction: column; align-items: center; margin: 0 0 14px; padding: 22px 18px 26px; border-radius: var(--radius-section); background: var(--section); }
-@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .look { --wall: radial-gradient(ellipse 75% 48% at 18% 104%, #1d3434, rgb(29 52 52 / 0) 72%), radial-gradient(ellipse 85% 52% at 88% 108%, #233128, rgb(35 49 40 / 0) 70%), linear-gradient(180deg, #0e1828 0%, #1a2634 56%, #22282a 100%);
+@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .look { --wall: #1b2129;
   --bar: rgb(30 30 32 / .55); --bar-ink: #f5f5f7; --glass: rgb(46 46 50 / .84); --lift: 0 6px 18px rgb(0 0 0 / .5), 0 0 0 .5px rgb(255 255 255 / .1);
   --win: #1e1e1f; --win-bar: #2b2b2d; --win-ink: #ececee; --win-dim: #8d8d92; --win-rule: rgb(255 255 255 / .08); --win-shadow: 0 10px 30px rgb(0 0 0 / .55), 0 0 0 .5px rgb(255 255 255 / .12);
   --metal: linear-gradient(#66676c 0%, #46474c 40%, #2c2d31 100%); --metal-light: #8d8e93; --metal-edge: #17181b; --rim: #3a3b40; --orb-body: rgb(22 22 25 / .92); } }
-:root[data-theme='dark'] .look { --wall: radial-gradient(ellipse 75% 48% at 18% 104%, #1d3434, rgb(29 52 52 / 0) 72%), radial-gradient(ellipse 85% 52% at 88% 108%, #233128, rgb(35 49 40 / 0) 70%), linear-gradient(180deg, #0e1828 0%, #1a2634 56%, #22282a 100%);
+:root[data-theme='dark'] .look { --wall: #1b2129;
   --bar: rgb(30 30 32 / .55); --bar-ink: #f5f5f7; --glass: rgb(46 46 50 / .84); --lift: 0 6px 18px rgb(0 0 0 / .5), 0 0 0 .5px rgb(255 255 255 / .1);
   --win: #1e1e1f; --win-bar: #2b2b2d; --win-ink: #ececee; --win-dim: #8d8d92; --win-rule: rgb(255 255 255 / .08); --win-shadow: 0 10px 30px rgb(0 0 0 / .55), 0 0 0 .5px rgb(255 255 255 / .12);
   --metal: linear-gradient(#66676c 0%, #46474c 40%, #2c2d31 100%); --metal-light: #8d8e93; --metal-edge: #17181b; --rim: #3a3b40; --orb-body: rgb(22 22 25 / .92); }
@@ -194,10 +213,12 @@ button, input, select { font-family: var(--font); }
 @keyframes look-blink { 50% { opacity: 0; } }
 
 /* Every part sits on one point, where the dots are; the moment decides which parts show. */
-.look-dock { position: absolute; left: 50%; bottom: calc(30px * var(--s)); width: 0; height: 0; font-family: var(--font); transition: left var(--slow) var(--ease), bottom var(--slow) var(--ease), top var(--slow) var(--ease); }
+/* A new edge or size: the dots travel there on the spring the real ones land on (Appearance.tsx). */
+.look-dock { position: absolute; left: 50%; bottom: calc(30px * var(--s)); width: 0; height: 0; font-family: var(--font); }
 .look[data-edge='left'] .look-dock { left: calc(30px * var(--s)); bottom: auto; top: calc(50% + 5px); }
 .look[data-edge='right'] .look-dock { left: calc(100% - 30px * var(--s)); bottom: auto; top: calc(50% + 5px); }
-.look-dock > * { position: absolute; left: 0; top: 0; display: flex; align-items: center; translate: -50% -50%; opacity: 0; scale: .7; transition: opacity var(--quick) var(--ease), scale var(--slow) var(--spring); }
+/* A moment's parts spring in as the overlay's do and fall away quickly: in on the spring, out on --ease-in. */
+.look-dock > * { position: absolute; left: 0; top: 0; display: flex; align-items: center; translate: -50% -50%; opacity: 0; scale: .7; transition: opacity var(--quick) var(--ease-in), scale var(--quick) var(--ease-in); }
 .look-dots { gap: calc(4px * var(--s)); padding: calc(5px * var(--s)) calc(9px * var(--s)); border-radius: var(--radius-pill); background: var(--glass); box-shadow: var(--lift); }
 .look-dots i { width: calc(4px * var(--s)); height: calc(4px * var(--s)); border-radius: 50%; background: var(--win-dim); }
 .look-pill { gap: calc(4px * var(--s)); padding: calc(4px * var(--s)); border-radius: var(--radius-pill); background: var(--glass); box-shadow: var(--lift); }
@@ -207,13 +228,14 @@ button, input, select { font-family: var(--font); }
 /* The orb as the overlay draws it, in miniature (LiveOrb paints the glass and the bars on its canvases). */
 .look-orb { width: calc(64px * var(--s)); height: calc(64px * var(--s)); border-radius: 50%; background: radial-gradient(circle closest-side, var(--orb-body) 80%, transparent 81%); filter: drop-shadow(0 5px 12px rgb(0 0 0 / .3)); }
 .look-orb canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
-.look-hint { gap: 4px; padding: 2px 8px 2px 2px; border-radius: var(--radius-pill); font-size: 8px; white-space: nowrap; color: var(--win-ink); background: var(--glass); box-shadow: var(--lift); translate: calc(53px * var(--s) + 7px) -50%; }
+.look-hint { gap: 4px; padding: 2px 8px 2px 2px; border-radius: var(--radius-pill); font-size: 8px; white-space: nowrap; color: var(--win-ink); background: var(--glass); box-shadow: var(--lift); --half: calc((17px * var(--buttons, 3) + 2px) * var(--s)); /* half the pill: 30 px buttons, 4 px apart, 4 px in */ translate: calc(var(--half) + 7px) -50%; }
 .look-hint kbd { padding: 1px 5px; border-radius: var(--radius-pill); font: 600 8px/1.45 var(--font); color: var(--win-ink); background: var(--win-rule); }
 .look-pointer { width: 9px; height: auto; fill: #000; stroke: #fff; stroke-width: 1.1; translate: calc(4px * var(--s)) calc(6px * var(--s)); filter: drop-shadow(0 1px 1px rgb(0 0 0 / .3)); }
 .look:is([data-edge='left'], [data-edge='right']) :is(.look-dots, .look-pill) { flex-direction: column; }
-.look[data-edge='left'] .look-hint { translate: calc(19px * var(--s) + 7px) -50%; }
-.look[data-edge='right'] .look-hint { translate: calc(-100% - 19px * var(--s) - 7px) -50%; }
-.look[data-moment='idle']:not([data-quiet]) .look-dots, .look[data-moment='hover'] :is(.look-pill, .look-hint, .look-pointer), .look[data-moment='talking'] .look-orb { opacity: 1; scale: 1; }
+/* On a side edge the hint rises above the tall pill, as the overlay draws it, against the screen's edge. */
+.look[data-edge='left'] .look-hint { translate: calc(-19px * var(--s)) calc(-100% - var(--half) - 6px); }
+.look[data-edge='right'] .look-hint { translate: calc(-100% + 19px * var(--s)) calc(-100% - var(--half) - 6px); }
+.look[data-moment='idle']:not([data-quiet]) .look-dots, .look[data-moment='hover'] :is(.look-pill, .look-hint, .look-pointer), .look[data-moment='talking'] .look-orb { opacity: 1; scale: 1; transition: opacity var(--quick) var(--ease), scale var(--pop) var(--spring); }
 .look figcaption { display: flex; align-items: center; justify-content: space-between; gap: 12px; align-self: stretch; margin: 26px 0 0; font-size: 13px; color: var(--ink-2); }
 
 /* ---------- the editor pane ---------- */
@@ -232,6 +254,12 @@ button, input, select { font-family: var(--font); }
 .editor-page .ed-content { overflow-y: auto; padding-bottom: 30vh; scrollbar-width: thin; }
 .empty-pane { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; height: 100%; padding: 0 48px; color: var(--ink-3); text-align: center; font-size: 14px; line-height: 1.5; }
 .empty-pane p { max-width: 380px; margin: 0; }
+/* A place with nothing in it yet has the window to itself: what it is, and the one button to start. */
+.empty-pane.first { gap: 8px; color: var(--ink-2); }
+.empty-pane.first .empty-icon { display: grid; place-items: center; margin-bottom: 8px; color: var(--ink-2); } /* the glyph alone, no tile */
+.empty-pane.first strong { font: 500 19px/1.3 var(--font-display); color: var(--ink); }
+.empty-pane.first p { margin-bottom: 10px; }
+.empty-pane.first .meeting-strip { margin-top: 6px; }
 /* The people heard in a meeting, each a chip that renames them everywhere. */
 .people { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 2px 0 10px; color: var(--ink-3); }
 .people .chip { height: 24px; padding: 0 10px; border: 0; border-radius: var(--radius-pill); font: 500 12.5px/1 var(--font); color: var(--ink-2); background: var(--secondary); box-shadow: var(--elev-raised); cursor: text; }
@@ -240,7 +268,24 @@ button, input, select { font-family: var(--font); }
 .people .chip.renaming input { width: 120px; border: 0; outline: 0; background: none; font: inherit; color: var(--ink); }
 
 /* ---------- stickies: the window's cards are the stickers themselves (sticky.css has the same recipe) ---------- */
-.stickies-head { margin: -6px 0 18px; }
+/* The Stickies page: the title with New sticky beside it, the two views, then the stickies in groups. */
+.stickies-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
+.stickies-top .ui-page-header { margin-bottom: 18px; }
+.stickies-top > .ui-button { margin-top: 2px; }
+.stickies-views { margin: 0 0 22px; }
+.stickies-group { margin: 0 0 26px; }
+.stickies-heading { display: flex; align-items: baseline; gap: 8px; margin: 0 2px 10px; font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
+.stickies-heading span { font-variant-numeric: tabular-nums; letter-spacing: 0; }
+.stickies-none { margin: 8px 2px; font-size: 13.5px; color: var(--ink-3); }
+/* A sticky closed, shown, archived or restored travels to where it now is and the others make room (motion.ts
+   useFlip): a card that leaves the view shrinks a little as it fades, a heading only fades. The other view fades in. */
+.stickies-heading, .stickies-none { --enter: none; --leave: none; }
+.stickies-view { animation: fade-in var(--quick) var(--ease) backwards; }
+/* A question in place of a card's buttons, or the editor's: it fades in where the buttons were. */
+.sticky-card-ask, .ask-confirm { animation: fade-in var(--quick) var(--ease) backwards; }
+.stickies-first { display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 420px; margin: 18vh auto 0; text-align: center; font-size: 14px; line-height: 1.5; color: var(--ink-2); }
+.stickies-first strong { margin-top: 6px; font: 500 19px/1.3 var(--font-display); color: var(--ink); }
+.stickies-first p { margin: 0 0 10px; }
 .stickies-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
 .sticky-card { --paper: color-mix(in srgb, var(--hue) 30%, #ffffff); --sticker-ink: color-mix(in srgb, var(--hue) 20%, #17181b); --bar: color-mix(in srgb, var(--hue) 44%, #ffffff); --dim: color-mix(in srgb, var(--sticker-ink) 55%, transparent);
   display: flex; flex-direction: column; min-height: 160px; border-radius: 6px; color: var(--sticker-ink); background: var(--paper); box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--sticker-ink) 18%, transparent), 0 1px 4px rgb(0 0 0 / .12); transition: box-shadow var(--quick) var(--ease), translate var(--quick) var(--ease); }
@@ -257,53 +302,57 @@ button, input, select { font-family: var(--font); }
 .sticky-face { display: flex; align-items: flex-start; flex: 1; min-height: 90px; padding: 10px 12px; border: 0; background: none; color: inherit; text-align: left; font: 500 14px/1.45 var(--font); cursor: pointer; }
 .sticky-words { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 5; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
 .sticky-empty { color: var(--dim); }
-.sticky-card footer { display: flex; justify-content: space-between; padding: 2px 4px 5px; }
+.sticky-card footer { display: flex; align-items: center; gap: 2px; padding: 2px 4px 5px; }
+.sticky-card[data-closed] .sticky-face { opacity: .72; } /* off the screen */
+.sticky-face:disabled { cursor: default; }
+.sticky-card-tool.danger { color: var(--danger); }
+.sticky-card-ask { flex: 1; padding: 0 4px; font-size: 12px; color: var(--sticker-ink); }
 
-/* ---------- the Help page's mock of the Mac with its wires ---------- */
+/* ---------- the Help page: Business's annotated figures (GuideFigure), each a real screen in a well ---------- */
 .page.help { max-width: 760px; }
-.help-scene { position: relative; width: 100%; margin: 0 0 22px; }
-.help-desk { position: absolute; inset: 0; overflow: hidden; border-radius: 16px; background: radial-gradient(ellipse 70% 50% at 20% 110%, #8ea88f, transparent 70%), radial-gradient(ellipse 80% 50% at 90% 110%, #a9b69a, transparent 70%), linear-gradient(180deg, #c8d3e6, #dfe3ea 55%, #e9e5dc); box-shadow: var(--elev-raised); }
-@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .help-desk { background: radial-gradient(ellipse 70% 50% at 20% 110%, #1d3434, transparent 70%), radial-gradient(ellipse 80% 50% at 90% 110%, #233128, transparent 70%), linear-gradient(180deg, #0e1828, #1a2634 56%, #22282a); } }
-:root[data-theme='dark'] .help-desk { background: radial-gradient(ellipse 70% 50% at 20% 110%, #1d3434, transparent 70%), radial-gradient(ellipse 80% 50% at 90% 110%, #233128, transparent 70%), linear-gradient(180deg, #0e1828, #1a2634 56%, #22282a); }
-.help-menubar { position: absolute; inset: 0 0 auto; display: flex; align-items: center; justify-content: flex-end; gap: 7px; height: 7%; padding: 0 3%; background: rgb(255 255 255 / .35); }
-.help-menubar i { width: 7px; height: 7px; border-radius: 2px; background: rgb(0 0 0 / .35); }
-.help-otter { display: grid; place-items: center; width: 9px; height: 9px; }
-.help-otter span { width: 5px; height: 8px; border-radius: 2.5px 2.5px 1px 1px; background: rgb(0 0 0 / .6); }
-/* The window itself, at less than half size: the shell's own classes and the real editor; the lights drawn in. */
-.help-mini { position: absolute; zoom: .4; width: 1040px; height: 700px; overflow: hidden; border-radius: 22px; box-shadow: 0 30px 70px -24px rgb(0 0 0 / .6), 0 0 0 1px rgb(0 0 0 / .3), inset 0 0 0 1px rgb(255 255 255 / .08); }
+.help-figure { margin: 0 0 30px; }
+.help-well { position: relative; border-radius: var(--radius-section); background: var(--section); box-shadow: var(--elev-well); }
+.help-screen { position: relative; overflow: hidden; border-radius: 8px; background: var(--frame); }
+.help-stage { position: absolute; left: 0; top: 0; overflow: hidden; transform-origin: 0 0; pointer-events: none; }
+/* The numbers spring onto the margin as the figure arrives, and their lines and brackets draw in a beat after, so
+   the eye goes from the number to the part. */
+.help-marks { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; color: var(--accent); animation: fade-in var(--slow) var(--ease) 80ms backwards; }
+.help-marks path { fill: none; stroke: currentColor; stroke-width: 1.25; stroke-linecap: round; stroke-linejoin: round; }
+.help-marks g { transition: opacity var(--quick) var(--ease); }
+.help-marks g[data-active] path { stroke-width: 2; }
+.help-marker { display: inline-grid; flex: none; place-items: center; width: 22px; height: 22px; border-radius: 50%; font: 600 11px/1 var(--font); font-variant-numeric: tabular-nums; color: var(--on-accent); background: var(--accent-button); transition: opacity var(--quick) var(--ease); }
+.help-well .help-marker { --pop-by: .35; position: absolute; translate: -50% -50%; animation: fade-in var(--quick) var(--ease) backwards, pop-in var(--pop) var(--spring) backwards; }
+.help-well[data-small] .help-marker { width: 16px; height: 16px; font-size: 9px; }
+:is(.help-marks g, .help-marker)[data-dim] { opacity: .25; }
+.help-figure-title { margin: 14px 0 0; font-size: 14px; font-weight: 500; }
+.help-callouts { display: flex; flex-direction: column; gap: 10px; max-width: 640px; margin: 10px 0 0; padding: 0; list-style: none; }
+.help-callouts li { display: flex; gap: 12px; font-size: 14px; line-height: 1.5; color: var(--ink-2); }
+.help-callouts li .help-marker { margin-top: 0; }
+.help-callouts strong { font-weight: 500; color: var(--ink); }
+/* A desktop: a plain wallpaper, one tone a theme (no blobs), and the menu bar, for the parts that live on the screen rather than in the window. */
+.help-desk { position: absolute; inset: 0; overflow: hidden; background: #cdd5de; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .help-desk { background: #1b2129; } }
+:root[data-theme='dark'] .help-desk { background: #1b2129; }
+.help-menubar { position: absolute; inset: 0 0 auto; display: flex; align-items: center; justify-content: flex-end; gap: 12px; height: 26px; padding: 0 14px; font: 500 12.5px/1 -apple-system, BlinkMacSystemFont, system-ui, sans-serif; color: rgb(0 0 0 / .8); background: rgb(255 255 255 / .4); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .help-menubar { color: rgb(255 255 255 / .88); background: rgb(0 0 0 / .3); } }
+:root[data-theme='dark'] .help-menubar { color: rgb(255 255 255 / .88); background: rgb(0 0 0 / .3); }
+.help-menubar time { font-variant-numeric: tabular-nums; }
+/* A text field in some other app, the words going in at its cursor. */
+.help-field { position: absolute; display: flex; flex-direction: column; gap: 8px; box-sizing: border-box; padding: 14px 16px 18px; border-radius: 12px; color: var(--ink); background: var(--card); box-shadow: var(--elev-float); }
+.help-field-label { font-size: 12.5px; color: var(--ink-3); }
+.help-field p { margin: 0; font-size: 17px; line-height: 1.45; }
+.help-caret { display: inline-block; width: 1.5px; height: 1.1em; margin-left: 1px; vertical-align: -.2em; background: var(--ink); }
+/* The window itself: the shell's own classes and the real editor, the lights drawn in. */
+.help-mini { position: absolute; inset: 0; overflow: hidden; }
 .help-mini .window { pointer-events: none; }
-.help-mini .column { animation: none; }
+.help-mini .column, .help-stage :is(.column > *, .editor-pane > *, .page, .sticky) { animation: none; } /* a still screen: measured as it lands */
 .help-mini .list-item { display: block; }
 .help-lights { position: absolute; left: 12px; top: 14px; z-index: 3; display: flex; gap: 8px; }
 .help-lights i { width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; box-shadow: inset 0 0 0 .5px rgb(0 0 0 / .2); } .help-lights i:nth-child(2) { background: #febc2e; } .help-lights i:nth-child(3) { background: #28c840; }
-/* A real sticky (sticky.css, its Sheet), at four fifths. */
-.help-stick { position: absolute; zoom: .7; width: 230px; height: 190px; filter: drop-shadow(0 10px 22px rgb(0 0 0 / .32)); }
-.help-stick .sticky { height: 100%; pointer-events: none; }
-/* The real dots (overlay.css), each set in a layer of its own, pinned where the scene puts it rather than to the screen. */
-.help-desk .layer { position: absolute; inset: auto; pointer-events: none; }
-.help-desk .layer > *, .help-desk .layer [data-hit] { pointer-events: none; }
-.help-desk .dock { position: absolute; }
-.help-app { position: absolute; display: flex; flex-direction: column; gap: 6px; padding: 10px; border-radius: 8px 8px 0 0; background: #17181b; box-shadow: 0 0 0 .5px rgb(0 0 0 / .3); }
-.help-app p { height: 6px; margin: 0; border-radius: 3px; background: rgb(255 255 255 / .22); width: 70%; }
-.help-app p.caret { width: 42%; position: relative; } .help-app p.caret::after { content: ''; position: absolute; left: 100%; top: -3px; width: 1.5px; height: 12px; margin-left: 3px; background: #fff; animation: help-caret 1s steps(2) infinite; }
-@keyframes help-caret { 50% { opacity: 0; } }
-.help-sticky { position: absolute; width: 14%; aspect-ratio: 1.15; border-radius: 4px; background: color-mix(in srgb, #E0A23C 30%, #fff); box-shadow: 0 2px 6px rgb(0 0 0 / .18); }
-.help-sticky i { display: block; height: 14%; border-radius: 4px 4px 0 0; background: color-mix(in srgb, #E0A23C 44%, #fff); }
-.help-sticky p { height: 5px; margin: 8px 8px 0; border-radius: 3px; background: color-mix(in srgb, #E0A23C 20%, #17181b); opacity: .5; } .help-sticky p.short { width: 50%; }
-.help-pill { position: absolute; display: flex; align-items: center; gap: 8px; translate: -50% -50%; }
-.help-dots { display: flex; gap: 3px; padding: 5px 7px; border-radius: 9px; background: rgb(30 30 34 / .85); }
-.help-dots i { width: 3px; height: 3px; border-radius: 50%; background: #ddd; }
-.help-pill-buttons { display: flex; gap: 3px; padding: 3px; border-radius: 15px; background: rgb(30 30 34 / .85); }
-.help-pill-buttons b { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: rgb(255 255 255 / .08); }
-.help-orb { position: absolute; display: flex; align-items: center; justify-content: center; gap: 2px; width: 30px; height: 30px; border-radius: 50%; translate: -50% -50%; background: #1b1c20; box-shadow: inset 0 0 0 1px rgb(255 255 255 / .15), 0 6px 14px rgb(0 0 0 / .35); }
-.help-orb i { width: 2.5px; border-radius: 2px; background: #3b82f6; height: 8px; } .help-orb i:nth-child(2), .help-orb i:nth-child(3) { height: 14px; }
-.help-wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-.help-wires path { fill: none; stroke: var(--ink-2); stroke-width: 1.2; stroke-dasharray: 4 3; opacity: .8; }
-.help-wires circle { fill: var(--window); stroke: var(--ink-2); stroke-width: 1.5; }
-.help-tag { position: absolute; display: inline-flex; align-items: center; gap: 6px; height: 20px; padding: 0 8px 0 3px; border-radius: 10px; font: 600 11px/1 var(--font); letter-spacing: .02em; color: var(--ink); background: var(--card); box-shadow: var(--elev-float); white-space: nowrap; }
-.help-tag b { display: grid; place-items: center; width: 14px; height: 14px; border-radius: 50%; font-size: 9.5px; color: var(--on-accent); background: var(--accent); }
-.help-steps { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px 18px; margin: 0 0 28px; padding: 0; list-style: none; }
-.help-steps li { display: flex; gap: 10px; }
-.help-steps li > b { display: grid; flex: none; place-items: center; width: 20px; height: 20px; margin-top: 1px; border-radius: 50%; font-size: 11px; font-weight: 600; color: var(--on-accent); background: var(--accent); }
-.help-steps strong { display: block; font-size: 14px; }
-.help-steps p { margin: 2px 0 0; font-size: 13.5px; line-height: 1.45; color: var(--ink-2); }
+/* A real sticky (sticky.css, its Sheet). */
+.help-stick { position: absolute; width: 200px; height: 170px; }
+.help-stick .sticky { height: 100%; pointer-events: none; box-shadow: var(--elev-float); }
+/* The real dots (overlay.css), each set in a layer of its own, pinned where the figure puts it rather than to the screen. */
+.help-stage .layer { position: absolute; inset: auto; pointer-events: none; }
+.help-stage .layer > *, .help-stage .layer [data-hit] { pointer-events: none; }
+.help-stage .dock { position: absolute; }

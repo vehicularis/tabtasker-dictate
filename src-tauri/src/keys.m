@@ -65,3 +65,11 @@ size_t tt_hold_limit(bool long_session) { return (long_session ? 10 : 1) * 60 * 
 // Two minutes, or twice as long as it took to say: the speed a one-minute hold always needed, so a
 // ten-minute session whose tail is still untranscribed gets the time it needs too.
 double tt_words_timeout(size_t samples) { double said = samples / 16000.0; return said * 2 > 120 ? said * 2 : 120; }
+
+bool tt_types_instead(bool chromium, bool plain_layout, size_t units, bool one_line) {
+  return chromium && plain_layout && one_line && units > 1 && units <= 2000;
+}
+double tt_restore_at(double pressed_at, double read_at) {
+  double after_press = pressed_at + 0.45;
+  return read_at > 0 && read_at + 0.05 > after_press ? read_at + 0.05 : after_press;
+}

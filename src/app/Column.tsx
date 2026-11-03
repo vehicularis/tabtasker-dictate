@@ -7,11 +7,12 @@ export function ColumnHead({ title, action }: { title: string; action?: ReactNod
   return <header className="column-head"><h2>{title}</h2>{action}</header>;
 }
 
-/// A group of rows under an uppercase heading that folds; folded, the heading carries the count.
-export function ColumnGroup({ title, children, count }: { title: string; children: ReactNode; count?: number }) {
+/// A group of rows under an uppercase heading that folds; folded, the heading carries the count. `flip` keys the
+/// heading for a list that glides when it changes (motion.ts useFlip).
+export function ColumnGroup({ title, children, count, flip }: { title: string; children: ReactNode; count?: number; flip?: string }) {
   const [open, setOpen] = useState(true);
   return <section className="column-group" data-open={open || undefined}>
-    <button type="button" className="column-group-head" aria-expanded={open} onClick={() => setOpen(o => !o)}><Icon name="chevronDown" size={10} />{title}{count !== undefined && <span className="count">{count}</span>}</button>
+    <button type="button" className="column-group-head" data-flip={flip} aria-expanded={open} onClick={() => setOpen(o => !o)}><Icon name="chevronDown" size={10} />{title}{count !== undefined && <span className="count">{count}</span>}</button>
     {open && children}
   </section>;
 }

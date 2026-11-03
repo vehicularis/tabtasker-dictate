@@ -137,19 +137,40 @@ export function flatWave(canvas: HTMLCanvasElement, accent: string): Glass {
   };
 }
 
-/// What shows inside the glass: level bars while you talk, or a text cursor while your words type (solid
-/// while they are going in and, like the Mac's, blinking from full once they stop for `quiet` ms).
-export function paintInside(canvas: HTMLCanvasElement, kind: 'bars' | 'caret' | null, energy: number, time: number, quiet: number, ink: string) {
+/// What shows inside the glass: level bars while you talk, or, while you dictate, your words being written
+/// with a text cursor after them (`text`, the part written so far): the line ends at the cursor a little right
+/// of the middle and runs out of the glass on the left under a fade. With nothing written yet the cursor
+/// stands alone in the middle, rising and falling with your voice. Like the Mac's it blinks from full once
+/// the writing has been still for `quiet` ms.
+export function paintInside(canvas: HTMLCanvasElement, kind: 'bars' | 'caret' | null, energy: number, time: number, quiet: number, ink: string, text = '') {
   const context = canvas.getContext('2d');
   if (!context) return;
   const { width, height } = canvas;
   context.clearRect(0, 0, width, height);
   context.fillStyle = ink;
   if (kind === 'caret') {
-    const tall = height * .24, thin = Math.max(1.5, width * .024), blinking = quiet - 600;
+    const thin = Math.max(1.5, width * .024), blinking = quiet - 600, size = height * .155;
+    const words = text.trimStart();
+    const x = words ? width * .64 : width / 2;
+    if (words) {
+      const r = width * .41; // the glass (createGlass)
+      context.save();
+      context.beginPath(); context.arc(width / 2, height / 2, r * .94, 0, 2 * Math.PI); context.clip();
+      context.font = `500 ${size}px "Source Sans 3", system-ui, sans-serif`;
+      context.textAlign = 'right'; context.textBaseline = 'middle';
+      context.fillText(words.slice(-48), x - thin * 2.2, height / 2 + size * .06);
+      // The start of the line fades out where it leaves the glass.
+      const fade = context.createLinearGradient(width / 2 - r, 0, width / 2 - r * .15, 0);
+      fade.addColorStop(0, 'rgb(0 0 0)'); fade.addColorStop(1, 'rgb(0 0 0 / 0)');
+      context.globalCompositeOperation = 'destination-out';
+      context.fillStyle = fade; context.fillRect(0, 0, width / 2, height);
+      context.restore();
+      context.fillStyle = ink;
+    }
+    const tall = words ? size * (1.15 + .3 * energy) : height * (.14 + .2 * energy);
     context.globalAlpha = blinking < 0 ? 1 : Math.min(1, Math.max(0, .5 + Math.cos(blinking / 1060 * 2 * Math.PI) * 1.2));
     context.beginPath();
-    context.roundRect(width / 2 - thin / 2, height / 2 - tall / 2, thin, tall, thin / 2);
+    context.roundRect(x - thin / 2, height / 2 - tall / 2, thin, tall, thin / 2);
     context.fill();
     context.globalAlpha = 1;
     return;

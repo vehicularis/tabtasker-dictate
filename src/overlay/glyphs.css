@@ -1,0 +1,7 @@
+/* The glyphs' own light (glyphs.tsx): a quiet cast shadow under the object, and a small lift where it sits on
+   a button: the dots' pill, the window's rail and the Settings column alike. */
+.wb-tool-glyph { overflow: visible; transition: transform 180ms cubic-bezier(.2, .8, .2, 1); }
+.wb-glyph-object { filter: drop-shadow(0 1px .65px rgb(0 0 0 / .16)); }
+:is(.pill button, .rail-item, .column-row):hover .wb-tool-glyph { transform: translateY(-1px); }
+:is(.pill button, .rail-item, .column-row):active .wb-tool-glyph { transform: translateY(0) scale(.94); }
+@media (prefers-reduced-motion: reduce) { .wb-tool-glyph { transition: none; } :is(.pill button, .rail-item, .column-row) .wb-tool-glyph { transform: none; } }

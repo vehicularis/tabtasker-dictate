@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { Icon, type IconName } from './Icon';
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'quiet' | 'danger'; icon?: IconName; small?: boolean };
@@ -17,9 +17,28 @@ export function Toggle({ checked, onChange, label, disabled }: { checked: boolea
 
 export type Option<T extends string> = { value: T; label: string };
 
+/// The chosen segment's plate is one layer under every segment, cut to the chosen one, so a new choice slides it
+/// across (ui.css) instead of lighting another.
+function fitPlate(group: HTMLElement | null) {
+  const plate = group?.querySelector<HTMLElement>(':scope > .ui-segmented-plate'), on = group?.querySelector<HTMLElement>(':scope > [aria-checked="true"]');
+  if (!group || !plate) return;
+  plate.hidden = !on;
+  if (on) plate.style.clipPath = `inset(${on.offsetTop}px ${group.clientWidth - on.offsetLeft - on.offsetWidth}px ${group.clientHeight - on.offsetTop - on.offsetHeight}px ${on.offsetLeft}px round 10px)`;
+}
+
 /// A few choices side by side. Arrow keys move the choice, like a radio group.
 export function Segmented<T extends string>({ value, options, onChange, label }: { value: T; options: readonly Option<T>[]; onChange: (value: T) => void; label: string }) {
   const group = useRef<HTMLDivElement>(null);
+  // Every render, as the choice or a label may have changed. The first cut is from no clip at all, which does not
+  // slide, so the plate starts in place.
+  useLayoutEffect(() => fitPlate(group.current));
+  useEffect(() => {
+    const el = group.current;
+    if (!el) return;
+    const watch = new ResizeObserver(() => fitPlate(el));
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, []);
   const move = (event: KeyboardEvent) => {
     const step = event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 0;
     if (!step) return;
@@ -30,6 +49,7 @@ export function Segmented<T extends string>({ value, options, onChange, label }:
     requestAnimationFrame(() => group.current?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus());
   };
   return <div ref={group} className="ui-segmented" role="radiogroup" aria-label={label} onKeyDown={move}>
+    <span className="ui-segmented-plate" aria-hidden="true" />
     {options.map(option => <button key={option.value} type="button" role="radio" aria-checked={option.value === value} tabIndex={option.value === value ? 0 : -1}
       onClick={() => onChange(option.value)}>{option.label}</button>)}
   </div>;

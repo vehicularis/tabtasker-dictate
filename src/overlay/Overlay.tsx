@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Poin
 import { invoke, listen } from '../bridge';
 import { needsSetup, setupDone, updateSettings, useSettings, type Edge, type Events, type Status } from '../store';
 import { applyTheme, isDark } from '../ui/theme';
+import { leave } from '../ui/motion';
 import { CommandCard } from './CommandCard';
 import { Dock } from './Dock';
 import { HandsFree } from './HandsFree';
@@ -104,7 +105,7 @@ export function Overlay() {
         setLive(null);
         void invoke<string>('save_note', { title: '', text: note.text, stamp: stamp(new Date()), named: false })
           .then(path => { setSaved(path); return invoke('note_open', { path }); })
-          .catch(error => setToast(typeof error === 'string' ? error : 'Couldn’t save the note'));
+          .catch(error => setToast(typeof error === 'string' ? error : 'Couldn’t save the note.'));
       }),
       listen<{ message: string }>('dictate-error', ({ message }) => {
         if (message === 'microphone') setSetup(true);
@@ -139,7 +140,9 @@ export function Overlay() {
           const scale = element.offsetWidth ? element.getBoundingClientRect().width / element.offsetWidth : 1;
           return [...box(element), (parseFloat(style.borderTopLeftRadius) || 0) * scale, +style.opacity];
         });
-        const hit = [...node.querySelectorAll<HTMLElement>('[data-hit]')].filter(element => element.getClientRects().length).map(element => box(element, Number(element.dataset.hit) || 0));
+        // Only what can take the pointer: the pill at rest is laid out but invisible and pointer-events none, and
+        // as a hit it would make the window catch clicks over nothing and disagree with the page's own test.
+        const hit = [...node.querySelectorAll<HTMLElement>('[data-hit]')].filter(element => element.getClientRects().length && getComputedStyle(element).pointerEvents !== 'none').map(element => box(element, Number(element.dataset.hit) || 0));
         const dark = isDark(); // the page's theme, which Appearance can pin apart from the Mac's
         const message = JSON.stringify([glass, hit, dark]);
         if (message !== last) { last = message; void invoke('layout', { glass, hit, dark }).catch(() => {}); }
@@ -219,7 +222,7 @@ export function Overlay() {
   };
   const hideForAnHour = () => { setMenu(false); setHidden(true); setTimeout(() => setHidden(false), 60 * 60 * 1000); };
   const pickMic = (id: string | null) => { setMenu(false); void invoke('set_input', { id }).then(refresh).catch(() => setToast('Couldn’t change the microphone')); };
-  const login = () => { const on = !status?.openAtLogin; void invoke<boolean>('set_open_at_login', { enabled: on }).then(refresh).catch(() => setToast('Couldn’t change Open at Login')); };
+  const login = () => { const on = !status?.openAtLogin; void invoke<boolean>('set_open_at_login', { enabled: on }).then(refresh).catch(() => setToast('Couldn’t change Open at Login.')); };
   // A click on the dots: stops a note being taken, finishes setup, or opens the window.
   const clickDots = () => {
     if (dragged.current) return;
@@ -252,19 +255,19 @@ export function Overlay() {
     data-card={card || undefined} data-dragging={dragging || undefined}>
     <div ref={dock} className="dock">
       {setup && <Setup status={status} fnDown={fnDown} fnTested={fnTested} onClose={() => setSetup(false)} />}
-      {noting && phase === 'listening' && !card && <p className="glass said" data-glass data-live role="status">
+      {noting && phase === 'listening' && !card && <p ref={leave} className="glass said" data-glass data-live role="status">
         <small>Note · {clockOf(since)}</small><span>{live ?? 'Listening…'}</span>
       </p>}
-      {saved && !card && <button type="button" className="glass said saved" data-glass data-hit onClick={() => { void invoke('note_open', { path: saved }).catch(() => {}); setSaved(null); }}>
+      {saved && !card && <button ref={leave} type="button" className="glass said saved" data-glass data-hit onClick={() => { void invoke('note_open', { path: saved }).catch(() => {}); setSaved(null); }}>
         <small>Saved · Open</small><span>{saved.split('/').pop()?.replace(/\.md$/, '')}</span>
       </button>}
       <CommandCard />
       <MeetingPill />
       <HandsFree />
       <Learned />
-      {toast && <p className="glass toast" data-glass role="status">{toast}</p>}
+      {toast && <p ref={leave} className="glass toast" data-glass role="status">{toast}</p>}
       <Dock mode={mode} dots={dots} label="TabTasker Dictate" hint={settings.appearance.hint} quiet={quiet} level={level} typing={dictating} words={noting ? '' : live ?? ''}
-        onHover={setHover} onGrab={grab} onDots={clickDots} onNote={takeNote} onMeeting={startMeeting} recording={!!meetings?.recording} onOpen={() => openApp('notes')} onSettings={openSettings} onOrb={() => { if (noting) takeNote(); }}
+        onHover={setHover} onGrab={grab} onDots={clickDots} onNote={takeNote} onWrite={writeNote} onSticky={newSticky} onMeeting={startMeeting} recording={!!meetings?.recording} onOpen={() => openApp('notes')} onSettings={openSettings} onOrb={() => { if (noting) takeNote(); }}
         onMenu={() => { if (phase === 'idle') { setMenu(true); refresh(); lookMeetings(); } }}
         menu={menu && <Menu status={status} mics={mics} meeting={!!meetings?.recording} onMics={setMics} onNote={() => { setMenu(false); takeNote(); }} onWriteNote={writeNote} onSticky={newSticky} onMeeting={startMeeting}
           onOpen={() => openApp()} onPasteLast={() => { setMenu(false); void invoke('paste_last').catch(() => {}); }} onPickMic={pickMic} onLogin={login}

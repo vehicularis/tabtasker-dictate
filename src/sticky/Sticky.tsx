@@ -1,6 +1,8 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { invoke } from '../bridge';
-import { STICKY_HUES, type Sticky as Record, type StickyHue } from '../store';
+import { leave, reduced, timing } from '../ui/motion';
+import { STICKY_HUES, useSettings, type Sticky as Record, type StickyHue } from '../store';
+import { KEY_NAMES } from '../overlay/Dock';
 import { Editor } from '../editor/Editor';
 import { HUES, Sheet } from './Sheet';
 
@@ -16,6 +18,7 @@ const message = (error: unknown, fallback: string) => typeof error === 'string' 
 export function Sticky() {
   const [sticky, setSticky] = useState<Record | null>(null);
   const [text, setText] = useState('');
+  const dictateKey = KEY_NAMES[useSettings()?.shortcuts.dictate ?? 'fn'];
   const [picking, setPicking] = useState(new URLSearchParams(location.search).get('preview') === 'picker'); // ?preview=picker shows the colours open, for a look in a browser
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const menuBox = useRef<HTMLDivElement>(null);
@@ -25,8 +28,10 @@ export function Sticky() {
     if (!box || !menu) return;
     const size = box.getBoundingClientRect();
     const x = Math.max(4, Math.min(menu.x, innerWidth - size.width - 4)), y = Math.max(4, Math.min(menu.y, innerHeight - size.height - 4));
+    if (!box.style.transformOrigin) box.style.transformOrigin = `${menu.x - x}px ${menu.y - y}px`; // it grows from the click, wherever it had to go
     if (x !== menu.x || y !== menu.y) setMenu({ x, y });
   }, [menu]);
+  const holdMenu = useCallback((el: HTMLDivElement | null) => { menuBox.current = el; return leave(el); }, []);
   const [problem, setProblem] = useState<string | null>(null);
   const timer = useRef<number | undefined>(undefined);
   useEffect(() => { void invoke<Record>('sticky_get', { id }).then(found => { setSticky(found); setText(found.text); }, () => setProblem('This sticky is gone.')); }, []);
@@ -52,9 +57,24 @@ export function Sticky() {
   };
   const change = (patch: Partial<Record>, work: Promise<unknown>) => { setSticky(current => current && { ...current, ...patch }); void work.catch(error => setProblem(message(error, 'Couldn’t change that.'))); };
   const recolour = (hue: StickyHue) => { setPicking(false); change({ hue }, invoke('sticky_update', { id, hue })); };
-  const fold = () => sticky && change({ folded: !sticky.folded }, invoke('sticky_fold', { id, folded: !sticky.folded }));
+  // Folding, the paper rolls up into its bar, then the window becomes the bar; opening, the window grows and the
+  // paper rolls down out of the bar. The window's size is the Mac's to change at once, so the paper is clipped.
+  const rolling = useRef<Animation | null>(null);
+  const fold = () => {
+    if (!sticky) return;
+    const next = !sticky.folded, paper = document.querySelector<HTMLElement>('.sticky'), bar = paper?.querySelector<HTMLElement>('.sticky-bar');
+    const go = () => change({ folded: next }, invoke('sticky_fold', { id, folded: next }));
+    rolling.current?.cancel();
+    if (!paper || !bar || reduced()) { go(); return; }
+    const rolled = `inset(0 0 calc(100% - ${bar.offsetHeight}px) 0 round 6px)`, open = 'inset(0 0 0 0 round 6px)';
+    if (next) {
+      rolling.current = paper.animate({ clipPath: [open, rolled] }, { ...timing('--quick', '--ease-in'), fill: 'forwards' }); // kept: folded, it is the bar
+      rolling.current.finished.then(go, () => {});
+    } else { go(); rolling.current = paper.animate({ clipPath: [rolled, open] }, timing()); }
+  };
   const pin = () => sticky && change({ pinned: !sticky.pinned }, invoke('sticky_pin', { id, pinned: !sticky.pinned }));
-  const close = () => { clearTimeout(timer.current); void invoke('sticky_remove', { id }).catch(() => {}); };
+  // Off the screen, kept on the Stickies page: what was just typed is saved first.
+  const close = () => { clearTimeout(timer.current); void invoke('sticky_update', { id, text }).then(() => invoke('sticky_close', { id })).catch(() => {}); };
   const toNote = () => {
     clearTimeout(timer.current); setProblem(null);
     void invoke('sticky_update', { id, text }).then(() => invoke('sticky_to_note', { id, stamp: stamp() })).catch(error => setProblem(message(error, 'Couldn’t save it as a note.')));
@@ -65,9 +85,9 @@ export function Sticky() {
   return <Sheet hue={hue} folded={folded} pinned={!!sticky?.pinned} text={text} picking={picking} onPicking={setPicking}
     actions={{ recolour, fold: () => fold(), pin: () => pin(), note: toNote, close }}
     onContextMenu={event => { event.preventDefault(); setPicking(false); setMenu({ x: event.clientX, y: event.clientY }); }}>
-    {sticky && !folded && <Editor key={sticky.id} compact markdown={sticky.text} label="Sticky" placeholder="Type, or hold fn and talk" autoFocus={!sticky.text} onChange={edit} />}
+    {sticky && !folded && <Editor key={sticky.id} compact markdown={sticky.text} label="Sticky" placeholder={`Type, or hold ${dictateKey} and talk`} autoFocus={!sticky.text} onChange={edit} />}
     {problem && !folded && <p className="sticky-problem" role="alert">{problem}</p>}
-    {menu && <div ref={menuBox} className="sticky-menu" role="menu" aria-label="Sticky" style={{ left: menu.x, top: menu.y }}>
+    {menu && <div ref={holdMenu} className="sticky-menu" role="menu" aria-label="Sticky" style={{ left: menu.x, top: menu.y }}>
       <div className="sticky-menu-hues" role="group" aria-label="Colour">
         {HUES.map(one => <button key={one} type="button" role="menuitemradio" aria-checked={one === hue} aria-label={one} className="sticky-hue" style={{ '--hue': STICKY_HUES[one] } as CSSProperties} onClick={() => { setMenu(null); recolour(one); }} />)}
       </div>

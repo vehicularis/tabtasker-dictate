@@ -23,13 +23,13 @@ export function General({ settings, update }: PageProps) {
       <TileGroup>
         <Tile title="Open at Login" detail="Starts in the menu bar when you log in.">
           <Toggle label="Open at Login" checked={!!status?.openAtLogin} disabled={!status}
-            onChange={on => run(invoke('set_open_at_login', { enabled: on }), 'Couldn’t change Open at Login')} />
+            onChange={on => run(invoke('set_open_at_login', { enabled: on }), 'Couldn’t change Open at Login.')} />
         </Tile>
         <Tile title="Menu bar icon" detail={icon ? 'New notes, meetings and recent notes from the menu bar.'
           : `Hidden. To come back here, open TabTasker Dictate again from Finder or Spotlight${settings.appearance.idle === 'dots' ? ', or right-click the dots' : ''}.`}>
           <Toggle label="Menu bar icon" checked={icon} onChange={menuBarIcon => void update({ general: { menuBarIcon } })} />
         </Tile>
-        <Tile title="Show in the Dock" detail={settings.general.showInDock ? 'Always in the Dock; clicking the icon opens TabTasker Dictate.' : 'In the Dock only while the window is open.'}>
+        <Tile title="Show in the Dock" detail={settings.general.showInDock ? 'Always in the Dock. Click the icon to open the window.' : 'In the Dock only while the window is open.'}>
           <Toggle label="Show in the Dock" checked={settings.general.showInDock} onChange={showInDock => void update({ general: { showInDock } })} />
         </Tile>
       </TileGroup>
@@ -41,7 +41,7 @@ export function General({ settings, update }: PageProps) {
             onChange={id => run(invoke('set_input', { id: id || null }), 'Couldn’t change the microphone')} />
         </Tile>
         <Tile title="Pause dictation" detail={status && !status.enabled
-          ? 'Dictation is off. Turn this off to start it; the speech model downloads first if it isn’t on this Mac.'
+          ? 'Dictation is paused. Turn this off to start again. The speech model downloads first if it isn’t on this Mac.'
           : 'The microphone and Whisper stay off until you turn this off again. Your model is kept.'}>
           <Toggle label="Pause dictation" checked={!!status && !status.enabled} disabled={!status}
             onChange={paused => run(invoke('set_enabled', { enabled: !paused }), 'Couldn’t change dictation')} />

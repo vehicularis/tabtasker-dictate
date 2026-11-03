@@ -1,29 +1,118 @@
-/* The Text editor (Editor.tsx), on the design tokens. The bar is a row of small round-cornered buttons
-   with no borders: a pressed one sits on a plate, as every other control in the app does. The body is
-   the prose itself, with the rhythm richEditor.css gives TabTasker Business's pages. */
-.ed { display: flex; flex-direction: column; min-height: 0; }
-.ed-bar { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 2px 8px; }
-.ed-group { display: inline-flex; gap: 2px; }
-.ed-group + .ed-group { position: relative; padding-left: 8px; }
-.ed-group + .ed-group::before { content: ''; position: absolute; left: 0; top: 7px; bottom: 7px; width: 1px; background: var(--surface-3); }
-.ed-tool { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 7px; color: var(--ink-2); background: none; cursor: pointer;
-  font: 600 11.5px/1 var(--font); letter-spacing: .02em; transition: background var(--quick) var(--ease), color var(--quick) var(--ease); }
-.ed-tool:hover { color: var(--ink); background: var(--surface-2); }
-.ed-tool[aria-pressed='true'] { color: var(--ink); background: var(--surface-3); }
-.ed-tool:disabled { opacity: .4; cursor: default; background: none; }
-.ed-tool b { font-weight: 700; }
-.ed-link { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 2px 0 9px; border-radius: 9px; color: var(--ink-3); background: var(--field); box-shadow: var(--elev-well); }
-.ed-link input { width: 220px; height: 100%; padding: 0; border: 0; outline: 0; font: 13.5px/1 var(--font); color: var(--ink); background: none; }
-.ed-link input::placeholder { color: var(--ink-3); }
-.ed-tail { display: inline-flex; align-items: center; margin-left: auto; font-size: 12.5px; color: var(--ink-3); }
+/* The Text editor (Editor.tsx), drawn as TabTasker Business draws its Atlas pages (richEditor.css and the
+   page's prose rules), on Dictate's tokens. Business's muted-foreground is --ink-2 here, its muted is
+   --muted, its primary --accent. A sticky (`compact`) keeps its own smaller type: the Atlas page rules
+   below are scoped to the page editor. */
+.ed { --ed-border: color-mix(in srgb, var(--ink) 20%, transparent); --ed-box: color-mix(in srgb, var(--muted) 50%, transparent);
+  --ed-code-ink: color-mix(in srgb, var(--accent) 20%, #505050); --ed-code-bg: color-mix(in srgb, var(--accent) 4%, #f2f2f2);
+  display: flex; flex-direction: column; min-height: 0; }
 
-/* ---------- the prose ---------- */
-/* EditorContent is the body's own element: it fills the column, and its bottom padding is where a click below the last line lands to keep writing. */
-.ed-content { flex: 1 1 auto; min-height: 0; overflow-x: hidden; }
+/* ---------- the bar: one row that folds into "More" (Toolbar.tsx) ---------- */
+.ed-bar { display: flex; flex: none; flex-direction: column; gap: 6px; }
+.ed-tools { display: flex; align-items: center; gap: 4px 12px; min-width: 0; }
+/* Clipped while it measures, so a control about to fold never wraps the row; padded so rings still show. */
+.ed-toolbar { display: flex; flex: 1 1 auto; flex-wrap: nowrap; align-items: center; gap: 4px; min-width: 0; margin: -2px; padding: 2px; overflow: hidden; }
+.ed-tool { display: inline-flex; flex: none; align-items: center; justify-content: center; gap: 8px; width: 28px; height: 28px; padding: 0; border: 0; border-radius: var(--radius-row);
+  font: 500 12px/1 var(--font); color: var(--ink-2); background: none; cursor: pointer; transition: background-color var(--quick) var(--ease), color var(--quick) var(--ease); }
+.ed-tool:hover, .ed-tool[aria-pressed='true'], .ed-tool[aria-expanded='true'] { color: var(--ink); background: var(--muted); }
+.ed-tool:disabled { opacity: .4; pointer-events: none; }
+.ed-glyph { font: 600 12.5px/1 var(--font); letter-spacing: .01em; }
+.ed-tail { display: inline-flex; flex: none; align-items: center; gap: 8px; margin-left: auto; font-size: 12.5px; color: var(--ink-3); }
+
+/* ---------- menus: Business's inverted tray (Menu.tsx) ----------
+   Every menu is the far end of the ramp, a plate one notch toward the page in a 6 px ring of ink, with
+   the page tokens re-pointed in the surface's own ink: 10% for a fill, 60% for quiet text, 15% for a line. */
+.ed-menu { --m-ink: var(--window); --m-dim: color-mix(in srgb, var(--window) 60%, transparent); --m-fill: color-mix(in srgb, var(--window) 10%, transparent); --m-line: color-mix(in srgb, var(--window) 15%, transparent);
+  --m-accent: #93c5fd; --m-danger: #ff9999;
+  --m-cast: 0 0 0 7px color-mix(in srgb, var(--shadow-ink) 6%, transparent), 0 2px 6px 6px color-mix(in srgb, var(--shadow-ink) 8%, transparent), 0 12px 28px -2px color-mix(in srgb, var(--shadow-ink) 18%, transparent);
+  position: fixed; z-index: 60; box-sizing: border-box; min-width: 208px; max-height: calc(100vh - 40px); overflow-y: auto; padding: 4px; border-radius: 14px;
+  font: 14px/1.4 var(--font); color: var(--m-ink); background: color-mix(in srgb, var(--ink) 95%, var(--window)); box-shadow: 0 0 0 6px var(--ink), var(--m-cast);
+  color-scheme: dark; scrollbar-width: thin; animation: var(--ed-pop); }
+/* Every menu and popover grows out of what opened it (Menu.tsx sets the origin) as Business's do: fade-in-0 and
+   zoom-in-95 over --quick, then fades back out there (motion.ts leave). */
+:root { --ed-pop: fade-in var(--quick) var(--ease) backwards, pop-in var(--quick) var(--ease) backwards; }
+.ed-menu-item { display: flex; align-items: center; gap: 10px; width: 100%; box-sizing: border-box; padding: 6px 10px; border: 0; border-radius: 10px; font: 14px/1.43 var(--font); text-align: left; white-space: nowrap;
+  color: inherit; background: none; cursor: pointer; transition: background-color var(--quick) var(--ease); }
+.ed-menu-item:is(:hover, :focus-visible) { outline: none; background: var(--m-fill); }
+.ed-menu-item .ui-icon { color: var(--m-dim); }
+.ed-menu-item.danger, .ed-menu-item.danger .ui-icon { color: var(--m-danger); }
+.ed-menu-item:disabled { opacity: .5; pointer-events: none; }
+.ed-menu-line { height: 1px; margin: 4px -4px; background: var(--m-line); }
+.ed-menu-label { padding: 6px 8px 4px; font: 600 10px/1.4 var(--font); letter-spacing: .06em; text-transform: uppercase; color: color-mix(in srgb, var(--window) 42%, transparent); }
+/* The keys it answers to (MenuKeyboardHints). */
+.ed-keys { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 8px; font: 10px/1.4 var(--font); color: var(--m-dim); user-select: none; -webkit-user-select: none; pointer-events: none; }
+.ed-keys > span { display: inline-flex; align-items: center; gap: 4px; }
+.ed-kbds { display: inline-flex; gap: 2px; }
+.ed-keys kbd { display: inline-grid; place-items: center; box-sizing: border-box; min-width: 16px; height: 17px; padding: 0 2px; border-radius: 4px; font: 600 10px/1 var(--font-mono); color: var(--m-ink); background: var(--m-fill); }
+/* "More formatting": the controls that did not fit, grouped, two to a row, with their names. */
+.ed-more { width: 320px; padding: 12px; }
+.ed-more fieldset { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.ed-more fieldset + fieldset { margin-top: 12px; }
+.ed-more legend { margin-bottom: 4px; padding: 0 8px; font: 500 12px/1.4 var(--font); color: var(--m-dim); }
+.ed-more .ed-tool { justify-content: flex-start; width: 100%; height: 36px; padding: 0 8px; font-size: 12px; color: var(--m-dim); }
+.ed-more .ed-tool:is(:hover, :focus-visible, [aria-pressed='true']) { outline: none; color: var(--m-ink); background: var(--m-fill); }
+.ed-more .ed-keys { margin-top: 4px; padding-bottom: 0; }
+
+/* ---------- "/" (SlashMenu.tsx) ---------- */
+.ed-slash-box { position: fixed; z-index: 60; }
+.ed-slash { position: static; width: 288px; min-width: 0; max-height: none; padding: 0; overflow: hidden; transform-origin: 0 0; } /* out of the caret */
+.ed-slash-box[data-above] .ed-slash { transform-origin: 0 100%; }
+.ed-slash-list { max-height: 304px; padding: 6px; overflow-y: auto; scrollbar-width: thin; }
+.ed-slash-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 8px; border: 0; border-radius: 10px; text-align: left; color: inherit; background: none; cursor: pointer; transition: background-color var(--quick) var(--ease); }
+.ed-slash-item[aria-selected='true'] { background: var(--m-fill); }
+.ed-slash-icon { display: grid; flex: none; place-items: center; width: 32px; height: 32px; border-radius: 10px; color: var(--m-dim); background: var(--m-fill); transition: color var(--quick) var(--ease), background-color var(--quick) var(--ease); }
+.ed-slash-item[aria-selected='true'] .ed-slash-icon { color: var(--m-accent); background: color-mix(in srgb, var(--m-accent) 14%, transparent); }
+.ed-slash-words { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+.ed-slash-title, .ed-slash-detail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-slash-title { font: 500 14px/1.3 var(--font); color: var(--m-ink); }
+.ed-slash-detail { font: 12px/1.3 var(--font); color: var(--m-dim); }
+.ed-slash-none { margin: 0; padding: 24px 12px; font-size: 13px; text-align: center; color: var(--m-dim); }
+.ed-slash-keys { gap: 12px; padding: 6px 12px; border-top: 1px solid var(--m-line); background: color-mix(in srgb, var(--window) 3%, transparent); }
+
+/* ---------- the bar over a selection, and the link field (Bubble.tsx, Editor.tsx) ---------- */
+.ed-bubble, .ed-float { border-radius: 14px; color: var(--ink); background: var(--popover); box-shadow: var(--elev-float); }
+.ed-bubble { display: flex; align-items: center; gap: 2px; padding: 4px; transform-origin: 50% 100%; animation: var(--ed-pop); } /* out of the selection under it */
+.ed-float { position: fixed; z-index: 60; padding: 4px; animation: var(--ed-pop); }
+.ed-link { display: flex; align-items: center; gap: 6px; height: 28px; padding-left: 8px; color: var(--ink-3); }
+.ed-link input { width: 240px; height: 100%; padding: 0; border: 0; outline: 0; font: 14px/1 var(--font); color: var(--ink); background: none; }
+.ed-link input::placeholder { color: var(--ink-3); }
+
+/* ---------- the scroller and its gutters (BlockHandles.tsx) ----------
+   The scroller bleeds into the room beside the text and pays it back as padding, so the text keeps its
+   edge and the handles have a gutter to live in, inside the scroller where they scroll with the text.
+   Atlas's 80 px left and 48 right, or less where the pane has less (BlockHandles measures it). */
+.ed-content { position: relative; display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; overflow-x: hidden; }
+.ed:not(.compact) > .ed-content { margin: 0 calc(-1 * var(--gutter-r, 0px)) 0 calc(-1 * var(--gutter-l, 0px)); padding-left: var(--gutter-l, 0px); padding-right: var(--gutter-r, 0px); }
+/* EditorContent's own div between the scroller and the text, stretched so a click under the last line lands in the text. */
+.ed-doc { display: flex; flex: 1 0 auto; flex-direction: column; min-width: 0; }
+.ed-doc > .ed-body { flex: 1 0 auto; }
+.ed-handle-anchor, .ed-bin-anchor { display: flex; align-items: flex-start; z-index: 10; transition: opacity var(--quick) var(--ease), visibility 0s; }
+/* The handles fade in beside a block and out when the pointer leaves the text. Hidden is the drag handle's own
+   inline visibility, kept a moment so the fade shows; from block to block they stay put and jump with it. */
+.ed-handle-anchor[style*='hidden'], .ed-bin-anchor[style*='hidden'] { opacity: 0; transition: opacity var(--quick) var(--ease-in), visibility 0s var(--quick); }
+.ed-handle-group { display: flex; align-items: center; gap: 2px; }
+.ed-add, .ed-grip, .ed-bin { display: grid; flex: none; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 6px; color: var(--ink-2); background: none;
+  transition: background-color var(--quick) var(--ease), color var(--quick) var(--ease); }
+.ed-add, .ed-bin { cursor: pointer; }
+.ed-grip { margin-right: 4px; cursor: grab; }
+.ed-grip:active { cursor: grabbing; }
+.ed-add:hover, .ed-grip:hover, .ed-grip[aria-expanded='true'] { color: var(--ink); background: var(--muted); }
+.ed-bin { margin-left: 4px; }
+.ed-bin:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 15%, transparent); }
+/* A narrow pane: the grip alone on the left (its menu has "Insert below"), and no bin on the right (its menu has "Delete"). */
+.ed-content[data-narrow] .ed-add { display: none; }
+.ed-content[data-narrow] .ed-grip { width: 20px; margin-right: 2px; }
+/* Hidden, not gone: a handle out of the layout has no offset parent, so the drag handle would place it in
+   the viewport's coordinates and it would land off its block once the room came back. */
+.ed-content[data-no-bin] .ed-bin-anchor { visibility: hidden !important; pointer-events: none !important; }
+/* Where the block will land (blocks.ts): the top or bottom edge of the row under the pointer. */
+.ed-block-drop { position: absolute; z-index: 20; height: 3px; border-radius: 999px; background: var(--accent); opacity: .9; pointer-events: none; }
+.ed-block-menu .ed-menu-item { padding-right: 18px; }
+
+/* ---------- the prose: shared with a sticky ---------- */
 /* No ring on the body, ever: it shows focus by its caret. ui.css rings every [tabindex] on keyboard focus with more weight than a
    bare class, and the ring, clipped on three sides by the scroller, was left as one stray line under the words. */
 .ed .ed-body:is(:focus, :focus-visible) { outline: none; }
-.ed-body { box-sizing: border-box; min-height: 100%; overflow-wrap: anywhere; outline: none; caret-color: var(--accent); font: 15.5px/1.55 var(--font); color: var(--ink); }
+.ed-body { box-sizing: border-box; overflow-wrap: anywhere; outline: none; caret-color: var(--accent); font: 15.5px/1.55 var(--font); color: var(--ink); }
 .ed-body > * + * { margin-top: .7em; }
 .ed-body > *:first-child { margin-top: 0; }
 .ed-body p { margin: 0; }
@@ -52,37 +141,16 @@
 .ed-body a { color: var(--accent-ink); text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); text-underline-offset: 3px; }
 .ed-body hr { height: 1px; margin: 1.2em 0; border: 0; background: var(--surface-3); }
 .ed-body hr.ProseMirror-selectednode { background: var(--accent); }
-.ed-body .ProseMirror-selectednode { outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; border-radius: 4px; }
+/* The block picked up or dropped. @tiptap/extension-node-range ships no stylesheet, so a block range is drawn here. */
+.ed-body :is(.ProseMirror-selectednode, .ProseMirror-selectednoderange) { outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; border-radius: 4px; }
+.ed-body .ProseMirror-noderangeselection *::selection { background: transparent; }
+.ed-body .ProseMirror-noderangeselection { border-radius: 4px; background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .ed-body p.is-editor-empty:first-child::before { content: attr(data-placeholder); float: left; height: 0; color: var(--ink-3); pointer-events: none; }
 .ed-body .ProseMirror-gapcursor::after { border-top-color: var(--ink); }
 /* ProseMirror's own helpers inside empty lines: WebKit must never draw them as anything. */
 .ed-body img.ProseMirror-separator { display: inline !important; width: 0 !important; height: 0 !important; border: 0 !important; margin: 0 !important; }
 .ed-body br.ProseMirror-trailingBreak { display: inline; }
-
-/* A sticky's words: the same editor, smaller and a touch heavier, filling the paper. */
-.ed.compact { flex: 1; }
-.ed-body.compact { padding: 10px 12px 12px; font: 500 15px/1.45 var(--font); }
-.ed-body.compact h1, .ed-body.compact h2, .ed-body.compact h3 { margin: .5em 0 .2em; font-family: var(--font); }
-.ed-body.compact h1 { font-size: 1.25em; } .ed-body.compact h2 { font-size: 1.12em; } .ed-body.compact h3 { font-size: 1em; }
-
-/* ---------- "/" menu, the bar over a selection, the block handle ---------- */
-.ed-slash-box { position: fixed; z-index: 50; width: 280px; overflow-y: auto; border-radius: 12px; background: var(--popover); box-shadow: var(--elev-float); }
-.slash { display: flex; flex-direction: column; gap: 1px; padding: 5px; }
-.slash-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 8px; border: 0; border-radius: 8px; text-align: left; background: none; color: var(--ink); cursor: pointer; }
-.slash-item[aria-selected='true'] { background: var(--surface-2); }
-.slash-icon { display: grid; flex: none; place-items: center; width: 28px; height: 28px; border-radius: 7px; color: var(--ink-2); background: var(--surface); box-shadow: var(--elev-raised); font: 700 11px/1 var(--font); }
-.slash-words { display: flex; flex-direction: column; min-width: 0; }
-.slash-title { font-size: 13.5px; font-weight: 600; }
-.slash-detail { font-size: 12px; color: var(--ink-3); }
-.slash-none { margin: 0; padding: 8px 10px; font-size: 13px; color: var(--ink-3); }
-.ed-bubble { display: flex; gap: 2px; padding: 4px; border-radius: 10px; background: var(--popover); box-shadow: var(--elev-float); }
-.ed-bubble .ed-link { height: 26px; }
-.ed-handle { display: grid; place-items: center; width: 22px; height: 24px; margin-right: 2px; border-radius: 6px; color: var(--ink-3); cursor: grab; transition: background var(--quick) var(--ease), color var(--quick) var(--ease); }
-.ed-handle:hover { color: var(--ink); background: var(--surface-2); }
-.ed-handle:active { cursor: grabbing; }
 .ed-body .ProseMirror-selectednode img { outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; border-radius: 8px; }
-
-/* ---------- tables and pictures ---------- */
 .ed-body .tableWrapper { overflow-x: auto; margin: .2em 0; }
 .ed-body table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: .95em; }
 .ed-body th, .ed-body td { position: relative; padding: .4em .6em; border: 1px solid var(--surface-3); vertical-align: top; }
@@ -91,15 +159,94 @@
 .ed-body .selectedCell::after { content: ''; position: absolute; inset: 0; background: color-mix(in srgb, var(--accent) 14%, transparent); pointer-events: none; }
 .ed-body img { display: block; max-width: 100%; height: auto; margin: .4em 0; border-radius: 8px; }
 .ed-body img[data-src=''] { display: none; }
+/* Code block: the language picker in the top-right corner, on hover (CodeBlockView). */
+.ed-codeblock { position: relative; }
+.ed-codeblock-lang { position: absolute; top: .4rem; right: .4rem; z-index: 1; padding: .1rem .3rem; border: 0; border-radius: 6px; font: 11.2px var(--font); color: var(--ink-2); background: var(--window); box-shadow: var(--elev-raised); opacity: 0; transition: opacity var(--quick) var(--ease); }
+.ed-codeblock:hover .ed-codeblock-lang, .ed-codeblock-lang:focus { opacity: 1; }
+.ed-body.compact .ed-codeblock-lang { display: none; }
+
+/* ---------- the Atlas page (RichEditor's .ib-rich + the page's .prose) ---------- */
+.ed-body:not(.compact) { padding-top: 28px; font: 16px/1.5 var(--font); overflow-wrap: break-word; }
+.ed-body:not(.compact) > * + * { margin-top: .75em; }
+.ed-body:not(.compact) :is(p, li) { line-height: 1.85; }
+.ed-body:not(.compact) p { margin-bottom: 1.5em; }
+.ed-body:not(.compact) :is(h1, h2, h3) { letter-spacing: normal; color: var(--ink); }
+.ed-body:not(.compact) h1 { margin: .4em 0 .3em; font: 700 30px/1.2 var(--font); }
+.ed-body:not(.compact) h2 { margin: .6em 0 .3em; font: 700 24px/1.25 var(--font-display); }
+.ed-body:not(.compact) h3 { margin: .6em 0 .3em; font: 600 20px/1.3 var(--font-display); }
+.ed-body:not(.compact) :is(ul, ol) { margin-bottom: 1.5em; padding-left: 1.5rem; }
+.ed-body:not(.compact) li { margin: 0 0 .5em; }
+.ed-body:not(.compact) li::marker { color: var(--ink-2); }
+.ed-body:not(.compact) li > :is(ul, ol) { margin-top: 0; }
+.ed-body:not(.compact) li > p { margin: 0; }
+.ed-body:not(.compact) ul[data-type='taskList'] { padding-left: .25rem; }
+.ed-body:not(.compact) ul[data-type='taskList'] li { gap: .5rem; }
+.ed-body:not(.compact) ul[data-type='taskList'] li > label { height: 1.75em; }
+.ed-body:not(.compact) ul[data-type='taskList'] li > div > p { margin: 0; }
+.ed-body:not(.compact) ul[data-type='taskList'] li[data-checked='true'] > div > p { color: var(--ink-2); }
+/* The round checkbox Business's pages draw (its checkbox recipe): a raised well, the accent with a tick when done. */
+.ed-body:not(.compact) ul[data-type='taskList'] li > label input { position: relative; display: inline-grid; place-items: center; flex: none; width: 16px; height: 16px; margin: 0; border-radius: 50%;
+  appearance: none; -webkit-appearance: none; color: #fff; background: var(--ed-box); box-shadow: var(--elev-raised); cursor: pointer; transition: box-shadow var(--quick) var(--ease), background-color var(--quick) var(--ease); }
+.ed-body:not(.compact) ul[data-type='taskList'] li > label input:checked { background: var(--accent); box-shadow: var(--elev-control); }
+.ed-body:not(.compact) ul[data-type='taskList'] li > label input:checked::after { content: ''; width: 12px; height: 12px; background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='24' d='m40 128 56 56L216 64'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='24' d='m40 128 56 56L216 64'/%3E%3C/svg%3E") center / contain no-repeat; }
+.ed-body:not(.compact) ul[data-type='taskList'] li > label input:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.ed-body:not(.compact) blockquote { padding: 0 0 0 .875rem; border-left: 3px solid var(--ed-border); color: var(--ink-2); }
+.ed-body:not(.compact) pre { padding: .75rem 1rem; border-radius: 8px; font: .85em/1.5 var(--font-mono); color: var(--ink); background: var(--muted); }
+.ed-body:not(.compact) :not(pre) > code { padding: .1em 0 .1em .35em; border-radius: 4px; font: .85em var(--font-mono); color: var(--ed-code-ink); background: var(--ed-code-bg);
+  box-shadow: 3px 0 0 0 var(--ed-code-bg); -webkit-box-decoration-break: clone; box-decoration-break: clone; overflow-wrap: anywhere; }
+.ed-body:not(.compact) a { font-weight: 500; color: var(--accent); text-decoration-color: color-mix(in srgb, var(--accent) 50%, transparent); transition: text-decoration-color var(--quick) var(--ease); }
+.ed-body:not(.compact) a:hover { text-decoration-color: var(--accent); }
+.ed-body:not(.compact) hr { height: 0; margin-bottom: 0; border-top: 1px solid var(--ed-border); background: none; }
+.ed-body:not(.compact) hr.ProseMirror-selectednode { border-top-color: var(--accent); }
+.ed-body:not(.compact) p.is-editor-empty:first-child::before { color: var(--ink-2); }
+/* Tables sized to their content (Markdown keeps no column widths), in Business's table recipe: a card
+   with a hairline, a muted header, quieter body cells, every other row tinted. */
+.ed-body:not(.compact) .tableWrapper { margin-bottom: 0; contain: inline-size; }
+.ed-body:not(.compact) table { margin: 2rem 0; overflow: hidden; border: 1px solid color-mix(in srgb, var(--ed-border) 40%, transparent); border-radius: 8px;
+  font-size: .9375rem; line-height: 1.55; table-layout: auto; background: var(--card); }
+.ed-body:not(.compact) :is(th, td) { padding: .375rem .5rem; border: 1px solid var(--ed-border); text-align: left; }
+.ed-body:not(.compact) :is(th, td) > * { min-width: 4rem; }
+.ed-body:not(.compact) :is(th, td) > p { margin: 0; }
+.ed-body:not(.compact) th { font-weight: 600; color: var(--ink); background: var(--muted); }
+.ed-body:not(.compact) td { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.ed-body:not(.compact) tr:nth-child(even) { background: color-mix(in srgb, var(--secondary) 36%, transparent); }
+.ed-body:not(.compact) img { margin: .5rem 0; }
+
+/* A sticky's words: the same editor, smaller and a touch heavier, filling the paper. */
+.ed.compact { flex: 1; }
+.ed-body.compact { padding: 10px 12px 12px; font: 500 15px/1.45 var(--font); }
+.ed-body.compact h1, .ed-body.compact h2, .ed-body.compact h3 { margin: .5em 0 .2em; font-family: var(--font); }
+.ed-body.compact h1 { font-size: 1.25em; } .ed-body.compact h2 { font-size: 1.12em; } .ed-body.compact h3 { font-size: 1em; }
+
+/* ---------- table controls (TableControls.tsx) ---------- */
+.ed-table-controls { position: absolute; inset: 0; z-index: 20; pointer-events: none; }
+.ed-table-controls > * { position: absolute; pointer-events: auto; }
+.ed-table-grip, .ed-table-add { display: grid; place-items: center; padding: 0; border: 0; color: var(--ink-2); background: var(--muted); transition: background-color var(--quick) var(--ease), color var(--quick) var(--ease), opacity var(--quick) var(--ease); }
+.ed-table-grip { border-radius: 999px; box-shadow: var(--elev-raised); cursor: grab; }
+.ed-table-grip:active { cursor: grabbing; }
+.ed-table-grip.ed-row { width: 10px; height: 24px; }
+.ed-table-grip.ed-col { width: 24px; height: 10px; }
+.ed-table-add { border-radius: 4px; opacity: .35; cursor: pointer; }
+.ed-table-add.ed-row { height: 10px; }
+.ed-table-add.ed-col { width: 10px; }
+.ed-table-grip:is(:hover, [aria-expanded='true']), .ed-table-add:hover { opacity: 1; color: var(--on-accent); background: var(--accent); }
+.ed-table-drop { border-radius: 999px; background: var(--accent); pointer-events: none; }
+.ed-table-drop.ed-row { height: 3px; }
+.ed-table-drop.ed-col { width: 3px; }
+
+/* ---------- find and replace (Find.tsx) ---------- */
+.ed-find { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; animation: fade-in var(--quick) var(--ease) backwards; }
+.ed-find-field { position: relative; display: inline-flex; align-items: center; }
+.ed-find-field .ui-icon { position: absolute; left: 9px; color: var(--ink-3); pointer-events: none; }
+.ed-find .ui-field { width: 208px; height: 30px; }
+.ed-find-field .ui-field { padding-left: 30px; }
+.ed-find-count { min-width: 64px; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.ed-find .ed-find-close { margin-left: auto; }
 
 /* ---------- code colours (highlight.js tokens), as Business tunes them ---------- */
-.ed-body .hljs-comment, .ed-body .hljs-quote { color: #6a737d; font-style: italic; }
-.ed-body .hljs-keyword, .ed-body .hljs-selector-tag, .ed-body .hljs-built_in { color: #d73a49; }
-.ed-body .hljs-string, .ed-body .hljs-attr { color: #032f62; }
-.ed-body .hljs-number, .ed-body .hljs-literal { color: #005cc5; }
-.ed-body .hljs-title, .ed-body .hljs-function, .ed-body .hljs-section { color: #6f42c1; }
-.ed-body .hljs-name, .ed-body .hljs-tag { color: #22863a; }
-.ed-body .hljs-attribute, .ed-body .hljs-variable, .ed-body .hljs-meta { color: #e36209; }
+.ed-body .hljs-comment, .ed-body .hljs-quote { font-style: italic; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .ed-body { --c1: #7d8590; --c2: #ff7b72; --c3: #a5d6ff; --c4: #79c0ff; --c5: #d2a8ff; --c6: #7ee787; --c7: #ffa657; } }
 :root[data-theme='dark'] .ed-body { --c1: #7d8590; --c2: #ff7b72; --c3: #a5d6ff; --c4: #79c0ff; --c5: #d2a8ff; --c6: #7ee787; --c7: #ffa657; }
 .ed-body .hljs-comment, .ed-body .hljs-quote { color: var(--c1, #6a737d); }
@@ -109,3 +256,11 @@
 .ed-body .hljs-title, .ed-body .hljs-function, .ed-body .hljs-section { color: var(--c5, #6f42c1); }
 .ed-body .hljs-name, .ed-body .hljs-tag { color: var(--c6, #22863a); }
 .ed-body .hljs-attribute, .ed-body .hljs-variable, .ed-body .hljs-meta { color: var(--c7, #e36209); }
+
+/* ---------- dark: the checkbox well, inline code, and the menus' tray on a dark page ---------- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .ed { --ed-box: color-mix(in srgb, var(--input) 30%, transparent); --ed-code-ink: color-mix(in srgb, var(--accent) 20%, #c3c3c3); --ed-code-bg: color-mix(in srgb, var(--accent) 4%, #1b1b1b); }
+  :root:not([data-theme='light']) .ed-menu { --m-accent: #1e40af; --m-danger: #991b1b; --m-cast: 0 2px 6px 6px rgb(0 0 0 / .4), 0 12px 28px -2px rgb(0 0 0 / .6); color-scheme: light; }
+}
+:root[data-theme='dark'] .ed { --ed-box: color-mix(in srgb, var(--input) 30%, transparent); --ed-code-ink: color-mix(in srgb, var(--accent) 20%, #c3c3c3); --ed-code-bg: color-mix(in srgb, var(--accent) 4%, #1b1b1b); }
+:root[data-theme='dark'] .ed-menu { --m-accent: #1e40af; --m-danger: #991b1b; --m-cast: 0 2px 6px 6px rgb(0 0 0 / .4), 0 12px 28px -2px rgb(0 0 0 / .6); color-scheme: light; }

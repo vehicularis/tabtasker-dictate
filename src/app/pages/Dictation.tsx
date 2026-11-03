@@ -65,10 +65,10 @@ export function Dictation({ settings, update }: PageProps) {
     <PageHeader icon="waveform" title="Speech">How your speech becomes text. Whisper runs on this Mac.</PageHeader>
     <Section title="Language">
       <TileGroup>
-        <Tile title="Language" detail={dictation.language === 'auto' ? 'Whisper works out the language each time. Pick yours to get the first words right.' : `Whisper always hears ${language}.`}>
+        <Tile title="Spoken language" detail={dictation.language === 'auto' ? 'Whisper works out the language each time. Pick yours to get the first words right.' : `Whisper always hears ${language}.`}>
           <Select label="Language" value={dictation.language} options={options} onChange={language => update({ dictation: { language } })} />
         </Tile>
-        <Tile title="Translate to English" detail="Speak any language, get English.">
+        <Tile title="Translate to English" detail="Types English, whatever language you speak.">
           <Toggle label="Translate to English" checked={dictation.translateToEnglish} onChange={translateToEnglish => update({ dictation: { translateToEnglish } })} />
         </Tile>
         {dictation.translateToEnglish && dictation.model === 'turbo' && <Tile title="Small translates better" detail="Large-v3 Turbo isn’t trained to translate, so it often types what you said as you said it.">
@@ -78,17 +78,14 @@ export function Dictation({ settings, update }: PageProps) {
     </Section>
     <Section title="Typing">
       <TileGroup>
-        <Tile title="Live typing" detail="Words appear as you speak. Off, they arrive all at once when you let go.">
-          <Toggle label="Live typing" checked={dictation.liveTyping} onChange={liveTyping => update({ dictation: { liveTyping } })} />
-        </Tile>
         <Tile title="Remove filler words" detail="Leaves out um, uh, er, ah and hmm. “Like” always stays.">
           <Toggle label="Remove filler words" checked={dictation.removeFillers} onChange={removeFillers => update({ dictation: { removeFillers } })} />
         </Tile>
       </TileGroup>
     </Section>
-    <Section title="Sounds" note="The Mac’s own sounds, played as listening starts and stops.">
+    <Section title="Sounds">
       <TileGroup>
-        <Tile title="Sounds" detail="A cue when listening starts and another when it stops.">
+        <Tile title="Start and stop sounds" detail="The Mac’s own sounds, one as listening starts and one as it stops.">
           <Toggle label="Sounds" checked={dictation.sounds} onChange={sounds => update({ dictation: { sounds } })} />
         </Tile>
         <Tile title="Volume" detail="For both cues." dim={!dictation.sounds}>

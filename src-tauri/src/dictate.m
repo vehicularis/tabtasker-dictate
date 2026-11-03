@@ -174,7 +174,7 @@ typedef NS_ENUM(NSUInteger, TTVoicePhase) { TTVoiceIdle, TTVoiceListening, TTVoi
 @property double displayLevel;
 @property NSTimeInterval listeningSince;
 @property NSUInteger inputChanges;
-@property (copy) NSString *typed, *lastDraft; // dictation: what this hold put at the cursor, and the newest live words
+@property (copy) NSString *typed; // dictation: what this hold put at the cursor
 @property pid_t typedApp;
 @property (strong) id typedField;
 @property BOOL typingStopped; // the person clicked or typed after our words went in: never correct them again
@@ -195,7 +195,7 @@ typedef NS_ENUM(NSUInteger, TTVoicePhase) { TTVoiceIdle, TTVoiceListening, TTVoi
 @property TTKey key;
 @property NSEventModifierFlags commandFlag;
 @property (copy) NSDictionary<NSString *, NSArray<NSNumber *> *> *chords;
-@property BOOL handsFree, liveTyping, sounds;
+@property BOOL handsFree, sounds;
 @property BOOL sendAfter; // Return once this hold's words are typed (a chat app, or a spoken "send")
 @property double soundVolume; // 0 to 1
 @property (copy) NSString *startSound, *stopSound; // names in /System/Library/Sounds
@@ -237,7 +237,9 @@ static NSUInteger TTVoiceVisible(NSString *text, NSUInteger from) {
   return count;
 }
 // Marks our own keystrokes, so the fn monitor never takes them for an fn shortcut.
-static const int64_t TTVoiceMark = 0x74747663;
+static const int64_t TTVoiceMark = TT_VOICE_MARK;
+// insert.m: the words put in at the cursor, pasted or typed, as OpenWhispr puts them in.
+void TTInsertText(NSString *text, pid_t pid, NSString *bundle, void (^done)(BOOL pasted));
 // Appearance › Stay clear of the Dock: the overlay window covers the screen's visible area (above the Dock,
 // below the menu bar), else the whole screen, so the dots can sit behind an auto-hidden Dock's edge.
 static BOOL TTOverlayAvoidsDock = YES;
@@ -262,18 +264,6 @@ static void TTVoiceType(NSString *text, NSUInteger from) {
     at = NSMaxRange(chunk);
   }
 }
-// The words two live drafts in a row agree on, cut back to a whole word, so the cursor isn't rewritten
-// every time Whisper changes its mind about the word still being said.
-static NSString *TTVoiceAgreed(NSString *before, NSString *now) {
-  if (!before) return @"";
-  NSUInteger same = 0, max = MIN(before.length, now.length);
-  while (same < max && [before characterAtIndex:same] == [now characterAtIndex:same]) same++;
-  BOOL edge = (same == before.length || [before characterAtIndex:same] == ' ') && (same == now.length || [now characterAtIndex:same] == ' ');
-  if (edge) return [now substringToIndex:same];
-  NSRange space = [now rangeOfString:@" " options:NSBackwardsSearch range:NSMakeRange(0, same)];
-  return space.location == NSNotFound ? @"" : [now substringToIndex:space.location];
-}
-
 static NSString *TTVoiceDeviceString(AudioObjectID device, AudioObjectPropertySelector selector) {
   AudioObjectPropertyAddress address = { selector, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain };
   CFStringRef value = NULL; UInt32 size = sizeof(value);
@@ -354,7 +344,7 @@ static void TTVoiceBringForward(NSRunningApplication *app, void (^then)(BOOL fro
 }
 @synthesize phase = _phase;
 - (instancetype)init {
-  if ((self = [super init])) { _key = TTKeyFn; _handsFree = _liveTyping = _sounds = YES; _soundVolume = 0.3; _startSound = @"Tink"; _stopSound = @"Pop"; }
+  if ((self = [super init])) { _key = TTKeyFn; _handsFree = _sounds = YES; _soundVolume = 0.3; _startSound = @"Tink"; _stopSound = @"Pop"; }
   return self;
 }
 - (const char *)phaseName {
@@ -372,8 +362,10 @@ static void TTVoiceBringForward(NSRunningApplication *app, void (^then)(BOOL fro
     __weak TTVoiceCommands *weak = self;
     self.levelTimer = [NSTimer timerWithTimeInterval:1.0 / 30 repeats:YES block:^(NSTimer *timer) { (void)timer; [weak tick]; }];
     [NSRunLoop.mainRunLoop addTimer:self.levelTimer forMode:NSRunLoopCommonModes];
-    // Live words: what has been said so far, transcribed again as soon as the last pass is done (a tick
-    // that finds one still running skips), so typed words keep up with the speech.
+    // Live passes, again as soon as the last is done (a tick that finds one still running skips): the words
+    // the orb writes while you talk, a command's for its card, a hands-free session's pieces. None is typed:
+    // the field gets the words once, on release, as OpenWhispr types them. A release frees the engine of a
+    // pass that hasn't heard the end (speech.rs finish).
     self.draftTimer = [NSTimer timerWithTimeInterval:0.2 repeats:YES block:^(NSTimer *timer) { (void)timer; [weak draft]; }];
     [NSRunLoop.mainRunLoop addTimer:self.draftTimer forMode:NSRunLoopCommonModes];
   } else if (phase != TTVoiceListening) {
@@ -413,13 +405,19 @@ static void TTVoiceBringForward(NSRunningApplication *app, void (^then)(BOOL fro
     self.held = NO; [self finish];
   }
 }
-- (void)stopCapture {
+- (void)stopCapture { [self stopCaptureThen:nil]; }
+/// `then` runs on the main thread once the engine has stopped on the audio queue, so the last buffer the
+/// tap was handed is in the audio by then.
+- (void)stopCaptureThen:(dispatch_block_t)then {
   AVAudioEngine *engine = self.engine;
   self.engine = nil;
   if (engine) {
     [NSNotificationCenter.defaultCenter removeObserver:self name:AVAudioEngineConfigurationChangeNotification object:engine];
-    dispatch_async(TTVoiceAudioQueue(), ^{ [engine stop]; @try { [engine.inputNode removeTapOnBus:0]; } @catch (NSException *e) { (void)e; } });
-  }
+    dispatch_async(TTVoiceAudioQueue(), ^{
+      [engine stop]; @try { [engine.inputNode removeTapOnBus:0]; } @catch (NSException *e) { (void)e; }
+      if (then) dispatch_async(dispatch_get_main_queue(), then);
+    });
+  } else if (then) dispatch_async(dispatch_get_main_queue(), then);
   [self.audio resetLevel]; self.displayLevel = 0;
 }
 - (void)cancel {
@@ -438,14 +436,14 @@ static void TTVoiceBringForward(NSRunningApplication *app, void (^then)(BOOL fro
   if (self.typed.length) self.dictated = self.typingStopped ? nil : [(self.dictated ?: @"") stringByAppendingString:self.typed];
   [self forgetTyped];
 }
-- (void)forgetTyped { self.typed = nil; self.lastDraft = nil; self.typedField = nil; self.typingStopped = NO; self.lead = @""; self.replaced = nil; }
+- (void)forgetTyped { self.typed = nil; self.typedField = nil; self.typingStopped = NO; self.lead = @""; self.replaced = nil; }
 - (void)fail:(NSString *)message {
   [self cancel];
   dictate_ui_error(message.UTF8String);
 }
 - (void)begin {
   if (self.phase != TTVoiceIdle || !self.enabled || !(self.held || self.locked) || self.blocked) return;
-  if (!self.modelReady) { [self fail:@"Voice is still loading"]; return; }
+  if (!self.modelReady) { [self fail:@"The speech model is still loading."]; return; }
   self.request = NSUUID.UUID.UUIDString;
   self.generation++;
   [self forgetTyped];
@@ -522,7 +520,7 @@ static void TTVoicePlaySound(NSString *name, double volume) {
     }
   } @catch (NSException *exception) {
     (void)exception;
-    problem = @"Mic changed, try again";
+    problem = @"The microphone changed. Try again.";
   }
   if (self.engine != engine) { [engine stop]; return; } // ended while the microphone was opening
   if (problem) dispatch_async(dispatch_get_main_queue(), ^{
@@ -564,18 +562,27 @@ static void TTVoicePlaySound(NSString *name, double volume) {
 }
 // Speech turned the audio down: still loading, paused, or busy with the last one.
 - (void)refused {
-  [self fail:self.modelReady ? @"Couldn’t transcribe that, try again" : @"Voice is still loading"];
+  [self fail:self.modelReady ? @"Couldn’t transcribe that. Try again." : @"The speech model is still loading."];
 }
 - (void)finish {
   if (self.phase != TTVoiceListening) return;
   self.phase = TTVoiceFinishing;
-  [self stopCapture];
   [self chime:NO];
   NSUInteger generation = self.generation;
-  double patience = tt_words_timeout(self.audio.count);
-  [self transcribe];
-  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(patience * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-    if (self.generation == generation && self.phase == TTVoiceFinishing) [self fail:@"Took too long, try again"];
+  // The last syllable is often still being said, and its buffer still on its way, as the key comes up: listen
+  // a moment longer, then take the audio only once the engine has stopped and that buffer has landed. Freezing
+  // it at once, with the stop still queued, cut the end of the last word.
+  // ponytail: 0.3 s by ear (Handy keeps 0.45 s after speech); time it by the voice activity if 0.3 still clips.
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    if (self.generation != generation || self.phase != TTVoiceFinishing) return;
+    [self stopCaptureThen:^{
+      if (self.generation != generation || self.phase != TTVoiceFinishing) return;
+      double patience = tt_words_timeout(self.audio.count);
+      [self transcribe];
+      dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(patience * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        if (self.generation == generation && self.phase == TTVoiceFinishing) [self fail:@"That took too long. Try again."];
+      });
+    }];
   });
 }
 - (void)receiveText:(NSString *)text error:(NSError *)error generation:(NSUInteger)generation {
@@ -587,13 +594,14 @@ static void TTVoicePlaySound(NSString *name, double volume) {
   if (self.commanding) { [self command:body]; return; }
   dictate_ui_said(body.UTF8String, true, false);
   if (!AXIsProcessTrusted()) { [self fail:@"Turn on Accessibility to type"]; return; }
-  [self retype:body];
+  // Sending: Return, once every word is in, and only where they went (set below, before the words land).
+  __block BOOL send = NO;
+  [self retype:body then:^{ if (send) TTVoicePostKey(36, nil); }];
   // A click elsewhere stops the typing for good; what was said is still the last transcript.
   BOOL whole = self.typed.length && [self.typed isEqualToString:[self.lead stringByAppendingString:body]];
   if (!self.typed.length) dictate_ui_notice("Nothing to type into here. Paste last transcript has your words.");
   else if (!whole) dictate_ui_notice("Stopped typing when you moved on. Paste last transcript has it all.");
-  // Sending: Return, after every word went in and only where they went.
-  if (whole && self.sendAfter) TTVoicePostKey(36, nil);
+  send = whole && self.sendAfter;
   [self cancel];
 }
 // A spoken command, with the selection and the app it was said over, for Claude. Its answer comes back
@@ -608,9 +616,11 @@ static void TTVoicePlaySound(NSString *name, double volume) {
   self.request = nil; // not forgotten: Claude reads the hold's context while it works
   [self cancel];
 }
-// Dictation: brings what this hold typed at the cursor to `text`, deleting back to where they differ
-// and typing the rest, as keystrokes into whatever has the keyboard focus.
-- (void)retype:(NSString *)text {
+// Dictation: brings what this hold typed at the cursor to `text`. Words going in fresh go in once, pasted (or
+// typed where pasting is unreliable, insert.m); anything already typed is deleted back to where it differs and
+// the rest typed. `then` runs on the main thread once the words are in.
+- (void)retype:(NSString *)text { [self retype:text then:nil]; }
+- (void)retype:(NSString *)text then:(dispatch_block_t)then {
   if (self.typingStopped) return;
   pid_t app = NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier;
   // A click on the overlay brings this app forward for a moment: the words wait for theirs to come back.
@@ -629,6 +639,12 @@ static void TTVoicePlaySound(NSString *name, double volume) {
   }
   text = [self.lead stringByAppendingString:text];
   NSString *typed = self.typed ?: @"";
+  if (!typed.length) {
+    self.typed = text;
+    NSRunningApplication *front = NSWorkspace.sharedWorkspace.frontmostApplication;
+    TTInsertText(text, front.processIdentifier, front.bundleIdentifier, ^(BOOL pasted) { (void)pasted; if (then) then(); });
+    return;
+  }
   NSUInteger same = 0, max = MIN(typed.length, text.length);
   while (same < max && [typed characterAtIndex:same] == [text characterAtIndex:same]) same++;
   // Back to a character boundary in both: marks added to the last letter retype the letter too.
@@ -640,6 +656,7 @@ static void TTVoicePlaySound(NSString *name, double volume) {
   for (NSUInteger i = TTVoiceVisible(typed, same); i > 0; i--) TTVoicePostKey(51, nil);
   TTVoiceType(text, same);
   self.typed = text;
+  if (then) dispatch_async(dispatch_get_main_queue(), then);
 }
 // The overlay's note button: the mic's talk with no minute cap, transcribed while it is said.
 - (void)toggleNote {
@@ -818,7 +835,6 @@ static void TTVoicePlaySound(NSString *name, double volume) {
   // answers.
   self.commandFlag = [claude[@"enabled"] isEqual:@YES] && ![claude[@"commands"] isEqual:@NO] ? [flags[keys[@"command"] ?: @"control"] unsignedIntegerValue] : 0;
   self.handsFree = ![keys[@"handsFree"] isEqual:@NO];
-  self.liveTyping = ![dictation[@"liveTyping"] isEqual:@NO];
   self.sounds = ![dictation[@"sounds"] isEqual:@NO];
   NSDictionary *appearance = TTVoiceObject(settings[@"appearance"]);
   BOOL avoidDock = ![appearance[@"avoidDock"] isEqual:@NO];
@@ -860,7 +876,7 @@ static void TTVoicePlaySound(NSString *name, double volume) {
   [self monitor];
   if (self.enabled) [self prepareModels];
   else {
-    self.modelReady = NO; self.modelPreparing = NO; self.modelMessage = @"Voice is off. Your local model is kept for next time.";
+    self.modelReady = NO; self.modelPreparing = NO; self.modelMessage = @"Dictation is paused. The speech model stays on this Mac.";
     dictate_disable_models();
   }
 }
@@ -971,6 +987,11 @@ static CGFloat TTDockStrip(NSRectEdge *edge) {
   // The visible frame stops at a Dock that stays. A Dock that hides itself reserves nothing, so the dots sit
   // at the edge and step aside while it is out (readDock, track), rather than keeping its strip empty all day.
   NSRect fit = TTOverlayAvoidsDock ? screen.visibleFrame : screen.frame;
+  // macOS posts screen-parameter changes in bursts, about 120 a second while the Dock slides, with nothing
+  // changed for the overlay: an unchanged frame needs no new frame, no log line and no Dock read, which is an
+  // Accessibility call into the busy Dock on the main thread the hover and the voice run on. The Dock is read
+  // every few seconds anyway (watchDock), and when the setting that decides the fit changes (TTOverlayFit).
+  if (self.dockRead && NSEqualRects(fit, self.window.frame)) return;
   dictate_log([NSString stringWithFormat:@"overlay: fitted to %.0f × %.0f at %.0f, %.0f (clear of the Dock: %@)", fit.size.width, fit.size.height, fit.origin.x, fit.origin.y, TTOverlayAvoidsDock ? @"yes" : @"no"].UTF8String);
   [self.window setFrame:fit display:YES];
   [self readDock];
@@ -1145,7 +1166,7 @@ static BOOL TTVoiceNumbers(id row, NSUInteger count) {
 
 static TTVoiceCommands *voice;
 static TTVoiceOverlay *overlay;
-static void TTOverlayFit(void) { [overlay fitScreen]; }
+static void TTOverlayFit(void) { [overlay fitScreen]; [overlay readDock]; } // the Dock's strip counts only while the overlay keeps clear of it
 static NSWindow *TTVoiceOverlayWindow(void) { return overlay.window; }
 
 static NSDictionary *appliedSettings; // settings that arrived before the voice object
@@ -1280,11 +1301,7 @@ void dictate_result_sends(const char *request, bool send) {
 }
 void dictate_draft_result(const char *request, const char *text) {
   if (![voice.request isEqual:@(request)] || voice.phase != TTVoiceListening) return;
-  dictate_ui_said(text, voice.dictating, true);
-  if (!voice.dictating || !voice.liveTyping || !AXIsProcessTrusted()) return; // without live typing the result types once
-  NSString *now = @(text), *agreed = TTVoiceAgreed(voice.lastDraft, now);
-  voice.lastDraft = now;
-  if (agreed.length && ![voice.typed hasPrefix:[voice.lead stringByAppendingString:agreed]]) [voice retype:agreed];
+  dictate_ui_said(text, voice.dictating, true); // for the overlay only: the field gets the words once, on release
 }
 // A note's step: what is transcribed for good can go from the buffer, and the piece still being said
 // is the preview.
@@ -1322,7 +1339,8 @@ static void TTVoiceTypeText(NSString *text) {
   // These keystrokes are ours, so the monitor never sees the field change: the next hold starts afresh.
   voice.dictated = nil;
   if (voice.typed.length) voice.typingStopped = YES;
-  TTVoiceType(text, 0);
+  NSRunningApplication *front = NSWorkspace.sharedWorkspace.frontmostApplication;
+  TTInsertText(text, front.processIdentifier, front.bundleIdentifier, ^(BOOL pasted) { (void)pasted; });
 }
 static void TTVoiceOnMain(dispatch_block_t work) {
   if (NSThread.isMainThread) work(); else dispatch_async(dispatch_get_main_queue(), work);

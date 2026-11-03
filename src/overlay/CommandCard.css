@@ -1,5 +1,5 @@
 /* Claude near the dots: what was asked while it works, its answer card, and Send to Claude Code. */
-.claude-bubble { display: flex; align-items: center; gap: 10px; box-sizing: border-box; width: max-content; max-width: 380px; padding: 7px 8px 8px 13px; border-radius: 16px; font-size: 13px; animation: pop .25s var(--ease) both; }
+.claude-bubble { display: flex; align-items: center; gap: 10px; box-sizing: border-box; width: max-content; max-width: 380px; padding: 7px 8px 8px 13px; border-radius: var(--radius-pill); font-size: 13px; }
 .claude-bubble .what { font-size: 13px; }
 .claude-bubble .what small { display: flex; align-items: center; gap: 6px; }
 .claude-bubble .what > span { display: -webkit-box; overflow: hidden; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
@@ -21,7 +21,7 @@
 /* What went wrong takes its own line above the buttons, so the answer and its actions stay as they were. */
 .claude-card .ask[data-error] { flex: 1 0 100%; margin: 0 0 2px; color: var(--danger); font-weight: 400; }
 
-.claude-send { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 14px 0 11px; border: 0; border-radius: 16px; font-size: 13px; font-weight: 500; cursor: pointer; animation: pop .25s var(--ease) both; }
+.claude-send { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 14px 0 11px; border: 0; border-radius: 16px; font-size: 13px; font-weight: 500; cursor: pointer; }
 .claude-send .ui-icon { color: var(--ink-2); }
 .claude-send:hover { background: var(--surface-3); }
 .claude-send:disabled { cursor: default; opacity: .7; }

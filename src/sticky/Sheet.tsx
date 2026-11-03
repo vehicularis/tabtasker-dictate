@@ -1,6 +1,7 @@
 import type { CSSProperties, HTMLAttributes, ReactNode } from 'react';
 import { STICKY_HUES, type StickyHue } from '../store';
 import { Icon } from '../ui/Icon';
+import { leave } from '../ui/motion';
 
 export const HUES = Object.keys(STICKY_HUES) as StickyHue[];
 /// A sticky's first line, as words: for the folded bar.
@@ -19,7 +20,7 @@ export function Sheet({ hue, folded, pinned, text, picking, onPicking, actions, 
       <span className="sticky-swatch-wrap">
         <button type="button" className="sticky-swatch" aria-label={`Colour: ${hue}. Change it`} aria-expanded={picking} aria-haspopup="dialog" title="Colour" onPointerDown={event => event.stopPropagation()} onClick={() => onPicking(!picking)} />
         {/* The colours, as dots on a small card under the swatch: pick one and it closes; a press anywhere else closes it (Sticky.tsx). */}
-        {picking && <span className="sticky-picker" role="radiogroup" aria-label="Colour" onPointerDown={event => event.stopPropagation()}>
+        {picking && <span ref={leave} className="sticky-picker" role="radiogroup" aria-label="Colour" onPointerDown={event => event.stopPropagation()}>
           {HUES.map(one => <button key={one} type="button" role="radio" aria-checked={one === hue} aria-label={one} title={one} className="sticky-hue" style={{ '--hue': STICKY_HUES[one] } as CSSProperties} onClick={() => actions.recolour(one)} />)}
         </span>}
       </span>

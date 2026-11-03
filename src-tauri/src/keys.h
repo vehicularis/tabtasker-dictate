@@ -35,4 +35,15 @@ size_t tt_hold_limit(bool long_session);
 // Seconds the words of `samples` may take before the overlay gives up on them.
 double tt_words_timeout(size_t samples);
 
+// Our own key events carry this in kCGEventSourceUserData, so the key monitor never takes them for the person's.
+#define TT_VOICE_MARK 0x74747663
+
+// Putting the words in, as OpenWhispr does: pasted, except in a Chromium browser (it drops a synthetic ⌘V now
+// and then), where they are typed if the keyboard is a plain layout (an input method would compose the keys)
+// and they are one line of 2 to 2,000 UTF-16 units.
+bool tt_types_instead(bool chromium, bool plain_layout, size_t units, bool one_line);
+// When the clipboard goes back to what it held: 450 ms after ⌘V, or 50 ms after the app read the words
+// (`read_at`, 0 while it hasn't), whichever is later. Seconds, on the clock `pressed_at` is on.
+double tt_restore_at(double pressed_at, double read_at);
+
 #endif
