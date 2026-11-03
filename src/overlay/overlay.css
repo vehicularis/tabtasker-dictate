@@ -46,12 +46,9 @@
    around them is bigger (room for the pill and the orb, all centred on one another), so the dock sits that
    much further out, and comes in by the difference while the pill (on hover) or the orb (while you talk) is
    the thing at the edge. */
-/* The otter's capsule is 44 by 22 and upright on every edge, in a 48-point spot: 13 points of spot show past it on
-   the bottom edge, 2 on a side. */
+/* The otter's capsule is 44 by 22 along its edge, in a 48-point spot: 13 points of spot show past it. */
 .layer { --out: calc(13px * var(--scale)); }
-.layer:is([data-edge='left'], [data-edge='right']) { --out: calc(2px * var(--scale)); }
 .layer[data-mode='hover'] { --out: calc(4px * var(--scale)); }
-.layer:is([data-edge='left'], [data-edge='right'])[data-mode='hover'] { --out: calc(2px * var(--scale)); }
 .layer:is([data-mode='listening'], [data-mode='thinking']) { --out: calc(-8px * var(--scale)); }
 /* While you point, the spot keeps the pointer everywhere that started the hover: 16 px round the spot (the
    dots' own reach) and the 13 px it slid in by toward the edge, where the resting dots' halo was. Without it
@@ -64,13 +61,18 @@
 .layer[data-edge='bottom'] .keep { bottom: calc(-16px - 13px * var(--scale)); }
 .layer[data-edge='left'] .keep { left: calc(-16px - 13px * var(--scale)); }
 .layer[data-edge='right'] .keep { right: calc(-16px - 13px * var(--scale)); }
-/* A small glass capsule behind the otter, so it reads on any wallpaper. Upright on every edge. */
+/* A small glass capsule behind the otter, so it reads on any wallpaper: along the edge, so on a side edge it
+   stands, and the otter in it turns with it. */
 .capsule { position: absolute; width: 44px; height: 22px; border-radius: 11px; opacity: .9; transition: opacity .2s; }
+.layer:is([data-edge='left'], [data-edge='right']) .capsule { width: 22px; height: 44px; }
+.layer[data-edge='right'] .otter { rotate: -90deg; }
+.layer[data-edge='left'] .otter { rotate: 90deg; }
 .layer:is([data-mode='hover'], [data-mode='listening'], [data-mode='thinking']) .capsule { opacity: 0; }
 /* The resting mark: the otter as the Logo draws it, eight bars with rounded caps, 14 points tall, in ink at a little
    under half strength, breathing slowly from the foot of each bar a beat after the one to its left. The one thing
    on the screen that is unmistakably Dictate. */
-.dots { position: relative; display: flex; align-items: center; height: 30px; padding: 0 8px; border: 0; background: none; color: var(--ink); cursor: grab; transition: opacity .2s; }
+.dots { position: relative; display: flex; align-items: center; justify-content: center; width: 48px; height: 30px; padding: 0; border: 0; background: none; color: var(--ink); cursor: grab; transition: opacity .2s; }
+.layer:is([data-edge='left'], [data-edge='right']) .dots { width: 30px; height: 48px; }
 .dots::before { content: ''; position: absolute; inset: -12px -22px; }
 .otter { display: flex; align-items: flex-end; gap: 2px; height: 14px; opacity: .45; transition: opacity .25s var(--ease); }
 .otter i { width: 2.2px; height: calc(var(--h) * 1px); border-radius: 2px; background: currentColor; transform-origin: 50% 100%; animation: otter-breathe 2.6s ease-in-out infinite; animation-delay: calc(var(--i) * .16s); }
@@ -89,9 +91,18 @@
 /* The pill: a frosted capsule with a hairline rim all round, six 30-point rounds on a 2-point gap, so it is a hand's
    width and not a toolbar; a button takes a plate only under the pointer. It takes the desktop's colour through the
    blur behind it (data-glass). */
-.pill { position: absolute; display: flex; z-index: 1; gap: 2px; padding: 4px; border-radius: 999px; background: var(--pill-tint); box-shadow: inset 0 0 0 .5px var(--rim), 0 8px 24px -8px rgb(0 0 0 / .45), 0 1px 2px rgb(0 0 0 / .12); opacity: 0; pointer-events: none; transform: scale(.6); transition: opacity .15s, transform .25s var(--ease); }
-.layer[data-mode='hover'] .pill { opacity: 1; pointer-events: auto; transform: none; transition: opacity .15s .04s, transform .4s var(--spring) .04s; }
-.pill button { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; color: var(--ink); background: none; cursor: pointer; transition: background .15s; }
+/* It arrives whole: the capsule fades in where it will be, sliding a few points out from the edge, and its buttons
+   spring up one after the other inside it. The glass behind it (the Mac's blur, placed from the page's rects
+   each frame) never has to chase a scaling box, which is what read as lag. The radius is a number the native
+   mask can draw: half the capsule's 38 points. */
+.pill { position: absolute; display: flex; z-index: 1; gap: 2px; padding: 4px; border-radius: 19px; background: var(--pill-tint); box-shadow: inset 0 0 0 .5px var(--rim), 0 8px 24px -8px rgb(0 0 0 / .45), 0 1px 2px rgb(0 0 0 / .12); opacity: 0; pointer-events: none; translate: 0 calc(6px * var(--motion)); transition: opacity .12s var(--ease-in), translate .2s var(--ease-in); }
+.layer[data-edge='left'] .pill { translate: calc(-6px * var(--motion)) 0; }
+.layer[data-edge='right'] .pill { translate: calc(6px * var(--motion)) 0; }
+.layer[data-mode='hover'] .pill { opacity: 1; pointer-events: auto; translate: none; transition: opacity .16s var(--ease), translate .32s var(--ease); }
+.pill button { opacity: 0; scale: .72; transition: opacity .1s var(--ease-in), scale .15s var(--ease-in), background .15s; }
+.layer[data-mode='hover'] .pill button { opacity: 1; scale: 1; transition: opacity .18s var(--ease) calc(40ms + var(--i, 0) * 22ms), scale .38s var(--spring) calc(40ms + var(--i, 0) * 22ms), background .15s; }
+@media (prefers-reduced-motion: reduce) { .pill, .pill button, .layer[data-mode='hover'] .pill, .layer[data-mode='hover'] .pill button { transition-duration: .12s; transition-delay: 0s; scale: 1; } }
+.pill button { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; color: var(--ink); background: none; cursor: pointer; }
 .pill button:hover { background: var(--surface-2); }
 /* A meeting under way: a red dot on its button, breathing. */
 .pill button[data-recording]::after { content: ''; position: absolute; top: 2px; right: 2px; width: 7px; height: 7px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 1.5px var(--pill-tint); animation: breathe 1.8s ease-in-out infinite; }

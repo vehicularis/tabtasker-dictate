@@ -1,10 +1,10 @@
 import { ICON_GLYPHS } from '../../overlay/glyphs';
-import { useEffect, useId, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { invoke } from '../../bridge';
 import type { PageProps } from '../../store';
 import { Button, Icon, Section, Tile, TileGroup, type IconName } from '../../ui';
 import { BusinessMark, Logo, otterBars } from '../../overlay/icons';
-import otters from '../assets/otters-talking.webp';
+import city from '../assets/otter-city.webp';
 import licence from '../../../LICENSE?raw';
 import notices from '../../../THIRD_PARTY_NOTICES.txt?raw';
 
@@ -85,39 +85,6 @@ const AppIcon = ({ size = 112 }: { size?: number }) => <svg className="about-ico
   </g>
 </svg>;
 
-/// The Highlands as an ink wash in the page's own tones: the sky is the page, lightening toward the horizon; ridges
-/// recede into it, each a wash that is darkest along its crest and thins toward its foot, with mist lying between
-/// them; the loch takes the sky; a moor stands in front. Every tone is the ink mixed a little deeper into the
-/// canvas, so by night it is moonlit grey on grey and by day grey on white. Each wash is a flat shape whose edge a
-/// little turbulence makes wobble as a wet brush does, blurred a hair as a wet edge is.
-const Highlands = () => {
-  const id = useId();
-  const tone = (mix: number) => `color-mix(in srgb, var(--ink) ${mix}%, var(--shell-canvas))`;
-  const ridge = (name: string, d: string, crest: number, foot: number) => <>
-    <linearGradient id={`${id}-${name}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={tone(crest)} /><stop offset="1" stopColor={tone(foot)} /></linearGradient>
-    <path d={d} fill={`url(#${id}-${name})`} filter={`url(#${id}-wet)`} />
-  </>;
-  return <svg className="about-sky" viewBox="0 0 1200 360" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
-    <defs>
-      <linearGradient id={`${id}-air`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="var(--shell-canvas)" /><stop offset=".45" stopColor={tone(3)} /><stop offset=".64" stopColor={tone(9)} /><stop offset="1" stopColor={tone(9)} /></linearGradient>
-      <linearGradient id={`${id}-loch`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={tone(12)} /><stop offset="1" stopColor={tone(7)} /></linearGradient>
-      <filter id={`${id}-wet`} x="-5%" y="-10%" width="110%" height="120%"><feTurbulence type="fractalNoise" baseFrequency=".014 .03" numOctaves="3" seed="11" result="n" /><feDisplacementMap in="SourceGraphic" in2="n" scale="7" xChannelSelector="R" yChannelSelector="G" result="d" /><feGaussianBlur in="d" stdDeviation=".7" /></filter>
-      <filter id={`${id}-soft`} x="-30%" y="-60%" width="160%" height="220%"><feGaussianBlur stdDeviation="18" /></filter>
-    </defs>
-    <rect width="1200" height="360" fill={`url(#${id}-air)`} />
-    <circle cx="900" cy="96" r="46" fill="color-mix(in srgb, #e0a23c 30%, var(--shell-canvas))" opacity=".5" filter={`url(#${id}-soft)`} />
-    {ridge('far', 'M0 158 C110 122 220 104 340 136 C440 162 500 100 620 112 C720 124 790 80 900 104 C1000 126 1090 102 1200 128 L1200 360 L0 360 Z', 13, 8)}
-    <ellipse cx="600" cy="196" rx="760" ry="20" fill="var(--shell-canvas)" opacity=".55" filter={`url(#${id}-soft)`} />
-    {ridge('mid', 'M0 210 C90 186 180 158 300 182 C400 202 470 168 560 176 C660 188 740 150 860 172 C960 190 1060 160 1200 188 L1200 360 L0 360 Z', 19, 12)}
-    <ellipse cx="640" cy="236" rx="700" ry="14" fill="var(--shell-canvas)" opacity=".4" filter={`url(#${id}-soft)`} />
-    <rect x="0" y="242" width="1200" height="54" fill={`url(#${id}-loch)`} />
-    <path d="M160 262 C300 258 420 266 540 262 M660 276 C780 272 920 278 1060 272" stroke="var(--shell-canvas)" strokeOpacity=".45" strokeWidth="1.5" strokeLinecap="round" fill="none" />
-    {ridge('left', 'M0 256 C140 218 260 226 420 250 C470 258 520 272 560 294 L0 294 Z', 27, 20)}
-    {ridge('right', 'M640 292 C700 266 840 230 980 222 C1060 218 1130 232 1200 244 L1200 294 L640 294 Z', 25, 19)}
-    {ridge('moor', 'M0 304 C200 284 380 300 600 290 C800 282 1000 302 1200 292 L1200 360 L0 360 Z', 38, 30)}
-  </svg>;
-};
-
 const Legal = ({ rows }: { rows: [string, string][] }) => <dl className="legal">{rows.map(([term, words]) => <div key={term}><dt>{term}</dt><dd>{words}</dd></div>)}</dl>;
 
 export function About(_: PageProps) {
@@ -170,18 +137,21 @@ export function About(_: PageProps) {
       </TileGroup>
     </Section>
     <footer className="about-end">
-      <Highlands />
-      <img className="about-otters" src={otters} alt="" width={1448} height={1086} draggable={false} />
-      <div className="about-end-words">
-        <p className="about-lockup"><Logo size={22} /><span>TabTasker</span><i>|</i><span>Dictate</span></p>
-        <p className="about-end-line">Dictate is made by Vehicularis, the team behind TabTasker | Business.</p>
-        <nav className="about-links" aria-label="More from TabTasker">
-          <button type="button" className="link" onClick={site(BUSINESS)}>TabTasker | Business</button>
-          <button type="button" className="link" onClick={site(`${BUSINESS}/privacy`)}>Privacy</button>
-          <button type="button" className="link" onClick={site(`${BUSINESS}/terms`)}>Terms</button>
-          <button type="button" className="link" onClick={site('https://github.com/vehicularis/tabtasker-dictate')}>Source</button>
+      <img className="about-city" src={city} alt="" width={2172} height={724} draggable={false} loading="lazy" decoding="async" />
+      <div className="about-card">
+        <p className="about-lockup"><Logo size={24} /><span>TabTasker</span><i>|</i><span>Dictate</span></p>
+        <div className="about-chips" aria-label="About this build">
+          <span className="about-chip">{version ? `Version ${version}` : 'Version'}</span>
+          <span className="about-chip">Apache License 2.0</span>
+          <span className="about-chip">Built with Tauri, Rust and Whisper</span>
+        </div>
+        <nav className="about-chips" aria-label="More from TabTasker">
+          <button type="button" className="about-chip link" onClick={site(BUSINESS)}>TabTasker | Business<Icon name="external" size={11} /></button>
+          <button type="button" className="about-chip link" onClick={site(`${BUSINESS}/privacy`)}>Privacy</button>
+          <button type="button" className="about-chip link" onClick={site(`${BUSINESS}/terms`)}>Terms</button>
+          <button type="button" className="about-chip link" onClick={site('https://github.com/vehicularis/tabtasker-dictate')}>Source</button>
         </nav>
-        <p className="about-foot">© 2026 Vehicularis Limited</p>
+        <p className="about-made">Made with <BusinessMark size={18} /> by Vehicularis in the UK. © 2026 Vehicularis Limited.</p>
       </div>
     </footer>
   </>;

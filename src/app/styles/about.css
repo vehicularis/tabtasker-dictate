@@ -15,26 +15,24 @@
 .notices { max-height: 240px; margin: 0; padding: 2px 2px 2px 0; overflow: auto; font: 11px/1.55 var(--font-mono); color: var(--ink-2); overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; }
 .notices p { margin: 0; }
 .notices:focus-visible { outline-offset: 6px; border-radius: 2px; }
-/* The end of the page: the Highlands as an ink wash the width of the pane (About.tsx Highlands), in the page's own
-   tones: the sky is the page, the ridges the ink mixed a little deeper into it, so it belongs to the theme by day
-   and by night. A grain over it; Business's two otters in conversation on the moor; over the sky, the lockup, who
-   makes Dictate, the links out and the ©. It reaches past the page's column to the pane's edges with container
-   units (pane.css makes .content a container). */
-.about-end { position: relative; width: 100cqw; min-height: 280px; margin: 24px 0 -36px calc(50% - 50cqw); overflow: hidden; isolation: isolate; color: var(--ink); background: var(--shell-canvas); }
-.about-end::before { content: ''; position: absolute; inset: 0 0 auto; height: 40%; z-index: 1; background: linear-gradient(var(--shell-canvas), transparent); pointer-events: none; }
-.about-end::after { content: ''; position: absolute; inset: 0; z-index: 1; opacity: .07; mix-blend-mode: luminosity; pointer-events: none;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .9 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23g)'/%3E%3C/svg%3E"); }
-.about-sky { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-.about-otters { position: absolute; right: 28px; bottom: -3px; z-index: 2; width: 150px; height: auto; -webkit-user-drag: none; }
-.about-end-words { position: relative; z-index: 2; display: flex; flex-direction: column; gap: 6px; max-width: 440px; padding: 30px 36px 28px; }
-.about-lockup { display: flex; align-items: center; gap: 8px; margin: 0 0 2px; font: 600 17px/1 var(--font-display); letter-spacing: -.01em; color: var(--ink); }
+/* The end of the page, as Business ends its own: the otter city in ink (Business's footer art, a transparent WebP) the
+   width of the pane on warm paper, its bottom edge the page's; over its sky a frosted card with the lockup, chips
+   for the build, the way out and who makes Dictate. Paper by day and by night: ink needs paper, and the card
+   reads the same on both. It reaches past the page's column to the pane's edges with container units (pane.css
+   makes .content a container). */
+.about-end { position: relative; width: 100cqw; margin: 28px 0 -36px calc(50% - 50cqw); padding: 26px 30px 0; box-sizing: border-box; overflow: hidden; isolation: isolate; color: #2a2622; background: linear-gradient(#f7f5f0, #efece4); }
+.about-city { display: block; width: calc(100% + 60px); max-width: none; height: auto; margin: -140px -30px 0; -webkit-user-drag: none; pointer-events: none; }
+.about-card { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 14px; max-width: 560px; padding: 22px 24px; border-radius: 18px; background: rgb(255 255 255 / .62); backdrop-filter: blur(18px) saturate(1.2); -webkit-backdrop-filter: blur(18px) saturate(1.2); box-shadow: inset 0 0 0 .5px rgb(255 255 255 / .8), 0 1px 2px rgb(0 0 0 / .06), 0 12px 32px -14px rgb(0 0 0 / .3); }
+.about-lockup { display: flex; align-items: center; gap: 9px; margin: 0; font: 600 18px/1 var(--font-display); letter-spacing: -.01em; color: #1d1a17; }
 .about-lockup svg { display: block; }
-.about-lockup i { font-style: normal; font-weight: 400; color: var(--ink-3); }
-.about-end-line { max-width: 40ch; margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--ink-2); }
-.about-links { display: flex; flex-wrap: wrap; gap: 2px 16px; margin: 4px 0 0; }
-.about-end .link { color: var(--ink); text-decoration-color: color-mix(in srgb, var(--ink) 35%, transparent); }
-.about-end .link:hover { text-decoration-color: var(--ink); }
-.about-foot { margin: 8px 0 0; font-size: 12.5px; color: var(--ink-3); }
+.about-lockup i { font-style: normal; font-weight: 400; color: #8a847c; }
+.about-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.about-chip { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px; border: 0; border-radius: 8px; font: 500 12.5px/1 var(--font); color: #3f3933; background: rgb(0 0 0 / .055); white-space: nowrap; }
+.about-chip.link { cursor: pointer; transition: background var(--quick) var(--ease), color var(--quick) var(--ease); }
+.about-chip.link:hover { color: #1d1a17; background: rgb(0 0 0 / .1); }
+.about-chip svg { color: #8a847c; }
+.about-made { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 2px 0 0; font-size: 13px; color: #4a433d; }
+.about-made svg { display: block; border-radius: 4px; }
 /* The policy and the terms: a term in ink, its words beside it, nothing else. */
 .legal { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 2px 0; font-size: 13px; line-height: 1.5; user-select: text; -webkit-user-select: text; }
 .legal > div { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 12px; }

@@ -40,7 +40,7 @@ export function Dock({ mode, menu, dots, label, hint, hintShown = false, quiet, 
       {/* The resting mark is the otter itself: the Logo's eight bars, small, breathing slowly (overlay.css .otter). */}
       <span className="otter" aria-hidden="true">{OTTER.map((h, i) => <i key={i} style={{ '--h': h, '--i': i } as CSSProperties} />)}</span>
     </button>
-    <div className="glass pill" data-glass data-hit aria-hidden={mode !== 'hover'} onPointerDown={onGrab}>{pill.map(name => button[name])}</div>
+    <div className="glass pill" data-glass data-hit aria-hidden={mode !== 'hover'} onPointerDown={onGrab}>{pill.map((name, i) => <span key={name} style={{ display: 'contents', '--i': i } as CSSProperties}>{button[name]}</span>)}</div>
     <Orb mode={mode} level={level} typing={typing} words={words} onClick={onOrb} />
     {hint && <span className="label" aria-hidden="true"><span className="glass"><kbd>{key}</kbd> hold to type</span></span>}
   </div>;
