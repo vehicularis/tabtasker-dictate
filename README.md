@@ -1,58 +1,52 @@
 <p align="center">
-  <img src="design/icon.png" width="112" alt="">
+  <img src="docs/images/icon.png" width="112" alt="">
 </p>
 
 <h1 align="center">TabTasker Dictate</h1>
 
 <p align="center">
-  <strong>Talk instead of typing, on your Mac.</strong><br>
-  Hold a key, say it, and it’s written. In any app, and it never leaves your Mac.
+  <strong>Talk, and it’s typed.</strong><br>
+  Hold fn in any app, say what you want to write, and let go.
 </p>
 
 <p align="center">
   <img src="docs/images/window.png" alt="The TabTasker Dictate window with a note open">
 </p>
 
-## What it is
-
-TabTasker Dictate sits at the edge of your screen as a few quiet dots. Hold fn and talk: your words appear
-where the cursor is, in your email, your chat, your code editor, anywhere. Let go and you’re done.
-
-Point at the dots and they open into everything else: speak a note, write one, put a sticky on the screen,
-record a meeting.
+Dictate lives in a few small dots at the edge of your screen. Wherever your cursor is, hold your key and
+talk, and your words are typed in when you let go. The dots open up for everything else: a note you can
+talk into for as long as you like, a sticky that stays on top of your windows, or a meeting recording.
 
 <p align="center">
   <img src="docs/images/dots.png" width="340" alt="The dots, opened into their buttons">
 </p>
 
-## What you can do
+## What’s in it
 
-- **Type with your voice, anywhere.** Every app, more than 40 languages, and “send” presses Return for you.
-- **Take notes by talking.** Talk for as long as you like. The note is saved as a plain Markdown file in
-  your Documents folder, ready to edit with headings, to-dos, tables and pictures.
-- **Keep stickies on top.** Small notes that float over your other windows. Say “sticky: call Thomas”
-  while you dictate and one appears.
-- **Record meetings.** The room and the other side of a call, transcribed as it goes, with every voice
-  told apart.
-- **Add AI if you want it.** Connect Claude, or a model running on your own Mac, and it titles your notes,
-  summarises meetings, tidies what you dictate and follows spoken commands.
+- Dictation in any app, in more than 40 languages. Say “send” at the end and it presses Return for you.
+- Notes you can talk or type. They’re plain Markdown files in your Documents folder, so Obsidian and
+  everything else can read them.
+- Stickies that float over your windows until you close them. Say “sticky: call Thomas” while you dictate
+  and one appears.
+- Meeting recordings that tell the voices apart, including the other side of a call.
+- AI if you want it. Connect Claude or a model running on your Mac, and it’ll name your notes, summarise
+  your meetings and tidy up what you dictate.
 
 <p align="center">
   <img src="docs/images/stickies.png" alt="Stickies in their own colours">
 </p>
 
-## Private by design
+## Privacy
 
-Your voice is turned into text by Whisper, running on your Mac’s own chip. No audio is ever uploaded.
-There’s no account and nothing to sign in to. If you connect a model, it only ever sees text, and you can
-see exactly what it gets in Settings.
+Speech recognition runs on your Mac, so your voice never leaves it and you don’t need an account. If you
+connect an AI model, it only ever gets text, and Settings shows you exactly what it sees.
 
 ## Get started
 
-You need a Mac with Apple silicon and macOS 13 or later. On first launch the app downloads its speech model
-once (about 875 MB) and walks you through the microphone and Accessibility permissions.
+You’ll need a Mac with Apple silicon on macOS 13 or later. The first time it opens, Dictate downloads its
+speech model (about 875 MB) and walks you through the two permissions it needs.
 
-To build it yourself, with Rust, Node 22 and Xcode’s command line tools installed:
+To build it yourself, install Rust, Node 22 and Xcode’s command line tools, then:
 
 ```sh
 npm install
@@ -60,7 +54,7 @@ npm run tauri dev      # run from source
 npm run tauri build    # TabTasker Dictate.app and a DMG in src-tauri/target/release/bundle
 ```
 
-How it all works is written up in [docs/spec/v1.md](docs/spec/v1.md).
+The full design is written up in [docs/spec/v1.md](docs/spec/v1.md).
 
 ## License
 
