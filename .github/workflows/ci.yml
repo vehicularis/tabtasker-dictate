@@ -50,12 +50,20 @@ jobs:
         # whose sherpa-onnx-sys crate needs recompiling (a bumped dependency) then fails to find
         # libsherpa-onnx-c-api.a. With the libraries gone, forget the script ran so it downloads them.
         run: |
+          echo "prebuilt, as restored:"; find src-tauri/target/sherpa-onnx-prebuilt -maxdepth 3 2>/dev/null | head -20
+          echo "build dirs:"; ls -d src-tauri/target/*/build/sherpa-onnx-sys-* src-tauri/target/*/.fingerprint/sherpa-onnx-sys-* 2>/dev/null
           if ! ls src-tauri/target/sherpa-onnx-prebuilt/*/lib/libsherpa-onnx-c-api.a >/dev/null 2>&1; then
-            rm -rf src-tauri/target/*/build/sherpa-onnx-sys-* src-tauri/target/*/.fingerprint/sherpa-onnx-sys-*
+            echo "no libraries: the build script runs again"
+            rm -rf src-tauri/target/sherpa-onnx-prebuilt src-tauri/target/*/build/sherpa-onnx-sys-* src-tauri/target/*/.fingerprint/sherpa-onnx-sys-*
           fi
       - name: Clippy
         working-directory: src-tauri
         run: cargo clippy --all-targets --locked -- -D warnings
+      - name: Where sherpa-onnx's libraries are, after Clippy
+        run: |
+          find src-tauri/target/sherpa-onnx-prebuilt -maxdepth 3 2>/dev/null | head -20
+          for f in src-tauri/target/debug/build/sherpa-onnx-sys-*/output; do echo "== $f"; grep -i 'link-search\|link-lib=static=sherpa-onnx-c-api' "$f"; done
+          ls -la src-tauri/target/debug/build | grep sherpa
       - name: Tests
         working-directory: src-tauri
         run: cargo test --locked
