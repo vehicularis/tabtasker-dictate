@@ -5,6 +5,7 @@
 //! archived or deleted there. A sticky can become a note in the notes folder.
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::ffi::{c_char, c_void, CString};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -44,6 +45,10 @@ impl Default for Sticky {
 }
 /// A folded sticky's height: its band alone (sticky.css .sticky-band).
 const FOLDED: f64 = 34.0;
+/// Above the sheet, a clear strip of the window where the pill floats in: the window's, never the sticky's size.
+pub(crate) const GUTTER: f64 = 44.0;
+/// How far from the window's top the pill sits (sticky.css).
+const PILL_TOP: f64 = 6.0;
 pub const TILTS: [&str; 3] = ["none", "slight", "random"];
 pub const WEIGHTS: [&str; 2] = ["regular", "bold"];
 fn one_of<'a>(name: Option<&'a str>, allowed: &[&str], fallback: &'a str) -> String { name.filter(|v| allowed.contains(v)).unwrap_or(fallback).to_owned() }
@@ -53,7 +58,7 @@ static SAVING: Mutex<()> = Mutex::new(());
 fn now_ms() -> u64 { SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |age| age.as_millis() as u64) }
 fn file(app: &AppHandle) -> Result<PathBuf, String> { Ok(app.path().app_data_dir().map_err(|e| e.to_string())?.join("stickies.json")) }
 fn hue_or(name: Option<&str>, fallback: &str) -> String { name.filter(|hue| HUES.contains(hue)).unwrap_or(fallback).to_owned() }
-fn label(id: &str) -> String { format!("{LABEL}{id}") }
+pub(crate) fn label(id: &str) -> String { format!("{LABEL}{id}") }
 
 /// Every sticky, from the file; an unreadable file is an empty list, never a crash at launch.
 pub fn all(app: &AppHandle) -> Vec<Sticky> {
@@ -92,7 +97,7 @@ fn open(app: &AppHandle, sticky: &Sticky) -> tauri::Result<()> {
     .title("Sticky")
     .decorations(false).transparent(true).shadow(true)
     .always_on_top(sticky.pinned).visible_on_all_workspaces(true).skip_taskbar(true)
-    .resizable(!sticky.folded).min_inner_size(160.0, if sticky.folded { FOLDED } else { 120.0 }).inner_size(sticky.width, if sticky.folded { FOLDED } else { sticky.height }).position(sticky.x, sticky.y)
+    .resizable(!sticky.folded).min_inner_size(160.0, (if sticky.folded { FOLDED } else { 120.0 }) + GUTTER).inner_size(sticky.width, (if sticky.folded { FOLDED } else { sticky.height }) + GUTTER).position(sticky.x, sticky.y)
     .accept_first_mouse(true)
     .build()?;
   window.set_focus()
@@ -176,8 +181,8 @@ pub fn frame_changed(app: &AppHandle, window_label: &str) {
   let (position, size): (LogicalPosition<f64>, LogicalSize<f64>) = (position.to_logical(scale), size.to_logical(scale));
   let mut list = all(app);
   let Some(sticky) = list.iter_mut().find(|sticky| sticky.id == id) else { return };
-  // Folded, the window is its bar: the open height is kept for when it unfolds.
-  let height = if sticky.folded { sticky.height } else { size.height };
+  // Folded, the window is its band: the open height is kept for when it unfolds. The gutter is the window's.
+  let height = if sticky.folded { sticky.height } else { size.height - GUTTER };
   if (sticky.x, sticky.y, sticky.width, sticky.height) == (position.x, position.y, size.width, height) { return; }
   sticky.x = position.x; sticky.y = position.y; sticky.width = size.width; sticky.height = height;
   if let Err(e) = write(app, &list) { log::warn!("sticky: {e}"); }
@@ -226,9 +231,32 @@ pub fn sticky_size(app: AppHandle, id: String, width: f64, height: f64) -> Resul
   let sticky = list.iter_mut().find(|sticky| sticky.id == id).ok_or("That sticky isn’t there any more.")?;
   sticky.width = width; sticky.height = height;
   let kept = sticky.clone();
-  if !kept.folded { if let Some(window) = app.get_webview_window(&label(&id)) { window.set_size(LogicalSize::new(width, height)).map_err(|e| e.to_string())?; } }
+  if !kept.folded { if let Some(window) = app.get_webview_window(&label(&id)) { window.set_size(LogicalSize::new(width, height + GUTTER)).map_err(|e| e.to_string())?; } }
   changed(&app, &list)?;
   Ok(kept)
+}
+
+extern "C" {
+  fn dictate_sticky_watch(window: *mut c_void, id: *const c_char, gutter: f64, pill_width: f64, pill_top: f64);
+  fn dictate_sticky_hold(window: *mut c_void, hold: bool);
+}
+/// The page's pill, measured, so the Mac knows where the window takes the mouse: over the sheet, and over the
+/// pill while it is up (dictate.m). The page hears the pill rise and fall as `dictate-sticky-hover`.
+#[tauri::command]
+pub fn sticky_watch(app: AppHandle, id: String, pill_width: f64) -> Result<(), String> {
+  let window = app.get_webview_window(&label(&id)).ok_or("That sticky isn’t on the screen.")?;
+  let native = window.ns_window().map_err(|e| e.to_string())?;
+  let name = CString::new(id).map_err(|e| e.to_string())?;
+  unsafe { dictate_sticky_watch(native, name.as_ptr(), GUTTER, pill_width.clamp(40.0, 900.0), PILL_TOP) };
+  Ok(())
+}
+/// The pill stays up, wherever the pointer is: its colours or menu are open, or the keyboard is in it.
+#[tauri::command]
+pub fn sticky_hold(app: AppHandle, id: String, hold: bool) -> Result<(), String> {
+  let window = app.get_webview_window(&label(&id)).ok_or("That sticky isn’t on the screen.")?;
+  let native = window.ns_window().map_err(|e| e.to_string())?;
+  unsafe { dictate_sticky_hold(native, hold) };
+  Ok(())
 }
 
 /// On top of everything, or behind other windows like any window: a sticky that is out of the way.
@@ -251,8 +279,8 @@ pub fn sticky_fold(app: AppHandle, id: String, folded: bool) -> Result<Sticky, S
   sticky.folded = folded;
   let kept = sticky.clone();
   if let Some(window) = app.get_webview_window(&label(&id)) {
-    let height = if folded { FOLDED } else { kept.height };
-    window.set_resizable(!folded).and_then(|_| window.set_min_size(Some(LogicalSize::new(160.0, if folded { FOLDED } else { 120.0 }))))
+    let height = (if folded { FOLDED } else { kept.height }) + GUTTER;
+    window.set_resizable(!folded).and_then(|_| window.set_min_size(Some(LogicalSize::new(160.0, (if folded { FOLDED } else { 120.0 }) + GUTTER))))
       .and_then(|_| window.set_size(LogicalSize::new(kept.width, height))).map_err(|e| e.to_string())?;
   }
   changed(&app, &list)?;

@@ -63,6 +63,8 @@ export type Events = {
   'dictate-history': { entry: HistoryEntry };
   'dictate-learned': { word: string };
   'dictate-dock': { shown: boolean; strip: number; edge: 'bottom' | 'left' | 'right' };
+  /// A sticky's pill rising or falling, as the Mac sees the pointer (stickies.rs, to that sticky's window).
+  'dictate-sticky-hover': { id: string; up: boolean };
 };
 
 // NSEvent modifier flags, as the native side matches them.
