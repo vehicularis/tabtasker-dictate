@@ -1,18 +1,22 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
-import { invoke } from '../bridge';
+import { invoke, listen } from '../bridge';
 import { stamp } from '../lib/dates';
 import { message } from '../lib/errors';
 import { KEY_NAMES } from '../lib/keyNames';
 import { leave, reduced, timing } from '../ui/motion';
-import { STICKY_HUES, STICKY_SIZES, useSettings, type Sticky as Record, type StickyHue, type StickyTilt, type StickyWeight } from '../store';
+import { STICKY_HUES, STICKY_SIZES, useSettings, type Events, type Sticky as Record, type StickyHue, type StickyTilt, type StickyWeight } from '../store';
 import { Editor } from '../editor/Editor';
 import { HUES, Sheet } from './Sheet';
 
 const id = new URLSearchParams(location.search).get('id') ?? '';
 const PREVIEW = new URLSearchParams(location.search).get('preview'); // ?preview=pill keeps the pill out, for a look in a browser
-// One sticky, in its own small window: Business's sticker (Sheet). Its band drags it and, under the pointer, shows
-// the pill: the swatch (the other colours under it), fold, keep on top, save as a note, more and close. More, or a
-// right-click, opens the look menu: the colours, a title line, bold type, the tilt, the size, fold, keep on top.
+// In its own window on the Mac, the pointer is the Mac's to report (dictate.m): WebKit's hover goes stale once
+// the window stops taking the mouse over the clear gutter. In a browser, hover is hover.
+const NATIVE = !PREVIEW && '__TAURI__' in window;
+// One sticky, in its own small window: Business's sticker (Sheet). Its band drags it; while the pointer is over it
+// the pill floats above the sheet, in the window's clear gutter: the swatch (the other colours under it), fold,
+// keep on top, save as a note, more and close. More, or a right-click, opens the look menu: the colours, a title
+// line, bold type, the tilt, the size, fold, keep on top.
 // The words are the Text editor, compact; hold the dictate key with them focused to talk into them. Saved as typed.
 export function Sticky() {
   const [sticky, setSticky] = useState<Record | null>(null);
@@ -31,9 +35,20 @@ export function Sticky() {
   }, [menu]);
   const holdMenu = useCallback((el: HTMLDivElement | null) => { menuBox.current = el; return leave(el); }, []);
   const [problem, setProblem] = useState<string | null>(null);
+  // The pill: up while the Mac says the pointer is over the sheet or the pill; held up while its colours or the
+  // menu are open, or the keyboard is in it. The Mac is told the pill's width once it is laid out, to know where.
+  const [hover, setHover] = useState(false);
+  const [held, setHeld] = useState(false);
+  useEffect(() => NATIVE ? listen<Events['dictate-sticky-hover']>('dictate-sticky-hover', pill => { if (pill.id === id) setHover(pill.up); }) : undefined, []);
+  useEffect(() => { if (NATIVE) void invoke('sticky_hold', { id, hold: held || !!menu }).catch(() => {}); }, [held, !!menu]); // eslint-disable-line react-hooks/exhaustive-deps -- whether the menu is open, not where
   const timer = useRef<number | undefined>(undefined);
   const titleTimer = useRef<number | undefined>(undefined);
   useEffect(() => { void invoke<Record>('sticky_get', { id }).then(found => { setSticky(found); setText(found.text); }, () => setProblem('Couldn’t find this sticky. It may have been deleted.')); }, []);
+  useEffect(() => {
+    if (!NATIVE || !sticky) return;
+    const width = document.querySelector('.sticky-pill')?.getBoundingClientRect().width;
+    if (width) void invoke('sticky_watch', { id, pillWidth: width }).catch(() => {});
+  }, [sticky?.id, sticky?.folded]); // eslint-disable-line react-hooks/exhaustive-deps -- laid out again on these
   // A press anywhere else closes the menu; one on ⋯ is left to ⋯, which opens and closes it.
   useEffect(() => {
     if (!menu) return;
@@ -89,7 +104,7 @@ export function Sticky() {
   </div>;
   return <Sheet id={id} hue={hue} folded={folded} pinned={!!sticky?.pinned} text={text} title={sticky?.title ?? ''} titled={!!sticky?.titled} tilt={sticky?.tilt ?? 'none'} weight={sticky?.weight ?? 'bold'}
     actions={{ fold: () => fold(), pin: () => pin(), note: toNote, close, recolour: (next: StickyHue) => look({ hue: next }), retitle, more: at => setMenu(open => open ? null : at) }}
-    data-hover={PREVIEW === 'pill' || undefined} onContextMenu={event => { event.preventDefault(); setMenu({ x: event.clientX, y: event.clientY }); }}>
+    data-native={NATIVE || undefined} data-hover={hover || PREVIEW === 'pill' || undefined} onHold={setHeld} onContextMenu={event => { event.preventDefault(); setMenu({ x: event.clientX, y: event.clientY }); }}>
     {sticky && !folded && <Editor key={sticky.id} compact markdown={sticky.text} label="Sticky" placeholder={`Type, or hold ${dictateKey} and talk`} autoFocus={!sticky.text} onChange={edit} />}
     {problem && !folded && <p className="sticky-problem" role="alert">{problem}</p>}
     {menu && <div ref={holdMenu} className="sticky-menu" role="menu" aria-label="Look and size" style={{ left: menu.x, top: menu.y }}>

@@ -70,6 +70,13 @@ extern "C" fn dictate_ui_dock(shown: bool, strip: f64, edge: *const c_char) {
   let edge = text(edge).unwrap_or_else(|| "bottom".to_owned());
   emit("dictate-dock", serde_json::json!({ "shown": shown, "strip": if strip.is_finite() { strip } else { 0.0 }, "edge": edge }));
 }
+/// A sticky's pill rising or falling (dictate.m): its page shows the pill while it is up, and the window takes
+/// the mouse over it only then.
+#[no_mangle]
+extern "C" fn dictate_ui_sticky_hover(id: *const c_char, up: bool) {
+  let Some(id) = text(id) else { return };
+  if let Some(app) = APP.get() { let _ = app.emit_to(crate::library::stickies::label(&id), "dictate-sticky-hover", serde_json::json!({ "id": id, "up": up })); }
+}
 /// A line for the app log: no speech, just what the microphone delivered.
 #[no_mangle]
 extern "C" fn dictate_log(line: *const c_char) {

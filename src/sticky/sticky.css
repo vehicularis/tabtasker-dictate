@@ -1,36 +1,39 @@
 /* A sticky is TabTasker Business's whiteboard sticker (boardColor.ts hueSurface, nodeStyleTokens' sticky): paper is
-   the hue mixed 30 % into white, 26 % into #1D2126 at night; ink is the hue mixed 20 % into #17181B, 34 % into
-   #E9EBEE at night; corners nearly square (2), type 14 at 600 (or 500 when regular), the pad's own shadow being the
-   window's. A band across the top is where it is dragged and where its title goes; the pill with its tools floats
-   in at the band's right only while the pointer is over the sticker (or one has the keyboard). A tilt leans the
-   whole sheet, scaled a touch so its corners stay inside the window. */
+   the hue mixed 30 % into white and ink the hue mixed 20 % into #17181B, by day and by night alike (paper is paper;
+   the dark recipe looked like mud on a dark desk); corners nearly square (2), type 14 at 600 (or 500 when regular),
+   the pad's own shadow being the window's. A band across the top is where it is dragged and where its title goes.
+   The pill with the tools floats above the sheet, level, only while the pointer is over the sticker (or one has the
+   keyboard, or its colours are open): in the sticky's window, in the clear gutter above the sheet (page.css
+   --gutter); on a page, over whatever is above. A tilt leans the sheet, scaled a touch so its corners stay inside. */
 /* The page's own rules live in page.css, so this file can be borrowed by the Stickies and Help pages for a real sticky. */
-.sticky { --paper: color-mix(in srgb, var(--hue) 30%, #ffffff); --ink: color-mix(in srgb, var(--hue) 20%, #17181b); --dim: color-mix(in srgb, var(--ink) 55%, transparent); --weight: 600; --tilt: 0deg; --fit: 1;
+.sticker { --tilt: 0deg; --fit: 1; position: relative; box-sizing: border-box; height: 100%; padding-top: var(--gutter, 0px); }
+.sticky { --paper: color-mix(in srgb, var(--hue) 30%, #ffffff); --ink: color-mix(in srgb, var(--hue) 20%, #17181b); --dim: color-mix(in srgb, var(--ink) 55%, transparent); --weight: 600;
   display: flex; flex-direction: column; box-sizing: border-box; height: 100%; border-radius: 2px; color: var(--ink); background: var(--paper); color-scheme: light;
   font: var(--weight) 14px/1.5 var(--font); rotate: var(--tilt); scale: var(--fit); transition: rotate var(--slow) var(--ease), scale var(--slow) var(--ease); }
 .sticky[data-weight='regular'] { --weight: 500; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .sticky { --paper: color-mix(in srgb, var(--hue) 26%, #1d2126); --ink: color-mix(in srgb, var(--hue) 34%, #e9ebee); color-scheme: dark; } }
-:root[data-theme='dark'] .sticky { --paper: color-mix(in srgb, var(--hue) 26%, #1d2126); --ink: color-mix(in srgb, var(--hue) 34%, #e9ebee); color-scheme: dark; }
-/* The band: 34 points (stickies.rs FOLDED), the title at its left, the pill at its right. */
-.sticky-band { position: relative; display: flex; flex: none; align-items: center; gap: 6px; height: 34px; padding: 0 6px 0 12px; cursor: grab; user-select: none; -webkit-user-select: none; }
+/* The band: 34 points (stickies.rs FOLDED), the title on it. */
+.sticky-band { position: relative; display: flex; flex: none; align-items: center; gap: 6px; height: 34px; padding: 0 12px; cursor: grab; user-select: none; -webkit-user-select: none; }
 .sticky-band:active { cursor: grabbing; }
 .sticky-peek { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; color: var(--ink); }
 .sticky-title { flex: 1; min-width: 0; height: 24px; padding: 0; border: 0; outline: 0; background: none; font: 600 11px/1 var(--font); letter-spacing: .06em; text-transform: uppercase; color: var(--dim); cursor: text; }
 .sticky-title::placeholder { color: color-mix(in srgb, var(--ink) 30%, transparent); }
 .sticky-title:focus { color: var(--ink); }
 /* The pill: dark, as Business's style bar floats over a selection; it fades in under the pointer. */
-.sticky-pill { position: absolute; right: 5px; top: 4px; z-index: 2; display: flex; align-items: center; gap: 1px; height: 26px; padding: 0 3px 0 5px; border-radius: 13px; color: rgb(255 255 255 / .82); background: #1d1f24;
-  box-shadow: 0 4px 12px -3px rgb(0 0 0 / .5), inset 0 0 0 .5px rgb(255 255 255 / .12); opacity: 0; translate: 0 -2px; pointer-events: none; transition: opacity var(--quick) var(--ease), translate var(--quick) var(--ease); }
-.sticky:hover .sticky-pill, .sticky[data-hover] .sticky-pill, .sticky-pill:focus-within, .sticky-pill:has([aria-expanded='true']) { opacity: 1; translate: none; pointer-events: auto; }
-.sticky-swatch-wrap { position: relative; display: flex; flex: none; align-items: center; margin-right: 3px; }
-.sticky-swatch { width: 14px; height: 14px; padding: 0; border: 0; border-radius: 50%; background: var(--hue); box-shadow: inset 0 0 0 .5px rgb(0 0 0 / .3), 0 0 0 1.5px rgb(255 255 255 / .35); cursor: pointer; transition: transform var(--quick) var(--ease); }
+/* The pill: 30 points, centred 8 above the sheet's top edge (so 6 under the window's top, with the 44 gutter), dark
+   whatever the paper. It rises as the pointer comes onto the sticker: in the window, when the Mac says so
+   (data-hover, from dictate.m); on a page, on hover. */
+.sticky-pill { position: absolute; left: 50%; top: calc(var(--gutter, 0px) - 38px); z-index: 2; display: flex; align-items: center; gap: 2px; height: 30px; padding: 0 5px; border-radius: 15px; color: rgb(255 255 255 / .82); background: #1d1f24;
+  box-shadow: 0 6px 16px -4px rgb(0 0 0 / .5), inset 0 0 0 .5px rgb(255 255 255 / .12); opacity: 0; translate: -50% 3px; pointer-events: none; transition: opacity var(--quick) var(--ease), translate var(--quick) var(--ease); }
+.sticker:not([data-native]):hover .sticky-pill, .sticker[data-hover] .sticky-pill, .sticky-pill:focus-within, .sticky-pill:has([aria-expanded='true']) { opacity: 1; translate: -50% 0; pointer-events: auto; }
+.sticky-swatch { flex: none; width: 14px; height: 14px; margin: 0 5px 0 4px; padding: 0; border: 0; border-radius: 50%; background: var(--hue); box-shadow: inset 0 0 0 .5px rgb(0 0 0 / .3), 0 0 0 1.5px rgb(255 255 255 / .35); cursor: pointer; transition: transform var(--quick) var(--ease); }
 .sticky-swatch:hover, .sticky-swatch[aria-expanded='true'] { transform: scale(1.12); }
-/* The colours: dots on a card under the swatch; the one it has, ringed. */
-.sticky-picker { position: absolute; top: calc(100% + 10px); right: -6px; z-index: 6; display: grid; grid-template-columns: repeat(4, 18px); gap: 9px; padding: 9px; border-radius: 10px; background: var(--popover, #fff); box-shadow: var(--elev-float); cursor: default; animation: fade-in var(--quick) var(--ease) backwards; }
+/* The colours: dots on a card hanging under the pill, over the sheet; the one it has, ringed. */
+.sticky-picker { position: absolute; top: calc(100% + 10px); left: 50%; translate: -50% 0; z-index: 6; display: grid; grid-template-columns: repeat(4, 18px); gap: 9px; padding: 9px; border-radius: 10px; background: var(--popover, #fff); box-shadow: var(--elev-float); cursor: default; animation: fade-in var(--quick) var(--ease) backwards; }
 .sticky-hue { width: 18px; height: 18px; padding: 0; border: 0; border-radius: 50%; background: var(--hue); box-shadow: inset 0 0 0 .5px rgb(0 0 0 / .25); cursor: pointer; transition: transform var(--quick) var(--ease), box-shadow var(--quick) var(--ease); }
 .sticky-hue[aria-checked='true'] { box-shadow: 0 0 0 2px var(--popover, #fff), 0 0 0 3.5px var(--hue); }
 .sticky-hue:hover { transform: scale(1.12); }
 .sticky-tool { display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 7px; color: inherit; background: none; cursor: pointer; transition: color var(--quick) var(--ease), background var(--quick) var(--ease); }
+.sticky-pill .sticky-tool { width: 24px; height: 24px; border-radius: 8px; }
 .sticky-pill .sticky-tool:hover { color: #fff; background: rgb(255 255 255 / .14); }
 .sticky-pill .sticky-tool[data-on] { color: #fff; }
 .sticky-tool:disabled { opacity: .35; cursor: default; }

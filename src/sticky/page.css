@@ -1,5 +1,7 @@
-/* The sticky's page: transparent, filling its window. */
+/* The sticky's page: transparent, filling its window. The window's top 44 points (stickies.rs GUTTER) are clear:
+   the pill floats there, above the sheet. */
 html, body, #root { height: 100%; margin: 0; background: transparent; overflow: hidden; }
+:root { --gutter: 44px; }
 /* WebKit keeps a button's native look unless told otherwise, even with a background set through a variable. */
 button { appearance: none; -webkit-appearance: none; font-family: var(--font); }
 body { font: 14px/1.45 var(--font); -webkit-font-smoothing: antialiased; }

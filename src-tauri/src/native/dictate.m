@@ -35,6 +35,18 @@ extern void dictate_ui_hands_free(bool locked);
 extern void dictate_paste_last(void);
 extern bool dictate_meeting(const char *action);
 extern void dictate_meeting_unstarted(void);
+extern void dictate_ui_sticky_hover(const char *id, bool up);
+
+// macOS re-checks which window is under the pointer only when the mouse moves, so a window that just started
+// or stopped taking the mouse would still get, or miss, a trackpad scroll that starts with the pointer at rest.
+// A move to where the pointer already is makes it look again. (Posting needs Accessibility, which fn has.)
+static void TTLookAgain(void) {
+  if (!AXIsProcessTrusted()) return;
+  CGEventRef here = CGEventCreate(NULL);
+  CGEventRef move = CGEventCreateMouseEvent(NULL, kCGEventMouseMoved, CGEventGetLocation(here), kCGMouseButtonLeft);
+  CGEventPost(kCGHIDEventTap, move);
+  CFRelease(move); CFRelease(here);
+}
 bool dictate_open_at_login(int set);
 static NSWindow *TTVoiceOverlayWindow(void);
 static void TTVoiceCatchEscape(BOOL on); // Escape as a hot key, defined with the C API below
@@ -1152,15 +1164,7 @@ static CGFloat TTDockStrip(NSRectEdge *edge) {
   BOOL ignore = !(over || dragging);
   if (window.ignoresMouseEvents != ignore) {
     window.ignoresMouseEvents = ignore;
-    // macOS re-checks which window is under the pointer only when the mouse moves, so a trackpad
-    // scroll that starts with the pointer at rest would still go to the window below. A move to
-    // where the pointer already is makes it look again. (Posting needs Accessibility, which fn has.)
-    if (AXIsProcessTrusted()) {
-      CGEventRef here = CGEventCreate(NULL);
-      CGEventRef move = CGEventCreateMouseEvent(NULL, kCGEventMouseMoved, CGEventGetLocation(here), kCGMouseButtonLeft);
-      CGEventPost(kCGHIDEventTap, move);
-      CFRelease(move); CFRelease(here);
-    }
+    TTLookAgain();
   }
   // WebKit sends no hover to a window that isn't key, and the overlay never is while another app is
   // in front, so the page hears the pointer from here.
@@ -1428,6 +1432,78 @@ void dictate_request(const char *kind) {
     [NSWorkspace.sharedWorkspace openURL:[NSURL URLWithString:@"x-apple.systempreferences:com.apple.Keyboard-Settings.extension"]];
   }
 }
+// ---------- Sticky windows: the sheet, and a clear gutter above it where the pill floats in ----------
+// A window takes all of its mouse events or none, so a click on the clear gutter would go nowhere. As the overlay
+// does, a sticky's window takes the mouse only while the pointer is over the sheet, or over the pill while it is
+// up: the pill rises when the pointer comes onto the sheet and stays while the pointer is over either, with a
+// moment's grace for crossing the gap; the page holds it up while its colours or menu are open. The page hears
+// when it rises and falls (dictate_ui_sticky_hover), since WebKit's own hover goes stale once the window stops
+// taking the mouse.
+@interface TTSticky : NSObject
+@property (weak) NSWindow *window;
+@property (copy) NSString *name;
+@property CGFloat gutter, pillWidth, pillTop; // points: the clear strip's height, the pill's width, its distance from the top
+@property BOOL up, hold;
+@property CFAbsoluteTime left; // when the pointer left the sheet and the pill, while the pill was up
+@end
+@implementation TTSticky
+@end
+
+static NSMutableArray<TTSticky *> *stickies;
+static NSTimer *stickyTimer;
+
+static void TTStickyTick(void) {
+  NSPoint at = NSEvent.mouseLocation;
+  CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
+  for (TTSticky *sticky in [stickies copy]) {
+    NSWindow *window = sticky.window;
+    if (!window) { [stickies removeObject:sticky]; continue; }
+    if (!window.visible) continue;
+    NSRect frame = window.frame;
+    NSRect sheet = NSMakeRect(NSMinX(frame), NSMinY(frame), NSWidth(frame), NSHeight(frame) - sticky.gutter);
+    // The pill, the gap under it down to the sheet, and a little around: where it is reached.
+    NSRect pill = NSMakeRect(NSMidX(frame) - sticky.pillWidth / 2 - 8, NSMaxY(sheet), sticky.pillWidth + 16, sticky.gutter - sticky.pillTop + 4);
+    BOOL onSheet = NSPointInRect(at, sheet), onPill = NSPointInRect(at, pill);
+    BOOL near = onSheet || ((sticky.up || sticky.hold) && onPill);
+    if (near) {
+      sticky.left = 0;
+      if (!sticky.up) { sticky.up = YES; dictate_ui_sticky_hover(sticky.name.UTF8String, true); }
+    } else if (sticky.up) {
+      if (!sticky.left) sticky.left = now;
+      else if (now - sticky.left > 0.2) { sticky.up = NO; dictate_ui_sticky_hover(sticky.name.UTF8String, false); }
+    }
+    BOOL dragging = NSEvent.pressedMouseButtons != 0 && !window.ignoresMouseEvents;
+    BOOL take = onSheet || ((sticky.up || sticky.hold) && onPill) || dragging;
+    if (window.ignoresMouseEvents == take) { window.ignoresMouseEvents = !take; TTLookAgain(); }
+  }
+  if (!stickies.count) { [stickyTimer invalidate]; stickyTimer = nil; }
+}
+
+// A sticky's window to watch, with its gutter's height, its pill's width and how far the pill is from the top
+// (all points). Called again when the pill's width changes. Any thread.
+void dictate_sticky_watch(void *window, const char *id, double gutter, double pill_width, double pill_top) {
+  if (!window || !id) return;
+  NSWindow *target = (__bridge NSWindow *)window;
+  NSString *name = @(id);
+  dispatch_async(dispatch_get_main_queue(), ^{
+    if (!stickies) stickies = [NSMutableArray new];
+    TTSticky *sticky = nil;
+    for (TTSticky *one in stickies) if (one.window == target) { sticky = one; break; }
+    if (!sticky) { sticky = [TTSticky new]; sticky.window = target; [stickies addObject:sticky]; }
+    sticky.name = name; sticky.gutter = gutter; sticky.pillWidth = pill_width; sticky.pillTop = pill_top;
+    if (!stickyTimer) {
+      stickyTimer = [NSTimer timerWithTimeInterval:1.0 / 60 repeats:YES block:^(NSTimer *timer) { (void)timer; TTStickyTick(); }];
+      [NSRunLoop.mainRunLoop addTimer:stickyTimer forMode:NSRunLoopCommonModes];
+    }
+  });
+}
+// The page keeps the pill up (its colours or menu are open, or the keyboard is in it), wherever the pointer is.
+void dictate_sticky_hold(void *window, bool hold) {
+  if (!window) return;
+  NSWindow *target = (__bridge NSWindow *)window;
+  dispatch_async(dispatch_get_main_queue(), ^{ for (TTSticky *one in stickies) if (one.window == target) { one.hold = hold; return; } });
+}
+
 void dictate_overlay_attach(void *window) {
   if (!window) return;
   if (!overlay) overlay = [TTVoiceOverlay new];
