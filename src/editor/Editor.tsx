@@ -12,6 +12,7 @@ import { Placeholder } from '@tiptap/extensions';
 import { Markdown } from '@tiptap/markdown';
 import { common, createLowlight } from 'lowlight';
 import { fileSrc, invoke } from '../bridge';
+import { Select } from '../ui/controls';
 import { Icon } from '../ui/Icon';
 import { BlockDrop, TaskListMarkdownShortcut } from './blocks';
 import { BlockHandles } from './BlockHandles';
@@ -177,11 +178,10 @@ function CodeBlockView({ node, updateAttributes, extension }: NodeViewProps) {
   const languages = ((extension.options.lowlight as { listLanguages: () => string[] } | undefined)?.listLanguages() ?? []).slice().sort();
   const current = (node.attrs.language as string) || 'auto';
   return <NodeViewWrapper className="ed-codeblock">
-    <select className="ed-codeblock-lang" contentEditable={false} value={current} aria-label="Language"
-      onMouseDown={event => event.stopPropagation()} onChange={event => updateAttributes({ language: event.target.value === 'auto' ? null : event.target.value })}>
-      <option value="auto">auto</option>
-      {languages.map(language => <option key={language} value={language}>{language}</option>)}
-    </select>
+    <span className="ed-codeblock-lang" contentEditable={false} onMouseDown={event => event.stopPropagation()}>
+      <Select label="Language" value={current} options={[{ value: 'auto', label: 'auto' }, ...languages.map(language => ({ value: language, label: language }))]}
+        onChange={language => updateAttributes({ language: language === 'auto' ? null : language })} />
+    </span>
     <pre spellCheck={false}><NodeViewContent<'code'> as="code" /></pre>
   </NodeViewWrapper>;
 }
