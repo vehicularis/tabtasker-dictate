@@ -105,7 +105,7 @@ export function Overlay() {
         setLive(null);
         void invoke<string>('save_note', { title: '', text: note.text, stamp: stamp(new Date()), named: false })
           .then(path => { setSaved(path); return invoke('note_open', { path }); })
-          .catch(error => setToast(typeof error === 'string' ? error : 'Couldn’t save the note.'));
+          .catch(error => setToast(typeof error === 'string' ? error : 'Couldn’t save the note. Check there’s space on your disk.'));
       }),
       listen<{ message: string }>('dictate-error', ({ message }) => {
         if (message === 'microphone') setSetup(true);
@@ -183,7 +183,7 @@ export function Overlay() {
       const to = dots.current.getBoundingClientRect();
       dock.current.animate([{ translate: `${from.x - to.x}px ${from.y - to.y}px` }, { translate: '0 0' }], { duration: 450, easing: 'cubic-bezier(.34, 1.36, .64, 1)' });
       setDropped(next);
-      if (!PREVIEW) void updateSettings({ appearance: { edge: next } }).catch(() => setToast('Couldn’t keep the dots there'));
+      if (!PREVIEW) void updateSettings({ appearance: { edge: next } }).catch(() => setToast('Couldn’t move the dots there.'));
     };
     addEventListener('pointermove', move);
     addEventListener('pointerup', up);
@@ -200,15 +200,15 @@ export function Overlay() {
   };
   const openSetup = () => { setMenu(false); refresh(); setSetup(true); };
   /// The window, at a place: your notes, a note, the settings…
-  const openApp = useCallback((route?: string) => { setMenu(false); setHover(false); void invoke('open_app', route ? { route } : {}).catch(() => setToast('Couldn’t open TabTasker Dictate')); }, []);
+  const openApp = useCallback((route?: string) => { setMenu(false); setHover(false); void invoke('open_app', route ? { route } : {}).catch(() => setToast('Couldn’t open Dictate.')); }, []);
   const openSettings = useCallback(() => openApp('settings'), [openApp]);
   // A note to type: a new file at once, open in the window with the keyboard in it (hold the key to talk into it).
   const writeNote = useCallback(() => {
     setMenu(false); setHover(false);
     void invoke<string>('note_new', { title: '', text: '', stamp: stamp(new Date()) }).then(path => invoke('note_open', { path }))
-      .catch(error => setToast(typeof error === 'string' ? error : 'Couldn’t make a note'));
+      .catch(error => setToast(typeof error === 'string' ? error : 'Couldn’t make a new note.'));
   }, []);
-  const newSticky = useCallback(() => { setMenu(false); void invoke('sticky_new', {}).catch(error => setToast(typeof error === 'string' ? error : 'Couldn’t make a sticky')); }, []);
+  const newSticky = useCallback(() => { setMenu(false); void invoke('sticky_new', {}).catch(error => setToast(typeof error === 'string' ? error : 'Couldn’t make a new sticky.')); }, []);
   // The global shortcut for a typed note, which the native side hears and hands here.
   useEffect(() => listen<{ what: string }>('dictate-open', ({ what }) => { if (what === 'writeNote') writeNote(); }), [writeNote]);
   // The Dock that hides itself, sliding out over the dots' edge: the dots step aside by its strip until it goes.
@@ -217,12 +217,12 @@ export function Overlay() {
   const startMeeting = () => {
     setMenu(false);
     const action = meetings?.recording ? 'stop' : 'start';
-    void invoke<boolean>('meeting', { action }).then(changed => { if (!changed && action === 'start') setToast('Couldn’t start the meeting'); })
-      .catch((error: unknown) => setToast(typeof error === 'string' ? error : 'Couldn’t start the meeting'));
+    void invoke<boolean>('meeting', { action }).then(changed => { if (!changed && action === 'start') setToast('Couldn’t start the meeting.'); })
+      .catch((error: unknown) => setToast(typeof error === 'string' ? error : 'Couldn’t start the meeting.'));
   };
   const hideForAnHour = () => { setMenu(false); setHidden(true); setTimeout(() => setHidden(false), 60 * 60 * 1000); };
-  const pickMic = (id: string | null) => { setMenu(false); void invoke('set_input', { id }).then(refresh).catch(() => setToast('Couldn’t change the microphone')); };
-  const login = () => { const on = !status?.openAtLogin; void invoke<boolean>('set_open_at_login', { enabled: on }).then(refresh).catch(() => setToast('Couldn’t change Open at Login.')); };
+  const pickMic = (id: string | null) => { setMenu(false); void invoke('set_input', { id }).then(refresh).catch(() => setToast('Couldn’t change the microphone.')); };
+  const login = () => { const on = !status?.openAtLogin; void invoke<boolean>('set_open_at_login', { enabled: on }).then(refresh).catch(() => setToast('Couldn’t change whether Dictate opens at login.')); };
   // A click on the dots: stops a note being taken, finishes setup, or opens the window.
   const clickDots = () => {
     if (dragged.current) return;

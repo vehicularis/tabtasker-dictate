@@ -18,59 +18,59 @@ export function General({ settings, update }: PageProps) {
   const icon = settings.general.menuBarIcon;
   const mic = status?.microphone;
   return <>
-    <PageHeader icon="general" title="General">How TabTasker Dictate starts, and which microphone it listens with.</PageHeader>
+    <PageHeader icon="general" title="General">How Dictate starts and which microphone it uses.</PageHeader>
     <Section title="Startup">
       <TileGroup>
-        <Tile title="Open at Login" detail="Starts in the menu bar when you log in.">
-          <Toggle label="Open at Login" checked={!!status?.openAtLogin} disabled={!status}
-            onChange={on => run(invoke('set_open_at_login', { enabled: on }), 'Couldn’t change Open at Login.')} />
+        <Tile title="Open at login">
+          <Toggle label="Open at login" checked={!!status?.openAtLogin} disabled={!status}
+            onChange={on => run(invoke('set_open_at_login', { enabled: on }), 'Couldn’t change whether Dictate opens at login.')} />
         </Tile>
-        <Tile title="Menu bar icon" detail={icon ? 'New notes, meetings and recent notes from the menu bar.'
-          : `Hidden. To come back here, open TabTasker Dictate again from Finder or Spotlight${settings.appearance.idle === 'dots' ? ', or right-click the dots' : ''}.`}>
+        <Tile title="Menu bar icon" detail={icon ? undefined
+          : `You can still get back here from Spotlight${settings.appearance.idle === 'dots' ? ' or by right-clicking the dots' : ''}.`}>
           <Toggle label="Menu bar icon" checked={icon} onChange={menuBarIcon => void update({ general: { menuBarIcon } })} />
         </Tile>
-        <Tile title="Show in the Dock" detail={settings.general.showInDock ? 'Always in the Dock. Click the icon to open the window.' : 'In the Dock only while the window is open.'}>
+        <Tile title="Show in the Dock" detail={settings.general.showInDock ? undefined : 'Dictate only shows in the Dock while its window is open.'}>
           <Toggle label="Show in the Dock" checked={settings.general.showInDock} onChange={showInDock => void update({ general: { showInDock } })} />
         </Tile>
       </TileGroup>
     </Section>
     <Section title="Listening" note={problem}>
       <TileGroup>
-        <Tile title="Microphone" detail={!status ? undefined : mic === 'allowed' ? `In use: ${status.inputInUse}` : 'Allow microphone access under Setup first.'}>
+        <Tile title="Microphone" detail={!status ? undefined : mic === 'allowed' ? `Right now it’s ${status.inputInUse}.` : 'Allow microphone access below first.'}>
           <Select label="Microphone" value={status?.input ?? ''} options={[{ value: '', label: 'Automatic' }, ...(status?.inputs ?? []).map(input => ({ value: input.id, label: input.name }))]}
-            onChange={id => run(invoke('set_input', { id: id || null }), 'Couldn’t change the microphone')} />
+            onChange={id => run(invoke('set_input', { id: id || null }), 'Couldn’t switch to that microphone.')} />
         </Tile>
         <Tile title="Pause dictation" detail={status && !status.enabled
-          ? 'Dictation is paused. Turn this off to start again. The speech model downloads first if it isn’t on this Mac.'
-          : 'The microphone and Whisper stay off until you turn this off again. Your model is kept.'}>
+          ? 'Turn this off to start dictating again.'
+          : 'Your microphone stays off while dictation is paused.'}>
           <Toggle label="Pause dictation" checked={!!status && !status.enabled} disabled={!status}
-            onChange={paused => run(invoke('set_enabled', { enabled: !paused }), 'Couldn’t change dictation')} />
+            onChange={paused => run(invoke('set_enabled', { enabled: !paused }), paused ? 'Couldn’t pause dictation.' : 'Couldn’t start dictation again.')} />
         </Tile>
       </TileGroup>
     </Section>
     <Section title="Setup">
       <TileGroup>
-        <Tile title="Microphone access" detail={!status ? undefined : mic === 'allowed' ? 'Allowed. It is on only while you hold your key or take a note.'
-          : mic === 'denied' ? 'Off. In Privacy & Security › Microphone, turn on TabTasker Dictate.' : 'Not asked yet.'}>
+        <Tile title="Microphone access" detail={!status ? undefined : mic === 'allowed' ? undefined
+          : mic === 'denied' ? 'Turn this on in System Settings so Dictate can hear you.' : 'Dictate needs this to hear you.'}>
           {mic === 'allowed' ? <State>Allowed</State> : status && <Button onClick={() => ask('microphone')}>{mic === 'denied' ? 'Open System Settings' : 'Allow'}</Button>}
         </Tile>
-        <Tile title="Accessibility" detail={!status ? undefined : status.accessibility ? 'On. Your key works in every app and your words type there.'
-          : 'Off. In Privacy & Security › Accessibility, turn on TabTasker Dictate.'}>
+        <Tile title="Accessibility" detail={!status ? undefined : status.accessibility ? undefined
+          : 'Turn this on in System Settings so Dictate can type into other apps.'}>
           {status?.accessibility ? <State>On</State> : status && <Button onClick={() => ask('accessibility')}>Open System Settings</Button>}
         </Tile>
-        <Tile title="Set up again" detail="Permissions, your key, the speech model and a practice run, one step at a time.">
+        <Tile title="Set up again" detail="Go through setup from the start.">
           <Button onClick={() => { location.hash = 'setup'; }}>Open setup</Button>
         </Tile>
       </TileGroup>
     </Section>
     <Section title="Reset">
       <TileGroup>
-        <Tile title={resetting ? 'Reset all settings?' : 'Reset all settings'} detail="Every setting goes back to how it was at first launch. Your notes, the speech model and your Claude key stay.">
+        <Tile title={resetting ? 'Reset all settings?' : 'Reset all settings'} detail="Puts every setting back to its default. Your notes aren’t touched.">
           {resetting
             ? <><Button variant="quiet" autoFocus onClick={() => confirm(false)}>Cancel</Button>
               <Button variant="danger" onClick={() => {
                 confirm(false); setReset(null);
-                void resetSettings().then(() => setReset('Settings are back to how they were at first launch.')).catch(() => setReset('Couldn’t reset settings.'));
+                void resetSettings().then(() => setReset('Your settings are back to their defaults.')).catch(() => setReset('Couldn’t reset your settings. Try again.'));
               }}>Reset</Button></>
             : <Button id={resetId} variant="danger" onClick={() => { setReset(null); confirm(true); }}>Reset…</Button>}
         </Tile>

@@ -192,7 +192,7 @@ export function TableControls({ editor, wrap: wrapRef }: { editor: Editor; wrap:
 
   const grip = (axis: Axis) => <button type="button" className={`ed-table-grip ed-${axis}`} aria-haspopup="menu" aria-expanded={menu?.axis === axis}
     style={axis === 'row' ? { left: table.left - 5, top: row.top + row.height / 2 - 12 } : { left: cell.left + cell.width / 2 - 12, top: table.top - 5 }}
-    aria-label={axis === 'row' ? 'Row options' : 'Column options'} title="Click for options, drag to move" onPointerDown={startGrip(axis)}>
+    aria-label={axis === 'row' ? 'Row options' : 'Column options'} title="Click for options, or drag to move" onPointerDown={startGrip(axis)}>
     <Icon name={axis === 'row' ? 'grip' : 'gripRow'} size={14} />
   </button>;
 

@@ -15,7 +15,7 @@ pub enum Kind { Note, Meeting }
 pub struct NoteRef { pub path: PathBuf, pub title: String, pub modified_ms: u64 }
 
 fn documents() -> Result<PathBuf, String> {
-  let home = std::env::var_os("HOME").ok_or("No home folder")?;
+  let home = std::env::var_os("HOME").ok_or("Couldn’t find your home folder.")?;
   Ok(PathBuf::from(home).join("Documents").join("TabTasker Dictate"))
 }
 
@@ -149,7 +149,7 @@ fn write_new(dir: &Path, stem: &str, bytes: &[u8]) -> Result<PathBuf, String> {
       Err(e) => return Err(format!("Couldn’t save the note: {e}")),
     }
   }
-  Err("Couldn’t find a free name for the note".into())
+  Err("Couldn’t find a free name for the note. Try another title.".into())
 }
 
 /// Adds the note to the day's file: the first of `{date}.md`, `{date} 2.md`… that is missing or a plain
@@ -176,12 +176,12 @@ fn append_daily(dir: &Path, note: &Composed) -> Result<PathBuf, String> {
     file.write_all(text.as_bytes()).and_then(|_| file.sync_all()).map_err(|e| format!("Couldn’t save the note: {e}"))?;
     return Ok(path);
   }
-  Err("Couldn’t find a free name for the note".into())
+  Err("Couldn’t find a free name for the note. Try another title.".into())
 }
 
 fn save(kind: Kind, title: &str, body: &str, actions: Option<&str>, stamp_text: &str, extra: &[(String, String)]) -> Result<PathBuf, String> {
-  if body.trim().is_empty() { return Err("Nothing to save".into()); }
-  if body.chars().count() > 1_000_000 { return Err("This note is too long to save".into()); }
+  if body.trim().is_empty() { return Err("There’s nothing to save.".into()); }
+  if body.chars().count() > 1_000_000 { return Err("This note is too long to save. Try splitting it in two.".into()); }
   let at = stamp(stamp_text)?;
   let dir = match kind { Kind::Note => notes_dir()?, Kind::Meeting => meetings_dir()? };
   std::fs::create_dir_all(&dir).map_err(|e| format!("Couldn’t make the notes folder: {e}"))?;
@@ -368,7 +368,7 @@ pub(crate) fn read_doc(path: &str) -> Result<NoteDoc, String> {
 /// Written beside the file and moved into place, so a crash leaves the old note, never half a new one.
 pub(crate) fn write_doc(path: &str, title: &str, body: &str) -> Result<u64, String> {
   let file = in_library(path)?;
-  if body.chars().count() > 1_000_000 { return Err("This note is too long to save".into()); }
+  if body.chars().count() > 1_000_000 { return Err("This note is too long to save. Try splitting it in two.".into()); }
   let current = std::fs::read_to_string(&file).map_err(|_| "That file isn’t there any more.".to_owned())?;
   let (front, _) = split_front(&current);
   let title = title.split_whitespace().collect::<Vec<_>>().join(" ");
@@ -390,7 +390,7 @@ pub(crate) fn write_doc(path: &str, title: &str, body: &str) -> Result<u64, Stri
 /// A new note file for the editor, with whatever words there are so far (none is fine): named by the
 /// notes template, or a section in the day's note.
 pub(crate) fn new_doc(title: &str, body: &str, stamp_text: &str) -> Result<PathBuf, String> {
-  if body.chars().count() > 1_000_000 { return Err("This note is too long to save".into()); }
+  if body.chars().count() > 1_000_000 { return Err("This note is too long to save. Try splitting it in two.".into()); }
   let at = stamp(stamp_text)?;
   let dir = notes_dir()?;
   std::fs::create_dir_all(&dir).map_err(|e| format!("Couldn’t make the notes folder: {e}"))?;
@@ -407,11 +407,11 @@ pub fn note_attach(path: String, name: String, data: String) -> Result<String, S
   let file = in_library(&path)?;
   let bytes = base64::engine::general_purpose::STANDARD.decode(data.trim()).map_err(|_| "That picture couldn’t be read.".to_owned())?;
   if bytes.is_empty() { return Err("That picture is empty.".into()); }
-  if bytes.len() > 25 << 20 { return Err("That picture is too big to keep in a note (25 MB at most).".into()); }
+  if bytes.len() > 25 << 20 { return Err("That picture is too big. A note can hold pictures up to 25 MB.".into()); }
   let dir = file.parent().ok_or("That file isn’t there any more.")?;
   let stem = file.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_else(|| "note".into());
   let folder = dir.join("attachments").join(clean(&stem));
-  std::fs::create_dir_all(&folder).map_err(|e| format!("Couldn’t make the attachments folder: {e}"))?;
+  std::fs::create_dir_all(&folder).map_err(|e| format!("Couldn’t make a folder for the note’s pictures: {e}"))?;
   let suggested = Path::new(&name);
   let ext = suggested.extension().map(|ext| ext.to_string_lossy().to_lowercase()).filter(|ext| ["png", "jpg", "jpeg", "gif", "webp", "heic", "svg", "pdf"].contains(&ext.as_str())).unwrap_or_else(|| "png".into());
   let base = clean(&suggested.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default());
@@ -428,7 +428,7 @@ pub fn note_attach(path: String, name: String, data: String) -> Result<String, S
       Err(e) => return Err(format!("Couldn’t save the picture: {e}")),
     }
   }
-  Err("Couldn’t find a free name for the picture".into())
+  Err("Couldn’t find a free name for the picture.".into())
 }
 
 /// `file` into the `Archive/` folder beside it, or back out to its folder, with its pictures (they live in
@@ -449,7 +449,7 @@ fn archive_move(file: &Path, archived: bool) -> Result<PathBuf, String> {
   let (pictures, pictures_to) = (dir.join("attachments").join(&stem), target_dir.join("attachments").join(&stem));
   let moving_pictures = !stem.is_empty() && pictures.is_dir();
   if target.symlink_metadata().is_ok() || (moving_pictures && pictures_to.symlink_metadata().is_ok()) {
-    return Err(if archived { "The archive has one by this name already. Rename this one first." } else { "There is one by this name already. Rename it first." }.into());
+    return Err(if archived { "There’s already one with this name in the archive. Rename this one first." } else { "There’s already one with this name. Rename this one first." }.into());
   }
   std::fs::create_dir_all(&target_dir).map_err(|e| format!("Couldn’t make the Archive folder: {e}"))?;
   if moving_pictures {
@@ -473,7 +473,7 @@ pub fn note_archive(path: String, archived: bool) -> Result<String, String> {
 #[tauri::command]
 pub fn note_delete(path: String) -> Result<(), String> {
   let file = in_library(&path)?;
-  let trash = PathBuf::from(std::env::var_os("HOME").ok_or("No home folder")?).join(".Trash");
+  let trash = PathBuf::from(std::env::var_os("HOME").ok_or("Couldn’t find your home folder.")?).join(".Trash");
   let name = file.file_name().map(|name| name.to_string_lossy().into_owned()).ok_or("That file isn’t there any more.")?;
   let stem = name.strip_suffix(".md").unwrap_or(&name);
   for n in 1..=100 {
@@ -481,7 +481,7 @@ pub fn note_delete(path: String) -> Result<(), String> {
     if target.symlink_metadata().is_ok() { continue; }
     return std::fs::rename(&file, &target).map_err(|e| format!("Couldn’t move it to the Trash: {e}"));
   }
-  Err("Couldn’t find room in the Trash".into())
+  Err("Couldn’t move it to the Trash.".into())
 }
 
 #[tauri::command]
@@ -528,7 +528,7 @@ fn claude_title(text: &str) -> Option<String> {
 /// budget, and the note is saved as it is when Claude has nothing.
 #[tauri::command]
 pub async fn save_note(app: tauri::AppHandle, title: String, text: String, stamp: String, named: Option<bool>) -> Result<String, String> {
-  if text.trim().is_empty() { return Err("Nothing to save".into()); }
+  if text.trim().is_empty() { return Err("There’s nothing to save.".into()); }
   self::stamp(&stamp)?;
   let path = tauri::async_runtime::spawn_blocking(move || {
     let settings = settings::get();

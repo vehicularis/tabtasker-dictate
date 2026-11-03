@@ -46,12 +46,12 @@ impl std::fmt::Display for Error {
       Self::RateLimited => "Too many requests for this key right now. Try again in a minute.",
       Self::Busy => "Claude is busy right now. Try again in a moment.",
       Self::Offline => "Can’t reach Anthropic. Check your internet connection.",
-      Self::Timeout => "Claude took too long to answer.",
+      Self::Timeout => "Claude took too long to answer. Try again.",
       Self::Refused => "Claude declined this one.",
       Self::Cut => "Claude’s answer was cut short.",
       Self::Broken => "Claude’s answer didn’t come through. Try again.",
-      Self::Empty => "Claude had nothing to say.",
-      Self::NoClaudeCode => "Claude Code isn’t on this Mac any more. Install it again, or connect with a key instead.",
+      Self::Empty => "Claude didn’t send anything back. Try again.",
+      Self::NoClaudeCode => "Claude Code isn’t installed any more. Install it again, or connect with a key instead.",
       Self::NotSignedIn => "Claude Code isn’t signed in. Run claude in Terminal and sign in, then try again.",
       Self::CodeFailed => "Claude Code couldn’t answer that. Try again.",
       Self::LocalOffline => "Can’t reach the local model. Is Ollama running?",
@@ -586,7 +586,7 @@ pub async fn claude_ask(question: String) -> Result<String, String> {
   if question.is_empty() { return Err("Type a question first.".into()); }
   if question.chars().count() > 4000 { return Err("That’s too long for one question.".into()); }
   let mut bytes = [0u8; 8];
-  ring::rand::SecureRandom::fill(&ring::rand::SystemRandom::new(), &mut bytes).map_err(|_| "Couldn’t ask.".to_owned())?;
+  ring::rand::SecureRandom::fill(&ring::rand::SystemRandom::new(), &mut bytes).map_err(|_| "Couldn’t send your question. Try again.".to_owned())?;
   let request: String = format!("ask-{}", bytes.iter().map(|byte| format!("{byte:02x}")).collect::<String>());
   let (route, model) = route().map_err(|e| e.to_string())?;
   emit_command(json!({ "request": request, "phase": "thinking", "instruction": question, "typed": true }));
@@ -621,7 +621,7 @@ extern "C" fn dictate_command(request: *const c_char, instruction: *const c_char
   if !claude.enabled || request.is_empty() || APP.get().is_none() { return false; }
   if !bundle_id.is_empty() { keep(&ORIGINS, (request.clone(), bundle_id)); }
   let error = |text: &str| emit_command(json!({ "request": request, "phase": "error", "text": text, "instruction": instruction }));
-  if !claude.commands { error("Commands are off. Turn them on in Settings, under Claude."); return true; }
+  if !claude.commands { error("Commands are off. Turn them on in Settings › Agents."); return true; }
   if instruction.trim().is_empty() { error("Didn’t catch what to do. Hold the keys and try again."); return true; }
   emit_command(json!({ "request": request, "phase": "thinking", "instruction": instruction }));
   tauri::async_runtime::spawn_blocking(move || {
@@ -667,7 +667,7 @@ fn bring_back(app: &AppHandle, bundle_id: &str) -> bool {
 /// in comes back to the front first, and the answer is typed there.
 #[tauri::command]
 pub async fn claude_insert(app: AppHandle, request: String, text: String) -> Result<(), String> {
-  if text.trim().is_empty() || text.chars().count() > 100_000 { return Err("Nothing to insert".into()); }
+  if text.trim().is_empty() || text.chars().count() > 100_000 { return Err("There’s nothing to insert.".into()); }
   tauri::async_runtime::spawn_blocking(move || {
     if !origin(&request).is_some_and(|bundle_id| bring_back(&app, &bundle_id)) {
       return Err("Couldn’t get back to the app you asked in. Copy the answer instead.".to_owned());
@@ -720,7 +720,7 @@ pub async fn claude_connect_code(app: AppHandle) -> Result<settings::Settings, S
   let model = settings::get().claude.model;
   let finder = app.clone();
   let program = tauri::async_runtime::spawn_blocking(move || code_program(Some(&finder))).await.map_err(|e| e.to_string())?
-    .ok_or("Claude Code isn’t installed on this Mac. Install it and sign in, then try again.")?;
+    .ok_or("Claude Code isn’t installed. Install it and sign in, then try again.")?;
   probe(&Route::Code { program: program.clone() }, model).await.map_err(|e| e.to_string())?;
   let saved = settings::update(&app, &json!({ "claude": { "enabled": true, "via": "claudeCode", "claudeCode": program.display().to_string() } }))?;
   // Claude Code can read the notes from now on, with nothing more to set up: this app's own MCP server,

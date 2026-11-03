@@ -54,7 +54,7 @@ export function Menu({ status, mics, meeting, onMics, onNote, onWriteNote, onSti
         <i className="rule" role="separator" /><p className="in-use">Mic in use<span>{status.inputInUse}</span></p>
       </div>}
     </div>}
-    <button type="button" role="menuitemcheckbox" tabIndex={-1} aria-checked={!!status?.openAtLogin} onClick={onLogin}><Icon name={status?.openAtLogin ? 'boxCheck' : 'box'} size={16} />Open at Login</button>
+    <button type="button" role="menuitemcheckbox" tabIndex={-1} aria-checked={!!status?.openAtLogin} onClick={onLogin}><Icon name={status?.openAtLogin ? 'boxCheck' : 'box'} size={16} />Open at login</button>
     <i className="rule" role="separator" />
     <button type="button" role="menuitem" tabIndex={-1} onClick={onHide}><AlarmIcon />Hide for an hour</button>
     <button type="button" role="menuitem" tabIndex={-1} onClick={onSettings}><GearIcon />Settings…</button>

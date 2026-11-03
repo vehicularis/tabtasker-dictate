@@ -462,14 +462,14 @@ fn keep_aside(path: &Path) {
 /// Written beside the file, synced, then renamed over it: a crash leaves the old settings or the new, never half.
 pub fn save_to(path: &Path, settings: &Settings) -> Result<(), String> {
   use std::io::Write;
-  let dir = path.parent().ok_or("No settings folder")?;
+  let dir = path.parent().ok_or("Couldn’t find the settings folder.")?;
   std::fs::create_dir_all(dir).map_err(|e| format!("Couldn’t make the settings folder: {e}"))?;
   let temp = path.with_extension("json.tmp");
   let json = serde_json::to_vec_pretty(settings).map_err(|e| e.to_string())?;
   let written = std::fs::File::create(&temp).and_then(|mut file| { file.write_all(&json)?; file.sync_all() });
   if let Err(e) = written.and_then(|_| std::fs::rename(&temp, path)) {
     let _ = std::fs::remove_file(&temp);
-    return Err(format!("Couldn’t save settings: {e}"));
+    return Err(format!("Couldn’t save your settings: {e}"));
   }
   Ok(())
 }

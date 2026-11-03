@@ -47,17 +47,17 @@ const Failed = ({ children }: { children: string }) => <span role="alert" style=
 const COPY: Record<Target, { name: string; about: string; added: string; missing: string; confirm: string }> = {
   claudeCode: {
     name: 'Claude Code',
-    about: 'Lets Claude Code use your notes and meetings in every project.',
-    added: 'Added for every project. Start a new session to use it.',
-    missing: 'Not found. If it is installed, set its path in Settings › Agents.',
-    confirm: 'Runs “claude mcp add” for your user, so every project can use it.',
+    about: 'Lets Claude Code use your notes in every project.',
+    added: 'Start a new Claude Code session to use it.',
+    missing: 'Couldn’t find Claude Code. If it’s installed, set its path above.',
+    confirm: 'This runs “claude mcp add” for your user, so it works in every project.',
   },
   claudeDesktop: {
     name: 'Claude Desktop',
-    about: 'Lets Claude Desktop use your notes and meetings in any chat.',
-    added: 'Added. Quit and reopen Claude Desktop if it was open.',
-    missing: 'Claude Desktop isn’t installed on this Mac.',
-    confirm: 'Adds it to Claude Desktop’s settings and keeps a copy of the old file. Your other servers stay as they are.',
+    about: 'Lets Claude Desktop use your notes in any chat.',
+    added: 'If Claude Desktop is open, quit and reopen it.',
+    missing: 'Claude Desktop isn’t installed.',
+    confirm: 'This adds Dictate to Claude Desktop’s settings and backs up the old file first.',
   },
 };
 
@@ -84,7 +84,7 @@ function Connect({ target, status, adding, confirming, failed, onConfirm, onCanc
   const detail = !install ? 'Looking…'
     : failed ? <Failed>{failed}</Failed>
     : install.added === 'yes' ? copy.added
-    : update ? 'Added for another copy of TabTasker Dictate. Update it to use this one.'
+    : update ? 'It’s set up for another copy of Dictate. Update it to use this one.'
     : !install.found ? copy.missing
     : copy.about;
   return <Tile title={copy.name} detail={detail}>
@@ -134,7 +134,7 @@ export function Agents({ settings, update }: PageProps) {
       if (mine === asked.current) setStatus(next);
       setSaid(`Added to ${name}.`);
     } catch (error) {
-      setFailed({ target, message: typeof error === 'string' ? error : `Couldn’t add it to ${name}.` });
+      setFailed({ target, message: typeof error === 'string' ? error : `Couldn’t add it to ${name}. Try again.` });
     }
     inFlight.current = false;
     setAdding(null);
@@ -144,10 +144,10 @@ export function Agents({ settings, update }: PageProps) {
   const copy = () => void navigator.clipboard.writeText(usable).then(() => setCopied(true), () => setCopied(false));
 
   return <>
-    <GroupHeader title="Reading your notes">Claude Code and Claude Desktop can read your notes and meetings through TabTasker Dictate, on this Mac. Claude Code is set up for it the moment you connect it above.</GroupHeader>
-    <Section title="Server" note="The server runs on this Mac and opens only your notes and meetings folders. What an agent reads goes to its own model, like anything else you share with it.">
+    <GroupHeader title="Reading your notes">Let Claude Code and Claude Desktop read your notes and meetings. If you connected Claude Code above, it’s already set up.</GroupHeader>
+    <Section title="Server" note="What an agent reads is sent to its model, like anything else you share with it.">
       <TileGroup>
-        <Tile title="Answer agents" detail="Turn off to refuse every agent at once.">
+        <Tile title="Answer agents">
           <Toggle label="Answer agents" checked={agents.mcp} onChange={mcp => update({ agents: { mcp } })} />
         </Tile>
         <Tile title="Last call" detail={status ? lastCall(status.lastCall) : 'Looking…'} />
@@ -160,32 +160,32 @@ export function Agents({ settings, update }: PageProps) {
           confirming={confirming === target} failed={failed?.target === target ? failed.message : null}
           onConfirm={() => { setFailed(null); setSaid(''); setConfirming(target); }} onCancel={() => setConfirming(null)} onAdd={() => void add(target)} />)}
         {usable
-          ? <Tile stack title="Other apps" detail={copied === false ? <Failed>Couldn’t copy it. Select the entry and press ⌘C.</Failed> : 'For any other app that runs local MCP servers, add this to “mcpServers” in its settings.'}>
+          ? <Tile stack title="Other apps" detail={copied === false ? <Failed>Couldn’t copy it. Select the entry and press ⌘C.</Failed> : 'To use it in another app that supports MCP, add this to “mcpServers” in its settings.'}>
             <span className="pair">
-              <pre className="notices" tabIndex={0} aria-label="Entry for other apps">{usable}</pre>
+              <pre className="notices" tabIndex={0} aria-label="Settings entry for other apps">{usable}</pre>
               <Button icon={copied ? 'check' : 'copy'} onClick={copy}>{copied ? 'Copied' : 'Copy'}</Button>
             </span>
           </Tile>
-          : <Tile title="Other apps" detail={status ? 'Any app that runs local MCP servers can use it too, once TabTasker Dictate is in Applications.' : 'Looking…'} />}
+          : <Tile title="Other apps" detail={status ? 'Other apps that support MCP can use it once Dictate is in your Applications folder.' : 'Looking…'} />}
       </TileGroup>
       <p className="sr" role="status">{said}</p>
     </Section>
     <Section title="What agents can see">
       <TileGroup>
-        <Tile title="Notes" detail="List, read and search your notes." dim={off}>
+        <Tile title="Notes" dim={off}>
           <Toggle label="Share notes" checked={agents.shareNotes} onChange={shareNotes => update({ agents: { shareNotes } })} />
         </Tile>
-        <Tile title="Meetings" detail="List and read meeting transcripts." dim={off}>
+        <Tile title="Meetings" dim={off}>
           <Toggle label="Share meetings" checked={agents.shareMeetings} onChange={shareMeetings => update({ agents: { shareMeetings } })} />
         </Tile>
-        <Tile title="Recent dictations" detail="What you dictated lately, while History keeps it." dim={off}>
+        <Tile title="Recent dictations" detail="Agents see only what’s still in History." dim={off}>
           <Toggle label="Share recent dictations" checked={agents.shareHistory} onChange={shareHistory => update({ agents: { shareHistory } })} />
         </Tile>
       </TileGroup>
     </Section>
-    <Section title="What agents can do" note="Changes on this page reach agents that are already connected.">
+    <Section title="What agents can do" note="Changes apply right away, even to agents that are already connected.">
       <TileGroup>
-        <Tile title="Write notes" detail="Create notes and add to them. Agents never delete or overwrite one." dim={off}>
+        <Tile title="Write notes" detail="Agents can add to your notes, but never delete or overwrite them." dim={off}>
           <Toggle label="Write notes" checked={agents.allowWrite} onChange={allowWrite => update({ agents: { allowWrite } })} />
         </Tile>
       </TileGroup>

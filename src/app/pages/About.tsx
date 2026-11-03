@@ -43,14 +43,14 @@ export function About(_: PageProps) {
       <img src={icon} width="112" height="112" alt="" draggable={false} />
       <h1>TabTasker Dictate</h1>
       <p className="version">{version ? `Version ${version}` : ' '}</p>
-      <p>Talk instead of typing, on your Mac.</p>
+      <p>Talk instead of typing, in any app.</p>
     </header>
     <Section title="Privacy">
       <TileGroup label="Privacy">
-        <Pledge icon="mic" title="Your voice stays on this Mac">Whisper transcribes it here. Audio is never uploaded or shared, and isn’t kept once it’s transcribed.</Pledge>
-        <Pledge icon="claude" title="Claude only if you connect it">It gets text, never audio. Only your commands, and the dictations, notes and meetings you turn it on for. Your key stays in the Keychain.</Pledge>
-        <Pledge icon="folder" title="Notes stay on this Mac">Notes, meetings and history are kept here. Claude Code and Claude Desktop read only what Settings › Agents allows.</Pledge>
-        <Pledge icon="shield" title="No account and no analytics">Nothing to sign in to, and nothing about how you use it is sent anywhere.</Pledge>
+        <Pledge icon="mic" title="Your voice stays on your Mac">It’s turned into text right there, and the audio is deleted once that’s done.</Pledge>
+        <Pledge icon="claude" title="AI only if you connect it">It only ever sees text, and only for the things you turn it on for. Your Claude key is kept in the Keychain.</Pledge>
+        <Pledge icon="folder" title="Notes stay on your Mac">They’re plain files in a folder you choose. Claude Code and Claude Desktop can only read what you allow in Agents.</Pledge>
+        <Pledge icon="shield" title="No account, no analytics">There’s nothing to sign up for, and nothing about how you use Dictate is sent anywhere.</Pledge>
       </TileGroup>
     </Section>
     <Section title="Licence">
@@ -61,7 +61,7 @@ export function About(_: PageProps) {
         {reading && <div className="ui-tile stack"><Notices label="Apache License 2.0" text={LICENCE} /></div>}
       </TileGroup>
     </Section>
-    <Section title="Third-party notices" note="The speech models, libraries and fonts inside TabTasker Dictate, with their licences.">
+    <Section title="Third-party notices" note="The open-source projects Dictate is built on, with their licences.">
       <TileGroup label="Third-party notices">
         <div className="ui-tile stack"><Notices label="Third-party notices" text={NOTICES} /></div>
       </TileGroup>

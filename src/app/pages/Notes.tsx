@@ -18,7 +18,7 @@ const TOKENS = [{ token: '{date}', label: 'Date' }, { token: '{time}', label: 'T
 
 // The store's rules for a file name, said before it refuses one.
 const nameProblem = (name: string) => /[/:]/.test(name) ? 'A file name can’t contain a slash or a colon.'
-  : name.trimStart().startsWith('.') ? 'A file name can’t start with a dot, which would hide the note.' : null;
+  : name.trimStart().startsWith('.') ? 'A file name can’t start with a dot, because that would hide the note.' : null;
 // A tag as the front matter writes it: no leading #, words joined by hyphens.
 const tagOf = (text: string) => text.trim().replace(/^#+/, '').split(/\s+/).filter(Boolean).join('-');
 const two = (n: number) => String(n).padStart(2, '0');
@@ -60,10 +60,10 @@ export function Notes({ settings, update }: PageProps) {
     setChoosing(true);
     setFolderProblem(null);
     try {
-      const path = await invoke<string | null>('choose_folder', { message: 'Choose the folder your notes are saved in.', start: folder?.path ?? null });
+      const path = await invoke<string | null>('choose_folder', { message: 'Choose where to save your notes.', start: folder?.path ?? null });
       if (!path) return;
       const saved = await update({ notes: { folder: path } });
-      if (saved && saved.notes.folder !== path) setFolderProblem('That folder can’t hold notes. Choose another one.');
+      if (saved && saved.notes.folder !== path) setFolderProblem('Dictate can’t save notes in that folder. Choose another one.');
     } catch (error) {
       setFolderProblem(typeof error === 'string' ? error : 'Couldn’t open the folder picker.');
     } finally {
@@ -95,17 +95,17 @@ export function Notes({ settings, update }: PageProps) {
   const path = folder?.path ?? status?.notes;
   const name = path?.split('/').filter(Boolean).pop() ?? 'TabTasker Dictate';
   return <>
-    <PageHeader icon="note" title="Notes">Spoken notes are saved as Markdown files in a folder you choose.</PageHeader>
+    <PageHeader icon="note" title="Notes">Your notes are plain Markdown files in a folder you choose.</PageHeader>
 
     <Section title="Folder" note={folderProblem ?? (notes.folder
-      ? <>New notes are saved here. Notes already saved stay where they are. <button type="button" className="link" onClick={() => void update({ notes: { folder: null } })}>Use the default folder</button></>
-      : 'Any folder works. Choose one inside an Obsidian vault and your notes show up in Obsidian.')}>
+      ? <>New notes go here, and older ones stay where they are. <button type="button" className="link" onClick={() => void update({ notes: { folder: null } })}>Use the default folder</button></>
+      : 'To save notes straight into Obsidian, choose a folder inside your vault.')}>
       <TileGroup label="Notes folder">
         <Tile title={<span className="notes-folder"><Icon name="folder" size={16} />{name}</span>} detail={path && <span className="notes-path">{tilde(path, status?.home)}</span>}>
-          <Button variant="quiet" small onClick={() => void invoke('show_notes', {}).catch(() => setFolderProblem('Couldn’t open the folder in Finder.'))}>Show in Finder</Button>
+          <Button variant="quiet" small onClick={() => void invoke('show_notes', {}).catch(() => setFolderProblem('Couldn’t show the folder in Finder.'))}>Show in Finder</Button>
           <Button disabled={choosing} onClick={() => void choose()}>Choose…</Button>
         </Tile>
-        {folder?.vault && <Tile title={`Obsidian vault “${folder.vault}”`} detail="Notes show up in Obsidian as soon as they are saved, with their tags.">
+        {folder?.vault && <Tile title={`Obsidian vault “${folder.vault}”`} detail="New notes show up in Obsidian as soon as they’re saved.">
           <span className="state" data-on><Icon name="check" size={14} />Obsidian</span>
         </Tile>}
       </TileGroup>
@@ -114,10 +114,10 @@ export function Notes({ settings, update }: PageProps) {
     <Section title="Files" note={templateProblem ? <span id={problemId} role="alert">{templateProblem}</span> : (!notes.dailyNote && notes.fileName !== DEFAULT_NAME
       ? <button type="button" className="link" onClick={() => void update({ notes: { fileName: DEFAULT_NAME } })}>Use the default name, {DEFAULT_NAME}</button> : undefined)}>
       <TileGroup>
-        <Tile title="Daily note" detail="Adds each note to one file a day, named by its date, as a new section with the time.">
+        <Tile title="Daily note" detail="Keep one file per day and add each note to it.">
           <Toggle label="Daily note" checked={notes.dailyNote} onChange={dailyNote => update({ notes: { dailyNote } })} />
         </Tile>
-        <Tile title="File name" detail={notes.dailyNote ? 'Not used while daily note is on.' : 'Filled in for each note. A name that is taken gets a number, so no note is ever replaced.'} stack dim={notes.dailyNote}>
+        <Tile title="File name" detail={notes.dailyNote ? 'With Daily note on, files are named by their date.' : 'If a name’s taken, Dictate adds a number, so nothing gets overwritten.'} stack dim={notes.dailyNote}>
           <span className="notes-template">
             <input ref={field} className="ui-field mono" aria-label="File name" aria-invalid={!!templateProblem || undefined}
               aria-describedby={templateProblem ? problemId : undefined} value={template} disabled={notes.dailyNote} spellCheck={false}
@@ -135,31 +135,31 @@ export function Notes({ settings, update }: PageProps) {
 
     <Section title="For Obsidian">
       <TileGroup>
-        <Tile title="Front matter" detail="Adds the date, the tags and “TabTasker Dictate” as the source at the top of the file.">
+        <Tile title="Front matter" detail="Adds the date and your tags at the top of each file.">
           <Toggle label="Front matter" checked={notes.frontmatter} onChange={frontmatter => update({ notes: { frontmatter } })} />
         </Tile>
-        {notes.frontmatter && <Tile title="Tags" detail="Added to every note, so you can find them all in Obsidian." stack>
+        {notes.frontmatter && <Tile title="Tags" detail="Every note gets these, so you can find them all in Obsidian." stack>
           <ChipList label="Tags" placeholder="Add a tag, like voice" items={notes.tags} onChange={tags => update({ notes: { tags: tags.map(tagOf).filter(Boolean) } })} />
         </Tile>}
       </TileGroup>
     </Section>
 
-    <Section title="Preview" note={notes.dailyNote ? 'Each note is added to the end of the day’s file. The front matter is written once, when the day’s file is made.' : undefined}>
+    <Section title="Preview" note={notes.dailyNote ? 'Each note is added to the end of that day’s file.' : undefined}>
       <div className="ui-tiles notes-preview" role="group" aria-label="Preview of a saved note">
         <div className="notes-file"><Icon name="note" size={16} /><span aria-live="polite">{preview?.fileName ?? ' '}</span></div>
         <pre className="notes-text">{preview && lines(preview.text)}</pre>
       </div>
     </Section>
 
-    <Section title="With Claude" note={claude
-      ? 'Claude sees the note’s words, never your voice. When Claude is slow or unavailable, the note is saved as it is.'
-      : <>These work once Claude is connected. <button type="button" className="link" onClick={() => { location.hash = 'settings/agents'; }}>Connect Claude</button></>}>
+    <Section title="With AI" note={claude
+      ? 'If the AI is slow or can’t be reached, the note is saved as it is.'
+      : <>These need Claude or a local model. <button type="button" className="link" onClick={() => { location.hash = 'settings/agents'; }}>Connect one</button></>}>
       <TileGroup>
-        <Tile title="Claude names the note" detail="A short title from what you said, unless you type one." dim={!claude}>
-          <Toggle label="Claude names the note" checked={notes.claudeTitle} onChange={claudeTitle => update({ notes: { claudeTitle } })} />
+        <Tile title="Name notes with AI" dim={!claude}>
+          <Toggle label="Name notes with AI" checked={notes.claudeTitle} onChange={claudeTitle => update({ notes: { claudeTitle } })} />
         </Tile>
-        <Tile title="Action items" detail="Claude adds a list of what to do at the end of the note." dim={!claude}>
-          <Toggle label="Action items" checked={notes.claudeActions} onChange={claudeActions => update({ notes: { claudeActions } })} />
+        <Tile title="To-dos" detail="Adds the to-dos it hears at the end of the note." dim={!claude}>
+          <Toggle label="To-dos" checked={notes.claudeActions} onChange={claudeActions => update({ notes: { claudeActions } })} />
         </Tile>
       </TileGroup>
     </Section>

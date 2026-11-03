@@ -395,7 +395,7 @@ impl Job {
       writers.0[i] = None;
       drop(writers);
       let full = matches!(e.kind(), io::ErrorKind::StorageFull | io::ErrorKind::QuotaExceeded);
-      self.stopped_early(if full { "The disk is full, so the meeting stopped" } else { "The meeting’s audio couldn’t be kept, so it stopped" });
+      self.stopped_early(if full { "Your disk is full, so the meeting stopped" } else { "Couldn’t save the meeting’s audio, so it stopped" });
       return;
     }
     self.written[i].fetch_add(gap + pcm.len() as u64, Ordering::SeqCst);
@@ -483,24 +483,24 @@ fn text(text: *const c_char) -> Option<String> {
 #[no_mangle]
 extern "C" fn dictate_meeting_begin(stamp: *const c_char) -> i32 {
   REFUSED.lock().unwrap_or_else(|e| e.into_inner()).take();
-  let Some(root) = ROOT.get() else { return refuse("Meetings aren’t available") };
+  let Some(root) = ROOT.get() else { return refuse("Meetings aren’t ready yet. Try again in a moment.") };
   crate::speakers::prepare_in_background();
-  let Some(stamp) = text(stamp).filter(|stamp| stamp.len() == 16 && stamp.chars().all(|c| c.is_ascii_digit() || matches!(c, '-' | ' ' | '.'))) else { return refuse("Couldn’t start the meeting") };
+  let Some(stamp) = text(stamp).filter(|stamp| stamp.len() == 16 && stamp.chars().all(|c| c.is_ascii_digit() || matches!(c, '-' | ' ' | '.'))) else { return refuse("Couldn’t start the meeting.") };
   let mut meetings = state();
-  if meetings.recording.is_some() { return refuse("The last meeting is still closing. Try again in a moment."); }
-  if free_space(root.parent().unwrap_or(root)).is_some_and(|free| free < LOW_DISK) { return refuse("The disk is almost full, so the meeting can’t start"); }
+  if meetings.recording.is_some() { return refuse("The last meeting is still saving. Try again in a moment."); }
+  if free_space(root.parent().unwrap_or(root)).is_some_and(|free| free < LOW_DISK) { return refuse("Your disk is almost full, so the meeting can’t start."); }
   let job = match Spool::create(root, Header { stamp, since_ms: now_ms(), saved: None }).and_then(|spool| Job::new(spool, true)) {
     Ok(job) => Arc::new(job),
     Err(e) => {
       log::warn!("meeting: couldn’t make the spool: {e}");
-      return refuse(if e.kind() == io::ErrorKind::StorageFull { "The disk is full, so the meeting can’t start" } else { "Couldn’t make room for the meeting’s audio" });
+      return refuse(if e.kind() == io::ErrorKind::StorageFull { "Your disk is full, so the meeting can’t start." } else { "Couldn’t make room for the meeting’s audio." });
     }
   };
   let worker = job.clone();
   if let Err(e) = std::thread::Builder::new().name("meeting".into()).spawn(move || work(worker)) {
     log::warn!("meeting: {e}");
     job.spool.remove();
-    return refuse("Couldn’t start the meeting");
+    return refuse("Couldn’t start the meeting.");
   }
   meetings.recording = Some(job.clone());
   drop(meetings);
@@ -653,7 +653,7 @@ fn work(job: Arc<Job>) {
     let ended = job.ended.load(Ordering::SeqCst);
     if !ended && looked.is_none_or(|looked| looked.elapsed() >= Duration::from_secs(30)) {
       looked = Some(Instant::now());
-      if free_space(&job.spool.dir).is_some_and(|free| free < LOW_DISK) { job.stopped_early("The disk is almost full, so the meeting stopped"); }
+      if free_space(&job.spool.dir).is_some_and(|free| free < LOW_DISK) { job.stopped_early("Your disk is almost full, so the meeting stopped"); }
     }
     let mut moved = false;
     let mut waiting = None;
@@ -684,7 +684,7 @@ fn with_speakers(job: &Job, lines: &[Line]) -> Vec<Line> {
   let mut lines = lines.to_vec();
   let Some(root) = speech::models_root() else { return lines };
   if !crate::speakers::ready(&root) { log::info!("meeting: the speaker models aren’t downloaded yet, so lines are labelled by stream"); return lines; }
-  emit(saving_payload(job, "Telling speakers apart"));
+  emit(saving_payload(job, "Working out who said what"));
   for source in SOURCES {
     let len = job.len(source);
     if len == 0 || !lines.iter().any(|line| line.source == source && !line.text.trim().is_empty()) { continue; }
@@ -800,13 +800,13 @@ pub fn meeting_state() -> serde_json::Value {
 /// gaps again.
 #[tauri::command]
 pub fn meeting_recover(id: String, save: bool) -> Result<(), String> {
-  let root = ROOT.get().ok_or("Meetings are unavailable")?;
+  let root = ROOT.get().ok_or("Meetings aren’t ready yet. Try again in a moment.")?;
   let mut meetings = state();
   let busy = busy(&meetings);
-  if !leftovers(root, &busy).iter().any(|leftover| leftover.id == id) { return Err("That recording is gone".into()); }
-  let spool = Spool::open(&root.join(&id)).ok_or("That recording is gone")?;
+  if !leftovers(root, &busy).iter().any(|leftover| leftover.id == id) { return Err("That recording isn’t there any more.".into()); }
+  let spool = Spool::open(&root.join(&id)).ok_or("That recording isn’t there any more.")?;
   if !save {
-    return fs::remove_dir_all(&spool.dir).map_err(|e| { log::warn!("meeting: couldn’t discard: {e}"); "Couldn’t discard the recording".into() });
+    return fs::remove_dir_all(&spool.dir).map_err(|e| { log::warn!("meeting: couldn’t discard: {e}"); "Couldn’t discard the recording.".into() });
   }
   let job = Arc::new(Job::new(spool, false).map_err(|e| e.to_string())?);
   meetings.finishing.push(id.clone());
@@ -824,8 +824,8 @@ pub fn meeting_recover(id: String, save: bool) -> Result<(), String> {
 #[tauri::command]
 pub fn meeting_reveal(path: String) -> Result<(), String> {
   let dir = notes::meetings_dir()?.canonicalize().map_err(|e| e.to_string())?;
-  let file = PathBuf::from(path).canonicalize().map_err(|_| "The meeting has moved")?;
-  if !file.starts_with(&dir) { return Err("Not a meeting".into()); }
+  let file = PathBuf::from(path).canonicalize().map_err(|_| "That meeting isn’t there any more.")?;
+  if !file.starts_with(&dir) { return Err("That file isn’t a meeting.".into()); }
   std::process::Command::new("/usr/bin/open").arg("-R").arg(file).spawn().map(|_| ()).map_err(|e| e.to_string())
 }
 
@@ -1111,7 +1111,7 @@ mod tests {
     assert_eq!(job.len(Source::Mic), len);
     assert_eq!(job.spool.samples(Source::Mic), len);
     assert!(job.writers.lock().unwrap().0[0].is_none());
-    assert_eq!(job.problem.lock().unwrap().as_deref(), Some("The meeting’s audio couldn’t be kept, so it stopped"));
+    assert_eq!(job.problem.lock().unwrap().as_deref(), Some("Couldn’t save the meeting’s audio, so it stopped"));
     job.append(Source::Mic, &[0.1; 1600], 0.0); // nothing more on this stream
     assert_eq!(job.len(Source::Mic), len);
     job.end();

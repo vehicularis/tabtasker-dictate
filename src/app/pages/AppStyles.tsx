@@ -5,11 +5,11 @@ import { Button, Icon, PageHeader, Section, Select, Tile, TileGroup, Toggle } fr
 import './speech.css';
 
 const STYLES: { value: Style; label: string; detail: string; said?: string; typed?: string }[] = [
-  { value: 'default', label: 'Default', detail: 'As Whisper writes it, with your replacements and filler setting.' },
-  { value: 'casual', label: 'Casual', detail: 'No full stop at the end of a single sentence.', said: 'Sounds good.', typed: 'Sounds good' },
-  { value: 'formal', label: 'Formal', detail: 'A capital to start and a full stop to end.', said: 'see you then', typed: 'See you then.' },
-  { value: 'code', label: 'Code', detail: 'Symbols and casing by name, and no capital to start.', said: 'camel case user name', typed: 'userName' },
-  { value: 'raw', label: 'Raw', detail: 'Exactly what Whisper heard: no replacements, fillers left in.' },
+  { value: 'default', label: 'Default', detail: 'Types what you said, using your vocabulary and filler settings.' },
+  { value: 'casual', label: 'Casual', detail: 'Leaves off the full stop on a single sentence.', said: 'Sounds good.', typed: 'Sounds good' },
+  { value: 'formal', label: 'Formal', detail: 'Always starts with a capital and ends with a full stop.', said: 'see you then', typed: 'See you then.' },
+  { value: 'code', label: 'Code', detail: 'Turns spoken symbols and casing into code.', said: 'camel case user name', typed: 'userName' },
+  { value: 'raw', label: 'Raw', detail: 'Exactly what Dictate heard, fillers and all.' },
 ];
 const same = (one: string, other: string) => one.toLowerCase() === other.toLowerCase();
 
@@ -61,7 +61,7 @@ function Picker({ apps, failed, styled, onPick, onClose }: { apps: App[] | null;
       <Button small variant="quiet" onClick={onClose}>Done</Button>
     </div>
     {apps === null && !failed && <p className="quiet" role="status">Finding your apps…</p>}
-    {failed && <p className="quiet" role="status">Couldn’t list your apps. Type an app’s bundle ID, like com.apple.Notes.</p>}
+    {failed && <p className="quiet" role="status">Couldn’t list your apps. You can type a bundle ID instead, like com.apple.Notes.</p>}
     {!!candidates.length && <ul ref={list} aria-label="Apps">
       {candidates.map(app => <li key={app.bundleId}>
         <button type="button" title={app.bundleId} onClick={() => onPick(app)}>
@@ -71,7 +71,7 @@ function Picker({ apps, failed, styled, onPick, onClose }: { apps: App[] | null;
     </ul>}
     {typed && <span><Button small icon="plus" onClick={() => onPick({ bundleId: typed, name: typed })}>Add {typed}</Button></span>}
     {apps !== null && !candidates.length && !typed && <p className="quiet">{already ? `${already.name} already has a style.`
-      : words ? 'No open or recent app matches. Type its bundle ID, like com.example.app.' : 'Every app you have used lately has a style already.'}</p>}
+      : words ? 'No open or recent app matches that. Try its bundle ID, like com.example.app.' : 'Every app you’ve used lately already has a style.'}</p>}
   </div>;
 }
 
@@ -99,17 +99,17 @@ export function AppStyles({ settings, update }: PageProps) {
   const claude = settings.claude.enabled;
 
   return <>
-    <PageHeader icon="apps" title="App styles">How your words are written in each app.</PageHeader>
+    <PageHeader icon="apps" title="App styles">Set how your words come out in each app.</PageHeader>
     <Section title="Everywhere else">
       <TileGroup>
-        <Tile title="Default style" detail="For every app without a style of its own.">
+        <Tile title="Default style">
           <Select label="Default style" value={apps.defaultStyle} options={STYLES} onChange={defaultStyle => update({ apps: { defaultStyle } })} />
         </Tile>
       </TileGroup>
     </Section>
-    <Section title="Apps" note={<>Send presses Return once your words are typed, as in a chat: on by default in Slack, Messages, WhatsApp, Teams, Telegram, Discord and Signal. Saying “send” at the end sends one message anywhere.
-      {claude ? ' Polish asks Claude to tidy your words in that app. If Claude takes more than a few seconds, your own words are typed.'
-        : <> Claude can also polish your words in the apps you choose. <button type="button" className="link" onClick={() => { location.hash = 'settings/agents'; }}>Connect Claude</button></>}</>}>
+    <Section title="Apps" note={<>Send presses Return after your words are typed, and it’s on by default in chat apps. Say “send” at the end to do it once in any app.
+      {claude ? ' Polish has AI tidy your words first, and types your own if it takes too long.'
+        : <> AI can also tidy your words in the apps you pick. <button type="button" className="link" onClick={() => { location.hash = 'settings/agents'; }}>Connect AI</button></>}</>}>
       <TileGroup label="Apps">
         <Tile title={picking ? 'Add an app' : `${apps.styles.length} ${apps.styles.length === 1 ? 'app' : 'apps'}`} stack={picking}>
           {picking
@@ -124,7 +124,7 @@ export function AppStyles({ settings, update }: PageProps) {
         </Tile>)}
       </TileGroup>
     </Section>
-    <Section title="The styles" note="Every style is applied on this Mac, before your words are typed.">
+    <Section title="The styles">
       <TileGroup label="The styles">
         {STYLES.map(style => <Tile key={style.value} title={style.label} detail={style.detail}>
           {style.said && <span className="style-example" aria-label={`${style.said} becomes ${style.typed}`}>{style.said}<Icon name="chevronRight" size={12} /><b>{style.typed}</b></span>}

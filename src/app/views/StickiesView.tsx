@@ -20,7 +20,8 @@ export function StickiesView({ onError }: { onError: (message: string) => void }
   const [stickies, setStickies] = useState<Sticky[] | null>(null);
   const [view, setView] = useState<'stickies' | 'archive'>('stickies');
   const [deleting, setDeleting] = useState<string | null>(null);
-  const refresh = useCallback(() => { void invoke<Sticky[]>('sticky_list').then(setStickies, error => onError(message(error, 'Couldn’t read the stickies.'))); }, [onError]);
+  const [clearing, setClearing] = useState(false);
+  const refresh = useCallback(() => { void invoke<Sticky[]>('sticky_list').then(setStickies, error => onError(message(error, 'Couldn’t load your stickies.'))); }, [onError]);
   useEffect(refresh, [refresh]);
   useEffect(() => { const off = listen('dictate-stickies', refresh); addEventListener('focus', refresh); return () => { off(); removeEventListener('focus', refresh); }; }, [refresh]);
   const act = (work: Promise<unknown>, failed: string) => void work.then(refresh, error => onError(message(error, failed)));
@@ -32,11 +33,21 @@ export function StickiesView({ onError }: { onError: (message: string) => void }
   if (!stickies.length) return <div className="stickies-first">
     <StickyGlyph size={48} />
     <strong>No stickies yet</strong>
-    <p>Small notes that stay on top of your other windows. Make one here, from the dots, or say “sticky” and the words while you dictate.</p>
+    <p>Stickies stay on top of your other windows. Make one here, or start a dictation with the word “sticky”.</p>
     <Button variant="primary" icon="plus" onClick={make}>New sticky</Button>
   </div>;
   const kept = stickies.filter(sticky => !sticky.archived), archived = stickies.filter(sticky => sticky.archived);
   const showing = archived.length ? view : 'stickies';
+  // Delete all, as Business's archive has it: asked first, since a deleted sticky is gone for good; one that
+  // can't be removed stays and the rest still go.
+  const many = (n: number) => `${n} ${n === 1 ? 'sticky' : 'stickies'}`;
+  const deleteAll = async () => {
+    setClearing(false);
+    let done = 0;
+    for (const sticky of archived) { try { await invoke('sticky_remove', { id: sticky.id }); done++; } catch { /* left in the archive */ } }
+    refresh();
+    onError(done === archived.length ? `Deleted ${many(done)}.` : `Deleted ${done} of ${many(archived.length)}. The rest are still in the archive.`);
+  };
   const paper = (sticky: Sticky) => {
     const show = () => act(invoke('sticky_show', { id: sticky.id }), 'Couldn’t show that sticky.');
     const toNote = () => act(invoke('sticky_to_note', { id: sticky.id, stamp: stamp() }), 'Couldn’t save it as a note.');
@@ -50,7 +61,7 @@ export function StickiesView({ onError }: { onError: (message: string) => void }
     return <article key={sticky.id} className="sticky sticky-card" data-flip={sticky.id} data-closed={sticky.closed || undefined} data-folded={folded || undefined}
       style={{ '--hue': STICKY_HUES[sticky.hue], '--shape': shape(sticky) } as CSSProperties} aria-label={firstLine(sticky.text) || 'Empty sticky'}>
       <header className="sticky-bar">
-        {folded && <button type="button" className="sticky-peek" title="Show it on the screen" onClick={show}>{firstLine(sticky.text) || 'Empty sticky'}</button>}
+        {folded && <button type="button" className="sticky-peek" title="Show on screen" onClick={show}>{firstLine(sticky.text) || 'Empty sticky'}</button>}
         {deleting === sticky.id
           ? <span className="sticky-card-ask">Delete for good?
             <button type="button" className="sticky-card-word" onClick={() => setDeleting(null)}>Keep</button>
@@ -63,11 +74,11 @@ export function StickiesView({ onError }: { onError: (message: string) => void }
             </> : <>
               {tool('note', 'Save as a note', toNote, !sticky.text.trim())}
               {tool('archive', 'Archive', () => archive(true))}
-              {sticky.closed ? tool('external', 'Show it on the screen', show) : tool('close', 'Close', close)}
+              {sticky.closed ? tool('external', 'Show on screen', show) : tool('close', 'Close', close)}
             </>}
           </span>}
       </header>
-      {!folded && <button type="button" className="sticky-face" title={sticky.archived ? undefined : 'Show it on the screen'} disabled={sticky.archived} onClick={show}>
+      {!folded && <button type="button" className="sticky-face" title={sticky.archived ? undefined : 'Show on screen'} disabled={sticky.archived} onClick={show}>
         {words || <span className="sticky-empty">Empty</span>}
       </button>}
     </article>;
@@ -80,12 +91,16 @@ export function StickiesView({ onError }: { onError: (message: string) => void }
     <div className="stickies-top">
       <PageHeader icon="sticky" title="Stickies" />
       {archived.length > 0 && <Segmented label="Show" value={showing} onChange={setView} options={[{ value: 'stickies', label: 'Stickies' }, { value: 'archive', label: `Archive · ${archived.length}` }]} />}
-      <Button icon="plus" onClick={make}>New sticky</Button>
+      {showing === 'archive'
+        ? clearing
+          ? <span className="stickies-clear"><span>Delete {many(archived.length)} for good?</span><Button variant="quiet" onClick={() => setClearing(false)}>Keep</Button><Button variant="danger" onClick={() => void deleteAll()}>Delete all</Button></span>
+          : <Button variant="danger" className="quiet" icon="trash" onClick={() => setClearing(true)}>Delete all</Button>
+        : <Button icon="plus" onClick={make}>New sticky</Button>}
     </div>
     <div ref={shelf} key={showing} className="stickies-view">
       {showing === 'stickies'
         ? kept.length ? <>{group('On your screen', kept.filter(sticky => !sticky.closed))}{group('Closed', kept.filter(sticky => sticky.closed))}</>
-          : <p className="stickies-none" data-flip="none">Every sticky is in the archive.</p>
+          : <p className="stickies-none" data-flip="none">All your stickies are in the archive.</p>
         : group(null, archived)}
     </div>
   </>;

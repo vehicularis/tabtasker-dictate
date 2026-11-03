@@ -62,7 +62,7 @@ export function CommandCard() {
     const error = command.phase === 'error';
     return <div ref={leave} className="glass claude-bubble" data-glass data-hit data-error={error || undefined} role={error ? 'alert' : 'status'} onKeyDown={escape}>
       <span className="what">
-        <small>{error ? 'Claude couldn’t do that' : <>Claude is working<span className="claude-wait" aria-hidden="true"><i /><i /><i /></span></>}</small>
+        <small>{error ? 'That didn’t work' : <>Working on it<span className="claude-wait" aria-hidden="true"><i /><i /><i /></span></>}</small>
         <span>{error ? command.text : command.instruction}</span>
       </span>
       <button type="button" className="close" aria-label={error ? 'Close' : 'Stop waiting'} title={error ? 'Close' : 'Stop waiting'} onClick={close}><X /></button>
@@ -75,9 +75,9 @@ export function CommandCard() {
     if (inserting) return;
     setInserting(true); setProblem(null); setCopied(false);
     void invoke('claude_insert', { request: command.request, text }).then(() => setCommand(null),
-      error => setProblem(failed(error, 'Couldn’t insert the answer.'))).finally(() => setInserting(false));
+      error => setProblem(failed(error, 'Couldn’t insert the answer. Copy it instead.'))).finally(() => setInserting(false));
   };
-  const copy = () => { setProblem(null); void copyText(text).then(() => setCopied(true), () => setProblem('Couldn’t copy the answer.')); };
+  const copy = () => { setProblem(null); void copyText(text).then(() => setCopied(true), () => setProblem('Couldn’t copy the answer. Try again.')); };
   const keys = (event: KeyboardEvent) => {
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); if (command.typed) copy(); else insert(); } else escape(event);
   };
@@ -90,7 +90,7 @@ export function CommandCard() {
       <button type="button" className="btn" onClick={close}>Close</button>
       <button type="button" className={`btn${command.typed ? ' primary' : ''}`} onClick={copy}>Copy</button>
       {/* A typed question has no app to go back to: Copy is the way to take the answer. */}
-      {!command.typed && <button type="button" className="btn primary" title="Type it in the app you asked in (⌘↩)" aria-busy={inserting} onClick={insert}>{inserting ? 'Inserting…' : 'Insert'}</button>}
+      {!command.typed && <button type="button" className="btn primary" title="Type it into the app you asked from (⌘↩)" aria-busy={inserting} onClick={insert}>{inserting ? 'Inserting…' : 'Insert'}</button>}
     </footer>
   </article>;
 }

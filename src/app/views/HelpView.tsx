@@ -21,25 +21,25 @@ type Box = { x: number; y: number; w: number; h: number };
 type Placed = { badge: { x: number; y: number }; bracket: string; line: string };
 
 const SCREEN: Callout[] = [
-  { target: '.help-typed', side: 'left', title: 'Hold your key and talk', text: 'Talk, then let go. Your words go in where the cursor is, in any app. Say “send” to press Return.' },
-  { target: '.orb', side: 'bottom', title: 'The orb', text: 'While you hold the key, the dots become the orb and write out what you say. Your words go in when you let go.' },
-  { target: '.sticky-bar', side: 'right', title: 'Stickies', text: 'Small notes that stay on top. Make one from the window, the menu, a shortcut, or by saying “sticky: call Thomas”.' },
+  { target: '.help-typed', side: 'left', title: 'Hold your key and talk', text: 'When you let go, what you said is typed wherever your cursor is. End with “send” to press Return as well.' },
+  { target: '.orb', side: 'bottom', title: 'The orb', text: 'While you talk, the dots turn into the orb and show your words as you say them.' },
+  { target: '.sticky-bar', side: 'right', title: 'Stickies', text: 'Small notes that stay on top of your other windows. Say “sticky” before your words to make one by voice.' },
 ];
 // Every button the pill can hold, in its order (PILL_BUTTONS); Appearance picks which ones it shows.
 const DOTS: Callout[] = [
-  { target: '.pill button:nth-child(1)', side: 'top', title: 'Speak a note', text: 'Click and talk for as long as you like. When you stop, it is saved and opens in the window.' },
-  { target: '.pill button:nth-child(2)', side: 'top', title: 'Write a note', text: 'A new note in the window, to type into.' },
-  { target: '.pill button:nth-child(3)', side: 'top', title: 'A sticky', text: 'A new sticky on the screen.' },
-  { target: '.pill button:nth-child(4)', side: 'top', title: 'A meeting', text: 'Records the room and, on a call, the other side, and tells the voices apart. A connected model writes the summary.' },
-  { target: '.pill button:nth-child(5)', side: 'top', title: 'Your notes', text: 'Opens the window with your notes, meetings and stickies.' },
-  { target: '.pill button:nth-child(6)', side: 'top', title: 'Settings', text: 'Everything else. Right-click the dots for the menu, or drag them to another edge of the screen. Pick the buttons under Settings › Appearance.' },
-  { target: '.label > span', side: 'bottom', title: 'Your key', text: 'Which key to hold. Turn this hint off under Appearance.' },
+  { target: '.pill button:nth-child(1)', side: 'top', title: 'Speak a note', text: 'Talk for as long as you like, and it’s saved as a note when you stop.' },
+  { target: '.pill button:nth-child(2)', side: 'top', title: 'Write a note', text: 'Opens a blank note to type into.' },
+  { target: '.pill button:nth-child(3)', side: 'top', title: 'New sticky', text: 'Puts a blank sticky on your screen.' },
+  { target: '.pill button:nth-child(4)', side: 'top', title: 'Start a meeting', text: 'Records the room, or both sides of a call, and works out who said what. With AI connected, you get a summary too.' },
+  { target: '.pill button:nth-child(5)', side: 'top', title: 'Your notes', text: 'Opens the window with everything you’ve saved.' },
+  { target: '.pill button:nth-child(6)', side: 'top', title: 'Settings', text: 'Opens Settings, where Appearance lets you choose which of these buttons show. You can also drag the dots to another edge, or right-click them for a menu.' },
+  { target: '.label > span', side: 'bottom', title: 'The hint', text: 'Shows which key to hold. You can turn it off in Settings › Appearance.' },
 ];
 const WINDOW: Callout[] = [
-  { target: '.tabs .tab', side: 'top', at: .3, title: 'Tabs', text: 'Notes, meetings and stickies open as tabs. ⌘ T for a new one, ⌘ W to close it.' },
-  { target: '.rail', side: 'left', at: .25, title: 'The rail', text: 'Your notes, meetings and stickies, with the settings at its foot.' },
-  { target: '.column', side: 'left', at: .55, title: 'The list', text: 'What is in the place you picked, newest first, with search at the top.' },
-  { target: '.editor-page', side: 'right', at: .3, title: 'The editor', text: 'Type or talk into it. It saves as you go, to a Markdown file in your notes folder.' },
+  { target: '.tabs .tab', side: 'top', at: .3, title: 'Tabs', text: 'Everything opens in its own tab. Press ⌘ T for a new one and ⌘ W to close it.' },
+  { target: '.rail', side: 'left', at: .25, title: 'Sidebar', text: 'Switch between notes, meetings and stickies, with Settings at the bottom.' },
+  { target: '.column', side: 'left', at: .55, title: 'The list', text: 'Shows what’s in the place you picked, newest first, with search on top.' },
+  { target: '.editor-page', side: 'right', at: .3, title: 'The editor', text: 'Type or talk into it. It saves as you go, as a Markdown file in your notes folder.' },
 ];
 const NOTE = 'Call the venue about Thursday and ask for the bigger room. Then send Maria the new floor plan before lunch.\n\n- [ ] Call them\n- [x] Send the plan\n';
 const STICKY = 'Call Thomas about the **venue** before 3';
@@ -50,20 +50,20 @@ export function HelpView({ settings }: { settings: Settings }) {
   const key = KEY_NAMES[keys.dictate];
   const command = { control: '⌃', option: '⌥', command: '⌘', shift: '⇧', off: '' }[keys.command];
   const chords: [string, string][] = [
-    [`Hold ${key}`, 'Type with your voice where the cursor is'],
-    ...(keys.handsFree ? [[`Tap ${key} twice`, 'Hands-free: keep listening until you tap again'] as [string, string]] : []),
-    ...(command ? [[`${key} + ${command}`, 'Give a spoken command, or rewrite the selected text'] as [string, string]] : []),
-    [keys.note?.label ?? 'Not set', 'Speak a note, or stop it'],
-    [keys.writeNote?.label ?? 'Not set', 'A new note in the window, to type into'],
+    [`Hold ${key}`, 'Dictate into any app'],
+    ...(keys.handsFree ? [[`Tap ${key} twice`, 'Dictate hands-free until you tap again'] as [string, string]] : []),
+    ...(command ? [[`${key} + ${command}`, 'Give a command or rewrite a selection'] as [string, string]] : []),
+    [keys.note?.label ?? 'Not set', 'Start or stop a spoken note'],
+    [keys.writeNote?.label ?? 'Not set', 'Write a note'],
     [keys.meeting?.label ?? 'Not set', 'Start or stop a meeting'],
-    [keys.sticky?.label ?? 'Not set', 'A new sticky'],
+    [keys.sticky?.label ?? 'Not set', 'New sticky'],
     [keys.pasteLast?.label ?? 'Not set', 'Paste the last transcript again'],
-    ['⌘ T · ⌘ W', 'A new tab · close the tab'],
-    ['⌘ [ · ⌘ ]', 'Back · forward, in the tab'],
-    ['⌘ ,', 'Settings'],
+    ['⌘ T · ⌘ W', 'Open or close a tab'],
+    ['⌘ [ · ⌘ ]', 'Go back or forward'],
+    ['⌘ ,', 'Open Settings'],
   ];
   return <>
-    <PageHeader icon="help" title="How TabTasker Dictate works">Talk instead of typing, in any app. Your speech becomes text on this Mac and stays here.</PageHeader>
+    <PageHeader icon="help" title="How TabTasker Dictate works">Talk instead of typing, in any app.</PageHeader>
     <Figure title="On your screen" width={760} height={380} callouts={SCREEN}>
       <div className="help-desk">
         <div className="help-menubar"><Logo size={13} /><time>Mon 2 Nov 09:41</time></div>
@@ -79,7 +79,7 @@ export function HelpView({ settings }: { settings: Settings }) {
         <Dots mode="listening" typing words="Thursday works. Can we take the bigger room?" at={{ left: 48, top: 0, width: 380, height: 380 }} />
       </div>
     </Figure>
-    <Figure title="The dots, when you point at them" width={480} height={120} callouts={DOTS}>
+    <Figure title="When you point at the dots" width={480} height={120} callouts={DOTS}>
       <div className="help-desk"><Dots mode="hover" hint at={{ left: 0, top: 0, width: 330, height: 120 }} /></div>
     </Figure>
     <Figure title="The window" width={1040} height={620} callouts={WINDOW}><MiniWindow /></Figure>
@@ -90,7 +90,7 @@ export function HelpView({ settings }: { settings: Settings }) {
     </Section>
     <Section title="Set up again">
       <TileGroup>
-        <Tile title="Permissions, your key, the speech model" detail="One step at a time, with what the Mac says right now.">
+        <Tile title="Go through setup again" detail="Handy if a permission was turned off or something stopped working.">
           <button type="button" className="ui-button" onClick={() => { location.hash = 'setup'; }}><Icon name="general" size={15} />Open setup</button>
         </Tile>
       </TileGroup>

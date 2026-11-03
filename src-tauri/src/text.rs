@@ -548,7 +548,7 @@ pub async fn list_apps(known: Vec<String>) -> Result<serde_json::Value, String> 
   tauri::async_runtime::spawn_blocking(move || {
     let known = CString::new(serde_json::to_string(&known).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
     let raw = unsafe { dictate_apps(known.as_ptr()) };
-    if raw.is_null() { return Err("Couldn’t list your apps".to_owned()); }
+    if raw.is_null() { return Err("Couldn’t get the list of your apps.".to_owned()); }
     let json = unsafe { CStr::from_ptr(raw) }.to_string_lossy().into_owned();
     unsafe { dictate_free(raw) };
     serde_json::from_str(&json).map_err(|e| e.to_string())

@@ -103,7 +103,7 @@ export function BlockHandles({ editor, wrap }: { editor: Editor; wrap: RefObject
         <button type="button" className="ed-add" aria-label="Insert a block below" title="Insert a block below" onMouseDown={keep} onClick={() => insertBlockBelow(editor, hovered.current)}>
           <Icon name="plus" size={17} />
         </button>
-        <span ref={grip} className="ed-grip" role="button" tabIndex={-1} aria-label="Drag to move, click for options" title="Drag to move, click for options" aria-haspopup="menu" aria-expanded={!!menu}
+        <span ref={grip} className="ed-grip" role="button" tabIndex={-1} aria-label="Drag to move, or click for options" title="Drag to move, or click for options" aria-haspopup="menu" aria-expanded={!!menu}
           onMouseDown={event => event.stopPropagation()} onClick={event => (menu ? close() : open(event.detail === 0))}>
           <Icon name="grip" size={19} />
         </span>

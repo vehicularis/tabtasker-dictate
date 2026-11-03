@@ -128,6 +128,6 @@ export function FindBar({ editor, onClose }: { editor: Editor; onClose: () => vo
     <input className="ui-field" aria-label="Replace with" placeholder="Replace with" value={replacement} spellCheck={false} onChange={event => setReplacement(event.target.value)} />
     <Button small disabled={!total} onMouseDown={event => event.preventDefault()} onClick={() => replace(editor, replacement, false)}>Replace</Button>
     <Button small disabled={!total} onMouseDown={event => event.preventDefault()} onClick={() => replace(editor, replacement, true)}>Replace all</Button>
-    <span className="ed-find-close"><Tool action={{ id: 'close', label: 'Close find (esc)', icon: <Icon name="close" size={15} />, run: close }} /></span>
+    <span className="ed-find-close"><Tool action={{ id: 'close', label: 'Close (Esc)', icon: <Icon name="close" size={15} />, run: close }} /></span>
   </div>;
 }

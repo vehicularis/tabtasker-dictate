@@ -120,6 +120,11 @@ button, input, select { font-family: var(--font); }
 .list-item[aria-current='true'] .x { color: inherit; opacity: .8; }
 .list-item .m { display: block; margin-top: 2px; font-size: 11px; line-height: 14px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
 .column-views { margin: 8px 12px 0; } .column-views .ui-segmented { display: flex; } .column-views .ui-segmented button { flex: 1; }
+/* Delete all, under the archive's switch: the button at its right, or the question on a line of its own with its answers under it. */
+.column-clear { display: flex; flex: none; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px 4px; min-height: 26px; margin: 8px 12px 0; font-size: 12.5px; color: var(--ink-2); animation: fade-in var(--quick) var(--ease) backwards; }
+.column-clear > span { flex: 1 1 100%; padding: 0 2px; }
+.stickies-clear { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; color: var(--ink-2); animation: fade-in var(--quick) var(--ease) backwards; }
+.stickies-clear > span { margin-right: 4px; }
 .list-none { margin: 20px 12px; font-size: 12.5px; line-height: 1.45; color: var(--ink-3); text-align: center; }
 /* The record button in the column's head: a 28-point round with the mic; recording, a red stop square breathing. */
 .column-head .record, .column-head .record.only-icon { width: 28px; height: 28px; padding: 0; border-radius: 50%; }
