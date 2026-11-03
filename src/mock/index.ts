@@ -47,7 +47,7 @@ const DEFAULTS: Settings = {
   claude: { enabled: false, via: 'api', model: 'claude-haiku-5-5', effort: 'medium', commands: true, claudeCode: null, localEndpoint: 'http://localhost:11434', localModel: 'llama3.2' },
   agents: { mcp: true, shareHistory: false, shareNotes: true, shareMeetings: true, allowWrite: false },
   history: { keep: 'week' },
-  appearance: { theme: 'system', edge: 'bottom', size: 'medium', idle: 'dots', hint: true, pill: ['note', 'write', 'sticky', 'meeting', 'library', 'settings'], margin: 8, avoidDock: true },
+  appearance: { theme: 'system', edge: 'right', size: 'medium', idle: 'dots', hint: true, pill: ['note', 'write', 'sticky', 'meeting', 'library', 'settings'], margin: 8, avoidDock: true },
 };
 
 const status: Status = {

@@ -11,9 +11,6 @@
    useFlip): one that leaves the view shrinks a little as it fades, a heading only fades. The other view fades in. */
 .stickies-heading, .stickies-none { --enter: none; --leave: none; }
 .stickies-view { animation: fade-in var(--quick) var(--ease) backwards; }
-.stickies-first { display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 420px; margin: 18vh auto 0; text-align: center; font-size: 14px; line-height: 1.5; color: var(--ink-2); }
-.stickies-first strong { margin-top: 6px; font: 500 19px/1.3 var(--font-display); color: var(--ink); }
-.stickies-first p { margin: 0 0 10px; }
 /* The paper keeps the shape it has on the screen. One on the screen floats as its window does; one closed lies flat. */
 .sticky-card { height: auto; aspect-ratio: var(--shape); box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--ink) 18%, transparent), var(--elev-float); transition: box-shadow var(--quick) var(--ease), translate var(--quick) var(--ease); }
 .sticky-card:not([data-closed]):hover { translate: 0 -2px; }
