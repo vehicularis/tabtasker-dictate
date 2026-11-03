@@ -79,7 +79,7 @@
 /* While a meeting runs, or recordings are kept: the time and the recordings, under the search. */
 .meeting-strip { display: flex; flex: none; flex-direction: column; gap: 6px; padding: 8px 12px 0; }
 .meeting-live { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
-.meeting-live i { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: record-breathe 1.6s ease-in-out infinite; }
+.meeting-live i { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); animation: record-breathe 1.6s ease-in-out infinite; }
 .leftover { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); }
 .leftover > span { flex: 1 1 100%; }
 

@@ -22,7 +22,7 @@
    Every menu is the far end of the ramp, a plate one notch toward the page in a 6 px ring of ink, with
    the page tokens re-pointed in the surface's own ink: 10% for a fill, 60% for quiet text, 15% for a line. */
 .ed-menu { --m-ink: var(--window); --m-dim: color-mix(in srgb, var(--window) 60%, transparent); --m-fill: color-mix(in srgb, var(--window) 10%, transparent); --m-line: color-mix(in srgb, var(--window) 15%, transparent);
-  --m-accent: #93c5fd; --m-danger: #ff9999;
+  --m-accent: var(--m-ink); --m-danger: #ff9999;
   --m-cast: 0 0 0 7px color-mix(in srgb, var(--shadow-ink) 6%, transparent), 0 2px 6px 6px color-mix(in srgb, var(--shadow-ink) 8%, transparent), 0 12px 28px -2px color-mix(in srgb, var(--shadow-ink) 18%, transparent);
   position: fixed; z-index: 60; box-sizing: border-box; min-width: max(208px, var(--anchor-width, 0px)); max-height: calc(100vh - 40px); overflow-y: auto; padding: 4px; border-radius: 14px;
   font: 14px/1.4 var(--font); color: var(--m-ink); background: color-mix(in srgb, var(--ink) 95%, var(--window)); box-shadow: 0 0 0 6px var(--ink), var(--m-cast);
@@ -264,7 +264,7 @@
 /* ---------- dark: the checkbox well, inline code, and the menus' tray on a dark page ---------- */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) .ed { --ed-box: color-mix(in srgb, var(--input) 30%, transparent); --ed-code-ink: color-mix(in srgb, var(--accent) 20%, #c3c3c3); --ed-code-bg: color-mix(in srgb, var(--accent) 4%, #1b1b1b); }
-  :root:not([data-theme='light']) .ed-menu { --m-accent: #1e40af; --m-danger: #991b1b; --m-cast: 0 2px 6px 6px rgb(0 0 0 / .4), 0 12px 28px -2px rgb(0 0 0 / .6); color-scheme: light; }
+  :root:not([data-theme='light']) .ed-menu { --m-danger: #991b1b; --m-cast: 0 2px 6px 6px rgb(0 0 0 / .4), 0 12px 28px -2px rgb(0 0 0 / .6); color-scheme: light; }
 }
 :root[data-theme='dark'] .ed { --ed-box: color-mix(in srgb, var(--input) 30%, transparent); --ed-code-ink: color-mix(in srgb, var(--accent) 20%, #c3c3c3); --ed-code-bg: color-mix(in srgb, var(--accent) 4%, #1b1b1b); }
-:root[data-theme='dark'] .ed-menu { --m-accent: #1e40af; --m-danger: #991b1b; --m-cast: 0 2px 6px 6px rgb(0 0 0 / .4), 0 12px 28px -2px rgb(0 0 0 / .6); color-scheme: light; }
+:root[data-theme='dark'] .ed-menu { --m-danger: #991b1b; --m-cast: 0 2px 6px 6px rgb(0 0 0 / .4), 0 12px 28px -2px rgb(0 0 0 / .6); color-scheme: light; }
