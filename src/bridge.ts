@@ -6,7 +6,6 @@ type Tauri = {
   window: { getCurrentWindow: () => { close: () => Promise<void>; setTitle: (title: string) => Promise<void> } };
 };
 const tauri = () => (window as unknown as { __TAURI__?: Tauri }).__TAURI__;
-export const inApp = () => !!tauri();
 
 let mock: Promise<typeof import('./mock')> | undefined;
 const browser = () => (mock ??= import('./mock'));

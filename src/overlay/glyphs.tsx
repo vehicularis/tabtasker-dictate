@@ -12,7 +12,7 @@ const ENAMEL = 'var(--wb-glyph-enamel)';
 const AMBER = '#E0A33A';
 const BLUE = '#4A8CD2';
 
-export function Glyph({ children, size = 22 }: { children: ReactNode; size?: number }) {
+function Glyph({ children, size = 22 }: { children: ReactNode; size?: number }) {
   const id = useId();
   return <svg className="wb-tool-glyph" width={size} height={size} viewBox="0 0 28 28" fill="none" strokeLinecap="round" strokeLinejoin="round" aria-hidden
     style={{ '--wb-glyph-enamel': `url(#${id})` } as CSSProperties}>
@@ -92,7 +92,7 @@ export const SettingsGlyph = ({ size }: { size?: number }) => {
 // ---------- the settings pages, in the same hand ----------
 
 /// A switch, on: General.
-export const SwitchGlyph = ({ size }: { size?: number }) => <Glyph size={size}>
+const SwitchGlyph = ({ size }: { size?: number }) => <Glyph size={size}>
   <rect x="3.5" y="8.5" width="21" height="11" rx="5.5" fill={ENAMEL} stroke={INK} strokeOpacity="0.5" strokeWidth="1.1" />
   <circle cx="18.6" cy="14" r="3.7" fill={BLUE} stroke={INK} strokeOpacity="0.4" strokeWidth="0.9" />
   <path d="M6.8 11.6h5.4" stroke="white" strokeOpacity="0.6" strokeWidth="0.8" />
@@ -100,7 +100,7 @@ export const SwitchGlyph = ({ size }: { size?: number }) => <Glyph size={size}>
 </Glyph>;
 
 /// A key, the fn key's globe on it: Shortcuts.
-export const KeyGlyph = ({ size }: { size?: number }) => <Glyph size={size}>
+const KeyGlyph = ({ size }: { size?: number }) => <Glyph size={size}>
   <rect x="4" y="4.5" width="20" height="19.5" rx="4" fill={ENAMEL} stroke={INK} strokeOpacity="0.5" strokeWidth="1.1" />
   <rect x="6.3" y="6.5" width="15.4" height="13.5" rx="2.6" fill={PAPER} stroke={INK} strokeOpacity="0.16" strokeWidth="0.8" />
   <circle cx="14" cy="13.2" r="3.6" stroke={BLUE} strokeWidth="1.1" />
@@ -110,7 +110,7 @@ export const KeyGlyph = ({ size }: { size?: number }) => <Glyph size={size}>
 </Glyph>;
 
 /// A microphone with its sound going out: Speech.
-export const MicGlyph = ({ size }: { size?: number }) => <Glyph size={size}>
+const MicGlyph = ({ size }: { size?: number }) => <Glyph size={size}>
   <path d="M6.5 12.5a7.5 7.5 0 0 0 15 0" stroke={INK} strokeOpacity="0.45" strokeWidth="1.1" />
   <path d="M14 20v3.5M10.5 24h7" stroke={INK} strokeOpacity="0.45" strokeWidth="1.1" />
   <rect x="10" y="3.5" width="8" height="13.5" rx="4" fill={ENAMEL} stroke={INK} strokeOpacity="0.5" strokeWidth="1.1" />
@@ -120,7 +120,7 @@ export const MicGlyph = ({ size }: { size?: number }) => <Glyph size={size}>
 </Glyph>;
 
 /// Two app windows, the front one's words in its own style: App styles.
-export const AppsGlyph = ({ size }: { size?: number }) => <Glyph size={size}>
+const AppsGlyph = ({ size }: { size?: number }) => <Glyph size={size}>
   <rect x="8.5" y="4" width="15.5" height="12.5" rx="2.5" fill={ENAMEL} stroke={INK} strokeOpacity="0.35" strokeWidth="1" />
   <rect x="4" y="10" width="16" height="14" rx="2.5" fill={ENAMEL} stroke={INK} strokeOpacity="0.5" strokeWidth="1.1" />
   <path d="M4 13.6h16" stroke={INK} strokeOpacity="0.25" strokeWidth="0.9" />
@@ -130,7 +130,7 @@ export const AppsGlyph = ({ size }: { size?: number }) => <Glyph size={size}>
 </Glyph>;
 
 /// A book with a ribbon in it: Vocabulary.
-export const BookGlyph = ({ size }: { size?: number }) => <Glyph size={size}>
+const BookGlyph = ({ size }: { size?: number }) => <Glyph size={size}>
   <path d="M7 4.5h13a2 2 0 0 1 2 2V23a1 1 0 0 1-1 1H8a2.5 2.5 0 0 1-2.5-2.5V6A1.5 1.5 0 0 1 7 4.5z" fill={ENAMEL} stroke={INK} strokeOpacity="0.5" strokeWidth="1.1" />
   <path d="M5.5 21.5A2.5 2.5 0 0 1 8 19h14" stroke={INK} strokeOpacity="0.4" strokeWidth="1" />
   <path d="M15.5 4.5v8.2l2-1.5 2 1.5V4.5" fill={BLUE} fillOpacity="0.9" stroke={INK} strokeOpacity="0.35" strokeWidth="0.8" />
@@ -139,14 +139,14 @@ export const BookGlyph = ({ size }: { size?: number }) => <Glyph size={size}>
 </Glyph>;
 
 /// A glass orb with the agents' wave in it: Agents.
-export const AgentsGlyph = ({ size }: { size?: number }) => <Glyph size={size}>
+const AgentsGlyph = ({ size }: { size?: number }) => <Glyph size={size}>
   <circle cx="14" cy="14" r="10" fill={ENAMEL} stroke={INK} strokeOpacity="0.5" strokeWidth="1.1" />
   <path d="M7 14.6c1.4 0 1.8-3.2 3.4-3.2s2 6 3.6 6 2-7 3.6-7 1.9 4.2 3.4 4.2" stroke={BLUE} strokeWidth="1.4" />
   <path d="M8.6 9a7 7 0 0 1 4.4-2.6" stroke="white" strokeOpacity="0.7" strokeWidth="0.9" />
 </Glyph>;
 
 /// A disc half light, half dark: Appearance.
-export const AppearanceGlyph = ({ size }: { size?: number }) => <Glyph size={size}>
+const AppearanceGlyph = ({ size }: { size?: number }) => <Glyph size={size}>
   <circle cx="14" cy="14" r="10" fill={ENAMEL} stroke={INK} strokeOpacity="0.5" strokeWidth="1.1" />
   <path d="M14 4a10 10 0 0 1 0 20z" fill={INK} fillOpacity="0.72" />
   <circle cx="14" cy="14" r="3.4" fill={BLUE} stroke={INK} strokeOpacity="0.4" strokeWidth="0.9" />
@@ -154,7 +154,7 @@ export const AppearanceGlyph = ({ size }: { size?: number }) => <Glyph size={siz
 </Glyph>;
 
 /// A card of bars, the tallest in blue: History & stats.
-export const StatsGlyph = ({ size }: { size?: number }) => <Glyph size={size}>
+const StatsGlyph = ({ size }: { size?: number }) => <Glyph size={size}>
   <rect x="4" y="4.5" width="20" height="19" rx="3" fill={ENAMEL} stroke={INK} strokeOpacity="0.5" strokeWidth="1.1" />
   <path d="M9 19.5v-4M19 19.5v-6.5" stroke={INK} strokeOpacity="0.4" strokeWidth="2.6" />
   <path d="M14 19.5v-9.5" stroke={BLUE} strokeWidth="2.6" />
@@ -164,28 +164,28 @@ export const StatsGlyph = ({ size }: { size?: number }) => <Glyph size={size}>
 // ---------- the rest of the app's objects ----------
 
 /// A lifebuoy: Help.
-export const HelpGlyph = ({ size }: { size?: number }) => <Glyph size={size}>
+const HelpGlyph = ({ size }: { size?: number }) => <Glyph size={size}>
   <path d="M14 4a10 10 0 1 1 0 20a10 10 0 1 1 0-20zM14 9.6a4.4 4.4 0 1 0 0 8.8a4.4 4.4 0 1 0 0-8.8z" fill={ENAMEL} fillRule="evenodd" stroke={INK} strokeOpacity="0.5" strokeWidth="1.1" />
   <circle cx="14" cy="14" r="7.2" stroke={BLUE} strokeWidth="5.4" strokeDasharray="5.65 5.66" transform="rotate(-23 14 14)" />
   <path d="M8.4 8.9a7.6 7.6 0 0 1 3.8-2.6" stroke="white" strokeOpacity="0.7" strokeWidth="0.9" />
 </Glyph>;
 
 /// A magnifier with a tinted lens: Search.
-export const SearchGlyph = ({ size }: { size?: number }) => <Glyph size={size}>
+const SearchGlyph = ({ size }: { size?: number }) => <Glyph size={size}>
   <path d="M17.6 17.6l6 6" stroke={INK} strokeOpacity="0.55" strokeWidth="3" />
   <circle cx="12" cy="12" r="7.6" fill={`color-mix(in srgb, ${BLUE} 22%, ${PAPER})`} stroke={INK} strokeOpacity="0.5" strokeWidth="1.3" />
   <path d="M8.3 9.7a4.6 4.6 0 0 1 3.3-2.5" stroke="white" strokeOpacity="0.75" strokeWidth="1" />
 </Glyph>;
 
 /// A shield with a check on it: what stays on this Mac.
-export const ShieldGlyph = ({ size }: { size?: number }) => <Glyph size={size}>
+const ShieldGlyph = ({ size }: { size?: number }) => <Glyph size={size}>
   <path d="M14 3.5l8.5 3v6.8c0 5.2-3.6 9-8.5 11.2c-4.9-2.2-8.5-6-8.5-11.2V6.5z" fill={ENAMEL} stroke={INK} strokeOpacity="0.5" strokeWidth="1.1" />
   <path d="M10.2 14l2.7 2.7 5-5.2" stroke={BLUE} strokeWidth="1.7" />
   <path d="M8 8.3l5-1.8" stroke="white" strokeOpacity="0.6" strokeWidth="0.8" />
 </Glyph>;
 
 /// A folder with its front in blue: the notes folder.
-export const FolderGlyph = ({ size }: { size?: number }) => <Glyph size={size}>
+const FolderGlyph = ({ size }: { size?: number }) => <Glyph size={size}>
   <path d="M4 8.5a2 2 0 0 1 2-2h5l2 2.2h9a2 2 0 0 1 2 2V21a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" fill={ENAMEL} stroke={INK} strokeOpacity="0.5" strokeWidth="1.1" />
   <path d="M4 12.5h20V21a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" fill={BLUE} fillOpacity="0.85" stroke={INK} strokeOpacity="0.35" strokeWidth="0.8" />
   <path d="M6.5 14.6h6" stroke="white" strokeOpacity="0.55" strokeWidth="0.8" />
@@ -215,7 +215,7 @@ export const DownloadGlyph = ({ size }: { size?: number }) => <Glyph size={size}
 </Glyph>;
 
 /// A check on a blue disc: done.
-export const DoneGlyph = ({ size }: { size?: number }) => <Glyph size={size}>
+const DoneGlyph = ({ size }: { size?: number }) => <Glyph size={size}>
   <circle cx="14" cy="14" r="10" fill={BLUE} stroke={INK} strokeOpacity="0.35" strokeWidth="1" />
   <path d="M9.4 14.3l3.1 3.1 6.2-6.6" stroke="white" strokeWidth="1.9" />
   <path d="M8.5 8.8a7.6 7.6 0 0 1 3.6-2.6" stroke="white" strokeOpacity="0.55" strokeWidth="0.9" />

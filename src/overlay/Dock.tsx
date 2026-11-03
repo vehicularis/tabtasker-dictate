@@ -1,10 +1,8 @@
 import { useEffect, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from 'react';
-import { PILL_BUTTONS, useSettings, type DictateKey, type PillButton } from '../store';
+import { KEY_NAMES } from '../lib/keyNames';
+import { PILL_BUTTONS, useSettings, type PillButton } from '../store';
 import { LibraryGlyph, MeetingGlyph, NoteGlyph, SettingsGlyph, StickyGlyph, WriteGlyph } from './glyphs';
 import { Orb } from './Orb';
-
-/// The dictate key as the hint and Appearance's preview name it.
-export const KEY_NAMES: Record<DictateKey, string> = { fn: 'fn', rightCommand: 'right ⌘', rightOption: 'right ⌥', rightControl: 'right ⌃', rightShift: 'right ⇧' };
 
 // The dots, the pill they open into on hover (the buttons Appearance picks: a spoken note, a note to type, a
 // sticky, a meeting, the window with your notes, the settings), and the orb they become while you talk.

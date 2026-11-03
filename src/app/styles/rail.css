@@ -1,0 +1,12 @@
+/* ---------- the spine: Business's NavigationRail at 56 points, icons only. The otter at its head where Business keeps the account;
+   40-point rows with an 18-point glyph dead centre; the open row on Business's accent plate, pressed in; Settings pinned at the foot ---------- */
+.rail { display: flex; flex: none; flex-direction: column; gap: 4px; width: 56px; min-height: 0; box-sizing: border-box; padding: 8px; user-select: none; -webkit-user-select: none; background-image: linear-gradient(to bottom, var(--shell-frame), transparent 64px); }
+.rail-brand { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; margin-bottom: 8px; padding: 0; border: 0; border-radius: 10px; background: none; cursor: pointer; transition: background var(--quick) var(--ease); }
+.rail-brand:hover, .rail-brand[aria-current='page'] { background: color-mix(in srgb, var(--secondary) 60%, transparent); }
+.rail-brand svg { display: block; }
+.rail-group { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.rail-item { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 8px; color: color-mix(in srgb, var(--ink) 90%, transparent); background: none; cursor: pointer; transition: background var(--quick) var(--ease), color var(--quick) var(--ease); }
+.rail-item:hover { color: var(--ink); background: color-mix(in srgb, var(--secondary) 60%, transparent); }
+.rail-item:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.rail-item[aria-current='page'] { color: var(--ink); background: var(--secondary); box-shadow: var(--elev-well); }
+.rail-foot { margin-top: auto; }

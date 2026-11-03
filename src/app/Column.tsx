@@ -7,7 +7,7 @@ const fit = (px: number) => Math.round(Math.max(0, Math.min(MOST, px)));
 const savedWidth = () => { try { return fit(Number(localStorage.getItem(WIDER)) || 0); } catch { return 0; } };
 
 /// The column's edge: drag it, or use Left and Right, Home and End, to make the column wider. Escape puts a drag back.
-/// The width is this Mac's, kept for next time, and set on the window as --column-extra (app.css).
+/// The width is this Mac's, kept for next time, and set on the window as --column-extra (styles/column.css).
 export function ColumnResizer() {
   const [wider, setWider] = useState(savedWidth);
   const edge = useRef<HTMLDivElement>(null), drag = useRef<{ x: number; from: number; pointer: number } | null>(null);

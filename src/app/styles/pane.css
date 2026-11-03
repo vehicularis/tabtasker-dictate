@@ -1,0 +1,12 @@
+/* ---------- the pane: the page, raised, over the column's inner edge ---------- */
+.content { position: relative; z-index: 1; flex: 1; min-width: 0; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; border-radius: 20px; background: var(--shell-canvas); box-shadow: var(--elev-raised); }
+/* A page arriving (a place, a tab, a settings page, a note opening) rises 4 points as it fades in, once. Nothing
+   inside it cascades after it. */
+.page, .editor-pane > :is(.editor-top, .editor-page, .empty-pane) { animation: fade-in var(--quick) var(--ease) backwards, rise-in var(--slow) var(--ease) backwards; }
+.page { max-width: 640px; margin: 0 auto; padding: 30px 30px 36px; }
+.pair { display: flex; gap: 6px; width: 100%; }
+.pair .ui-field { flex: 1; min-width: 0; }
+.labelled { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--ink-3); }
+/* A status beside a control. On is a quiet green badge, as Business marks a state that is fine. */
+.state { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px; border-radius: var(--radius-pill); font-size: 13px; font-weight: 500; color: var(--ink-2); background: var(--surface-2); }
+.state[data-on] { color: var(--success); background: var(--success-fill); }

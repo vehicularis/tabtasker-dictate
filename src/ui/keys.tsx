@@ -4,7 +4,6 @@ import { Icon } from './Icon';
 
 export const Kbd = ({ children }: { children: ReactNode }) => <kbd className="ui-kbd">{children}</kbd>;
 
-export { MODIFIERS };
 const GLYPHS: [keyof typeof MODIFIERS, string][] = [['control', '⌃'], ['option', '⌥'], ['shift', '⇧'], ['command', '⌘']];
 
 // macOS virtual key codes by the browser's physical key, with how each reads in a shortcut.

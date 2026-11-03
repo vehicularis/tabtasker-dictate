@@ -516,9 +516,9 @@ pub fn apply(app: &AppHandle, settings: &Settings) {
   // Settings' sidebar is native vibrancy, which follows the app's appearance, not the page's theme.
   app.set_theme(match settings.appearance.theme { Theme::System => None, Theme::Light => Some(tauri::Theme::Light), Theme::Dark => Some(tauri::Theme::Dark) });
   let _ = app.emit("dictate-settings", settings);
-  crate::show_tray(app, settings.general.menu_bar_icon);
-  crate::show_in_dock(app, settings.general.show_in_dock);
-  crate::recent_changed(app); // the notes folder may have moved
+  crate::app::menu::show_tray(app, settings.general.menu_bar_icon);
+  crate::app::windows::show_in_dock(app, settings.general.show_in_dock);
+  crate::app::menu::recent_changed(app); // the notes folder may have moved
 }
 
 fn replace(app: &AppHandle, next: impl FnOnce(&Settings) -> Settings) -> Result<Settings, String> {

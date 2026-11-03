@@ -1,11 +1,11 @@
 import type { Mock } from '.';
+import { DAY, localDay } from '../lib/dates';
 import type { HistoryEntry, Keep } from '../store';
-import type { HistoryStats } from '../app/pages/History';
+import type { HistoryStats } from '../app/settings/History';
 
 // In a browser: a month of sample dictations, with history.rs's pruning and stats math.
 // `?history=empty` starts with nothing said.
 
-const DAY = 86_400_000;
 const SAMPLES: [Pick<HistoryEntry, 'mode' | 'bundleId' | 'appName'>, string][] = [
   [{ mode: 'dictate', bundleId: 'com.tinyspeck.slackmacgap', appName: 'Slack' }, 'Sounds good, I’ll pick up the onboarding copy after lunch and send it over for review.'],
   [{ mode: 'dictate', bundleId: 'com.apple.mail', appName: 'Mail' }, 'Hi Maria, thanks for the quick turnaround. The contract looks right to me, so let’s sign this week. Best, Can.'],
@@ -41,8 +41,6 @@ function sample(): HistoryEntry[] {
   return entries;
 }
 
-// The Mac's day of a moment, with the offset in force then.
-const localDay = (atMs: number) => Math.floor((atMs - new Date(atMs).getTimezoneOffset() * 60_000) / DAY);
 const AGE: Record<Keep, number | null> = { off: -Infinity, day: DAY, week: 7 * DAY, month: 30 * DAY, forever: null };
 
 function stats(entries: HistoryEntry[]): HistoryStats {

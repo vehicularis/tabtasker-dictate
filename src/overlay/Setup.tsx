@@ -1,11 +1,9 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
 import { invoke } from '../bridge';
-import { KEY_NAMES } from '../onboarding/Keyboard';
+import { GLOBE, KEY_NAMES } from '../lib/keyNames';
 import { setupDone, useSettings, type DictateKey, type Status } from '../store';
 import { Globe, Logo, NoteIcon, X } from './icons';
 import { leave } from '../ui/motion';
-
-const GLOBE = { inputSource: 'changes the input source', emoji: 'opens emoji', dictation: 'starts Dictation' };
 
 // ---------- the setup steps, as a card by the dots ----------
 

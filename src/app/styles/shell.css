@@ -1,0 +1,19 @@
+/* The app's window, in TabTasker Business's Mac workspace frame (AppShell, SidebarRail, DesktopTitleBar):
+   the frame colour behind everything; a 40-point title bar across its top with the traffic lights, the
+   column's toggle, back and forward, the open places as tabs and a plus; a 56-point spine of icons down
+   the left, on the frame; the column as a leaf raised beside it, rounded on its left; and the page as a
+   pane raised over the column's inner 24 points. The gutter is 12 points on the right and the bottom,
+   none on the left: the spine is the gutter there. In light the frame is Business's muted grey and the
+   pane is white; in dark the frame is the rail's own tone and the pane is darker than it. */
+html, body, #root { height: 100%; margin: 0; }
+:root { --shell-frame: var(--frame); --shell-leaf: var(--rail-panel); --shell-canvas: var(--window); --tab-on: color-mix(in srgb, var(--ink) 5%, var(--muted)); }
+@media (prefers-color-scheme: light) { :root:not([data-theme='dark']) { --shell-frame: var(--muted); --shell-canvas: var(--card); --tab-on: var(--card); } }
+:root[data-theme='light'] { --shell-frame: var(--muted); --shell-canvas: var(--card); --tab-on: var(--card); }
+body { font: 14px/1.45 var(--font); color: var(--ink); background: var(--shell-frame); -webkit-font-smoothing: antialiased; cursor: default; }
+button, input, select { font-family: var(--font); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.link { padding: 0; border: 0; background: none; font: inherit; color: var(--accent-ink); text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); text-underline-offset: 3px; cursor: pointer; }
+.link:hover { text-decoration-color: currentColor; }
+
+.window { --bar: 40px; --gap: 12px; --overlap: 24px; --column: clamp(224px, 20vw, 280px); --column-extra: 0px; position: relative; display: flex; flex-direction: column; box-sizing: border-box; height: 100%; padding: var(--bar) var(--gap) var(--gap) 0; background: var(--shell-frame); }
+.row { position: relative; display: flex; flex: 1; min-width: 0; min-height: 0; }
