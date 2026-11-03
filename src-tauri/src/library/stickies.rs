@@ -26,6 +26,10 @@ pub struct Sticky {
   /// The window's frame, in points from the top left of the main screen. `height` is the open height,
   /// kept while the sticky is folded to its bar.
   pub x: f64, pub y: f64, pub width: f64, pub height: f64,
+  /// The clear strip above the sheet that `y` includes, in points (GUTTER). A record from before there was one
+  /// says 0, and its window moves up by the difference once, so the sheet stays where it was on the screen.
+  #[serde(default)]
+  pub gutter: f64,
   /// On top of every window (the default), or behind them like any window, out of the way.
   pub pinned: bool,
   /// Folded to its bar alone, its first words showing.
@@ -41,7 +45,7 @@ pub struct Sticky {
   pub created_ms: u64, pub updated_ms: u64,
 }
 impl Default for Sticky {
-  fn default() -> Self { Self { id: String::new(), text: String::new(), hue: "amber".into(), x: 120.0, y: 140.0, width: 240.0, height: 200.0, pinned: true, folded: false, closed: false, archived: false, title: String::new(), titled: false, tilt: "none".into(), weight: "bold".into(), created_ms: 0, updated_ms: 0 } }
+  fn default() -> Self { Self { id: String::new(), text: String::new(), hue: "amber".into(), x: 120.0, y: 96.0, width: 240.0, height: 200.0, gutter: GUTTER, pinned: true, folded: false, closed: false, archived: false, title: String::new(), titled: false, tilt: "none".into(), weight: "bold".into(), created_ms: 0, updated_ms: 0 } }
 }
 /// A folded sticky's height: its band alone (sticky.css .sticky-band).
 const FOLDED: f64 = 34.0;
@@ -66,11 +70,18 @@ pub fn all(app: &AppHandle) -> Vec<Sticky> {
   let Ok(text) = std::fs::read_to_string(path) else { return Vec::new() };
   let mut list: Vec<Sticky> = serde_json::from_str::<Vec<Value>>(&text).unwrap_or_default().into_iter()
     .filter_map(|value| serde_json::from_value::<Sticky>(value).ok()).filter(|sticky| !sticky.id.is_empty()).collect();
+  let mut moved = false;
   for sticky in &mut list {
     sticky.hue = hue_or(Some(&sticky.hue), "amber");
     sticky.tilt = one_of(Some(&sticky.tilt), &TILTS, "none");
     sticky.weight = one_of(Some(&sticky.weight), &WEIGHTS, "bold");
+    if sticky.gutter != GUTTER {
+      sticky.y = (sticky.y - (GUTTER - sticky.gutter)).max(0.0);
+      sticky.gutter = GUTTER;
+      moved = true;
+    }
   }
+  if moved { if let Err(e) = write(app, &list) { log::warn!("sticky: {e}"); } }
   list
 }
 
@@ -158,13 +169,13 @@ pub fn create(app: &AppHandle, hue: Option<&str>, text: Option<&str>) -> Result<
   let mut bytes = [0u8; 6];
   ring::rand::SecureRandom::fill(&ring::rand::SystemRandom::new(), &mut bytes).map_err(|_| "Couldn’t make a sticky.".to_owned())?;
   let last = list.last().cloned();
-  let (x, y) = last.as_ref().map_or((120.0, 140.0), |last| (last.x + 28.0, last.y + 28.0));
+  let (x, y) = last.as_ref().map_or((120.0, 96.0), |last| (last.x + 28.0, last.y + 28.0));
   // The look of the sticky touched last is the look the new one starts with.
   let style = list.iter().filter(|sticky| !sticky.archived).max_by_key(|sticky| sticky.updated_ms).cloned().unwrap_or_default();
   let now = now_ms();
   let sticky = Sticky {
     id: bytes.iter().map(|byte| format!("{byte:02x}")).collect(), text: text.unwrap_or_default().chars().take(MAX_TEXT).collect(),
-    hue: hue_or(hue, ["amber", "sky", "sage", "coral", "violet", "teal"][list.len() % 6]), x, y, width: style.width.max(160.0), height: style.height.max(120.0), pinned: true, folded: false, closed: false, archived: false,
+    hue: hue_or(hue, ["amber", "sky", "sage", "coral", "violet", "teal"][list.len() % 6]), x, y, width: style.width.max(160.0), height: style.height.max(120.0), gutter: GUTTER, pinned: true, folded: false, closed: false, archived: false,
     title: String::new(), titled: style.titled, tilt: style.tilt, weight: style.weight, created_ms: now, updated_ms: now,
   };
   list.push(sticky.clone());
