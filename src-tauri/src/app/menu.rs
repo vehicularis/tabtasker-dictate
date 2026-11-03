@@ -14,12 +14,12 @@ use tauri::{AppHandle, Emitter, Manager, Wry};
 /// items are what make ⌘C and ⌘V work in a web view at all.
 pub(crate) fn app_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
   let separator = || PredefinedMenuItem::separator(app);
-  let main = Submenu::with_items(app, "TabTasker Dictate", true, &[
-    &MenuItem::with_id(app, "about", "About TabTasker Dictate", true, None::<&str>)?, &separator()?,
+  let main = Submenu::with_items(app, "TabTasker | Dictate", true, &[
+    &MenuItem::with_id(app, "about", "About TabTasker | Dictate", true, None::<&str>)?, &separator()?,
     &MenuItem::with_id(app, "settings", "Settings…", true, Some("CmdOrCtrl+,"))?, &separator()?,
     &PredefinedMenuItem::services(app, None)?, &separator()?,
     &PredefinedMenuItem::hide(app, None)?, &PredefinedMenuItem::hide_others(app, None)?, &PredefinedMenuItem::show_all(app, None)?, &separator()?,
-    &MenuItem::with_id(app, "quit", "Quit TabTasker Dictate", true, Some("CmdOrCtrl+Q"))?,
+    &MenuItem::with_id(app, "quit", "Quit TabTasker | Dictate", true, Some("CmdOrCtrl+Q"))?,
   ])?;
   let edit = Submenu::with_items(app, "Edit", true, &[
     &PredefinedMenuItem::undo(app, None)?, &PredefinedMenuItem::redo(app, None)?, &separator()?,
@@ -96,12 +96,12 @@ pub(crate) fn tray(app: &AppHandle, enabled: bool) -> tauri::Result<()> {
     &meeting,
     &MenuItem::with_id(app, "paste-last", "Paste Last Transcript", true, None::<&str>)?,
     &recent, &separator()?,
-    &MenuItem::with_id(app, "open", "Open TabTasker Dictate", true, None::<&str>)?,
+    &MenuItem::with_id(app, "open", "Open TabTasker | Dictate", true, None::<&str>)?,
     &MenuItem::with_id(app, "settings", "Settings…", true, Some("CmdOrCtrl+,"))?,
     &MenuItem::with_id(app, "setup", "Set Up…", true, None::<&str>)?,
     &MenuItem::with_id(app, "notes", "Show Notes in Finder", true, None::<&str>)?, &separator()?,
     &paused, &separator()?,
-    &MenuItem::with_id(app, "quit", "Quit TabTasker Dictate", true, Some("CmdOrCtrl+Q"))?,
+    &MenuItem::with_id(app, "quit", "Quit TabTasker | Dictate", true, Some("CmdOrCtrl+Q"))?,
   ])?;
   let _ = RECENT.set((recent, Mutex::default()));
   let _ = PAUSED.set(paused);
@@ -109,7 +109,7 @@ pub(crate) fn tray(app: &AppHandle, enabled: bool) -> tauri::Result<()> {
   recent_changed(app);
   // The mark alone, in black: macOS tints a template icon for the menu bar's light or dark look.
   let icon = tauri::image::Image::from_bytes(include_bytes!("../../icons/tray@2x.png"))?;
-  let tray = TrayIconBuilder::with_id("dictate").menu(&menu).tooltip("TabTasker Dictate").icon(icon).icon_as_template(true).build(app)?;
+  let tray = TrayIconBuilder::with_id("dictate").menu(&menu).tooltip("TabTasker | Dictate").icon(icon).icon_as_template(true).build(app)?;
   tray.set_visible(settings::get().general.menu_bar_icon)
 }
 

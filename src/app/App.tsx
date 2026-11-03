@@ -252,13 +252,13 @@ export function App() {
         <MenuItem disabled={tabMenu.index === tabs.length - 1} onSelect={() => { setTabMenu(null); tabAction('close-right', tabMenu.index); }}>Close Tabs to the Right</MenuItem>
       </Menu>}
       <span className="bar-end">
-        <button type="button" className="titlebar-site" title="TabTasker Business: chat, docs, whiteboards, tasks and meetings for your team, at business.tabtasker.com" onClick={() => { void invoke('open_site', { url: 'https://business.tabtasker.com' }).catch(() => {}); }}><BusinessMark size={16} /><span>TabTasker Business</span><Icon name="external" size={12} /></button>
+        <button type="button" className="titlebar-site" title="TabTasker | Business: chat, docs, whiteboards, tasks and meetings for your team, at business.tabtasker.com" onClick={() => { void invoke('open_site', { url: 'https://business.tabtasker.com' }).catch(() => {}); }}><BusinessMark size={16} /><span>TabTasker | Business</span><Icon name="external" size={12} /></button>
         <button type="button" className="titlebar-help" aria-label="Help" aria-pressed={place === 'help'} onClick={() => go('help')}><Icon name="help" size={16} /><span>Help</span></button>
       </span>
     </header>
     <div className="row">
-      <nav className="rail" aria-label="TabTasker Dictate">
-        <button type="button" className="rail-brand" aria-label="About TabTasker Dictate" title="TabTasker Dictate" aria-current={place === 'about' ? 'page' : undefined} onClick={() => go('about')}><Logo size={28} /></button>
+      <nav className="rail" aria-label="TabTasker | Dictate">
+        <button type="button" className="rail-brand" aria-label="About TabTasker | Dictate" title="TabTasker | Dictate" aria-current={place === 'about' ? 'page' : undefined} onClick={() => go('about')}><Logo size={28} /></button>
         <ul className="rail-group">{PLACES.map(p => railItem(p, place === p.route, () => go(p.route)))}</ul>
         <ul className="rail-group rail-foot">{railItem(EXTRA.settings, settingsOpen, () => go('settings'))}</ul>
       </nav>

@@ -42,7 +42,7 @@ export function Dots({ mode, hint = false, typing = false, words = '', loading =
   return <div className="layer demo-dots" data-edge="bottom" data-mode={mode} data-loading={loading || undefined} aria-hidden="true" style={at}>
     <div className="dock">
       {children}
-      <Dock mode={mode} menu={null} dots={dots} label="TabTasker Dictate" hint={hint} hintShown={hint} quiet={false} level={level} typing={typing} words={words} recording={false}
+      <Dock mode={mode} menu={null} dots={dots} label="TabTasker | Dictate" hint={hint} hintShown={hint} quiet={false} level={level} typing={typing} words={words} recording={false}
         buttons={PILL_BUTTONS} onHover={noop} onMenu={noop} onGrab={noop} onDots={noop} onNote={noop} onWrite={noop} onSticky={noop} onMeeting={noop} onOpen={noop} onSettings={noop} onOrb={noop} />
     </div>
   </div>;

@@ -28,7 +28,7 @@ export function Menu({ status, mics, meeting, onMics, onNote, onWriteNote, onSti
     else return;
     event.preventDefault(); event.stopPropagation();
   };
-  return <div ref={root} className="glass menu" data-glass data-hit role="menu" aria-label="TabTasker Dictate" tabIndex={-1} onKeyDown={keys}
+  return <div ref={root} className="glass menu" data-glass data-hit role="menu" aria-label="TabTasker | Dictate" tabIndex={-1} onKeyDown={keys}
     onPointerMove={event => {
       const row = (event.target as Element).closest<HTMLElement>('[role^="menuitem"]');
       if (!row) return;
@@ -41,7 +41,7 @@ export function Menu({ status, mics, meeting, onMics, onNote, onWriteNote, onSti
     <button type="button" role="menuitem" tabIndex={-1} onClick={onWriteNote}><Icon name="keyboard" size={16} />Write a note</button>
     <button type="button" role="menuitem" tabIndex={-1} onClick={onSticky}><Icon name="sticky" size={16} />New sticky</button>
     <button type="button" role="menuitem" tabIndex={-1} onClick={onMeeting}><MeetingIcon />{meeting ? 'Stop meeting' : 'Start meeting'}</button>
-    <button type="button" role="menuitem" tabIndex={-1} onClick={onOpen}><LibraryIcon />Open TabTasker Dictate</button>
+    <button type="button" role="menuitem" tabIndex={-1} onClick={onOpen}><LibraryIcon />Open TabTasker | Dictate</button>
     <button type="button" role="menuitem" tabIndex={-1} onClick={onPasteLast}><PasteIcon />Paste last transcript</button>
     <i className="rule" role="separator" />
     {status && status.inputs.length > 0 && <div className="sub">
@@ -60,6 +60,6 @@ export function Menu({ status, mics, meeting, onMics, onNote, onWriteNote, onSti
     <button type="button" role="menuitem" tabIndex={-1} onClick={onSettings}><GearIcon />Settings…</button>
     <button type="button" role="menuitem" tabIndex={-1} onClick={onSetup}><SetupIcon />Set up…</button>
     <i className="rule" role="separator" />
-    <button type="button" role="menuitem" tabIndex={-1} onClick={onQuit}><Icon name="power" size={16} />Quit TabTasker Dictate</button>
+    <button type="button" role="menuitem" tabIndex={-1} onClick={onQuit}><Icon name="power" size={16} />Quit TabTasker | Dictate</button>
   </div>;
 }

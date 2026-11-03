@@ -3,7 +3,7 @@ import { useEffect, useId, useState, type ReactNode } from 'react';
 import { invoke } from '../../bridge';
 import type { PageProps } from '../../store';
 import { Button, Icon, Section, Tile, TileGroup, type IconName } from '../../ui';
-import { BusinessMark, otterBars } from '../../overlay/icons';
+import { BusinessMark, Logo, otterBars } from '../../overlay/icons';
 import otters from '../assets/otters-talking.webp';
 import licence from '../../../LICENSE?raw';
 import notices from '../../../THIRD_PARTY_NOTICES.txt?raw';
@@ -50,7 +50,7 @@ const PRIVACY: [string, string][] = [
   ['Your rights', 'Everything is on your Mac, so deleting it is deleting the files; there is nothing to ask us for. Questions or complaints go to info@vehicularis.com, or to the UK Information Commissioner’s Office.'],
 ];
 const TERMS: [string, string][] = [
-  ['Open source', 'TabTasker Dictate is licensed under the Apache License 2.0: use it, copy it, change it and share it under that licence.'],
+  ['Open source', 'TabTasker | Dictate is licensed under the Apache License 2.0: use it, copy it, change it and share it under that licence.'],
   ['As it is', 'It comes without warranty, and to the extent the law allows, Vehicularis is not liable for loss from using it. The licence says the same, at length.'],
   ['Your recordings', 'You are responsible for what you record and transcribe. Where the law requires it, get the consent of the people in a meeting before you record it.'],
   ['Services you connect', 'Anthropic’s Claude, or a model running on your Mac, comes with its own terms; Dictate only carries your text to it.'],
@@ -85,31 +85,36 @@ const AppIcon = ({ size = 112 }: { size?: number }) => <svg className="about-ico
   </g>
 </svg>;
 
-/// The Highlands as an ink wash, in the page's own tones: a sky that is the page, a sun's warmth low in it, three
-/// ridges receding into mist, a loch taking the sky, a moor in front, every wash the ink mixed a little deeper into
-/// the canvas, so by night it is moonlit grey on grey and by day grey on white. Each wash is a flat shape whose
-/// edge a little turbulence makes wobble as a wet brush does.
+/// The Highlands as an ink wash in the page's own tones: the sky is the page, lightening toward the horizon; ridges
+/// recede into it, each a wash that is darkest along its crest and thins toward its foot, with mist lying between
+/// them; the loch takes the sky; a moor stands in front. Every tone is the ink mixed a little deeper into the
+/// canvas, so by night it is moonlit grey on grey and by day grey on white. Each wash is a flat shape whose edge a
+/// little turbulence makes wobble as a wet brush does, blurred a hair as a wet edge is.
 const Highlands = () => {
   const id = useId();
   const tone = (mix: number) => `color-mix(in srgb, var(--ink) ${mix}%, var(--shell-canvas))`;
-  const wash = (d: string, mix: number) => <path d={d} fill={tone(mix)} filter={`url(#${id}-edge)`} />;
+  const ridge = (name: string, d: string, crest: number, foot: number) => <>
+    <linearGradient id={`${id}-${name}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={tone(crest)} /><stop offset="1" stopColor={tone(foot)} /></linearGradient>
+    <path d={d} fill={`url(#${id}-${name})`} filter={`url(#${id}-wet)`} />
+  </>;
   return <svg className="about-sky" viewBox="0 0 1200 360" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
     <defs>
-      <linearGradient id={`${id}-air`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="var(--shell-canvas)" /><stop offset=".62" stopColor={tone(5)} /><stop offset="1" stopColor={tone(3)} /></linearGradient>
-      <linearGradient id={`${id}-loch`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={tone(11)} /><stop offset="1" stopColor={tone(6)} /></linearGradient>
-      <filter id={`${id}-edge`} x="-5%" y="-10%" width="110%" height="120%"><feTurbulence type="fractalNoise" baseFrequency=".012 .02" numOctaves="3" seed="7" result="n" /><feDisplacementMap in="SourceGraphic" in2="n" scale="12" xChannelSelector="R" yChannelSelector="G" /></filter>
-      <filter id={`${id}-soft`} x="-20%" y="-50%" width="140%" height="200%"><feGaussianBlur stdDeviation="16" /></filter>
+      <linearGradient id={`${id}-air`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="var(--shell-canvas)" /><stop offset=".45" stopColor={tone(3)} /><stop offset=".64" stopColor={tone(9)} /><stop offset="1" stopColor={tone(9)} /></linearGradient>
+      <linearGradient id={`${id}-loch`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={tone(12)} /><stop offset="1" stopColor={tone(7)} /></linearGradient>
+      <filter id={`${id}-wet`} x="-5%" y="-10%" width="110%" height="120%"><feTurbulence type="fractalNoise" baseFrequency=".014 .03" numOctaves="3" seed="11" result="n" /><feDisplacementMap in="SourceGraphic" in2="n" scale="7" xChannelSelector="R" yChannelSelector="G" result="d" /><feGaussianBlur in="d" stdDeviation=".7" /></filter>
+      <filter id={`${id}-soft`} x="-30%" y="-60%" width="160%" height="220%"><feGaussianBlur stdDeviation="18" /></filter>
     </defs>
     <rect width="1200" height="360" fill={`url(#${id}-air)`} />
-    <circle cx="930" cy="84" r="54" fill="color-mix(in srgb, #e0a23c 42%, var(--shell-canvas))" opacity=".55" filter={`url(#${id}-soft)`} />
-    {wash('M0 152 C110 114 220 96 340 130 C440 158 500 92 620 106 C720 118 790 70 900 98 C1000 120 1090 94 1200 122 L1200 360 L0 360 Z', 10)}
-    <ellipse cx="620" cy="190" rx="720" ry="22" fill="var(--shell-canvas)" opacity=".5" filter={`url(#${id}-soft)`} />
-    {wash('M0 206 C90 180 180 150 300 176 C400 198 470 160 560 170 C660 182 740 140 860 164 C960 184 1060 150 1200 182 L1200 360 L0 360 Z', 17)}
-    <rect x="0" y="238" width="1200" height="56" fill={`url(#${id}-loch)`} />
-    <path d="M180 262 C300 258 420 266 520 262 M640 274 C760 270 900 276 1040 270" stroke="var(--shell-canvas)" strokeOpacity=".5" strokeWidth="2" strokeLinecap="round" fill="none" />
-    {wash('M0 252 C140 212 260 220 420 246 C470 254 520 268 560 292 L0 292 Z', 25)}
-    {wash('M640 290 C700 262 840 224 980 216 C1060 212 1130 226 1200 240 L1200 292 L640 292 Z', 23)}
-    {wash('M0 302 C200 282 380 298 600 288 C800 280 1000 300 1200 290 L1200 360 L0 360 Z', 36)}
+    <circle cx="900" cy="96" r="46" fill="color-mix(in srgb, #e0a23c 30%, var(--shell-canvas))" opacity=".5" filter={`url(#${id}-soft)`} />
+    {ridge('far', 'M0 158 C110 122 220 104 340 136 C440 162 500 100 620 112 C720 124 790 80 900 104 C1000 126 1090 102 1200 128 L1200 360 L0 360 Z', 13, 8)}
+    <ellipse cx="600" cy="196" rx="760" ry="20" fill="var(--shell-canvas)" opacity=".55" filter={`url(#${id}-soft)`} />
+    {ridge('mid', 'M0 210 C90 186 180 158 300 182 C400 202 470 168 560 176 C660 188 740 150 860 172 C960 190 1060 160 1200 188 L1200 360 L0 360 Z', 19, 12)}
+    <ellipse cx="640" cy="236" rx="700" ry="14" fill="var(--shell-canvas)" opacity=".4" filter={`url(#${id}-soft)`} />
+    <rect x="0" y="242" width="1200" height="54" fill={`url(#${id}-loch)`} />
+    <path d="M160 262 C300 258 420 266 540 262 M660 276 C780 272 920 278 1060 272" stroke="var(--shell-canvas)" strokeOpacity=".45" strokeWidth="1.5" strokeLinecap="round" fill="none" />
+    {ridge('left', 'M0 256 C140 218 260 226 420 250 C470 258 520 272 560 294 L0 294 Z', 27, 20)}
+    {ridge('right', 'M640 292 C700 266 840 230 980 222 C1060 218 1130 232 1200 244 L1200 294 L640 294 Z', 25, 19)}
+    {ridge('moor', 'M0 304 C200 284 380 300 600 290 C800 282 1000 302 1200 292 L1200 360 L0 360 Z', 38, 30)}
   </svg>;
 };
 
@@ -122,7 +127,7 @@ export function About(_: PageProps) {
   return <>
     <header className="about">
       <AppIcon />
-      <h1>TabTasker Dictate</h1>
+      <h1>TabTasker | Dictate</h1>
       <p className="version">{version ? `Version ${version}` : ' '}</p>
       <p>Talk instead of typing, in any app.</p>
     </header>
@@ -146,14 +151,14 @@ export function About(_: PageProps) {
         <Tile title="The full terms" detail="For every TabTasker service, with the legal detail."><Button small icon="external" onClick={site(`${BUSINESS}/terms`)}>business.tabtasker.com/terms</Button></Tile>
       </TileGroup>
     </Section>
-    <Section title="TabTasker Business" icon={<BusinessMark size={18} />} note="The team workspace Dictate grew out of; its design and its otter are Business’s.">
-      <TileGroup label="TabTasker Business">
+    <Section title="TabTasker | Business" icon={<BusinessMark size={18} />} note="The team workspace Dictate grew out of; its design and its otter are Business’s.">
+      <TileGroup label="TabTasker | Business">
         <Tile title="Chat, docs, whiteboards, tasks and meetings for your team" detail="With the same editor, the same voice and the same care. Free to try."><Button small variant="primary" icon="external" onClick={site(BUSINESS)}>Open business.tabtasker.com</Button></Tile>
       </TileGroup>
     </Section>
     <Section title="Licence">
       <TileGroup label="Licence">
-        <Tile title="Apache License 2.0" detail="TabTasker Dictate is open source.">
+        <Tile title="Apache License 2.0" detail="TabTasker | Dictate is open source.">
           <Button small aria-expanded={reading} onClick={() => setReading(!reading)}>{reading ? 'Hide licence' : 'Read licence'}</Button>
         </Tile>
         {reading && <div className="ui-tile stack"><Notices label="Apache License 2.0" text={LICENCE} /></div>}
@@ -168,10 +173,10 @@ export function About(_: PageProps) {
       <Highlands />
       <img className="about-otters" src={otters} alt="" width={1448} height={1086} draggable={false} />
       <div className="about-end-words">
-        <p className="about-lockup"><BusinessMark size={22} /><span>TabTasker</span></p>
-        <p className="about-end-line">Dictate is made by Vehicularis, the team behind TabTasker Business.</p>
+        <p className="about-lockup"><Logo size={22} /><span>TabTasker</span><i>|</i><span>Dictate</span></p>
+        <p className="about-end-line">Dictate is made by Vehicularis, the team behind TabTasker | Business.</p>
         <nav className="about-links" aria-label="More from TabTasker">
-          <button type="button" className="link" onClick={site(BUSINESS)}>TabTasker Business</button>
+          <button type="button" className="link" onClick={site(BUSINESS)}>TabTasker | Business</button>
           <button type="button" className="link" onClick={site(`${BUSINESS}/privacy`)}>Privacy</button>
           <button type="button" className="link" onClick={site(`${BUSINESS}/terms`)}>Terms</button>
           <button type="button" className="link" onClick={site('https://github.com/vehicularis/tabtasker-dictate')}>Source</button>

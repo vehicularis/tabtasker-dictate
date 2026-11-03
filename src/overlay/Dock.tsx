@@ -10,6 +10,9 @@ import { Orb } from './Orb';
 // overrides the setting (Help shows them all). The key's hint shows only while the pointer is on the spoken
 // note, the button it is the other way to, as Business shows its fn hint only on its mic; `hintShown` keeps
 // it up (Help).
+/// The otter's eight bars at rest, in points, left to right: the ears stand above the head's dome, the sides fall away.
+const OTTER = [6, 12, 10, 11, 11, 10, 12, 6];
+
 export function Dock({ mode, menu, dots, label, hint, hintShown = false, quiet, level, typing, words, recording, buttons, onHover, onMenu, onGrab, onDots, onNote, onWrite, onSticky, onMeeting, onOpen, onSettings, onOrb }: {
   mode: string; menu: ReactNode; dots: RefObject<HTMLButtonElement | null>; label: string; hint: boolean; hintShown?: boolean; quiet: boolean; level: { current: number }; typing: boolean; words: string; recording: boolean; buttons?: readonly PillButton[];
   onHover: (over: boolean) => void; onMenu: () => void; onGrab: (event: ReactPointerEvent) => void; onDots: () => void; onNote: () => void; onWrite: () => void; onSticky: () => void; onMeeting: () => void; onOpen: () => void; onSettings: () => void; onOrb: () => void;
@@ -34,7 +37,8 @@ export function Dock({ mode, menu, dots, label, hint, hintShown = false, quiet, 
     <span className="keep" data-hit aria-hidden="true" />
     <span className="glass capsule" data-glass aria-hidden="true" />
     <button ref={dots} type="button" className="dots" data-hit={quiet ? undefined : 16} aria-label={label} onPointerDown={onGrab} onClick={onDots}>
-      <i /><i /><i />
+      {/* The resting mark is the otter itself: the Logo's eight bars, small, breathing slowly (overlay.css .otter). */}
+      <span className="otter" aria-hidden="true">{OTTER.map((h, i) => <i key={i} style={{ '--h': h, '--i': i } as CSSProperties} />)}</span>
     </button>
     <div className="glass pill" data-glass data-hit aria-hidden={mode !== 'hover'} onPointerDown={onGrab}>{pill.map(name => button[name])}</div>
     <Orb mode={mode} level={level} typing={typing} words={words} onClick={onOrb} />
