@@ -73,7 +73,10 @@
 .look-hint { gap: 4px; padding: 2px 8px 2px 2px; border-radius: var(--radius-pill); font-size: 8px; white-space: nowrap; color: var(--win-ink); background: var(--glass); box-shadow: var(--lift); --half: calc((17px * var(--buttons, 3) + 2px) * var(--s)); /* half the pill: 30 px buttons, 4 px apart, 4 px in */ translate: calc(var(--half) + 7px) -50%; }
 .look-hint kbd { padding: 1px 5px; border-radius: var(--radius-pill); font: 600 8px/1.45 var(--font); color: var(--win-ink); background: var(--win-rule); }
 .look-pointer { width: 9px; height: auto; fill: #000; stroke: #fff; stroke-width: 1.1; translate: calc(4px * var(--s)) calc(6px * var(--s)); filter: drop-shadow(0 1px 1px rgb(0 0 0 / .3)); }
-.look:is([data-edge='left'], [data-edge='right']) :is(.look-dots, .look-pill) { flex-direction: column; }
+.look:is([data-edge='left'], [data-edge='right']) .look-pill { flex-direction: column; }
+/* On a side edge the otter turns with its capsule, as the overlay's does. */
+.look[data-edge='right'] .look-dots { rotate: -90deg; }
+.look[data-edge='left'] .look-dots { rotate: 90deg; }
 /* On a side edge the hint rises above the tall pill, as the overlay draws it, against the screen's edge. */
 .look[data-edge='left'] .look-hint { translate: calc(-19px * var(--s)) calc(-100% - var(--half) - 6px); }
 .look[data-edge='right'] .look-hint { translate: calc(-100% + 19px * var(--s)) calc(-100% - var(--half) - 6px); }
