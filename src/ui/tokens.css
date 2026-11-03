@@ -19,11 +19,14 @@
   --card: #ffffff; --popover: #ffffff; --secondary: #e2e2e2; --input: #bdbdbd; --field: rgb(235 235 235 / .5);
   --surface: rgb(0 0 0 / .035); --surface-2: rgb(0 0 0 / .06); --surface-3: rgb(0 0 0 / .1);
   --ink: #202020; --ink-2: #595959; --ink-3: #707070;
-  --accent: #2563eb; --accent-button: #2563eb; --on-accent: #ffffff;
-  --accent-fill: color-mix(in srgb, var(--accent) 10%, transparent); --accent-ink: color-mix(in srgb, var(--accent) 75%, var(--ink));
+  /* The accent is ink: black by day, white by night. Nothing in the chrome is blue; a switch that is on is green,
+     as the Mac's are, and a live recording is the one red thing. */
+  --accent: #171717; --accent-button: #171717; --on-accent: #ffffff;
+  --accent-fill: color-mix(in srgb, var(--accent) 8%, transparent); --accent-ink: var(--ink);
+  --switch-on: #34c759;
   --danger: #b91c1c; --danger-fill: #b91c1c; --on-danger: #ffffff;
   --success: #046c4e; --success-fill: color-mix(in srgb, var(--success) 10%, transparent);
-  --knob: #ffffff; --shadow: 0 1px 2px rgb(0 0 0 / .2); --selection: color-mix(in srgb, var(--accent) 22%, transparent);
+  --knob: #ffffff; --shadow: 0 1px 2px rgb(0 0 0 / .2); --selection: color-mix(in srgb, var(--accent) 16%, transparent);
   --ring: color-mix(in srgb, var(--ink) 60%, var(--window));
 
   /* Raised lifts a surface off the page, well presses it in, control is a filled button, float is a
@@ -53,8 +56,9 @@
     --card: #242424; --popover: #303030; --secondary: #363636; --input: #4b4b4b; --field: rgb(75 75 75 / .3);
     --surface: rgb(255 255 255 / .04); --surface-2: rgb(255 255 255 / .08); --surface-3: rgb(255 255 255 / .12);
     --ink: #ededed; --ink-2: #a8a8a8; --ink-3: #8c8c8c;
-    --accent: #3b82f6; --accent-button: color-mix(in srgb, #3b82f6 80%, transparent); --on-accent: #ffffff;
-    --accent-fill: color-mix(in srgb, var(--accent) 12%, transparent); --accent-ink: color-mix(in srgb, var(--accent) 65%, var(--ink));
+    --accent: #ffffff; --accent-button: #ffffff; --on-accent: #171717;
+    --accent-fill: color-mix(in srgb, var(--accent) 10%, transparent); --accent-ink: var(--ink);
+    --switch-on: #30d158;
     --danger: #f87171; --danger-fill: color-mix(in srgb, #f87171 60%, transparent); --on-danger: #e9ebee;
     --success: #34d399; --success-fill: color-mix(in srgb, var(--success) 12%, transparent);
     --knob: #ffffff; --shadow: 0 1px 2px rgb(0 0 0 / .5);
@@ -72,8 +76,9 @@
   --card: #242424; --popover: #303030; --secondary: #363636; --input: #4b4b4b; --field: rgb(75 75 75 / .3);
   --surface: rgb(255 255 255 / .04); --surface-2: rgb(255 255 255 / .08); --surface-3: rgb(255 255 255 / .12);
   --ink: #ededed; --ink-2: #a8a8a8; --ink-3: #8c8c8c;
-  --accent: #3b82f6; --accent-button: color-mix(in srgb, #3b82f6 80%, transparent); --on-accent: #ffffff;
-  --accent-fill: color-mix(in srgb, var(--accent) 12%, transparent); --accent-ink: color-mix(in srgb, var(--accent) 65%, var(--ink));
+  --accent: #ffffff; --accent-button: #ffffff; --on-accent: #171717;
+  --accent-fill: color-mix(in srgb, var(--accent) 10%, transparent); --accent-ink: var(--ink);
+  --switch-on: #30d158;
   --danger: #f87171; --danger-fill: color-mix(in srgb, #f87171 60%, transparent); --on-danger: #e9ebee;
   --success: #34d399; --success-fill: color-mix(in srgb, var(--success) 12%, transparent);
   --knob: #ffffff; --shadow: 0 1px 2px rgb(0 0 0 / .5);

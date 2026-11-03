@@ -5,8 +5,8 @@
   --tint: rgb(255 255 255 / .6); --rim: rgb(255 255 255 / .8); --drop: rgb(0 0 0 / .14);
   --well: rgb(0 0 0 / .05); --well-shadow: rgb(0 0 0 / .1);
   --key: linear-gradient(#ffffff, #f1f1f3); --key-ink: rgb(0 0 0 / .55); --key-edge: rgb(0 0 0 / .14); --key-light: rgb(255 255 255 / .9);
-  /* The orb as Business draws it: a smoked disc under glass, the bars and wave in the accent, the cursor in ink. */
-  --orb-body: rgb(250 249 247 / .94); --orb-ink: #1d1d1f; --orb-bars: #2563eb; --orb-wave: #2563eb;
+  /* The orb as Business draws it: a smoked disc under glass, the bars and wave in its ink, the cursor too. */
+  --orb-body: rgb(250 249 247 / .94); --orb-ink: #1d1d1f; --orb-bars: #1d1d1f; --orb-wave: #1d1d1f;
   --wallpaper: radial-gradient(120% 90% at 20% 10%, #dfe7f5, #f3eee8 60%);
 }
 @media (prefers-color-scheme: dark) {
@@ -14,7 +14,7 @@
     --tint: rgb(28 28 30 / .55); --rim: rgb(255 255 255 / .22); --drop: rgb(0 0 0 / .35);
     --well: rgb(0 0 0 / .24); --well-shadow: rgb(0 0 0 / .35);
     --key: linear-gradient(#2d2e31, #232427); --key-ink: rgb(255 255 255 / .6); --key-edge: rgb(0 0 0 / .5); --key-light: rgb(255 255 255 / .08);
-    --orb-body: rgb(22 22 25 / .92); --orb-ink: #f4efe6; --orb-bars: #3b82f6; --orb-wave: #3b82f6;
+    --orb-body: rgb(22 22 25 / .92); --orb-ink: #f4efe6; --orb-bars: #f4efe6; --orb-wave: #f4efe6;
     --wallpaper: radial-gradient(120% 90% at 20% 10%, #3b4a6b, #161a24 60%), #161a24;
   }
 }
@@ -22,7 +22,7 @@
   --tint: rgb(28 28 30 / .55); --rim: rgb(255 255 255 / .22); --drop: rgb(0 0 0 / .35);
   --well: rgb(0 0 0 / .24); --well-shadow: rgb(0 0 0 / .35);
   --key: linear-gradient(#2d2e31, #232427); --key-ink: rgb(255 255 255 / .6); --key-edge: rgb(0 0 0 / .5); --key-light: rgb(255 255 255 / .08);
-  --orb-body: rgb(22 22 25 / .92); --orb-ink: #f4efe6; --orb-bars: #3b82f6; --orb-wave: #3b82f6;
+  --orb-body: rgb(22 22 25 / .92); --orb-ink: #f4efe6; --orb-bars: #f4efe6; --orb-wave: #f4efe6;
   --wallpaper: radial-gradient(120% 90% at 20% 10%, #3b4a6b, #161a24 60%), #161a24;
 }
 /* The page's own rules (html, body, focus) live in page.css, so this file can be borrowed by the Help page for a real pill and orb. */
@@ -85,7 +85,7 @@
 .pill button { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; color: var(--ink); background: var(--surface); cursor: pointer; transition: background .15s; }
 .pill button:hover { background: var(--surface-3); }
 /* A meeting under way: a red dot on its button, breathing. */
-.pill button[data-recording]::after { content: ''; position: absolute; top: 3px; right: 3px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 1.5px var(--surface); animation: breathe 1.8s ease-in-out infinite; }
+.pill button[data-recording]::after { content: ''; position: absolute; top: 3px; right: 3px; width: 7px; height: 7px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 1.5px var(--surface); animation: breathe 1.8s ease-in-out infinite; }
 .pill button { position: relative; }
 /* Business's whiteboard tiles: one light, fine edges, a quiet cast shadow, a small lift on hover. */
 .layer:is([data-edge='left'], [data-edge='right']) .pill { flex-direction: column; }

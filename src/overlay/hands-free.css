@@ -1,6 +1,6 @@
 /* Locked listening: a pill above the orb with the time, the way out, Cancel and Send. */
 .hands-free { display: flex; align-items: center; gap: 6px; box-sizing: border-box; max-width: 380px; padding: 6px 6px 6px 14px; border-radius: var(--radius-pill); }
-.hands-free .live { flex: none; width: 8px; height: 8px; margin-right: 4px; border-radius: 50%; background: var(--accent); animation: hands-free-live 1.4s ease-in-out infinite alternate; }
+.hands-free .live { flex: none; width: 8px; height: 8px; margin-right: 4px; border-radius: 50%; background: var(--danger); animation: hands-free-live 1.4s ease-in-out infinite alternate; }
 @keyframes hands-free-live { to { opacity: .35; } }
 .hands-free .what { margin-right: 6px; white-space: nowrap; }
 .hands-free b { font-weight: 600; }
