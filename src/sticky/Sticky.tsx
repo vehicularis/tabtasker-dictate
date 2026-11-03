@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
-import { invoke, listen } from '../bridge';
+import { invoke, listen, popupMenu, type MenuSpec } from '../bridge';
 import { stamp } from '../lib/dates';
 import { message } from '../lib/errors';
 import { KEY_NAMES } from '../lib/keyNames';
@@ -95,6 +95,29 @@ export function Sticky() {
   };
   const hue = sticky?.hue ?? 'amber';
   const folded = !!sticky?.folded;
+  // The look menu as the Mac draws a menu, popped over the window so a small sticky never clips it; the page's own
+  // menu stands in only in a browser. Built from the sticky as it is the moment it opens.
+  const nativeMenu = (at: { x: number; y: number } | undefined) => {
+    if (!sticky) return Promise.resolve(false);
+    const sizeNow = (Object.keys(STICKY_SIZES) as (keyof typeof STICKY_SIZES)[]).find(name => STICKY_SIZES[name][0] === sticky.width && STICKY_SIZES[name][1] === sticky.height);
+    const name = (word: string) => word[0].toUpperCase() + word.slice(1);
+    const spec: MenuSpec = [
+      { text: 'Colour', items: HUES.map(one => ({ text: name(one), checked: one === sticky.hue, action: () => look({ hue: one }) })) },
+      'separator',
+      { text: 'Title', checked: sticky.titled, action: () => look({ titled: !sticky.titled }) },
+      { text: 'Bold', checked: sticky.weight === 'bold', action: () => look({ weight: (sticky.weight === 'bold' ? 'regular' : 'bold') as StickyWeight }) },
+      { text: 'Tilt', items: ([['none', 'None'], ['slight', 'Slight'], ['random', 'Random']] as [StickyTilt, string][]).map(([value, label]) => ({ text: label, checked: sticky.tilt === value, action: () => look({ tilt: value }) })) },
+      { text: 'Size', items: ([['small', 'Small'], ['medium', 'Medium'], ['large', 'Large']] as [keyof typeof STICKY_SIZES, string][]).map(([value, label]) => ({ text: label, checked: sizeNow === value, action: () => resize(value) })) },
+      'separator',
+      { text: sticky.folded ? 'Unfold' : 'Fold up', action: () => fold() },
+      { text: 'Keep on top', checked: sticky.pinned, action: () => pin() },
+      'separator',
+      { text: 'Save as a note', disabled: !text.trim(), action: toNote },
+      { text: 'Close', action: close },
+    ];
+    return popupMenu(spec, at);
+  };
+  const openMenu = (at: { x: number; y: number }, pointer: boolean) => { void nativeMenu(pointer ? undefined : at).then(shown => { if (!shown) setMenu(open => open ? null : at); }); };
   const size = sticky ? (Object.keys(STICKY_SIZES) as (keyof typeof STICKY_SIZES)[]).find(name => STICKY_SIZES[name][0] === sticky.width && STICKY_SIZES[name][1] === sticky.height) : undefined;
   const item = (label: string, run: () => void, extra?: { disabled?: boolean; checked?: boolean }) => <button type="button" role={extra?.checked === undefined ? 'menuitem' : 'menuitemcheckbox'} aria-checked={extra?.checked} disabled={extra?.disabled} onClick={() => { setMenu(null); run(); }}>{extra?.checked !== undefined && <span className="tick">{extra.checked ? '✓' : ''}</span>}{label}</button>;
   // A row of choices, one of them on: the tilt, the size.
@@ -103,8 +126,8 @@ export function Sticky() {
     <span className="seg">{options.map(([value, name]) => <button key={value} type="button" role="menuitemradio" aria-checked={value === current} onClick={() => { setMenu(null); pick(value); }}>{name}</button>)}</span>
   </div>;
   return <Sheet id={id} hue={hue} folded={folded} pinned={!!sticky?.pinned} text={text} title={sticky?.title ?? ''} titled={!!sticky?.titled} tilt={sticky?.tilt ?? 'none'} weight={sticky?.weight ?? 'bold'}
-    actions={{ fold: () => fold(), pin: () => pin(), note: toNote, close, recolour: (next: StickyHue) => look({ hue: next }), retitle, more: at => setMenu(open => open ? null : at) }}
-    data-native={NATIVE || undefined} data-hover={hover || PREVIEW === 'pill' || undefined} onHold={setHeld} onContextMenu={event => { event.preventDefault(); setMenu({ x: event.clientX, y: event.clientY }); }}>
+    actions={{ fold: () => fold(), pin: () => pin(), note: toNote, close, recolour: (next: StickyHue) => look({ hue: next }), retitle, more: at => openMenu(at, false) }}
+    data-native={NATIVE || undefined} data-hover={hover || PREVIEW === 'pill' || undefined} onHold={setHeld} onContextMenu={event => { event.preventDefault(); openMenu({ x: event.clientX, y: event.clientY }, true); }}>
     {sticky && !folded && <Editor key={sticky.id} compact markdown={sticky.text} label="Sticky" placeholder={`Type, or hold ${dictateKey} and talk`} autoFocus={!sticky.text} onChange={edit} />}
     {problem && !folded && <p className="sticky-problem" role="alert">{problem}</p>}
     {menu && <div ref={holdMenu} className="sticky-menu" role="menu" aria-label="Look and size" style={{ left: menu.x, top: menu.y }}>

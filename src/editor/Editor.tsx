@@ -26,6 +26,9 @@ import './editor.css';
 
 const lowlight = createLowlight(common);
 
+/// Plain text that is written as Markdown: a heading, a list, a fenced block, bold or a link on one of its lines.
+const looksLikeMarkdown = (text: string) => /^(?:#{1,6} |[-*+] |\d+\. |> |```)/m.test(text) || /\*\*[^*\n]+\*\*|\[[^\]\n]+\]\([^)\n]+\)/.test(text);
+
 // The Text editor, as TabTasker Business's Atlas pages write with it (RichEditor.tsx, on TipTap): the
 // formatting bar that folds into "More" as the pane narrows, the bar over a selection, "/" for blocks,
 // a handle beside every block to drag it, add under it, turn it into something else or delete it, and
@@ -86,8 +89,14 @@ export function Editor({ markdown, onChange, placeholder, compact = false, autoF
       attributes: { class: `ed-body${compact ? ' compact' : ''}`, role: 'textbox', 'aria-multiline': 'true', 'aria-label': label },
       handlePaste: (_view, event) => {
         const file = [...(event.clipboardData?.files ?? [])].find(file => file.type.startsWith('image/'));
-        if (!file || !pathRef.current || !editorRef.current) return false;
-        void attach(editorRef.current, file).catch(() => {});
+        if (file && pathRef.current && editorRef.current) { void attach(editorRef.current, file).catch(() => {}); return true; }
+        // Markdown pasted as plain text (a note from elsewhere, a chat's answer) comes in as what it says, as Atlas
+        // takes it: headings, lists, bold. Not when the clipboard also carries real formatting, which TipTap
+        // round-trips better, and not inside a code block, where every marker is literal.
+        const html = event.clipboardData?.getData('text/html') ?? '', text = event.clipboardData?.getData('text/plain') ?? '';
+        const rich = /<(?:h[1-6]|ul|ol|li|strong|em|b|i|a|table|blockquote)\b/i.test(html);
+        if (!editorRef.current || editorRef.current.isActive('codeBlock') || rich || !looksLikeMarkdown(text)) return false;
+        editorRef.current.chain().focus().insertContent(text, { contentType: 'markdown' }).run();
         return true;
       },
       handleDrop: (view, event) => {
