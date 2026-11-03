@@ -7,9 +7,9 @@ const MODELS: { value: ClaudeModel; label: string }[] = [
   { value: 'claude-haiku-5-5', label: 'Haiku' }, { value: 'claude-sonnet-5-5', label: 'Sonnet' }, { value: 'claude-opus-5-5', label: 'Opus' },
 ];
 const ABOUT: Record<ClaudeModel, string> = {
-  'claude-haiku-5-5': 'Haiku 5.5: the fastest, best while you type.',
-  'claude-sonnet-5-5': 'Sonnet 5.5: more careful, a moment slower.',
-  'claude-opus-5-5': 'Opus 5.5: the most capable, for long notes and meetings.',
+  'claude-haiku-5-5': 'Haiku 5.5 is the fastest, and the best fit for polish.',
+  'claude-sonnet-5-5': 'Sonnet 5.5 is more careful, and a little slower.',
+  'claude-opus-5-5': 'Opus 5.5 is the most capable, and worth it for long meetings.',
 };
 const NAME: Record<ClaudeModel, string> = { 'claude-haiku-5-5': 'Haiku', 'claude-sonnet-5-5': 'Sonnet', 'claude-opus-5-5': 'Opus' };
 const DICTATE: Record<DictateKey, string> = { fn: 'fn', rightCommand: 'right ⌘', rightOption: 'right ⌥', rightControl: 'right ⌃', rightShift: 'right ⇧' };
@@ -35,7 +35,7 @@ export function Claude({ settings, update }: PageProps) {
     setProblem(null);
     // Claude Code's path is kept only once the app has checked a program is there.
     void invoke('claude_code_set', { path: value }).catch(error => {
-      setProblem(message(error, 'Couldn’t keep that path.'));
+      setProblem(message(error, 'Couldn’t use that path. Check that Claude Code is there.'));
       refocus.current = document.activeElement?.getAttribute('aria-label') === 'Claude Code path'; // Return, not a click elsewhere
       setRefused(n => n + 1);
     });
@@ -44,8 +44,8 @@ export function Claude({ settings, update }: PageProps) {
     if (finding) return;
     setFinding(true); setProblem(null);
     void invoke<string | null>('claude_code_find').then(found => {
-      if (!found) setProblem('Claude Code isn’t installed on this Mac. Install it, then choose Find again.');
-    }, error => setProblem(message(error, 'Couldn’t look for Claude Code.'))).finally(() => setFinding(false));
+      if (!found) setProblem('Couldn’t find Claude Code. Install it, then click Find again.');
+    }, error => setProblem(message(error, 'Couldn’t look for Claude Code. Try again in a moment.'))).finally(() => setFinding(false));
   };
   // The way in use once connected, else the one being chosen: Haiku, Sonnet, Opus and effort are Claude's alone,
   // so a local model (named under Connection) shows only what applies to it.
@@ -53,19 +53,19 @@ export function Claude({ settings, update }: PageProps) {
   const local = (claude.enabled ? claude.via : choosing) === 'local';
   const keys = settings.shortcuts;
   const commandsHow = keys.command === 'off'
-    ? 'The command key is off in Shortcuts, so commands can’t be given.'
-    : `Hold ${DICTATE[keys.dictate]} with ${COMMAND[keys.command]} and say what to do. With text selected, ${local ? 'the model' : 'Claude'} rewrites it. Without, it answers or writes at the cursor.`;
+    ? 'Turn on Ask AI in Shortcuts to use commands.'
+    : `Hold ${DICTATE[keys.dictate]} with ${COMMAND[keys.command]} and tell ${local ? 'the model' : 'Claude'} what to do with the selected text, or ask it something.`;
 
   return <>
-    <GroupHeader title="How it connects">Use Claude Code on this Mac, your own Anthropic key, or a model running on this Mac.</GroupHeader>
+    <GroupHeader title="AI">AI only ever gets the text of what you say, never your voice. If you’d rather nothing left your Mac, use a local model.</GroupHeader>
     <Connection claude={claude} home={status?.home} via={choosing} onVia={setChoosing} />
-    <Section title={local ? undefined : 'Model and effort'} note={claude.enabled ? undefined : local ? 'This takes effect once the model is connected.' : 'These take effect once a model is connected.'}>
+    <Section title={local ? undefined : 'Model and effort'} note={claude.enabled ? undefined : local ? 'This applies once you’re connected.' : 'These apply once you’re connected.'}>
       <TileGroup>
         {!local && <>
           <Tile title="Model" detail={ABOUT[claude.model]}>
             <Segmented label="Model" value={claude.model} options={MODELS} onChange={model => void update({ claude: { model } })} />
           </Tile>
-          <Tile title="Effort" detail={{ low: 'Low: quickest, best for polish while you type.', medium: 'Medium: a balance for titles, summaries and commands.', high: 'High: slowest, for long meetings and careful rewrites.' }[claude.effort]}>
+          <Tile title="Effort" detail={{ low: 'It answers fastest, which is all polish needs.', medium: 'It’s a good middle ground for most things.', high: 'It’s slower, but more thorough with long meetings.' }[claude.effort]}>
             <Segmented label="Effort" value={claude.effort} options={[{ value: 'low', label: 'Low' }, { value: 'medium', label: 'Medium' }, { value: 'high', label: 'High' }]} onChange={effort => void update({ claude: { effort } })} />
           </Tile>
         </>}
@@ -75,9 +75,9 @@ export function Claude({ settings, update }: PageProps) {
       </TileGroup>
     </Section>
     <Seen settings={settings} />
-    <Section title="Claude Code" note={problem ?? 'Where Claude Code is on this Mac. Found automatically. Set it only if Claude Code is somewhere else.'}>
+    <Section title="Claude Code" note={problem ?? 'Dictate finds Claude Code on its own, so you only need this if it’s somewhere unusual.'}>
       <TileGroup>
-        <Tile title="Claude Code" detail={claude.claudeCode ? 'Found on this Mac.' : 'Not found yet. It is looked for each time the app opens.'}>
+        <Tile title="Claude Code" detail={claude.claudeCode ? undefined : 'Dictate couldn’t find it, but it looks again every time it opens.'}>
           <TextField key={refused} label="Claude Code path" monospace value={tilde(claude.claudeCode ?? '', status?.home)} placeholder="~/.local/bin/claude" onCommit={path} />
           <Button aria-busy={finding} onClick={find}>{finding ? 'Finding…' : 'Find'}</Button>
         </Tile>
@@ -115,73 +115,73 @@ function Connection({ claude, home, via, onVia: setVia }: { claude: Settings['cl
     event.preventDefault();
     if (!key.trim() || busy) return;
     setBusy('connect'); setNote(null);
-    void invoke('claude_save_key', { key }).then(() => { setKey(''); setNote({ text: 'Connected. Your key is saved in your Keychain.' }); focus('test'); },
-      error => { setNote({ text: message(error, 'Couldn’t connect.'), error: true }); focus('key'); }).finally(() => setBusy(null));
+    void invoke('claude_save_key', { key }).then(() => { setKey(''); setNote({ text: 'Connected. Your Anthropic key is in your Keychain.' }); focus('test'); },
+      error => { setNote({ text: message(error, 'Couldn’t connect. Check the key and try again.'), error: true }); focus('key'); }).finally(() => setBusy(null));
   };
   const connectCode = () => {
     if (busy) return;
     setBusy('connect'); setNote(null);
-    void invoke('claude_connect_code').then(() => { setNote({ text: 'Connected through Claude Code, with your Claude account.' }); focus('test'); },
-      error => { setNote({ text: message(error, 'Couldn’t connect through Claude Code.'), error: true }); focus('code'); }).finally(() => setBusy(null));
+    void invoke('claude_connect_code').then(() => { setNote({ text: 'Connected through Claude Code.' }); focus('test'); },
+      error => { setNote({ text: message(error, 'Couldn’t connect through Claude Code. Check that you’re signed in to it.'), error: true }); focus('code'); }).finally(() => setBusy(null));
   };
   const disconnect = () => {
     setNote(null); focus('code');
-    void invoke('claude_disconnect').catch(error => { setNote({ text: message(error, 'Couldn’t disconnect.'), error: true }); focus('remove'); });
+    void invoke('claude_disconnect').catch(error => { setNote({ text: message(error, 'Couldn’t disconnect. Try again.'), error: true }); focus('remove'); });
   };
   const connectLocal = (event: FormEvent) => {
     event.preventDefault();
     if (busy) return;
     setBusy('connect'); setNote(null);
-    void invoke('claude_connect_local', { endpoint, model: localModel }).then(() => { setNote({ text: `Connected to ${localModel} on this Mac.` }); focus('test'); },
-      error => { setNote({ text: message(error, 'Couldn’t reach the local model.'), error: true }); focus('code'); }).finally(() => setBusy(null));
+    void invoke('claude_connect_local', { endpoint, model: localModel }).then(() => { setNote({ text: `Connected to ${localModel}.` }); focus('test'); },
+      error => { setNote({ text: message(error, 'Couldn’t reach the local model. Make sure it’s running.'), error: true }); focus('code'); }).finally(() => setBusy(null));
   };
   const test = () => {
     if (busy) return;
     setBusy('test'); setNote(null);
-    void invoke<number>('claude_test').then(ms => setNote({ text: `Working. ${claude.via === 'local' ? claude.localModel : NAME[model]} answered in ${seconds(ms)}.` }),
-      error => setNote({ text: message(error, 'The test didn’t go through.'), error: true })).finally(() => setBusy(null));
+    void invoke<number>('claude_test').then(ms => setNote({ text: `${claude.via === 'local' ? claude.localModel : NAME[model]} answered in ${seconds(ms)}.` }),
+      error => setNote({ text: message(error, 'The test didn’t go through. Try again in a moment.'), error: true })).finally(() => setBusy(null));
   };
   const confirm = () => { setRemoving(true); setNote(null); focus('cancel'); };
   const cancel = () => { setRemoving(false); focus('remove'); };
   const remove = () => {
     setRemoving(false); setNote(null); focus('key'); // the field appears with the settings, maybe before this answers
-    void invoke('claude_remove_key').catch(error => { setNote({ text: message(error, 'Couldn’t remove the key.'), error: true }); focus('remove'); });
+    void invoke('claude_remove_key').catch(error => { setNote({ text: message(error, 'Couldn’t remove the key. Try again.'), error: true }); focus('remove'); });
   };
   const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.preventDefault(); cancel(); } };
   const said = note && <span role={note.error ? 'alert' : 'status'} style={note.error ? { color: 'var(--danger)' } : undefined}>{note.text}</span>;
 
   const codeWhere = claude.claudeCode ? tilde(claude.claudeCode, home) : null;
-  if (!connected) return <Section title="Connection" note={said ?? 'Claude sees text only, never your voice. Nothing is sent until you connect.'}>
+  if (!connected) return <Section title="Connection" note={said ?? 'Nothing’s sent until you connect.'}>
     <TileGroup>
-      <Tile title="Connect through" detail={via === 'claudeCode' ? 'Claude Code runs on this Mac with the Claude account you signed in to there.' : 'Your own Anthropic key, billed to your Anthropic account.'}>
+      <Tile title="Connect through" detail={via === 'claudeCode' ? 'Uses whichever Claude account Claude Code is signed in to.' : undefined}>
         <Segmented label="Connect through" value={via} options={VIAS} onChange={setVia} />
       </Tile>
-      {via === 'claudeCode' && <Tile title="Claude Code" detail={codeWhere ? `Found at ${codeWhere}. A tiny request to the model below checks it is signed in.` : 'Not found on this Mac. Install Claude Code, run it once in Terminal and sign in, then choose Find below.'}>
+      {via === 'claudeCode' && <Tile title="Claude Code" detail={codeWhere ? undefined : 'Install Claude Code and sign in once in Terminal, then click Find below.'}>
         <Button id={`${id}-code`} variant="primary" disabled={!claude.claudeCode} aria-busy={busy === 'connect'} onClick={connectCode}>{busy === 'connect' ? 'Testing…' : 'Connect'}</Button>
       </Tile>}
-      {via === 'api' && <Tile title="Anthropic API key" detail="Paste a key from the Anthropic Console. It is tested with a tiny request to the model below, then saved in your Keychain." stack>
+      {via === 'api' && <Tile title="Anthropic API key" detail="Dictate checks that it works, then keeps it in your Keychain." stack>
         <form className="pair" onSubmit={connect}>
           <input id={`${id}-key`} className="ui-field mono" type="password" value={key} aria-label="Anthropic API key" placeholder="sk-ant-…" autoComplete="off" spellCheck={false}
             readOnly={!!busy} aria-busy={!!busy} onChange={event => setKey(event.target.value)} />
           <Button type="submit" variant="primary" disabled={!key.trim()} aria-busy={!!busy}>{busy ? 'Testing…' : 'Connect'}</Button>
         </form>
       </Tile>}
-      {via === 'local' && <Tile title="Local model" detail="A model running on this Mac through Ollama (LM Studio works too). Nothing leaves the Mac. Install Ollama, pull a model such as llama3.2, and connect." stack>
+      {via === 'local' && <Tile title="Local model" detail="Install Ollama or LM Studio, download a model like llama3.2, then connect." stack>
         <form className="pair" onSubmit={connectLocal}>
           <input id={`${id}-code`} className="ui-field mono" type="text" value={endpoint} aria-label="Ollama address" placeholder="http://localhost:11434" spellCheck={false} readOnly={!!busy} onChange={event => setEndpoint(event.target.value)} />
           <input className="ui-field mono" type="text" value={localModel} aria-label="Model name" placeholder="llama3.2" spellCheck={false} readOnly={!!busy} onChange={event => setLocalModel(event.target.value)} />
           <Button type="submit" variant="primary" disabled={!endpoint.trim() || !localModel.trim()} aria-busy={!!busy}>{busy ? 'Testing…' : 'Connect'}</Button>
         </form>
       </Tile>}
-      {via === 'api' && <Tile title="No key yet?" detail="Create one in the Anthropic Console. Usage is billed to your Anthropic account.">
+      {via === 'api' && <Tile title="No key yet?" detail="Make one in the Anthropic Console, which bills you for what you use.">
         <Button variant="quiet" icon="external" onClick={() => void invoke('claude_open_console').catch(() => {})}>Get a key</Button>
       </Tile>}
     </TileGroup>
   </Section>;
 
-  if (claude.via === 'claudeCode') return <Section title="Connection" note={said ?? 'Requests run through Claude Code on this Mac, with your Claude account. Your key, if you saved one, is not used.'}>
+  if (claude.via === 'claudeCode') return <Section title="Connection" note={said ?? 'Requests go through Claude Code, so any Anthropic key you saved isn’t used.'}>
     <TileGroup>
-      <Tile title="Claude Code" detail={codeWhere ? `At ${codeWhere}, signed in as you are there.` : 'Signed in as you are there.'}>
+      <Tile title="Claude Code">
         <span className="state" data-on><Icon name="check" size={14} />Connected</span>
         <Button id={`${id}-test`} aria-busy={busy === 'test'} onClick={test}>{busy === 'test' ? 'Testing…' : 'Test'}</Button>
         <Button id={`${id}-remove`} disabled={busy === 'test'} onClick={disconnect}>Disconnect</Button>
@@ -189,7 +189,7 @@ function Connection({ claude, home, via, onVia: setVia }: { claude: Settings['cl
     </TileGroup>
   </Section>;
 
-  if (claude.via === 'local') return <Section title="Connection" note={said ?? 'Requests go to the model on this Mac and nowhere else.'}>
+  if (claude.via === 'local') return <Section title="Connection" note={said}>
     <TileGroup>
       <Tile title="Local model" detail={`${claude.localModel} at ${claude.localEndpoint}.`}>
         <span className="state" data-on><Icon name="check" size={14} />Connected</span>
@@ -199,9 +199,9 @@ function Connection({ claude, home, via, onVia: setVia }: { claude: Settings['cl
     </TileGroup>
   </Section>;
 
-  return <Section title="Connection" note={said ?? 'Your key stays in your Keychain. It is never shown here again.'}>
+  return <Section title="Connection" note={said ?? 'Your Anthropic key is in your Keychain and won’t be shown again.'}>
     <TileGroup>
-      <Tile title={removing ? 'Remove the key?' : 'Anthropic API key'} detail={removing ? 'Claude turns off until you paste a key again.' : 'Saved in your Keychain.'}>
+      <Tile title={removing ? 'Remove the key?' : 'Anthropic API key'} detail={removing ? 'Claude stays off until you add a key again.' : undefined}>
         {removing
           ? <><Button id={`${id}-cancel`} variant="quiet" onClick={cancel} onKeyDown={escape}>Cancel</Button><Button variant="danger" onClick={remove} onKeyDown={escape}>Remove</Button></>
           : <><span className="state" data-on><Icon name="check" size={14} />Connected</span>
@@ -218,13 +218,13 @@ function Seen({ settings }: { settings: Settings }) {
   const polished = apps.styles.filter(app => app.polish && app.style !== 'raw').length;
   const commands = claude.commands && shortcuts.command !== 'off';
   const rows: { title: string; detail: string; on: boolean; state: string; route?: string; place?: string }[] = [
-    { title: 'Polish', detail: 'What you dictate, in apps where polish is on, to tidy it.', on: polished > 0, state: polished ? `In ${polished} ${polished === 1 ? 'app' : 'apps'}` : 'Off', route: 'settings/apps', place: 'App styles' },
-    { title: 'Commands', detail: 'What you say with the command key, and the text you selected.', on: commands, state: commands ? 'On' : 'Off',
+    { title: 'Polish', detail: 'Sees what you dictate in apps where polish is on.', on: polished > 0, state: polished ? `In ${polished} ${polished === 1 ? 'app' : 'apps'}` : 'Off', route: 'settings/apps', place: 'App styles' },
+    { title: 'Commands', detail: 'Sees what you ask, and any text you’ve selected.', on: commands, state: commands ? 'On' : 'Off',
       ...(shortcuts.command === 'off' && { route: 'settings/shortcuts', place: 'Shortcuts' }) },
-    { title: 'Notes', detail: 'A saved note’s words, for its title and action items.', on: notes.claudeTitle || notes.claudeActions, state: notes.claudeTitle || notes.claudeActions ? 'On' : 'Off', route: 'settings/notes', place: 'Notes' },
-    { title: 'Meetings', detail: 'The transcript, for a summary, decisions and action items.', on: meetings.summarize, state: meetings.summarize ? 'On' : 'Off', route: 'settings/meetings', place: 'Meetings' },
+    { title: 'Notes', detail: 'Reads each saved note to name it and list its to-dos.', on: notes.claudeTitle || notes.claudeActions, state: notes.claudeTitle || notes.claudeActions ? 'On' : 'Off', route: 'settings/notes', place: 'Notes' },
+    { title: 'Meetings', detail: 'Reads the transcript to write the summary.', on: meetings.summarize, state: meetings.summarize ? 'On' : 'Off', route: 'settings/meetings', place: 'Meetings' },
   ];
-  return <Section title="What the model sees" note={claude.via === 'local' ? 'Only text, and only to the model on this Mac.' : claude.via === 'claudeCode' ? 'Only text, sent through Claude Code with your Claude account. Your voice never leaves this Mac.' : 'Only text, sent straight to Anthropic over an encrypted connection with your key. Your voice never leaves this Mac.'}>
+  return <Section title="What the model sees" note={claude.via === 'local' ? 'Text goes to your local model and nowhere else.' : claude.via === 'claudeCode' ? 'Text goes to Anthropic through Claude Code.' : 'Text goes straight to Anthropic over an encrypted connection.'}>
     <TileGroup>
       {rows.map(row => <Tile key={row.title} title={row.title} detail={row.detail} dim={!claude.enabled}>
         {row.route && <Button variant="quiet" small onClick={() => { location.hash = row.route!; }} aria-label={`Open ${row.place}`}>{row.place}</Button>}

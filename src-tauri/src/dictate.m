@@ -394,14 +394,14 @@ static void TTVoiceBringForward(NSRunningApplication *app, void (^then)(BOOL fro
     // Half a second short of what the buffer holds, so the end of what was said is sent, not dropped.
     TTVoiceAudio *audio = self.audio;
     if (!audio || audio.count + 8000 < audio.limit) return;
-    dictate_ui_notice(self.locked ? "Stopped at 10 minutes" : "Stopped at one minute");
+    dictate_ui_notice(self.locked ? "Stopped at the 10-minute limit." : "Stopped at the one-minute limit.");
     self.held = NO; [self finish];
     return;
   }
   NSTimeInterval now = NSProcessInfo.processInfo.systemUptime;
   if (target > 0.01) self.lastSpoke = now;
   else if (now - self.lastSpoke > 180) { // a note left running: what was said is kept
-    dictate_ui_notice("Stopped after 3 minutes of quiet");
+    dictate_ui_notice("Stopped the note after 3 minutes of silence.");
     self.held = NO; [self finish];
   }
 }
@@ -501,21 +501,21 @@ static void TTVoicePlaySound(NSString *name, double volume) {
     }
     AVAudioFormat *format = [input outputFormatForBus:0];
     if (!format.channelCount || format.sampleRate <= 0) {
-      problem = @"No mic found";
+      problem = @"Couldn’t find a microphone.";
     } else {
       AVAudioNodeTapBlock append = ^(AVAudioPCMBuffer *buffer, AVAudioTime *when) { (void)when; [audio append:buffer]; };
       AVAudioFrameCount frames = (AVAudioFrameCount)ceil(format.sampleRate * 0.1);
       NSError *error;
 #if defined(__MAC_27_0)
       if (@available(macOS 27.0, *)) {
-        if (![input installTapOnBus:0 bufferSize:frames format:nil error:&error block:append]) problem = @"Couldn’t start the mic";
+        if (![input installTapOnBus:0 bufferSize:frames format:nil error:&error block:append]) problem = @"Couldn’t start the microphone.";
       } else { [input installTapOnBus:0 bufferSize:frames format:nil block:append]; }
 #else // built with an SDK before macOS 27, which has no error-returning tap
       [input installTapOnBus:0 bufferSize:frames format:nil block:append];
 #endif
       if (!problem) {
         [engine prepare];
-        if (![engine startAndReturnError:&error]) problem = @"Couldn’t start the mic";
+        if (![engine startAndReturnError:&error]) problem = @"Couldn’t start the microphone.";
       }
     }
   } @catch (NSException *exception) {
@@ -547,7 +547,7 @@ static void TTVoicePlaySound(NSString *name, double volume) {
     NSProcessInfo.processInfo.systemUptime - self.listeningSince, (unsigned long)self.audio.buffers, heard.sampleRate, heard.channelCount, self.audio.channelLevels,
     (unsigned long)(pcm.length / sizeof(float)), self.audio.peak, (unsigned long)self.inputChanges, running ? @"running" : @"stopped", TTVoiceInputName()];
   dictate_log(line.UTF8String);
-  if (self.audio.failed) { [self fail:@"Couldn’t record that"]; return; }
+  if (self.audio.failed) { [self fail:@"Couldn’t record that. Try again."]; return; }
   if (self.noting) { // the rest of the note: most of it is in its words already
     if (!dictate_note_finish(self.request.UTF8String, self.audio.dropped, pcm.bytes, pcm.length / sizeof(float))) [self refused];
     self.audio = nil; return;
@@ -555,7 +555,7 @@ static void TTVoicePlaySound(NSString *name, double volume) {
   if (!pcm.length) {
     // A short hold ends before the first audio arrives (a Bluetooth microphone takes a moment to open).
     BOOL tap = NSProcessInfo.processInfo.systemUptime - self.listeningSince < 1.5;
-    [self fail:tap ? @"unheard" : @"No sound from the mic"]; return;
+    [self fail:tap ? @"unheard" : @"No sound came through. Check your microphone in Settings."]; return;
   }
   if (!dictate_audio(self.request.UTF8String, pcm.bytes, pcm.length / sizeof(float))) [self refused];
   self.audio = nil;
@@ -593,14 +593,14 @@ static void TTVoicePlaySound(NSString *name, double volume) {
   if (self.noting) { dictate_ui_note(body.UTF8String); [self cancel]; return; } // to the note's review card
   if (self.commanding) { [self command:body]; return; }
   dictate_ui_said(body.UTF8String, true, false);
-  if (!AXIsProcessTrusted()) { [self fail:@"Turn on Accessibility to type"]; return; }
+  if (!AXIsProcessTrusted()) { [self fail:@"Dictate needs Accessibility to type. Turn it on in System Settings."]; return; }
   // Sending: Return, once every word is in, and only where they went (set below, before the words land).
   __block BOOL send = NO;
   [self retype:body then:^{ if (send) TTVoicePostKey(36, nil); }];
   // A click elsewhere stops the typing for good; what was said is still the last transcript.
   BOOL whole = self.typed.length && [self.typed isEqualToString:[self.lead stringByAppendingString:body]];
-  if (!self.typed.length) dictate_ui_notice("Nothing to type into here. Paste last transcript has your words.");
-  else if (!whole) dictate_ui_notice("Stopped typing when you moved on. Paste last transcript has it all.");
+  if (!self.typed.length) dictate_ui_notice("There’s nowhere to type here, but Paste Last Transcript has your words.");
+  else if (!whole) dictate_ui_notice("Typing stopped when you clicked away, but Paste Last Transcript has all of it.");
   send = whole && self.sendAfter;
   [self cancel];
 }
@@ -611,7 +611,7 @@ static void TTVoicePlaySound(NSString *name, double volume) {
   if (dictate_command(request.UTF8String, instruction.UTF8String, (self.selection ?: @"").UTF8String, (self.app.bundleIdentifier ?: @"").UTF8String)) {
     TTVoiceRememberCommand(request, self.app);
   } else {
-    dictate_ui_notice("Connect Claude in Settings to use commands");
+    dictate_ui_notice("Connect AI in Settings › Agents to use commands.");
   }
   self.request = nil; // not forgotten: Claude reads the hold's context while it works
   [self cancel];
@@ -787,7 +787,7 @@ static void TTVoicePlaySound(NSString *name, double volume) {
     NSArray<NSNumber *> *chord = self.chords[name];
     if (!tt_chord_matches(event.keyCode, event.modifierFlags, chord[0].unsignedShortValue, chord[1].unsignedLongLongValue)) continue;
     if ([name isEqual:@"note"]) {
-      if (!self.enabled) dictate_ui_notice("Dictation is paused");
+      if (!self.enabled) dictate_ui_notice("Dictation is paused.");
       else if (self.phase == TTVoiceIdle || (self.noting && self.phase == TTVoiceListening)) [self toggleNote];
     } else if ([name isEqual:@"meeting"]) {
       if (!dictate_meeting("stop") && !dictate_meeting("start")) dictate_meeting_unstarted(); // says why, unless the microphone card does
@@ -862,7 +862,7 @@ static void TTVoicePlaySound(NSString *name, double volume) {
 }
 - (void)prepareModels {
   self.modelReady = NO; self.modelPreparing = YES;
-  self.modelMessage = @"Preparing Whisper large-v3 Turbo…";
+  self.modelMessage = @"Getting Whisper large-v3 Turbo ready…";
   dictate_prepare_models();
 }
 - (void)applyEnabled:(BOOL)enabled {
@@ -876,7 +876,7 @@ static void TTVoicePlaySound(NSString *name, double volume) {
   [self monitor];
   if (self.enabled) [self prepareModels];
   else {
-    self.modelReady = NO; self.modelPreparing = NO; self.modelMessage = @"Dictation is paused. The speech model stays on this Mac.";
+    self.modelReady = NO; self.modelPreparing = NO; self.modelMessage = @"Dictation is paused. The speech model stays downloaded.";
     dictate_disable_models();
   }
 }
@@ -1335,7 +1335,7 @@ bool dictate_app_name(const char *bundle_id, char *output, size_t capacity) {
 // Types `text` into the focused field of the front app, over its selection if it has one.
 static void TTVoiceTypeText(NSString *text) {
   if (!text.length) return;
-  if (!AXIsProcessTrusted()) { dictate_ui_error("Turn on Accessibility to type"); return; }
+  if (!AXIsProcessTrusted()) { dictate_ui_error("Dictate needs Accessibility to type. Turn it on in System Settings."); return; }
   // These keystrokes are ours, so the monitor never sees the field change: the next hold starts afresh.
   voice.dictated = nil;
   if (voice.typed.length) voice.typingStopped = YES;
@@ -1353,7 +1353,7 @@ void dictate_type_text(const char *text) {
 static void TTVoiceCopyAnswer(NSString *text) {
   [NSPasteboard.generalPasteboard clearContents];
   [NSPasteboard.generalPasteboard setString:text forType:NSPasteboardTypeString];
-  dictate_ui_notice("You switched apps, so Claude’s answer is copied");
+  dictate_ui_notice("You switched apps, so the answer is on your clipboard instead.");
 }
 // Claude's answer to a command. `type` puts it over the selection, or at the caret, in the app the command
 // was said in: a click on the overlay's card took the front, so that app comes back first, and an

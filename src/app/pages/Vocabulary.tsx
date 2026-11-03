@@ -35,13 +35,13 @@ export function Vocabulary({ settings, update }: PageProps) {
     suggestions: vocabulary.suggestions.filter(word => !accepted.includes(word)),
   } });
   const count = vocabulary.words.length;
-  const wordsNote = !count ? 'Names, products and terms you use. The newest are given to Whisper first.'
-    : fit == null || fit >= count ? `Whisper is given ${count === 1 ? 'this word' : `all ${count}`} each time you speak.`
-    : `Whisper is given your newest ${fit} of ${count}, as many as fit each time you speak. Remove the ones you no longer need.`;
+  const wordsNote = !count ? 'Add the names and jargon Dictate keeps getting wrong.'
+    : fit == null || fit >= count ? `Dictate listens for ${count === 1 ? 'this word' : `all ${count}`} every time you talk.`
+    : `Dictate can only listen for your newest ${fit} of ${count}, so remove any you don’t need.`;
   const enter = (event: KeyboardEvent) => { if (event.key === 'Enter') { event.preventDefault(); addReplacement(); } };
 
   return <>
-    <PageHeader icon="book" title="Vocabulary">Names and terms Whisper should spell your way.</PageHeader>
+    <PageHeader icon="book" title="Vocabulary">Teach Dictate the names and words you use.</PageHeader>
     <Section title="Words" note={wordsNote}>
       <TileGroup>
         <Tile title="Your words" stack>
@@ -49,7 +49,7 @@ export function Vocabulary({ settings, update }: PageProps) {
         </Tile>
       </TileGroup>
     </Section>
-    <Section title="Replacements" note="Whole words in any case, and the punctuation around them stays. Leave “Type” empty to drop a phrase.">
+    <Section title="Replacements" note="Leave “Type” empty to cut a phrase out.">
       <TileGroup>
         <Tile title="Add a replacement" stack>
           <span className="pair">
@@ -68,18 +68,18 @@ export function Vocabulary({ settings, update }: PageProps) {
     </Section>
     <Section title="Learning">
       <TileGroup>
-        <Tile title="Learn from your corrections" detail="When you fix a dictated word within 30 seconds, it is suggested here. Nothing is added without a yes.">
+        <Tile title="Learn from your corrections" detail="Nothing’s added to your words until you say so.">
           <Toggle label="Learn from your corrections" checked={vocabulary.learn} onChange={learn => update({ vocabulary: { learn } })} />
         </Tile>
         {vocabulary.suggestions.length > 1 && <Tile title={`${vocabulary.suggestions.length} suggestions`}>
           <Button variant="quiet" small onClick={() => update({ vocabulary: { suggestions: [] } })}>Clear all</Button>
           <Button small onClick={() => accept(vocabulary.suggestions)}>Add all</Button>
         </Tile>}
-        {vocabulary.suggestions.map(word => <Tile key={word} title={word} detail="From a correction">
+        {vocabulary.suggestions.map(word => <Tile key={word} title={word}>
           <Button variant="quiet" small aria-label={`Dismiss ${word}`} onClick={() => update({ vocabulary: { suggestions: vocabulary.suggestions.filter(other => other !== word) } })}>Dismiss</Button>
           <Button variant="primary" small aria-label={`Add ${word}`} onClick={() => accept([word])}>Add</Button>
         </Tile>)}
-        {!vocabulary.suggestions.length && vocabulary.learn && <EmptyState icon="book" title="No suggestions yet">Fix a word right after you dictate it, and it shows up here.</EmptyState>}
+        {!vocabulary.suggestions.length && vocabulary.learn && <EmptyState icon="book" title="No suggestions yet">Fix a word right after you dictate it, and it’ll show up here.</EmptyState>}
       </TileGroup>
     </Section>
   </>;

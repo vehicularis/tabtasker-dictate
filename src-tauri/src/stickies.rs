@@ -90,7 +90,7 @@ fn open(app: &AppHandle, sticky: &Sticky) -> tauri::Result<()> {
 /// A sticky said aloud ("sticky: call Thomas"): made with the words, or the overlay told why not.
 pub fn from_voice(app: &AppHandle, words: &str) {
   match create(app, None, Some(words)) {
-    Ok(_) => { let _ = app.emit_to("overlay", "dictate-notice", serde_json::json!({ "message": if words.is_empty() { "A sticky, on the screen" } else { "Sticky made" } })); }
+    Ok(_) => { let _ = app.emit_to("overlay", "dictate-notice", serde_json::json!({ "message": if words.is_empty() { "Added a blank sticky to your screen." } else { "Saved that as a sticky." } })); }
     Err(e) => { let _ = app.emit_to("overlay", "dictate-notice", serde_json::json!({ "message": e })); }
   }
 }
@@ -98,7 +98,7 @@ pub fn from_voice(app: &AppHandle, words: &str) {
 /// One sticky changed in the file, by `id`; the sticky as it is now.
 fn change(app: &AppHandle, id: &str, edit: impl FnOnce(&mut Sticky)) -> Result<Sticky, String> {
   let mut list = all(app);
-  let sticky = list.iter_mut().find(|sticky| sticky.id == id).ok_or("That sticky is gone.")?;
+  let sticky = list.iter_mut().find(|sticky| sticky.id == id).ok_or("That sticky isn’t there any more.")?;
   edit(sticky);
   let sticky = sticky.clone();
   changed(app, &list)?;
@@ -138,7 +138,7 @@ fn on_screen(sticky: &Sticky) -> bool { !sticky.closed && !sticky.archived }
 pub fn create(app: &AppHandle, hue: Option<&str>, text: Option<&str>) -> Result<Sticky, String> {
   let mut list = all(app);
   // The archive keeps what it is given; only the stickies in use count toward the limit.
-  if list.iter().filter(|sticky| !sticky.archived).count() >= MAX { return Err(format!("That’s {MAX} stickies already. Archive one, or save one as a note.")); }
+  if list.iter().filter(|sticky| !sticky.archived).count() >= MAX { return Err(format!("You already have {MAX} stickies. Archive one or save it as a note to make room.")); }
   let mut bytes = [0u8; 6];
   ring::rand::SecureRandom::fill(&ring::rand::SystemRandom::new(), &mut bytes).map_err(|_| "Couldn’t make a sticky.".to_owned())?;
   let last = list.last().cloned();
@@ -174,7 +174,7 @@ pub fn sticky_list(app: AppHandle) -> Vec<Sticky> { all(&app) }
 
 #[tauri::command]
 pub fn sticky_get(app: AppHandle, id: String) -> Result<Sticky, String> {
-  all(&app).into_iter().find(|sticky| sticky.id == id).ok_or_else(|| "That sticky is gone.".into())
+  all(&app).into_iter().find(|sticky| sticky.id == id).ok_or_else(|| "That sticky isn’t there any more.".into())
 }
 
 /// From the menu, a shortcut or the Library: a new sticky on the screen, focused for typing.
@@ -190,7 +190,7 @@ pub async fn sticky_new(app: AppHandle, hue: Option<String>, text: Option<String
 #[tauri::command]
 pub fn sticky_update(app: AppHandle, id: String, text: Option<String>, hue: Option<String>) -> Result<Sticky, String> {
   let mut list = all(&app);
-  let sticky = list.iter_mut().find(|sticky| sticky.id == id).ok_or("That sticky is gone.")?;
+  let sticky = list.iter_mut().find(|sticky| sticky.id == id).ok_or("That sticky isn’t there any more.")?;
   if let Some(text) = text { sticky.text = text.chars().take(MAX_TEXT).collect(); }
   if let Some(hue) = hue { sticky.hue = hue_or(Some(&hue), &sticky.hue.clone()); }
   sticky.updated_ms = now_ms();
@@ -203,7 +203,7 @@ pub fn sticky_update(app: AppHandle, id: String, text: Option<String>, hue: Opti
 #[tauri::command]
 pub fn sticky_pin(app: AppHandle, id: String, pinned: bool) -> Result<Sticky, String> {
   let mut list = all(&app);
-  let sticky = list.iter_mut().find(|sticky| sticky.id == id).ok_or("That sticky is gone.")?;
+  let sticky = list.iter_mut().find(|sticky| sticky.id == id).ok_or("That sticky isn’t there any more.")?;
   sticky.pinned = pinned;
   let kept = sticky.clone();
   if let Some(window) = app.get_webview_window(&label(&id)) { window.set_always_on_top(pinned).map_err(|e| e.to_string())?; }
@@ -215,7 +215,7 @@ pub fn sticky_pin(app: AppHandle, id: String, pinned: bool) -> Result<Sticky, St
 #[tauri::command]
 pub fn sticky_fold(app: AppHandle, id: String, folded: bool) -> Result<Sticky, String> {
   let mut list = all(&app);
-  let sticky = list.iter_mut().find(|sticky| sticky.id == id).ok_or("That sticky is gone.")?;
+  let sticky = list.iter_mut().find(|sticky| sticky.id == id).ok_or("That sticky isn’t there any more.")?;
   sticky.folded = folded;
   let kept = sticky.clone();
   if let Some(window) = app.get_webview_window(&label(&id)) {
@@ -239,7 +239,7 @@ pub fn sticky_remove(app: AppHandle, id: String) -> Result<(), String> {
 /// The sticky's words saved as a note (its first line the title), and the sticky gone.
 #[tauri::command]
 pub async fn sticky_to_note(app: AppHandle, id: String, stamp: String) -> Result<String, String> {
-  let sticky = all(&app).into_iter().find(|sticky| sticky.id == id).ok_or("That sticky is gone.")?;
+  let sticky = all(&app).into_iter().find(|sticky| sticky.id == id).ok_or("That sticky isn’t there any more.")?;
   if sticky.text.trim().is_empty() { return Err("Write something first.".into()); }
   let mut lines = sticky.text.trim().lines().map(str::trim).filter(|line| !line.is_empty());
   let title: String = lines.next().unwrap_or("Sticky").chars().take(80).collect();

@@ -287,7 +287,7 @@ static void TTMeetingClosed(void) {
     (void)engine.mainMixerNode; // voice processing runs the output side too, which needs its chain
   } @catch (NSException *exception) {
     dictate_log([NSString stringWithFormat:@"meeting: the microphone engine could not be made: %@", exception.reason ?: exception.name].UTF8String);
-    return @"Couldn’t start the mic";
+    return @"Couldn’t start the microphone";
   }
   self.engine = engine;
   // A headset switching profile or a new default device stops the engine: it picks up again.
@@ -313,7 +313,7 @@ static void TTMeetingClosed(void) {
     AVAudioFormat *format = [input outputFormatForBus:0];
     if (!format.channelCount || format.sampleRate <= 0) {
       dictate_log([NSString stringWithFormat:@"meeting: the microphone reports no usable format (%u channels at %.0f Hz)", (unsigned)format.channelCount, format.sampleRate].UTF8String);
-      return @"No mic found";
+      return @"Couldn’t find a microphone";
     }
     TTMeetingStream *mic = self.mic;
     dispatch_queue_t audio = TTMeetingAudio();
@@ -329,7 +329,7 @@ static void TTMeetingClosed(void) {
     if (@available(macOS 27.0, *)) {
       if (![input installTapOnBus:0 bufferSize:frames format:nil error:&error block:append]) {
         dictate_log([NSString stringWithFormat:@"meeting: the microphone tap would not install: %@", error.localizedDescription ?: @"no reason given"].UTF8String);
-        return @"Couldn’t start the mic";
+        return @"Couldn’t start the microphone";
       }
     } else { [input installTapOnBus:0 bufferSize:frames format:nil block:append]; }
 #else // built with an SDK before macOS 27, which has no error-returning tap
@@ -338,11 +338,11 @@ static void TTMeetingClosed(void) {
     [engine prepare];
     if (!engine.isRunning && ![engine startAndReturnError:&error]) {
       dictate_log([NSString stringWithFormat:@"meeting: the microphone engine would not start: %@", error.localizedDescription ?: @"no reason given"].UTF8String);
-      return @"Couldn’t start the mic";
+      return @"Couldn’t start the microphone";
     }
   } @catch (NSException *exception) {
     dictate_log([NSString stringWithFormat:@"meeting: the microphone threw: %@", exception.reason ?: exception.name].UTF8String);
-    return @"Couldn’t start the mic";
+    return @"Couldn’t start the microphone";
   }
   return nil;
 }

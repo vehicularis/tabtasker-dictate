@@ -32,7 +32,7 @@ export function Sticky() {
   const holdMenu = useCallback((el: HTMLDivElement | null) => { menuBox.current = el; return leave(el); }, []);
   const [problem, setProblem] = useState<string | null>(null);
   const timer = useRef<number | undefined>(undefined);
-  useEffect(() => { void invoke<Record>('sticky_get', { id }).then(found => { setSticky(found); setText(found.text); }, () => setProblem('This sticky is gone.')); }, []);
+  useEffect(() => { void invoke<Record>('sticky_get', { id }).then(found => { setSticky(found); setText(found.text); }, () => setProblem('Couldn’t find this sticky. It may have been deleted.')); }, []);
   // A press anywhere else closes the menu; one on ⋯ is left to ⋯, which opens and closes it.
   useEffect(() => {
     if (!menu) return;
@@ -44,9 +44,9 @@ export function Sticky() {
   const edit = (next: string) => {
     setText(next);
     clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => { void invoke('sticky_update', { id, text: next }).catch(error => setProblem(message(error, 'Couldn’t keep that.'))); }, 350);
+    timer.current = window.setTimeout(() => { void invoke('sticky_update', { id, text: next }).catch(error => setProblem(message(error, 'Couldn’t save what you typed.'))); }, 350);
   };
-  const change = (patch: Partial<Record>, work: Promise<unknown>) => { setSticky(current => current && { ...current, ...patch }); void work.catch(error => setProblem(message(error, 'Couldn’t change that.'))); };
+  const change = (patch: Partial<Record>, work: Promise<unknown>) => { setSticky(current => current && { ...current, ...patch }); void work.catch(error => setProblem(message(error, 'Couldn’t change that. Try again.'))); };
   const recolour = (hue: StickyHue) => change({ hue }, invoke('sticky_update', { id, hue }));
   // Folding, the paper rolls up into its bar, then the window becomes the bar; opening, the window grows and the
   // paper rolls down out of the bar. The window's size is the Mac's to change at once, so the paper is clipped.
@@ -84,7 +84,7 @@ export function Sticky() {
       </div>
       <i className="sticky-menu-rule" role="separator" />
       {item(folded ? 'Unfold' : 'Fold up', () => fold())}
-      {item('Keep on top of everything', () => pin(), { checked: !!sticky?.pinned })}
+      {item('Keep on top', () => pin(), { checked: !!sticky?.pinned })}
       <i className="sticky-menu-rule" role="separator" />
       {item('Save as a note', toNote, { disabled: !text.trim() })}
       {item('Close', close)}

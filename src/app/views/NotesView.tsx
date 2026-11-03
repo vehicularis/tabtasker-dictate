@@ -22,11 +22,14 @@ const stamp = () => { const d = new Date(), p = (n: number) => String(n).padStar
 const message = (error: unknown, fallback: string) => typeof error === 'string' ? error : fallback;
 type Props = { kind: 'note' | 'meeting'; path: string | null; onError: (message: string) => void; onOpen: (route: string) => void } & PageProps;
 const routeTo = (kind: 'note' | 'meeting', path: string) => `${kind === 'note' ? 'notes' : 'meetings'}/${encodeURIComponent(path)}`;
-const newNote = (onOpen: Props['onOpen'], onError: Props['onError']) => void invoke<string>('note_new', { title: '', text: '', stamp: stamp() }).then(made => onOpen(routeTo('note', made)), error => onError(message(error, 'Couldn’t make a note.')));
+const newNote = (onOpen: Props['onOpen'], onError: Props['onError']) => void invoke<string>('note_new', { title: '', text: '', stamp: stamp() }).then(made => onOpen(routeTo('note', made)), error => onError(message(error, 'Couldn’t create a note.')));
 
 // The library as last read, notes and meetings both, for every place that asks: one opened again knows at once
 // whether it has a list, so its column doesn't flash in and out while the folder is read again.
 let known: LibraryItem[] | null = null;
+const readers = new Set<() => void>();
+/// Every list reads the folder again, after a change none of them would otherwise notice (Delete all).
+const refreshLibrary = () => readers.forEach(read => read());
 
 /// The notes, or the meetings (none for `null`), kept fresh as another one opens, a meeting ends or the
 /// window comes forward. Null only before the very first read: the window shows no column until it knows.
@@ -34,7 +37,12 @@ export function useLibrary(kind: 'note' | 'meeting' | null, path: string | null,
   const [all, setAll] = useState(known);
   const refresh = useCallback(() => { if (kind) void invoke<LibraryItem[]>('library_list').then(items => { known = items; setAll(items); }, error => onError(message(error, 'Couldn’t read your notes.'))); }, [kind, onError]);
   useEffect(refresh, [refresh, path]);
-  useEffect(() => { if (!kind) return; const off = listen('dictate-meeting', refresh); addEventListener('focus', refresh); return () => { off(); removeEventListener('focus', refresh); }; }, [kind, refresh]);
+  useEffect(() => {
+    if (!kind) return;
+    const off = listen('dictate-meeting', refresh);
+    addEventListener('focus', refresh); readers.add(refresh);
+    return () => { off(); removeEventListener('focus', refresh); readers.delete(refresh); };
+  }, [kind, refresh]);
   return useMemo(() => kind && all ? all.filter(item => item.kind === kind) : null, [kind, all]);
 }
 
@@ -59,6 +67,19 @@ export function NotesColumn({ kind, path, items, onError, onOpen }: Props & { it
   }, []);
   const list = useRef<HTMLDivElement>(null);
   useFlip(list, items); // a note added, archived or moved to the top glides there; typing in the search does not
+  // Delete all, as Business's archive has it: asked first, then every archived one goes to the Trash (where it can
+  // come back from); one that can't be moved stays in the archive and the rest still go.
+  const [clearing, setClearing] = useState(false);
+  const many = (n: number) => `${n} ${kind}${n === 1 ? '' : 's'}`;
+  const deleteAll = async () => {
+    setClearing(false);
+    const doomed = (items ?? []).filter(item => item.archived);
+    let done = 0;
+    for (const item of doomed) { try { await invoke('note_delete', { path: item.path }); done++; } catch { /* left in the archive */ } }
+    onError(done === doomed.length ? `Moved ${many(done)} to the Trash.` : `Moved ${done} of ${many(doomed.length)} to the Trash. The rest are still in the archive.`);
+    if (path && doomed.some(item => item.path === path)) onOpen(kind === 'note' ? 'notes' : 'meetings');
+    refreshLibrary();
+  };
   return <>
     <ColumnHead title={kind === 'note' ? 'Notes' : 'Meetings'} action={kind === 'note'
       ? <Button variant="quiet" icon="compose" aria-label="New note" title="New note" onClick={() => newNote(onOpen, onError)} />
@@ -66,9 +87,14 @@ export function NotesColumn({ kind, path, items, onError, onOpen }: Props & { it
     <label className="search column-search"><Icon name="search" size={15} /><input type="search" placeholder={kind === 'note' ? 'Search notes' : 'Search meetings'} aria-label={kind === 'note' ? 'Search notes' : 'Search meetings'} value={query} spellCheck={false} onChange={event => setQuery(event.target.value)} /></label>
     {archived > 0 && <div className="column-views"><Segmented label="Show" value={viewing ? 'archive' : 'list'} onChange={view => setInArchive(view === 'archive')}
       options={[{ value: 'list', label: kind === 'note' ? 'Notes' : 'Meetings' }, { value: 'archive', label: `Archive · ${archived}` }]} /></div>}
+    {viewing && <div className="column-clear">
+      {clearing
+        ? <><span>Move {many(archived)} to the Trash?</span><Button small variant="quiet" onClick={() => setClearing(false)}>Keep</Button><Button small variant="danger" onClick={() => void deleteAll()}>Move to Trash</Button></>
+        : <Button small variant="danger" className="quiet" icon="trash" onClick={() => setClearing(true)}>Delete all</Button>}
+    </div>}
     {kind === 'meeting' && !viewing && <MeetingStrip onError={onError} />}
     <div ref={list} key={viewing ? 'archive' : 'list'} className="column-scroll">
-      {items && !shown.length && (words.length ? <p className="list-none">Nothing has those words.</p> : !viewing && <p className="list-none">Everything here is in the archive.</p>)}
+      {items && !shown.length && (words.length ? <p className="list-none">Nothing matches that search.</p> : !viewing && <p className="list-none">Everything’s in the archive.</p>)}
       {groups.map(group => <ColumnGroup key={group.day} flip={`day:${group.day}`} title={dayTitle(group.day, today)} count={group.items.length}>
         {group.items.map(item => <button key={item.path} type="button" className="list-item" data-flip={item.path} aria-current={item.path === path || undefined} onClick={() => onOpen(routeTo(kind, item.path))}>
           <span className="t">{item.title}</span>
@@ -90,16 +116,16 @@ export function NotePage({ kind, path, items, settings, onError, onOpen }: Props
   if (items && !items.length) return <div className="editor-pane"><div className="empty-pane first">
     <span className="empty-icon">{(() => { const Glyph = PLACE_GLYPHS[kind === 'note' ? 'notes' : 'meetings']; return <Glyph size={48} />; })()}</span>
     <strong>{kind === 'note' ? 'No notes yet' : 'No meetings yet'}</strong>
-    <p>{kind === 'note' ? `Type one, or hold ${key} and talk. Click the note on the dots to take a long one by voice. Notes are Markdown files${settings.notes.folder ? '' : ' in Documents › TabTasker Dictate'}.`
-      : 'A meeting records the room and, on a call, the other side, and tells the people apart. Start one here, or from the dots.'}</p>
+    <p>{kind === 'note' ? `Write one here, or click the note on the dots and talk.${settings.notes.folder ? '' : ' They’re saved in Documents › TabTasker Dictate.'}`
+      : 'Start one here or from the dots, and you’ll get a transcript of everyone in the room or on the call.'}</p>
     {kind === 'note' ? <Button variant="primary" icon="compose" onClick={() => newNote(onOpen, onError)}>New note</Button> : <><MeetingAction onError={onError} labelled /><MeetingStrip onError={onError} /></>}
   </div></div>;
   if (!items) return <div className="editor-pane" />;
   const Glyph = PLACE_GLYPHS[kind === 'note' ? 'notes' : 'meetings'];
   return <div className="editor-pane"><div className="empty-pane">
     <Glyph size={36} />
-    <p>{kind === 'note' ? `Pick a note, or make one with the pencil. Notes are Markdown files${settings.notes.folder ? '' : ' in Documents › TabTasker Dictate'}. Hold ${key} anywhere to type with your voice. Click the note on the dots to take a long one.`
-      : 'Pick a meeting. A meeting records the room and, on a call, the other side, and tells the people apart. Start one with the microphone above, or from the dots.'}</p>
+    <p>{kind === 'note' ? `Pick a note, or start a new one with the pencil. Once it’s open, hold ${key} to add to it by voice.`
+      : 'Pick a meeting, or start a new one with the microphone above.'}</p>
   </div></div>;
 }
 
@@ -113,10 +139,10 @@ function MeetingAction({ onError, labelled = false }: { onError: (message: strin
     if (busy) return;
     setBusy(true);
     const action = recording ? 'stop' : 'start';
-    void invoke<boolean>('meeting', { action }).then(changed => { if (!changed && action === 'start') onError('Couldn’t start the meeting. Check the microphone in Settings.'); refresh(); },
+    void invoke<boolean>('meeting', { action }).then(changed => { if (!changed && action === 'start') onError('Couldn’t start the meeting. Check your microphone in Settings.'); refresh(); },
       error => onError(message(error, 'Couldn’t start the meeting.'))).finally(() => setBusy(false));
   };
-  return <button type="button" className={`ui-button record${recording ? ' on' : labelled ? ' primary' : ' quiet'}`} aria-label={recording ? 'Stop the meeting' : 'Start a meeting'} title={recording ? 'Stop the meeting' : 'Start a meeting: the room and, on a call, the other side'} disabled={!state || busy} onClick={toggle}>
+  return <button type="button" className={`ui-button record${recording ? ' on' : labelled ? ' primary' : ' quiet'}`} aria-label={recording ? 'Stop the meeting' : 'Start a meeting'} title={recording ? 'Stop the meeting' : 'Start a meeting'} disabled={!state || busy} onClick={toggle}>
     {recording ? <span className="record-stop" /> : <Icon name="mic" size={16} />}{labelled && (recording ? 'Stop the meeting' : 'Start a meeting')}
   </button>;
 }
@@ -137,7 +163,7 @@ function MeetingStrip({ onError }: { onError: (message: string) => void }) {
     {recording && <span className="meeting-live"><i />{elapsed} · {recording.system === 'on' ? 'you and the call' : 'your microphone'}</span>}
     {!recording && !!state?.saving.length && <span className="meeting-live">Saving the last meeting…</span>}
     {state?.leftovers.map(leftover => <div key={leftover.id} className="leftover">
-      <span>{meetingWhen(leftover.sinceMs)} · {meetingLength(leftover.seconds)} · {leftover.saved ? 'saved, with parts left' : 'not saved yet'}</span>
+      <span>{meetingWhen(leftover.sinceMs)} · {meetingLength(leftover.seconds)} · {leftover.saved ? 'partly transcribed' : 'not saved yet'}</span>
       {confirming === leftover.id
         ? <><Button small variant="quiet" onClick={() => setConfirming(null)}>Keep</Button><Button small variant="danger" onClick={() => recover(leftover.id, false)}>Discard</Button></>
         : <><Button small variant="quiet" onClick={() => setConfirming(leftover.id)}>Discard</Button><Button small variant="primary" onClick={() => recover(leftover.id, true)}>{leftover.saved ? 'Try again' : 'Save'}</Button></>}

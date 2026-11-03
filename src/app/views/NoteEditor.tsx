@@ -29,7 +29,7 @@ export function NoteEditor({ path, kind, onChanged, onDeleted, onMoved, onError 
     void invoke<NoteDoc>('note_read', { path }).then(found => {
       setDoc(found); setTitle(found.title); latest.current = { title: found.title, body: found.body }; setState('clean');
       setWindowTitle(found.title || (kind === 'meeting' ? 'Meeting' : 'Note'));
-    }, error => { onError(message(error, 'This note isn’t there any more.')); setState('error'); });
+    }, error => { onError(message(error, 'This note has been moved or deleted.')); setState('error'); });
     return () => setWindowTitle('TabTasker Dictate');
   }, [path, kind, onError]);
   const save = useCallback(() => {
@@ -74,7 +74,7 @@ export function NoteEditor({ path, kind, onChanged, onDeleted, onMoved, onError 
     dirty.current = false; void save();
   };
   const people = doc && kind === 'meeting' ? peopleIn(latest.current.body) : [];
-  if (!doc) return <div className="editor-pane"><p className="empty-pane">{state === 'error' ? 'This note isn’t there any more.' : ''}</p></div>;
+  if (!doc) return <div className="editor-pane"><p className="empty-pane">{state === 'error' ? 'This note has been moved or deleted.' : ''}</p></div>;
   return <div className="editor-pane" onKeyDown={event => { if (event.key === 's' && event.metaKey) { event.preventDefault(); void save(); } }}>
     <div className="editor-top">
       <span className="file" title={doc.path}>{archived ? 'Archived' : kind === 'meeting' ? 'Meeting' : 'Note'} · {file}</span>
@@ -83,7 +83,7 @@ export function NoteEditor({ path, kind, onChanged, onDeleted, onMoved, onError 
       <Button small variant="quiet" icon="external" aria-label="Open in another app" title="Open in another app" onClick={elsewhere} />
       {archived
         ? <Button small variant="quiet" onClick={() => archive(false)}>Restore</Button>
-        : <Button small variant="quiet" icon="archive" aria-label="Archive" title="Archive: out of the list, kept in the Archive folder" onClick={() => archive(true)} />}
+        : <Button small variant="quiet" icon="archive" aria-label="Archive" title="Move to the archive" onClick={() => archive(true)} />}
       {deleting
         ? <><span className="ask-confirm">Move to the Trash?</span><Button small variant="quiet" onClick={() => setDeleting(false)}>Keep</Button><Button small variant="danger" onClick={remove}>Trash</Button></>
         : <Button small variant="quiet" icon="trash" aria-label="Move to the Trash" title="Move to the Trash" onClick={() => setDeleting(true)} />}
@@ -101,7 +101,7 @@ export function NoteEditor({ path, kind, onChanged, onDeleted, onMoved, onError 
           : <button key={person} type="button" className="chip" title={`Rename ${person} everywhere in this meeting`} onClick={() => setRenaming({ from: person, to: person })}>{person}</button>)}
       </div>}
       <Editor key={`${doc.path}:${seed}`} markdown={doc.body} label={kind === 'meeting' ? 'Meeting' : 'Note'} autoFocus={!doc.body} notePath={doc.path}
-        placeholder={`Type, or hold ${dictateKey} and talk. Markdown works: # for a heading, - for a list, [ ] for a to-do, / for everything else.`}
+        placeholder={`Type, or hold ${dictateKey} and talk. Press / for headings, lists and more.`}
         onChange={body => changed({ body })} />
     </div>
   </div>;

@@ -165,7 +165,7 @@ export function Editor({ markdown, onChange, placeholder, compact = false, autoF
       <form className="ed-link" onSubmit={event => { event.preventDefault(); setLink(linking.href); }}>
         <Icon name="link" size={14} />
         <input autoFocus value={linking.href} placeholder="Paste or type a link" aria-label="Link address" spellCheck={false} onChange={event => setLinking({ ...linking, href: event.target.value })} />
-        <button type="submit" className="ed-tool" aria-label="Add the link" title="Add the link"><Icon name="check" size={14} /></button>
+        <button type="submit" className="ed-tool" aria-label="Add link" title="Add link"><Icon name="check" size={14} /></button>
       </form>
     </Menu>}
     {notePath && <input ref={files} type="file" accept="image/*" hidden aria-label="Add a picture" onChange={event => { const file = event.target.files?.[0]; if (file && editorRef.current) void attach(editorRef.current, file).catch(() => {}); event.target.value = ''; }} />}

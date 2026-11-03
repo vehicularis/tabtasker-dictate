@@ -24,6 +24,8 @@ button { appearance: none; -webkit-appearance: none; }
 .ui-button.quiet { color: var(--ink-2); background: none; box-shadow: none; }
 .ui-button.quiet:hover { color: var(--ink); background: var(--surface-2); }
 .ui-button.danger { color: var(--danger); }
+/* Red words and no plate (Business's ghost-destructive), for a Delete all that asks before it does anything. */
+.ui-button.danger.quiet:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); }
 .ui-button.small { height: 26px; padding: 0 10px; border-radius: 8px; font-size: 13px; gap: 4px; }
 .ui-button.only-icon { width: 30px; padding: 0; }
 .ui-button.small.only-icon { width: 26px; }
