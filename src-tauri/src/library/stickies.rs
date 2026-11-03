@@ -33,13 +33,20 @@ pub struct Sticky {
   pub closed: bool,
   /// In the Stickies page's archive, out of the way; off the screen too.
   pub archived: bool,
+  /// The sticker's own look, as TabTasker Business's whiteboard sticker has it: a title line above the words
+  /// (on or off, and its words), a tilt (none, slight, random: the degrees come from the id, so it never
+  /// changes) and the weight of its type (regular, bold). A new sticky takes the last one's.
+  pub title: String, pub titled: bool, pub tilt: String, pub weight: String,
   pub created_ms: u64, pub updated_ms: u64,
 }
 impl Default for Sticky {
-  fn default() -> Self { Self { id: String::new(), text: String::new(), hue: "amber".into(), x: 120.0, y: 140.0, width: 240.0, height: 200.0, pinned: true, folded: false, closed: false, archived: false, created_ms: 0, updated_ms: 0 } }
+  fn default() -> Self { Self { id: String::new(), text: String::new(), hue: "amber".into(), x: 120.0, y: 140.0, width: 240.0, height: 200.0, pinned: true, folded: false, closed: false, archived: false, title: String::new(), titled: false, tilt: "none".into(), weight: "bold".into(), created_ms: 0, updated_ms: 0 } }
 }
-/// A folded sticky's height: its bar.
-const FOLDED: f64 = 30.0;
+/// A folded sticky's height: its band alone (sticky.css .sticky-band).
+const FOLDED: f64 = 34.0;
+pub const TILTS: [&str; 3] = ["none", "slight", "random"];
+pub const WEIGHTS: [&str; 2] = ["regular", "bold"];
+fn one_of<'a>(name: Option<&'a str>, allowed: &[&str], fallback: &'a str) -> String { name.filter(|v| allowed.contains(v)).unwrap_or(fallback).to_owned() }
 
 static SAVING: Mutex<()> = Mutex::new(());
 
@@ -54,7 +61,11 @@ pub fn all(app: &AppHandle) -> Vec<Sticky> {
   let Ok(text) = std::fs::read_to_string(path) else { return Vec::new() };
   let mut list: Vec<Sticky> = serde_json::from_str::<Vec<Value>>(&text).unwrap_or_default().into_iter()
     .filter_map(|value| serde_json::from_value::<Sticky>(value).ok()).filter(|sticky| !sticky.id.is_empty()).collect();
-  for sticky in &mut list { sticky.hue = hue_or(Some(&sticky.hue), "amber"); }
+  for sticky in &mut list {
+    sticky.hue = hue_or(Some(&sticky.hue), "amber");
+    sticky.tilt = one_of(Some(&sticky.tilt), &TILTS, "none");
+    sticky.weight = one_of(Some(&sticky.weight), &WEIGHTS, "bold");
+  }
   list
 }
 
@@ -143,10 +154,13 @@ pub fn create(app: &AppHandle, hue: Option<&str>, text: Option<&str>) -> Result<
   ring::rand::SecureRandom::fill(&ring::rand::SystemRandom::new(), &mut bytes).map_err(|_| "Couldn’t make a sticky.".to_owned())?;
   let last = list.last().cloned();
   let (x, y) = last.as_ref().map_or((120.0, 140.0), |last| (last.x + 28.0, last.y + 28.0));
+  // The look of the sticky touched last is the look the new one starts with.
+  let style = list.iter().filter(|sticky| !sticky.archived).max_by_key(|sticky| sticky.updated_ms).cloned().unwrap_or_default();
   let now = now_ms();
   let sticky = Sticky {
     id: bytes.iter().map(|byte| format!("{byte:02x}")).collect(), text: text.unwrap_or_default().chars().take(MAX_TEXT).collect(),
-    hue: hue_or(hue, ["amber", "sky", "sage", "coral", "violet", "teal"][list.len() % 6]), x, y, width: 240.0, height: 200.0, pinned: true, folded: false, closed: false, archived: false, created_ms: now, updated_ms: now,
+    hue: hue_or(hue, ["amber", "sky", "sage", "coral", "violet", "teal"][list.len() % 6]), x, y, width: style.width.max(160.0), height: style.height.max(120.0), pinned: true, folded: false, closed: false, archived: false,
+    title: String::new(), titled: style.titled, tilt: style.tilt, weight: style.weight, created_ms: now, updated_ms: now,
   };
   list.push(sticky.clone());
   changed(app, &list)?;
@@ -186,15 +200,33 @@ pub async fn sticky_new(app: AppHandle, hue: Option<String>, text: Option<String
   tauri::async_runtime::spawn_blocking(move || made.recv().map_err(|_| "Couldn’t make a sticky.".to_owned())?).await.map_err(|e| e.to_string())?
 }
 
-/// The sticky's own window: its words as they are typed, or a new colour.
+/// The sticky's own window: its words as they are typed, a new colour, or its look (title, tilt, weight).
 #[tauri::command]
-pub fn sticky_update(app: AppHandle, id: String, text: Option<String>, hue: Option<String>) -> Result<Sticky, String> {
+#[allow(clippy::too_many_arguments)]
+pub fn sticky_update(app: AppHandle, id: String, text: Option<String>, hue: Option<String>, title: Option<String>, titled: Option<bool>, tilt: Option<String>, weight: Option<String>) -> Result<Sticky, String> {
   let mut list = all(&app);
   let sticky = list.iter_mut().find(|sticky| sticky.id == id).ok_or("That sticky isn’t there any more.")?;
   if let Some(text) = text { sticky.text = text.chars().take(MAX_TEXT).collect(); }
   if let Some(hue) = hue { sticky.hue = hue_or(Some(&hue), &sticky.hue.clone()); }
+  if let Some(title) = title { sticky.title = title.chars().take(120).collect(); }
+  if let Some(titled) = titled { sticky.titled = titled; }
+  if let Some(tilt) = tilt { sticky.tilt = one_of(Some(&tilt), &TILTS, &sticky.tilt.clone()); }
+  if let Some(weight) = weight { sticky.weight = one_of(Some(&weight), &WEIGHTS, &sticky.weight.clone()); }
   sticky.updated_ms = now_ms();
   let kept = sticky.clone();
+  changed(&app, &list)?;
+  Ok(kept)
+}
+
+/// A size picked from the menu (small, medium, large): the window takes it now, unless folded, and keeps it.
+#[tauri::command]
+pub fn sticky_size(app: AppHandle, id: String, width: f64, height: f64) -> Result<Sticky, String> {
+  let (width, height) = (width.clamp(160.0, 900.0), height.clamp(120.0, 900.0));
+  let mut list = all(&app);
+  let sticky = list.iter_mut().find(|sticky| sticky.id == id).ok_or("That sticky isn’t there any more.")?;
+  sticky.width = width; sticky.height = height;
+  let kept = sticky.clone();
+  if !kept.folded { if let Some(window) = app.get_webview_window(&label(&id)) { window.set_size(LogicalSize::new(width, height)).map_err(|e| e.to_string())?; } }
   changed(&app, &list)?;
   Ok(kept)
 }
