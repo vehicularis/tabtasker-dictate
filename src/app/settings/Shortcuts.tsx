@@ -65,7 +65,7 @@ export function Shortcuts({ settings, update }: PageProps) {
   const down = useKeyDown();
   const system = reserved(status);
   const record = (name: ChordName) => async (chord: Chord | null) => (await update({ shortcuts: { [name]: chord } }))?.shortcuts[name];
-  const claude = keys.command === 'off' ? null : !settings.claude.enabled ? <>First, connect AI in <a className="link" href="#settings/agents">Agents settings</a>.</>
+  const claude = keys.command === 'off' ? null : !settings.claude.enabled ? <>First, connect AI in <a className="link" href="#settings/agents">Agents</a>.</>
     : !settings.claude.commands ? <>Turn on commands in <a className="link" href="#settings/agents">Agents settings</a>.</> : null;
   const aside = keys.dictate === 'fn' ? 'Shortcuts that use it, like fn-E for emoji, still work.'
     : keys.dictate === 'rightControl' ? 'Mac laptops don’t have a right Control key, so you’ll need an external keyboard.'

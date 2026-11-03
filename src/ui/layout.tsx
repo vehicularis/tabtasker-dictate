@@ -18,10 +18,10 @@ export function GroupHeader({ title, children }: { title: string; children?: Rea
   return <header className="ui-group-header"><h2>{title}</h2>{children && <p>{children}</p>}</header>;
 }
 
-/// A labelled group of tiles, with an optional line under it.
-export function Section({ title, note, children }: { title?: string; note?: ReactNode; children: ReactNode }) {
+/// A labelled group of tiles, with an optional line under it; `icon` is a mark before the title.
+export function Section({ title, icon, note, children }: { title?: string; icon?: ReactNode; note?: ReactNode; children: ReactNode }) {
   return <section className="ui-section">
-    {title && <h2>{title}</h2>}
+    {title && <h2>{icon && <span className="ui-section-icon">{icon}</span>}{title}</h2>}
     {children}
     {note && <p className="ui-section-note">{note}</p>}
   </section>;

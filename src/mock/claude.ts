@@ -39,7 +39,7 @@ export function register(mock: Mock) {
   mock.handle('claude_test', async () => {
     const claude = mock.settings().claude;
     await later(claude.via === 'claudeCode' ? 1800 : 700);
-    if (!claude.enabled) throw 'Connect Claude in Settings first.';
+    if (!claude.enabled) throw 'Connect AI in Agents first.';
     return (claude.via === 'claudeCode' ? 1600 : 420) + Math.round(Math.random() * 500);
   });
   mock.handle('claude_remove_key', () => { saved = false; const claude = mock.settings().claude; return mock.update({ claude: { enabled: claude.via === 'claudeCode' && claude.enabled } }); });
@@ -64,7 +64,7 @@ export function register(mock: Mock) {
   });
   // A typed question: answered as a spoken command is, on the same card.
   mock.handle('claude_ask', async ({ question }) => {
-    if (!mock.settings().claude.enabled) throw 'Connect Claude in Settings first.';
+    if (!mock.settings().claude.enabled) throw 'Connect AI in Agents first.';
     const request = `ask-${Date.now()}`;
     mock.emit('dictate-command', { request, phase: 'thinking', instruction: question, typed: true });
     setTimeout(() => mock.emit('dictate-command', { request, phase: 'answer', instruction: question, typed: true, text: 'From your notes: the design review is Thursday at 10, and Maria has the big room booked. The floor plan still has to go to her before lunch.' }), 1800);

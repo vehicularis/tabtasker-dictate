@@ -28,8 +28,8 @@ const SCREEN: Callout[] = [
 const DOTS: Callout[] = [
   { target: '.pill button:nth-child(1)', side: 'top', title: 'Speak a note', text: 'Talk for as long as you like, and it’s saved as a note when you stop.' },
   { target: '.pill button:nth-child(2)', side: 'top', title: 'Write a note', text: 'Opens a blank note to type into.' },
-  { target: '.pill button:nth-child(3)', side: 'top', title: 'New sticky', text: 'Puts a blank sticky on your screen.' },
-  { target: '.pill button:nth-child(4)', side: 'top', title: 'Start a meeting', text: 'Records the room, or both sides of a call, and works out who said what. With AI connected, you get a summary too.' },
+  { target: '.pill button:nth-child(3)', side: 'top', title: 'New sticky', text: 'Puts a blank sticky on your screen, on top of your other windows.' },
+  { target: '.pill button:nth-child(4)', side: 'top', title: 'Start a meeting', text: 'Records the room or both sides of a call, and works out who said what. With AI connected, you get a summary too.' },
   { target: '.pill button:nth-child(5)', side: 'top', title: 'Your notes', text: 'Opens the window with everything you’ve saved.' },
   { target: '.pill button:nth-child(6)', side: 'top', title: 'Settings', text: 'Opens Settings, where Appearance lets you choose which of these buttons show. You can also drag the dots to another edge, or right-click them for a menu.' },
   { target: '.label > span', side: 'bottom', title: 'The hint', text: 'Shows which key to hold. You can turn it off in Settings › Appearance.' },
@@ -85,7 +85,7 @@ export function HelpView({ settings }: { settings: Settings }) {
     </Section>
     <Section title="Set up again">
       <TileGroup>
-        <Tile title="Go through setup again" detail="Handy if a permission was turned off or something stopped working.">
+        <Tile title="Go through setup from the start" detail="Handy if a permission was turned off or something stopped working.">
           <button type="button" className="ui-button" onClick={() => { location.hash = 'setup'; }}><Icon name="general" size={15} />Open setup</button>
         </Tile>
       </TileGroup>

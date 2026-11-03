@@ -37,7 +37,7 @@ export function General({ settings, update }: PageProps) {
       <TileGroup>
         <Tile title="Microphone" detail={!status ? undefined : mic === 'allowed' ? `Right now it’s ${status.inputInUse}.` : 'Allow microphone access below first.'}>
           <Select label="Microphone" value={status?.input ?? ''} options={[{ value: '', label: 'Automatic' }, ...(status?.inputs ?? []).map(input => ({ value: input.id, label: input.name }))]}
-            onChange={id => run(invoke('set_input', { id: id || null }), 'Couldn’t switch to that microphone.')} />
+            onChange={id => run(invoke('set_input', { id: id || null }), 'Couldn’t switch to that microphone. Try again.')} />
         </Tile>
         <Tile title="Pause dictation" detail={status && !status.enabled
           ? 'Turn this off to start dictating again.'

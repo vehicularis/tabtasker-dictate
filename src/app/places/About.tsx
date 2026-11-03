@@ -3,7 +3,8 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { invoke } from '../../bridge';
 import type { PageProps } from '../../store';
 import { Button, Icon, Section, Tile, TileGroup, type IconName } from '../../ui';
-import { otterBars } from '../../overlay/icons';
+import { BusinessMark, otterBars } from '../../overlay/icons';
+import otters from '../assets/otters-talking.webp';
 import licence from '../../../LICENSE?raw';
 import notices from '../../../THIRD_PARTY_NOTICES.txt?raw';
 
@@ -117,7 +118,7 @@ export function About(_: PageProps) {
         <Tile title="The full terms" detail="For every TabTasker service, with the legal detail."><Button small icon="external" onClick={site(`${BUSINESS}/terms`)}>business.tabtasker.com/terms</Button></Tile>
       </TileGroup>
     </Section>
-    <Section title="TabTasker Business" note="The team workspace Dictate grew out of; its design and its otter are Business’s.">
+    <Section title="TabTasker Business" icon={<BusinessMark size={18} />} note="The team workspace Dictate grew out of; its design and its otter are Business’s.">
       <TileGroup label="TabTasker Business">
         <Tile title="Chat, docs, whiteboards, tasks and meetings for your team" detail="With the same editor, the same voice and the same care. Free to try."><Button small variant="primary" icon="external" onClick={site(BUSINESS)}>Open business.tabtasker.com</Button></Tile>
       </TileGroup>
@@ -135,6 +136,19 @@ export function About(_: PageProps) {
         <div className="ui-tile stack"><Notices label="Third-party notices" text={NOTICES} /></div>
       </TileGroup>
     </Section>
-    <p className="about-foot">© 2026 Vehicularis Limited</p>
+    <footer className="about-end">
+      <img className="about-otters" src={otters} alt="" width={1448} height={1086} draggable={false} />
+      <div className="about-end-words">
+        <p className="about-lockup"><BusinessMark size={22} /><span>TabTasker</span></p>
+        <p className="about-end-line">Dictate is made by Vehicularis, the team behind TabTasker Business.</p>
+        <nav className="about-links" aria-label="More from TabTasker">
+          <button type="button" className="link" onClick={site(BUSINESS)}>TabTasker Business</button>
+          <button type="button" className="link" onClick={site(`${BUSINESS}/privacy`)}>Privacy</button>
+          <button type="button" className="link" onClick={site(`${BUSINESS}/terms`)}>Terms</button>
+          <button type="button" className="link" onClick={site('https://github.com/vehicularis/tabtasker-dictate')}>Source</button>
+        </nav>
+        <p className="about-foot">© 2026 Vehicularis Limited</p>
+      </div>
+    </footer>
   </>;
 }

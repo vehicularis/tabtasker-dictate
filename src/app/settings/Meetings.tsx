@@ -89,7 +89,7 @@ export function Meetings({ settings, update }: PageProps) {
         {leftovers.map(leftover => {
           const confirming = discarding === leftover.id;
           const detail = confirming
-            ? (leftover.saved ? 'Discard the recording? Your saved meeting stays.' : 'Discard this recording? There’s no undo.')
+            ? (leftover.saved ? 'Discard this recording? Your saved meeting stays.' : 'Discard this recording? There’s no undo.')
             : `${meetingLength(leftover.seconds)} · ${leftover.saved ? 'Saved, but parts weren’t transcribed' : 'Not saved yet'}`;
           return <Tile key={leftover.id} title={meetingWhen(leftover.sinceMs)} detail={detail}>
             {confirming
@@ -108,7 +108,7 @@ export function Meetings({ settings, update }: PageProps) {
         {meetings.systemAudio && permission === 'denied' && <Tile title="System audio isn’t allowed" detail="Turn on TabTasker Dictate under System Audio Recording Only in Privacy & Security.">
           <Button onClick={() => void invoke('meeting_privacy').catch(() => {})}>Open System Settings</Button>
         </Tile>}
-        <Tile title="Summary" detail={settings.claude.enabled ? 'AI names the meeting and writes a summary of it.' : 'Connect Claude or a local model in Agents to use this.'}>
+        <Tile title="Summary" detail={settings.claude.enabled ? 'AI names the meeting and writes a summary of it.' : 'Connect AI in Agents to use this.'}>
           <Toggle label="Summary" checked={meetings.summarize} onChange={summarize => update({ meetings: { summarize } })} />
         </Tile>
         <Tile title="Decisions" dim={!meetings.summarize}>
