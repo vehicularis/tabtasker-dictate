@@ -247,6 +247,17 @@ impl Default for Claude {
 #[serde(rename_all = "camelCase")]
 pub enum ClaudeVia { Api, ClaudeCode, Local, OpenAi }
 
+/// An address a key may be sent to: https, or http only to this Mac (localhost, 127.0.0.1, ::1), so the key never
+/// crosses a network in the clear.
+pub fn secure_endpoint(endpoint: &str) -> bool {
+  if endpoint.len() > 200 || endpoint.contains(char::is_whitespace) { return false; }
+  if let Some(rest) = endpoint.strip_prefix("https://") { return !rest.is_empty(); }
+  let Some(rest) = endpoint.strip_prefix("http://") else { return false };
+  let host = rest.split(['/', '?', '#']).next().unwrap_or_default();
+  let host = host.strip_prefix('[').map_or_else(|| host.split(':').next().unwrap_or_default(), |v6| v6.split(']').next().unwrap_or_default());
+  matches!(host, "localhost" | "127.0.0.1" | "::1")
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Agents { pub mcp: bool, pub share_history: bool, pub share_notes: bool, pub share_meetings: bool, pub allow_write: bool }
@@ -353,7 +364,7 @@ impl Settings {
     folder(&self.notes.folder) && folder(&self.meetings.folder) && folder(&self.claude.claude_code)
       && (local.local_endpoint.starts_with("http://") || local.local_endpoint.starts_with("https://")) && local.local_endpoint.len() <= 200 && !local.local_endpoint.contains(char::is_whitespace)
       && !local.local_model.trim().is_empty() && local.local_model.len() <= 80
-      && (local.open_ai_endpoint.starts_with("http://") || local.open_ai_endpoint.starts_with("https://")) && local.open_ai_endpoint.len() <= 200 && !local.open_ai_endpoint.contains(char::is_whitespace)
+      && secure_endpoint(&local.open_ai_endpoint)
       && local.open_ai_model.len() <= 80
       && chords.iter().all(|chord| chord.valid()) && distinct
       && !file_name.contains(['/', ':', '\0']) && !file_name.trim_start().starts_with('.')
@@ -551,7 +562,9 @@ pub fn get_settings() -> Settings { get() }
 #[tauri::command]
 pub fn update_settings(app: AppHandle, mut patch: Value) -> Result<Settings, String> {
   if !patch.is_object() { return Err("Invalid settings".into()); }
-  if let Some(claude) = patch.get_mut("claude").and_then(Value::as_object_mut) { claude.remove("enabled"); claude.remove("via"); }
+  // The OpenAI-compatible address and model go with the key: only `claude_connect_open_ai` sets them, so a page can
+  // never point a saved key at another host.
+  if let Some(claude) = patch.get_mut("claude").and_then(Value::as_object_mut) { claude.remove("enabled"); claude.remove("via"); claude.remove("openAiEndpoint"); claude.remove("openAiModel"); }
   update(&app, &patch)
 }
 
@@ -622,6 +635,21 @@ mod tests {
     let mut page = json!({ "claude": { "enabled": true, "via": "claudeCode", "model": "claude-opus-5-5" } });
     if let Some(claude) = page.get_mut("claude").and_then(Value::as_object_mut) { claude.remove("enabled"); claude.remove("via"); }
     assert_eq!(page, json!({ "claude": { "model": "claude-opus-5-5" } }));
+  }
+
+  #[test]
+  fn a_key_only_goes_over_https_or_to_this_mac() {
+    assert!(secure_endpoint("https://api.openai.com"));
+    assert!(secure_endpoint("https://openrouter.ai/api"));
+    assert!(secure_endpoint("http://localhost:1234"));
+    assert!(secure_endpoint("http://127.0.0.1:8080/v1"));
+    assert!(secure_endpoint("http://[::1]:8080"));
+    assert!(!secure_endpoint("http://api.openai.com"));
+    assert!(!secure_endpoint("http://192.168.1.10:1234"));
+    assert!(!secure_endpoint("http://localhost.evil.com"));
+    assert!(!secure_endpoint("ftp://localhost"));
+    assert!(!secure_endpoint("https://"));
+    assert!(!secure_endpoint("https://a b"));
   }
 
   #[test]

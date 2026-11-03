@@ -308,8 +308,9 @@ async fn open_ai_call(endpoint: &str, key: &str, model: &str, request: &Request,
   let bytes = response.bytes().await.map_err(|_| Error::Broken)?;
   let value: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
   if status != 200 {
+    // The service's own words stay out of the log: they can carry a key or a prompt back. The status is enough.
     let said = value["error"]["message"].as_str().unwrap_or_default().to_ascii_lowercase();
-    log::warn!("openai-compatible: {status}: {}", said.chars().take(120).collect::<String>());
+    log::warn!("openai-compatible: HTTP {status}");
     return Err(match status {
       401 => Error::BadKey, 402 => Error::Billing, 403 => Error::Forbidden, 404 => Error::Model, 429 => Error::RateLimited,
       400 if said.contains("context") || said.contains("too long") || said.contains("maximum") => Error::TooLong,
@@ -460,6 +461,13 @@ extern "C" {
 const ANTHROPIC: &std::ffi::CStr = c"anthropic";
 const OPENAI: &std::ffi::CStr = c"openai";
 fn saved_key() -> Option<String> { key_of(ANTHROPIC) }
+/// The OpenAI-compatible key, only for the address it was saved with (the Keychain item is "address\nkey").
+fn open_ai_key(endpoint: &str) -> Option<String> {
+  let item = key_of(OPENAI)?;
+  let (saved_for, key) = item.split_once('\n')?;
+  if saved_for != endpoint { log::warn!("openai-compatible: the saved key is for another address, so it isn’t sent"); return None; }
+  Some(key.to_owned())
+}
 fn key_of(account: &std::ffi::CStr) -> Option<String> {
   let mut buffer = vec![0u8; 1024];
   let key = unsafe { dictate_keychain_get(account.as_ptr(), buffer.as_mut_ptr().cast(), buffer.len()) }
@@ -485,7 +493,7 @@ fn route() -> Result<(Route, ClaudeModel), Error> {
     ClaudeVia::Api => Route::Api { endpoint: MESSAGES.into(), key: saved_key().ok_or(Error::NoKey)? },
     ClaudeVia::ClaudeCode => Route::Code { program: claude.claude_code.map(PathBuf::from).filter(|path| executable(path)).ok_or(Error::NoClaudeCode)? },
     ClaudeVia::Local => Route::Local { endpoint: claude.local_endpoint.clone(), model: claude.local_model.clone() },
-    ClaudeVia::OpenAi => Route::OpenAi { endpoint: claude.open_ai_endpoint.clone(), key: key_of(OPENAI).ok_or(Error::NoKey)?, model: claude.open_ai_model.clone() },
+    ClaudeVia::OpenAi => Route::OpenAi { endpoint: claude.open_ai_endpoint.clone(), key: open_ai_key(&claude.open_ai_endpoint).ok_or(Error::NoKey)?, model: claude.open_ai_model.clone() },
   };
   Ok((route, claude.model))
 }
@@ -809,11 +817,12 @@ pub fn claude_disconnect(app: AppHandle) -> Result<settings::Settings, String> {
 pub async fn claude_connect_open_ai(app: AppHandle, endpoint: String, key: String, model: String) -> Result<settings::Settings, String> {
   let endpoint = endpoint.trim().trim_end_matches('/').trim_end_matches("/v1").to_owned();
   let (key, model) = (key.trim().to_owned(), model.trim().to_owned());
-  if !(endpoint.starts_with("http://") || endpoint.starts_with("https://")) || endpoint.len() > 200 || endpoint.contains(char::is_whitespace) { return Err("Use the service’s address, like https://api.openai.com.".into()); }
+  if !settings::secure_endpoint(&endpoint) { return Err("Use the service’s address, like https://api.openai.com (https, or http only on this Mac).".into()); }
   if model.is_empty() || model.len() > 80 { return Err("Name the model as the service knows it, like gpt-4.1-mini.".into()); }
   if key.is_empty() || key.len() > 400 || key.contains(char::is_whitespace) { return Err("Paste the service’s API key.".into()); }
   probe(&Route::OpenAi { endpoint: endpoint.clone(), key: key.clone(), model: model.clone() }, settings::get().claude.model).await.map_err(|e| e.to_string())?;
-  let stored = CString::new(key).map_err(|_| "Invalid key".to_owned())?;
+  // Kept with the address it was proven against, so a settings file edited to point elsewhere never gets the key.
+  let stored = CString::new(format!("{endpoint}\n{key}")).map_err(|_| "Invalid key".to_owned())?;
   if !unsafe { dictate_keychain_set(OPENAI.as_ptr(), stored.as_ptr()) } { return Err("Couldn’t save the key in your Keychain.".into()); }
   settings::update(&app, &json!({ "claude": { "enabled": true, "via": "openAi", "openAiEndpoint": endpoint, "openAiModel": model } }))
 }
