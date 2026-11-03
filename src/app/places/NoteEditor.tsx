@@ -96,8 +96,8 @@ export function NoteEditor({ path, kind, onChanged, onDeleted, onMoved, onError 
         ? <Button small variant="quiet" onClick={() => archive(false)}>Restore</Button>
         : <Button small variant="quiet" icon="archive" aria-label="Archive" title="Move to the archive" onClick={() => archive(true)} />}
       {deleting
-        ? <><span className="ask-confirm">Move to the Trash?</span><Button small variant="quiet" onClick={() => setDeleting(false)}>Keep</Button><Button small variant="danger" onClick={remove}>Trash</Button></>
-        : <Button small variant="quiet" icon="trash" aria-label="Move to the Trash" title="Move to the Trash" onClick={() => setDeleting(true)} />}
+        ? <><span className="ask-confirm">Move to Trash?</span><Button small variant="quiet" onClick={() => setDeleting(false)}>Keep</Button><Button small variant="danger" onClick={remove}>Trash</Button></>
+        : <Button small variant="quiet" icon="trash" aria-label="Move to Trash" title="Move to Trash" onClick={() => setDeleting(true)} />}
     </div>
     <div className="editor-page">
       <input className="note-title" aria-label="Title" placeholder="Title" value={title} spellCheck onChange={event => { setTitle(event.target.value); changed({ title: event.target.value }); }}

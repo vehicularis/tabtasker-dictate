@@ -206,7 +206,6 @@ export function App() {
   // itself; the stickies page is its own list.
   const hasColumn = (place === 'notes' || place === 'meetings') && !!items?.length || settingsOpen; // archived ones count: the archive is in the column
   const listed = items && items.filter(item => !item.archived);
-  const withColumn = column && hasColumn;
   const railItem = (candidate: Place, on: boolean, onClick: () => void) => { const Glyph = PLACE_GLYPHS[candidate.route]; return <li key={candidate.route}>
     <button type="button" className="rail-item" aria-label={candidate.title} title={candidate.title} aria-current={on ? 'page' : undefined} onClick={onClick}>{Glyph ? <Glyph size={24} /> : <Icon name={candidate.icon} size={18} />}</button>
   </li>; }
@@ -263,12 +262,14 @@ export function App() {
         <ul className="rail-group">{PLACES.map(p => railItem(p, place === p.route, () => go(p.route)))}</ul>
         <ul className="rail-group rail-foot">{railItem(EXTRA.settings, settingsOpen, () => go('settings'))}</ul>
       </nav>
-      {withColumn && <aside ref={leave} className="column" aria-label={`${here.title} sidebar`}>
-        {props && place === 'notes' && <NotesColumn kind="note" path={arg} items={items} {...props} onError={setToast} onOpen={go} />}
-        {props && place === 'meetings' && <NotesColumn kind="meeting" path={arg} items={items} {...props} onError={setToast} onOpen={go} />}
-        {props && settingsOpen && <SettingsColumn current={here.route} onOpen={go} />}
-      </aside>}
-      {withColumn && <ColumnResizer />}
+      {hasColumn && <div ref={leave} className="column-slot" data-closed={column ? undefined : ''} aria-hidden={column ? undefined : true}>
+        <aside className="column" aria-label={`${here.title} sidebar`}>
+          {props && place === 'notes' && <NotesColumn kind="note" path={arg} items={items} {...props} onError={setToast} onOpen={go} />}
+          {props && place === 'meetings' && <NotesColumn kind="meeting" path={arg} items={items} {...props} onError={setToast} onOpen={go} />}
+          {props && settingsOpen && <SettingsColumn current={here.route} onOpen={go} />}
+        </aside>
+        <ColumnResizer />
+      </div>}
       <main key={`${tab.id}:${place}`} className="content" aria-label={here.title}>
         {props && place === 'notes' && <NotePage kind="note" path={arg} items={listed} {...props} onError={setToast} onOpen={go} />}
         {props && place === 'meetings' && <NotePage kind="meeting" path={arg} items={listed} {...props} onError={setToast} onOpen={go} />}

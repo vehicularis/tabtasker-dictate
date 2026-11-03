@@ -15,7 +15,24 @@
 .notices { max-height: 240px; margin: 0; padding: 2px 2px 2px 0; overflow: auto; font: 11px/1.55 var(--font-mono); color: var(--ink-2); overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; }
 .notices p { margin: 0; }
 .notices:focus-visible { outline-offset: 6px; border-radius: 2px; }
-.about-foot { margin: 0; font-size: 13px; text-align: center; color: var(--ink-3); }
+/* The end of the page: a painted card. Warm paper with washes of the board's own hues bleeding into it, a grain
+   over all of it, Business's otters in conversation on its floor, the lockup, a line, the links and the ©. The
+   paper stays paper by night (the otters are drawn in ink), so the card is the one light thing on a dark page. */
+.about-end { position: relative; display: flex; align-items: flex-end; gap: 22px; margin: 14px 0 0; padding: 22px 26px 0 18px; border-radius: var(--radius-section); overflow: hidden; isolation: isolate; color: #2b2622; background: #f4efe6; box-shadow: var(--elev-raised); }
+.about-end::before { content: ''; position: absolute; inset: -30%; z-index: -1; filter: blur(18px) saturate(1.1);
+  background: radial-gradient(40% 55% at 14% 28%, rgb(74 140 210 / .30), transparent 72%), radial-gradient(36% 50% at 82% 22%, rgb(224 163 58 / .30), transparent 72%),
+    radial-gradient(46% 58% at 58% 92%, rgb(90 165 122 / .24), transparent 72%), radial-gradient(28% 40% at 34% 96%, rgb(180 98 156 / .16), transparent 72%); }
+.about-end::after { content: ''; position: absolute; inset: 0; z-index: -1; opacity: .16; mix-blend-mode: multiply; pointer-events: none;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .9 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23g)'/%3E%3C/svg%3E"); }
+.about-otters { flex: none; width: 196px; height: auto; margin-bottom: -6px; -webkit-user-drag: none; }
+.about-end-words { display: flex; flex: 1; flex-direction: column; gap: 6px; min-width: 0; padding-bottom: 20px; }
+.about-lockup { display: flex; align-items: center; gap: 8px; margin: 0 0 2px; font: 600 17px/1 var(--font-display); letter-spacing: -.01em; color: #1d1a17; }
+.about-lockup svg { display: block; border-radius: 5px; box-shadow: 0 1px 2px rgb(0 0 0 / .25); }
+.about-end-line { max-width: 44ch; margin: 0; font-size: 13.5px; line-height: 1.45; color: #4a433d; }
+.about-links { display: flex; flex-wrap: wrap; gap: 2px 16px; margin: 4px 0 0; }
+.about-end .link { color: #1d1a17; text-decoration-color: rgb(29 26 23 / .35); }
+.about-end .link:hover { text-decoration-color: #1d1a17; }
+.about-foot { margin: 6px 0 0; font-size: 12.5px; color: #6d655d; }
 /* The policy and the terms: a term in ink, its words beside it, nothing else. */
 .legal { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 2px 0; font-size: 13px; line-height: 1.5; user-select: text; -webkit-user-select: text; }
 .legal > div { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 12px; }

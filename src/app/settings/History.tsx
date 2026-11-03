@@ -156,7 +156,7 @@ export function History({ settings, update }: PageProps) {
       </EmptyState>
       : !entries.length
         ? stats?.dictations
-          ? <EmptyState icon="history" title="Nothing here right now">What you say next will show up here{FOR[keep]}.</EmptyState>
+          ? <EmptyState icon="history" title="Nothing here yet">What you say next will show up here{FOR[keep]}.</EmptyState>
           : <EmptyState icon="history" title="Nothing here yet">Hold {KEY_NAMES[settings.shortcuts.dictate]} and talk in any app, and it’ll show up here.</EmptyState>
         : <section className="history-list" aria-label="What you said">
           <label className="search history-search">
