@@ -3,7 +3,7 @@ import { useEditorState, type Editor } from '@tiptap/react';
 import { Icon } from '../ui/Icon';
 import { keep, Menu, MenuKeys } from './Menu';
 
-export type Action = {
+type Action = {
   id: string; label: string; text?: string; icon: ReactNode; run: () => void; active?: boolean; disabled?: boolean;
   group?: 'Text style' | 'Blocks & media' | 'History';
 };

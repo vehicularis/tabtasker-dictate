@@ -4,7 +4,7 @@ import { reduced } from '../ui/motion';
 // The window's tabs, as TabTasker Business's desktop app keeps them (desktopTabs.ts): a tab is a remembered
 // place with its own back and forward, not a second page. Every change here keeps the tab on screen by who
 // it is, not by where it stands, so moving, closing or reopening others never swaps it for a neighbour.
-export type Tab = { id: number; route: string; back: string[]; forward: string[] };
+type Tab = { id: number; route: string; back: string[]; forward: string[] };
 export type Tabs = { tabs: Tab[]; active: number };
 /// A closed tab and where it stood, for Reopen Closed Tab.
 export type Closed = { tab: Tab; at: number };

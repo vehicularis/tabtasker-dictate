@@ -68,7 +68,6 @@
 .layer:is([data-edge='left'], [data-edge='right']) .dots { flex-direction: column; height: auto; padding: 6px 0; }
 .dots::before { content: ''; position: absolute; inset: -12px -22px; }
 .dots i { width: 4px; height: 4px; border-radius: 50%; background: currentColor; opacity: .8; }
-.layer[data-pending] .dots::after { content: ''; position: absolute; top: 5px; right: 3px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
 /* The model loading at launch: the dots light up one after another until it is ready. */
 .layer[data-loading] .dots i { animation: loading 1.2s ease-in-out infinite; }
 .layer[data-loading] .dots i:nth-child(2) { animation-delay: .2s; }
@@ -149,7 +148,7 @@
 .layer { --from-x: 0px; --from-y: 8px; --origin: 50% 100%; --leave: translateY(4px) scale(.96); }
 .layer[data-edge='left'] { --from-x: -8px; --from-y: 0px; --origin: 0 50%; --leave: translateX(-4px) scale(.96); }
 .layer[data-edge='right'] { --from-x: 8px; --from-y: 0px; --origin: 100% 50%; --leave: translateX(4px) scale(.96); }
-:is(.said, .toast, .learned, .card, .claude-bubble, .claude-send, .meeting-pill, .hands-free) { transform-origin: var(--origin); animation: fade-in var(--quick) var(--ease) backwards, emerge var(--pop) var(--spring) backwards; }
+:is(.said, .toast, .learned, .card, .claude-bubble, .meeting-pill, .hands-free) { transform-origin: var(--origin); animation: fade-in var(--quick) var(--ease) backwards, emerge var(--pop) var(--spring) backwards; }
 @keyframes emerge { from { translate: calc(var(--from-x) * var(--motion)) calc(var(--from-y) * var(--motion)); scale: calc(1 - .04 * var(--motion)); } }
 
 /* ---------- the bubble, the saved note and the toast ---------- */
@@ -168,13 +167,11 @@
 .name { display: flex; align-items: center; gap: 7px; font-weight: 600; color: var(--ink); }
 .head { cursor: grab; }
 .close { display: grid; place-items: center; width: 22px; height: 22px; margin-left: auto; padding: 0; border: 0; border-radius: 50%; background: none; opacity: .55; cursor: pointer; }
-.close.grow + .close { margin-left: 0; }
 .close:hover { opacity: 1; }
 .title { display: block; width: 100%; box-sizing: border-box; margin: 2px 0 6px; padding: 2px 0; border: 0; border-radius: 6px; background: none; color: var(--ink); font: 500 18px/1.3 var(--font-display); }
 .title::placeholder { color: var(--ink-3); }
 .text { display: block; width: 100%; box-sizing: border-box; min-height: 96px; max-height: 300px; padding: 8px 10px; border: 0; border-radius: 12px; resize: none; background: var(--surface); color: var(--ink); font: inherit; field-sizing: content; }
 .text:focus { background: var(--surface-2); }
-.more { margin: 6px 10px 0; font-size: 13px; color: var(--ink-3); }
 .actions { display: flex; align-items: center; gap: 6px; margin-top: 12px; }
 .ask { margin-right: auto; font-size: 12.5px; color: var(--ink-2); }
 .tool { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 9px; background: none; cursor: pointer; }
@@ -191,38 +188,6 @@
 .setup .head svg { flex: none; border-radius: 9px; }
 .setup kbd { padding: 1px 6px; border-radius: 5px; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--ink); background: color-mix(in srgb, var(--ink) 10%, transparent); }
 .link { padding: 0; border: 0; background: none; color: var(--accent-ink); font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
-/* Quick settings: Settings' switch, in the card. */
-.switch { position: relative; flex: none; width: 36px; height: 20px; padding: 0; border: 0; border-radius: 10px; background: var(--input); cursor: pointer; transition: background .25s var(--ease); }
-.switch .knob { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--knob); box-shadow: var(--shadow); transition: transform .25s var(--ease); }
-.switch[aria-checked='true'] { background: var(--accent); }
-.switch[aria-checked='true'] .knob { transform: translateX(16px); }
-.quick .ask { font-size: 12.5px; line-height: 1.35; color: var(--ink-3); }
-.row-icon { display: grid; flex: none; place-items: center; width: 30px; height: 30px; border-radius: 9px; color: var(--ink-2); background: var(--surface); box-shadow: inset 0 1px 2px var(--well-shadow); }
-/* The Library card: a search, then the files as rows, the newest first; a click on a row opens the file. */
-.library { width: 420px; }
-.library-find { display: flex; align-items: center; gap: 6px; height: 30px; margin: 0 0 8px; padding: 0 9px; border-radius: 10px; color: var(--ink-3); background: var(--well); box-shadow: inset 0 1px 3px var(--well-shadow); }
-.library-find:focus-within { background: color-mix(in srgb, var(--well), var(--ink) 6%); }
-.library-find input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: 0; font: inherit; font-size: 13.5px; color: var(--ink); background: none; }
-.library-find input::placeholder { color: var(--ink-3); }
-.library-find input::-webkit-search-cancel-button { display: none; }
-.library-list { max-height: 384px; margin: 0 -4px; padding: 0 4px; overflow-y: auto; scrollbar-width: thin; }
-.library-list li { gap: 10px; padding: 7px 8px 7px 10px; }
-.library-open { padding: 0; border: 0; background: none; text-align: left; cursor: pointer; }
-.library-open:hover { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, currentColor 35%, transparent); }
-.library-open small { display: -webkit-box; overflow: hidden; -webkit-line-clamp: 1; -webkit-box-orient: vertical; }
-.library-acts { display: flex; flex: none; gap: 2px; opacity: .6; }
-.library-list li:hover .library-acts, .library-acts:focus-within { opacity: 1; }
-.library-acts .tool { width: 26px; height: 26px; }
-.library-none { margin: 6px 4px 10px; font-size: 13px; color: var(--ink-3); }
-.library .actions .btn { display: inline-flex; align-items: center; gap: 6px; }
-.library .actions .ask { text-align: center; }
-.library-where { margin: 8px 0 0; font-size: 12px; line-height: 1.4; color: var(--ink-3); text-align: center; }
-.library-where button { padding: 0; border: 0; background: none; font: inherit; color: var(--ink-2); text-decoration: underline dotted; text-underline-offset: 3px; cursor: pointer; }
-.library-where button:hover { color: var(--ink); }
-/* Ask Claude: one field and a button; the answer comes on Claude's card. */
-.askcard { width: 400px; }
-.askfield { height: 34px; margin-bottom: 10px; }
-.askfield input { font-size: 14px; }
 /* Raised rows, as in Settings. */
 .ways { display: flex; flex-direction: column; gap: 5px; margin: 0; padding: 0; list-style: none; }
 .ways li { display: flex; align-items: center; gap: 12px; min-height: 44px; box-sizing: border-box; padding: 8px 12px; border-radius: 12px; background: var(--surface-2); box-shadow: var(--elev-raised); }

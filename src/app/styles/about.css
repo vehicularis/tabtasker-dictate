@@ -1,0 +1,13 @@
+/* ---------- About ---------- */
+.about { display: flex; flex-direction: column; align-items: center; gap: 2px; margin: -6px 0 26px; text-align: center; }
+/* The icon is drawn full bleed (macOS rounds it in the Dock), so it is rounded and shadowed here as the Dock would. */
+.about img { margin: 6px 0 10px; border-radius: 25px; box-shadow: 0 10px 28px rgb(0 0 0 / .3), 0 0 0 .5px rgb(0 0 0 / .2); -webkit-user-drag: none; }
+.about h1 { margin: 0; font: 500 26px/1.2 var(--font-display); letter-spacing: -.01em; }
+.about p { margin: 0; font-size: 14px; color: var(--ink-2); }
+.about .version { margin-bottom: 6px; font-size: 13px; color: var(--ink-3); font-variant-numeric: tabular-nums; user-select: text; -webkit-user-select: text; }
+.pledge { align-items: flex-start; gap: 12px; padding-top: 12px; padding-bottom: 12px; }
+.pledge-icon { display: grid; flex: none; place-items: center; width: 30px; height: 30px; color: var(--ink-3); }
+.notices { max-height: 240px; margin: 0; padding: 2px 2px 2px 0; overflow: auto; font: 11px/1.55 var(--font-mono); color: var(--ink-2); overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; }
+.notices p { margin: 0; }
+.notices:focus-visible { outline-offset: 6px; border-radius: 2px; }
+.about-foot { margin: 0; font-size: 13px; text-align: center; color: var(--ink-3); }

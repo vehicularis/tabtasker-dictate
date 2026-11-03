@@ -1,0 +1,29 @@
+/* ---------- the title bar: Business's DesktopTitleBar. 28-point ghost tools, then the tabs, each a 28-point pill of 13-point text,
+   the open one lit and lifted; Help at the end as a small labelled button ---------- */
+.titlebar { position: absolute; inset: 0 0 auto; z-index: 2; display: flex; align-items: center; gap: 2px; height: var(--bar); padding: 0 20px 0 80px; user-select: none; -webkit-user-select: none; }
+.bar-tools { display: flex; flex: none; align-items: center; gap: 2px; }
+.bar-tool { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px; color: var(--ink-2); background: none; cursor: pointer; -webkit-app-region: no-drag; transition: background var(--quick) var(--ease), color var(--quick) var(--ease); }
+.bar-tool:hover:not(:disabled), .bar-tool[aria-pressed='true']:not(:disabled) { color: var(--ink); background: var(--surface-2); }
+.bar-tool:disabled { opacity: .4; cursor: default; }
+.tabs { position: relative; display: flex; flex: 1; align-items: center; gap: 4px; min-width: 0; margin-left: 8px; overflow-x: auto; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab { position: relative; display: flex; flex: 1; align-items: center; min-width: 96px; max-width: 224px; height: 28px; padding-right: 4px; border-radius: 10px; font-size: 13px; color: var(--ink-3); background: color-mix(in srgb, var(--ink) 5%, transparent); -webkit-app-region: no-drag; transition: background var(--quick), color var(--quick), box-shadow var(--quick); }
+/* A tab being dragged (tabs.ts useTabDrag): it comes up over its neighbours and follows the pointer; the others
+   slide aside and take no hover while they do, so nothing flickers under the pointer. */
+.tab[data-lifted] { z-index: 3; cursor: grabbing; box-shadow: var(--elev-float); }
+.tabs[data-tab-dragging] { cursor: grabbing; }
+.tabs[data-tab-dragging] .tab:not([data-lifted]) { pointer-events: none; }
+.tab-menu .ed-menu-item kbd { margin-left: auto; padding-left: 20px; font: 500 11.5px/1 var(--font); letter-spacing: .02em; opacity: .55; }
+.tab[aria-selected='false']:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 9%, transparent); }
+.tab[aria-selected='true'] { color: var(--ink); background: var(--tab-on); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ink) 5%, transparent), 0 1px 3px rgb(0 0 0 / .12); }
+.tab-select { display: flex; flex: 1; align-items: center; gap: 8px; min-width: 0; height: 100%; padding: 0 4px 0 10px; border: 0; border-radius: inherit; font: inherit; color: inherit; text-align: left; background: none; cursor: pointer; }
+.tab-select svg { flex: none; }
+.tab-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tab-close { display: flex; flex: none; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 4px; color: inherit; background: none; cursor: pointer; opacity: 0; }
+.tab:is(:hover, :focus-within) .tab-close, .tab[aria-selected='true'] .tab-close { opacity: 1; }
+.tab-close:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 10%, transparent); }
+.tab-select:focus-visible, .tab-close:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.bar-end { display: flex; flex: none; align-items: center; gap: 8px; margin-left: 12px; }
+.titlebar-help { position: relative; display: inline-flex; flex: none; align-items: center; gap: 6px; height: 28px; padding: 0 8px; border: 0; border-radius: 6px; font: 500 12px/1 var(--font); color: var(--ink-2); background: none; cursor: pointer; -webkit-app-region: no-drag; transition: background var(--quick) var(--ease), color var(--quick) var(--ease); }
+.titlebar-help:hover { color: var(--ink); background: var(--surface-2); }
+.titlebar-help[aria-pressed='true'] { color: var(--accent-ink); background: var(--accent-fill); }

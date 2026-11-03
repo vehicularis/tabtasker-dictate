@@ -1,4 +1,5 @@
 import type { Mock } from '.';
+import { stamp } from '../lib/dates';
 import type { Leftover, MeetingEvent, MeetingState } from '../overlay/MeetingPill';
 import { fileStem } from './notes';
 
@@ -15,10 +16,6 @@ export function register(mock: Mock) {
   const hours = (n: number) => Date.now() - n * 3600_000;
   let leftovers: Leftover[] = asked === 'leftover' ? [{ id: '2', sinceMs: hours(2), seconds: 1394, saved: false }, { id: '1', sinceMs: hours(50), seconds: 3925, saved: true }] : [];
 
-  const stamp = (at: number) => {
-    const date = new Date(at), two = (n: number) => String(n).padStart(2, '0');
-    return `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())} ${two(date.getHours())}.${two(date.getMinutes())}`;
-  };
   const keep = (leftover: Leftover) => { leftovers = [...leftovers.filter(one => one.id !== leftover.id), leftover].sort((a, b) => b.sinceMs - a.sinceMs); };
   const finish = (id: string, since: number, seconds: number) => {
     const settings = mock.settings();
@@ -34,7 +31,7 @@ export function register(mock: Mock) {
         return;
       }
       const folder = settings.meetings.folder ?? `${mock.status.notes}/Meetings`;
-      const [date, time] = stamp(since).split(' ');
+      const [date, time] = stamp(new Date(since)).split(' ');
       const path = `${folder}/${fileStem(settings.notes.fileName, claude ? 'Planning the launch' : `Meeting ${date} ${time}`, date, time)}.md`;
       if (asked === 'gaps') {
         keep({ id, sinceMs: since, seconds, saved: true });

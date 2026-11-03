@@ -39,6 +39,8 @@
 .ed-menu-item:disabled { opacity: .5; pointer-events: none; }
 .ed-menu-line { height: 1px; margin: 4px -4px; background: var(--m-line); }
 .ed-menu-label { padding: 6px 8px 4px; font: 600 10px/1.4 var(--font); letter-spacing: .06em; text-transform: uppercase; color: color-mix(in srgb, var(--window) 42%, transparent); }
+/* A line of what a menu's one choice will do, above it (a confirm, as Business's ask in a dialog). */
+.ed-menu-note { max-width: 240px; margin: 0; padding: 6px 10px 4px; font-size: 12.5px; line-height: 1.4; color: var(--m-dim); }
 /* The keys it answers to (MenuKeyboardHints). */
 .ed-keys { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 8px; font: 10px/1.4 var(--font); color: var(--m-dim); user-select: none; -webkit-user-select: none; pointer-events: none; }
 .ed-keys > span { display: inline-flex; align-items: center; gap: 4px; }

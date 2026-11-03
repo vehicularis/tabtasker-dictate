@@ -7,9 +7,9 @@ import { leave } from '../ui/motion';
 
 /// What "/" offers, as TabTasker Business's Text editor offers it (slashItems.ts): blocks to turn the
 /// line into or put in, each found by its name or a few other words.
-export type SlashItem = { id: string; title: string; detail: string; icon: IconName; keywords: string[]; run: (editor: Editor, range: Range) => void };
+type SlashItem = { id: string; title: string; detail: string; icon: IconName; keywords: string[]; run: (editor: Editor, range: Range) => void };
 
-export const slashItems = (onImage?: () => void): SlashItem[] => {
+const slashItems = (onImage?: () => void): SlashItem[] => {
   const block = (run: (chain: ReturnType<Editor['chain']>) => ReturnType<Editor['chain']>) => (editor: Editor, range: Range) => { run(editor.chain().focus().deleteRange(range)).run(); };
   const items: SlashItem[] = [
     { id: 'h1', title: 'Heading 1', detail: 'Large section heading', icon: 'h1', keywords: ['h1', 'title', 'heading'], run: block(chain => chain.setNode('heading', { level: 1 })) },
@@ -28,7 +28,7 @@ export const slashItems = (onImage?: () => void): SlashItem[] => {
 };
 
 /** Case-insensitive match on the title and the keywords. An empty query is everything. */
-export const filterSlash = (items: SlashItem[], query: string) => {
+const filterSlash = (items: SlashItem[], query: string) => {
   const q = query.trim().toLowerCase();
   return q ? items.filter(item => item.title.toLowerCase().includes(q) || item.keywords.some(word => word.includes(q))) : items;
 };

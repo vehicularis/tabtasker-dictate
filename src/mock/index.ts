@@ -11,7 +11,7 @@ import { register as stats } from './stats';
 import { register as setup } from './setup';
 import { register as design } from './design';
 
-export type Handler = (args: Record<string, unknown>) => unknown;
+type Handler = (args: Record<string, unknown>) => unknown;
 export type Mock = {
   /// Answers `command` in the browser. A later handler replaces an earlier one.
   handle: (command: string, handler: Handler) => void;

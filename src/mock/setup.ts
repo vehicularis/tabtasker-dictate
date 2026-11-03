@@ -26,7 +26,7 @@ export function register(mock: Mock) {
   });
 
   let since = 0;
-  const setup = () => location.pathname.endsWith('/settings.html') ? location.hash === '#setup' : !!params.get('preview')?.startsWith('setup');
+  const setup = () => location.pathname.endsWith('/app.html') ? location.hash === '#setup' : !!params.get('preview')?.startsWith('setup');
   const isKey = (event: KeyboardEvent) => event.code === CODES[mock.settings().shortcuts.dictate]
     && (event.code !== 'Backquote' || !(event.metaKey || event.ctrlKey || event.altKey));
   const release = () => {

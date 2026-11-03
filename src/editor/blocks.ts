@@ -30,7 +30,7 @@ interface DropTarget { pos: number; rect: DOMRect; side: 'before' | 'after'; ins
 /** The deepest block under the pointer whose parent takes the dragged node, split at its vertical
  *  middle: above the middle is before it, below is after. Not ProseMirror's character-position rule,
  *  which put the same drop above or below depending on how far right the hand let go. */
-export function blockDropTarget(view: EditorView, coords: { left: number; top: number }, dragged: PMNode): DropTarget | null {
+function blockDropTarget(view: EditorView, coords: { left: number; top: number }, dragged: PMNode): DropTarget | null {
   const found = view.posAtCoords(coords);
   if (!found) return null;
   const $pos = view.state.doc.resolve(found.pos);

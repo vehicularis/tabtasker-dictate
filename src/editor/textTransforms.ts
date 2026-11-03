@@ -9,7 +9,7 @@ import { TextSelection } from '@tiptap/pm/state';
 // ---- the string rules (lib/toolbox/text) ----
 
 const isAcronym = (word: string) => word.length > 1 && word === word.toUpperCase();
-export function changeCase(input: string, mode: 'upper' | 'lower' | 'title' | 'sentence'): string {
+function changeCase(input: string, mode: 'upper' | 'lower' | 'title' | 'sentence'): string {
   if (mode === 'upper') return input.toUpperCase();
   if (mode === 'lower') return input.toLowerCase();
   // Title case keeps an acronym ("the PDF export" stays "The PDF Export").
@@ -18,15 +18,15 @@ export function changeCase(input: string, mode: 'upper' | 'lower' | 'title' | 's
 }
 const lines = (input: string) => input.replace(/\r\n|\r/g, '\n');
 /// Runs of spaces to one, three or more line breaks to one blank line.
-export const tidySpacing = (input: string) => lines(input.replace(/[ \t]+/g, ' ')).replace(/\n{3,}/g, '\n\n');
-export function sortLines(input: string): string {
+const tidySpacing = (input: string) => lines(input.replace(/[ \t]+/g, ' ')).replace(/\n{3,}/g, '\n\n');
+function sortLines(input: string): string {
   const text = lines(input), trailing = text.endsWith('\n');
   const sorted = (trailing ? text.slice(0, -1) : text).split('\n').sort((a, b) => a < b ? -1 : a > b ? 1 : 0).join('\n');
   return trailing ? `${sorted}\n` : sorted;
 }
-export const dedupeLines = (input: string) => [...new Set(lines(input).split('\n'))].join('\n');
+const dedupeLines = (input: string) => [...new Set(lines(input).split('\n'))].join('\n');
 const SLUG_TRANSLITERATIONS: Record<string, string> = { 'ı': 'i', 'ß': 'ss' };
-export function slugify(input: string): string {
+function slugify(input: string): string {
   let base = input.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase();
   for (const [char, replacement] of Object.entries(SLUG_TRANSLITERATIONS)) base = base.replaceAll(char, replacement);
   return base.replace(/['’]/g, '').replace(/[^a-z0-9\s-]+/g, '').trim().replace(/[\s-]+/g, '-').replace(/^-+|-+$/g, '');

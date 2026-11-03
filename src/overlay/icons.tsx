@@ -11,13 +11,6 @@ const GEAR = Array.from({ length: 8 }, (_, i) => {
   return `${i ? 'L' : 'M'}${at(-14, 5.9)}L${at(-8, 7.6)}L${at(8, 7.6)}L${at(14, 5.9)}A5.9 5.9 0 0 1 ${at(31, 5.9)}`;
 }).join('') + 'Z';
 
-// The app icon, as design/icon.swift draws it: TabTasker's otter on dark grey, speaking (a small waveform
-// where its mouth is). The 1024 grid is scaled to the 26 tile here, and the otter is drawn in the icon's own
-// coordinates (y up) under one transform, so the two never drift apart.
-/// Business's mark (apps/web/public/tabtasker-mark.svg), in its own units: the head's path, the whisker dots, and Dictate's voice at the mouth.
-export const OTTER = 'M-13 -16 C-13 -22 -7 -25 0 -25 C7 -25 13 -22 13 -16 L13 15 C13 22 7 25 0 25 C-7 25 -13 22 -13 15 Z';
-export const WHISKERS = [[-3.5, -8], [-4.6, -7], [-3.5, -6], [3.5, -8], [4.6, -7], [3.5, -6]] as const;
-export const VOICE = [[-1.73, 0.87], [-0.865, 1.44], [0, 2.02], [0.865, 1.44], [1.73, 0.87]] as const;
 /// The otter as sound (design/icon.swift draws the same): a waveform in the otter's shape. Bars with rounded caps,
 /// each as tall as the otter is where it stands: the head's dome and the ears above (lifted a little), the body's
 /// round below; tall in the middle, short at the sides, the ears two taller bars, the whole the otter. No face.
@@ -32,7 +25,7 @@ const bodySpan = (x: number) => {
   return [bezier(-16, -22, -25, -25, t), bezier(15, 22, 25, 25, t)] as const;
 };
 const earSpan = (x: number) => { const dx = Math.abs(x) - 9; if (Math.abs(dx) > 4.5) return null; const h = Math.sqrt(4.5 * 4.5 - dx * dx); return [-22 - EAR_LIFT - h, -22 - EAR_LIFT + h] as const; };
-export const otterBars = (pitch = 2, width = 1.3) => {
+const otterBars = (pitch = 2, width = 1.3) => {
   const bars: { x: number; y: number; h: number }[] = [];
   for (let x = pitch / 2; x <= 13.5; x += pitch) for (const side of [-1, 1]) {
     const cx = side * x, body = bodySpan(cx), ear = earSpan(cx);
@@ -62,7 +55,6 @@ export const Logo = ({ size = 18 }: { size?: number }) => {
 export const NoteIcon = () => <Icon name="note" size={17} />;
 export const LibraryIcon = () => <Icon name="library" size={17} />;
 export const MicIcon = () => <Icon name="mic" size={17} />;
-export const FolderIcon = () => <Icon name="folder" size={17} />;
 export const PasteIcon = () => <Icon name="copy" size={17} />;
 export const MeetingIcon = () => <Icon name="meeting" size={17} />;
 export const GearIcon = () => <Line><path d={GEAR} /><circle cx="10" cy="10" r="2.4" /></Line>;

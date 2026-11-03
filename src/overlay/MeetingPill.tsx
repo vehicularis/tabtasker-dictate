@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { invoke, listen } from '../bridge';
+import { message } from '../lib/errors';
 import type { Events } from '../store';
 import { X } from './icons';
 import { leave } from '../ui/motion';
 import { PREVIEW } from './preview';
-import './MeetingPill.css';
+import './meeting-pill.css';
 
 /// What the Mac's own sound is doing in a meeting: waiting for macOS, recorded, or why it is not.
-export type SystemSound = 'pending' | 'on' | 'off' | 'unsupported' | 'denied' | 'failed';
+type SystemSound = 'pending' | 'on' | 'off' | 'unsupported' | 'denied' | 'failed';
 /// dictate-meeting, with what meeting.rs adds: which meeting, the Mac's sound, and a recording kept to retry.
 export type MeetingEvent = Events['dictate-meeting'] & { id?: string; system?: SystemSound; leftover?: string };
 /// A recording kept until someone chooses: a meeting that stopped before it was saved (a crash, a quit,
@@ -73,7 +74,7 @@ const preview = (PREVIEW && PREVIEWS[PREVIEW]) || {};
 
 // A meeting near the dots: recording with Stop, then saving and saved. A recording kept to try again is
 // offered back once the overlay loads. It listens for dictate-meeting itself, and gives way to the dots'
-// menu (MeetingPill.css).
+// menu (meeting-pill.css).
 export function MeetingPill() {
   const [recording, setRecording] = useState<MeetingEvent | null>(preview.recording ?? null);
   const [outcome, setOutcome] = useState<MeetingEvent | null>(preview.outcome ?? null);
@@ -122,7 +123,7 @@ export function MeetingPill() {
   const recover = (id: string, save: boolean) => {
     setDiscarding(false);
     void invoke('meeting_recover', { id, save }).then(() => { if (!save) look(later); }, (error: unknown) => {
-      setOutcome({ state: 'error', id, message: typeof error === 'string' ? error : 'Couldn’t do that. Try again in Settings › Meetings.' });
+      setOutcome({ state: 'error', id, message: message(error, 'Couldn’t do that. Try again in Settings › Meetings.') });
     });
   };
   const putOff = (id: string) => { const next = [...later, id]; setLater(next); setOutcome(null); look(next); };

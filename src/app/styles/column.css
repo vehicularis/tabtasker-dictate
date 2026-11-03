@@ -1,0 +1,91 @@
+/* ---------- the column: Business's rail column (SidebarRail, CollapsiblePanel). A leaf raised beside the spine, rounded on its left,
+   reaching 24 points under the pane; the frame's tone blends down its first 64 points. Its head is the place's name at 18 points with one
+   action flush right; the search is a well under it; the rows scroll in groups under 10-point uppercase headings that fold ---------- */
+.column { display: flex; flex: none; flex-direction: column; width: calc(var(--column) + var(--column-extra) + var(--overlap)); min-height: 0; box-sizing: border-box; margin-right: calc(-1 * var(--overlap)); padding: 8px calc(4px + var(--overlap)) 8px 4px; border-radius: 20px 0 0 20px; background-color: var(--shell-leaf); background-image: linear-gradient(to bottom, var(--shell-frame), transparent 64px); box-shadow: var(--elev-raised); user-select: none; -webkit-user-select: none;
+  --leave: translateX(-8px); animation: fade-in var(--quick) var(--ease) backwards, column-in var(--slow) var(--ease) backwards; }
+@keyframes column-in { from { translate: calc(-8px * var(--motion)) 0; } }
+/* The leaf comes in from the spine as Business's does, and goes back to it over the page, which already has the
+   room (motion.ts leave). What is in it changing (notes, meetings, settings; the list or the archive) fades. */
+.column[data-leaving] { z-index: 2; }
+/* Its edge, where the page begins, drags it up to 100 points wider, as Business's does (panel-resize-handle.css): 8 points
+   straddling the seam over the page, taking no room, with a short line that shows on hover and turns the accent while it moves.
+   The width is set on the window it is in (ColumnResizer), so the window drawn in Help keeps its own. */
+.column-resize { position: relative; z-index: 2; flex: none; width: 8px; margin: 0 -4px; cursor: col-resize; touch-action: none; }
+.column-resize:focus-visible { outline: none; }
+.column-resize::after { content: ''; position: absolute; top: 50%; left: 50%; width: 2px; height: 28px; border-radius: 2px; translate: -50% -50%; background: color-mix(in srgb, var(--ink-3) 40%, transparent); opacity: 0; pointer-events: none; transition: opacity var(--quick) var(--ease); }
+.column-resize:is(:hover, :focus-visible)::after, .window[data-resizing] .column-resize::after { opacity: 1; }
+.column-resize:focus-visible::after, .window[data-resizing] .column-resize::after { background: var(--accent); }
+.window[data-resizing], .window[data-resizing] * { cursor: col-resize !important; user-select: none; -webkit-user-select: none; }
+.column > * { animation: fade-in var(--quick) var(--ease) backwards; }
+.column-head { display: flex; flex: none; align-items: center; gap: 4px; min-height: 40px; padding: 4px 12px; }
+.column-head h2 { flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 18px; font-weight: 550; line-height: 1.4; }
+.column-head .ui-button { height: 28px; min-width: 28px; border-radius: 6px; }
+.column-head .ui-button.only-icon { width: 28px; }
+.column-search { height: 38px; margin: 8px 12px 0; padding: 0 10px; border-radius: 10px; font-size: 12px; background: color-mix(in srgb, var(--shell-canvas) 70%, transparent); box-shadow: var(--elev-well); }
+.column-search:focus-within { background: color-mix(in srgb, var(--shell-canvas) 85%, transparent); box-shadow: var(--elev-well), 0 0 0 2px var(--ring); }
+.column-search input { font-size: 13px; }
+.column-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 8px 12px; scrollbar-width: thin; }
+.column-group + .column-group { margin-top: 14px; }
+/* A group heading in plain sentence case, quiet, as Apple Notes sets its Today and Previous 7 days; the chevron that
+   folds it shows only under the pointer, or while it is folded. */
+.column-group-head { display: flex; align-items: center; gap: 5px; width: 100%; padding: 0 8px 4px; border: 0; border-radius: 6px; font: 600 12px/18px var(--font); text-align: left; color: var(--ink-2); background: none; cursor: pointer; transition: color var(--quick) var(--ease); }
+.column-group-head:hover { color: var(--ink); }
+.column-group-head svg { flex: none; order: 1; opacity: 0; transition: rotate .15s var(--ease), opacity var(--quick) var(--ease); }
+.column-group-head:is(:hover, :focus-visible) svg, .column-group:not([data-open]) .column-group-head svg { opacity: 1; }
+.column-group:not([data-open]) .column-group-head svg { rotate: -90deg; }
+.column-group-head .count { order: 2; margin-left: auto; width: 28px; font-weight: 400; letter-spacing: 0; text-align: center; font-variant-numeric: tabular-nums; }
+.column-group[data-open] .count { display: none; }
+.column-rows { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+/* A plain heading over rows that do not fold (the settings groups), the same type as the folding one. */
+.column-section + .column-section { margin-top: 12px; }
+.column-heading { margin: 0; padding: 0 8px 4px; font: 600 12px/18px var(--font); color: var(--ink-2); }
+.column-row, .list-item { position: relative; display: flex; align-items: flex-start; gap: 9px; width: 100%; min-height: 36px; box-sizing: border-box; padding: 8px 8px; border: 0; border-radius: 8px; font-size: 12px; line-height: 20px; text-align: left; color: color-mix(in srgb, var(--ink) 90%, transparent); background: none; cursor: pointer; transition: background var(--quick) var(--ease), color var(--quick) var(--ease); }
+.column-row:hover, .list-item:hover { background: color-mix(in srgb, var(--secondary) 60%, transparent); }
+.column-row:focus-visible, .list-item:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.column-row[aria-current='true'], .list-item[aria-current='true'] { color: color-mix(in srgb, var(--accent) 65%, var(--ink)); background: color-mix(in srgb, var(--accent) 9%, transparent); box-shadow: var(--elev-well); }
+.column-row-icon { display: flex; flex: none; align-items: center; justify-content: center; width: 24px; height: 24px; margin: -2px 0; border-radius: 7px; color: var(--ink-3); }
+.column-row { align-items: center; }
+.column-row[aria-current='true'] .column-row-icon { color: inherit; }
+.column-row-words { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+.column-row .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; line-height: 18px; }
+.list-item { display: block; }
+/* A note that is new rises into its place as Business's rows do, the ones under it gliding down (motion.ts
+   useFlip); one that went (archived, trashed) only fades, so its neighbours do not appear to flinch. */
+.list-item, .column-group-head { --enter: translateY(4px); --leave: none; }
+.column-group > .list-item { animation: fade-in var(--quick) var(--ease) backwards; } /* a day unfolded */
+.list-item .t { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; line-height: 18px; }
+.list-item .x { display: -webkit-box; margin-top: 1px; font-size: 12px; line-height: 1.35; color: var(--ink-2); -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.list-item[aria-current='true'] .x { color: inherit; opacity: .8; }
+.list-item .m { display: block; margin-top: 2px; font-size: 11px; line-height: 14px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+/* The second line: when, then the first words, on one line. */
+.list-item .d { display: block; margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; line-height: 17px; color: var(--ink-3); }
+.list-item .when { margin-right: 7px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.list-item .none { font-style: italic; }
+.list-item:is([aria-current="true"], [data-picked]) :is(.d, .when) { color: inherit; opacity: .78; }
+.column-views { margin: 8px 12px 0; } .column-views .ui-segmented { display: flex; } .column-views .ui-segmented button { flex: 1; }
+/* Picked rows (⌘ or ⇧ click): a fill in the accent, as Finder fills its selected rows, never a ring (that's focus).
+   What to do with them sits in the title row, in place of its action. */
+.list-item[data-picked], .list-item[data-picked][aria-current='true'] { color: color-mix(in srgb, var(--accent) 70%, var(--ink)); background: color-mix(in srgb, var(--accent) 18%, transparent); box-shadow: none; }
+.list-item[data-picked]:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.list-item[data-picked] .x { color: inherit; opacity: .8; }
+.column-bulk { display: inline-flex; flex: none; gap: 2px; animation: fade-in var(--quick) var(--ease) backwards; }
+.list-none { margin: 20px 12px; font-size: 12.5px; line-height: 1.45; color: var(--ink-3); text-align: center; }
+/* The record button in the column's head: a 28-point round with the mic; recording, a red stop square breathing. */
+.column-head .record, .column-head .record.only-icon { width: 28px; height: 28px; padding: 0; border-radius: 50%; }
+.record.on { color: var(--on-accent); background: var(--accent-button); box-shadow: var(--elev-control); }
+.record-stop { display: block; width: 10px; height: 10px; border-radius: 2px; background: #fff; animation: record-breathe 1.6s ease-in-out infinite; }
+@keyframes record-breathe { 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { .record-stop, .meeting-live i, .look-caret { animation: none; } }
+/* While a meeting runs, or recordings are kept: the time and the recordings, under the search. */
+.meeting-strip { display: flex; flex: none; flex-direction: column; gap: 6px; padding: 8px 12px 0; }
+.meeting-live { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.meeting-live i { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: record-breathe 1.6s ease-in-out infinite; }
+.leftover { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); }
+.leftover > span { flex: 1 1 100%; }
+
+/* The search field over a list, where a column has none. */
+.search { display: flex; flex: none; align-items: center; gap: 6px; height: 30px; padding: 0 9px; border-radius: var(--radius-control); color: var(--ink-3); background: var(--field); box-shadow: var(--elev-raised); }
+.search:focus-within { background: var(--surface-3); box-shadow: var(--elev-well); }
+.search input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: 0; font-size: 14px; color: var(--ink); background: none; }
+.search input::placeholder { color: var(--ink-3); }
+.search input::-webkit-search-cancel-button { display: none; }
