@@ -15,24 +15,27 @@
 .notices { max-height: 240px; margin: 0; padding: 2px 2px 2px 0; overflow: auto; font: 11px/1.55 var(--font-mono); color: var(--ink-2); overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; }
 .notices p { margin: 0; }
 .notices:focus-visible { outline-offset: 6px; border-radius: 2px; }
-/* The end of the page: a painting the width of the pane. Watercolour Highlands (About.tsx Highlands): a pale sky,
-   three ridges receding into mist, a loch taking the sky, a moor of heather in front, on warm paper with a grain over
-   it; Business's two otters in conversation on the moor; over the sky, the lockup, who makes Dictate, the links out
-   and the ©. The paper stays paper by night, so the painting is the one light thing on a dark page. It reaches
-   past the page's column to the pane's edges with container units (pane.css makes .content a container). */
-.about-end { position: relative; width: 100cqw; min-height: 300px; margin: 18px 0 -36px calc(50% - 50cqw); overflow: hidden; isolation: isolate; color: #2a2622; background: #f3eee4; }
-.about-end::after { content: ''; position: absolute; inset: 0; z-index: 1; opacity: .14; mix-blend-mode: multiply; pointer-events: none;
+/* The end of the page: the Highlands as an ink wash the width of the pane (About.tsx Highlands), in the page's own
+   tones: the sky is the page, the ridges the ink mixed a little deeper into it, so it belongs to the theme by day
+   and by night. A grain over it; Business's two otters in conversation on the moor; over the sky, the lockup, who
+   makes Dictate, the links out and the ©. It reaches past the page's column to the pane's edges with container
+   units (pane.css makes .content a container). */
+.about-end { position: relative; width: 100cqw; min-height: 280px; margin: 24px 0 -36px calc(50% - 50cqw); overflow: hidden; isolation: isolate; color: var(--ink); background: var(--shell-canvas); }
+.about-end::before { content: ''; position: absolute; inset: 0 0 auto; height: 40%; z-index: 1; background: linear-gradient(var(--shell-canvas), transparent); pointer-events: none; }
+.about-end::after { content: ''; position: absolute; inset: 0; z-index: 1; opacity: .07; mix-blend-mode: luminosity; pointer-events: none;
   background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .9 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23g)'/%3E%3C/svg%3E"); }
 .about-sky { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-.about-otters { position: absolute; right: 26px; bottom: -4px; z-index: 2; width: 168px; height: auto; -webkit-user-drag: none; filter: drop-shadow(0 1px 0 rgb(255 255 255 / .5)); }
+.about-otters { position: absolute; right: 28px; bottom: -3px; z-index: 2; width: 150px; height: auto; opacity: .92; -webkit-user-drag: none; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .about-otters { filter: invert(1) brightness(.92); opacity: .8; } }
+:root[data-theme='dark'] .about-otters { filter: invert(1) brightness(.92); opacity: .8; }
 .about-end-words { position: relative; z-index: 2; display: flex; flex-direction: column; gap: 6px; max-width: 440px; padding: 30px 36px 28px; }
-.about-lockup { display: flex; align-items: center; gap: 8px; margin: 0 0 2px; font: 600 17px/1 var(--font-display); letter-spacing: -.01em; color: #1d1a17; }
+.about-lockup { display: flex; align-items: center; gap: 8px; margin: 0 0 2px; font: 600 17px/1 var(--font-display); letter-spacing: -.01em; color: var(--ink); }
 .about-lockup svg { display: block; border-radius: 5px; box-shadow: 0 1px 2px rgb(0 0 0 / .25); }
-.about-end-line { max-width: 40ch; margin: 0; font-size: 13.5px; line-height: 1.45; color: #3f3933; }
+.about-end-line { max-width: 40ch; margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--ink-2); }
 .about-links { display: flex; flex-wrap: wrap; gap: 2px 16px; margin: 4px 0 0; }
-.about-end .link { color: #1d1a17; text-decoration-color: rgb(29 26 23 / .35); }
-.about-end .link:hover { text-decoration-color: #1d1a17; }
-.about-foot { margin: 8px 0 0; font-size: 12.5px; color: #5c554e; }
+.about-end .link { color: var(--ink); text-decoration-color: color-mix(in srgb, var(--ink) 35%, transparent); }
+.about-end .link:hover { text-decoration-color: var(--ink); }
+.about-foot { margin: 8px 0 0; font-size: 12.5px; color: var(--ink-3); }
 /* The policy and the terms: a term in ink, its words beside it, nothing else. */
 .legal { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 2px 0; font-size: 13px; line-height: 1.5; user-select: text; -webkit-user-select: text; }
 .legal > div { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 12px; }
