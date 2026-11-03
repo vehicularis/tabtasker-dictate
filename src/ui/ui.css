@@ -49,12 +49,16 @@ button { appearance: none; -webkit-appearance: none; }
 .ui-segmented-plate { position: absolute; inset: 0; background: color-mix(in srgb, var(--ink) 11%, transparent); pointer-events: none; transition: clip-path var(--slow) var(--ease); }
 
 /* ---------- fields: select, text, recorder ---------- */
-.ui-select { position: relative; display: inline-flex; flex: none; align-items: center; }
-.ui-select select { height: 30px; max-width: 260px; padding: 0 30px 0 11px; border: 0; border-radius: var(--radius-control); font: 14px/1 var(--font); color: var(--ink); background: var(--field); box-shadow: var(--elev-raised); appearance: none; -webkit-appearance: none; cursor: pointer; transition: box-shadow var(--quick) var(--ease); }
-.ui-select select:hover { box-shadow: var(--elev-raised-hover); }
-.ui-select select:disabled { opacity: .5; cursor: default; }
-.ui-select select:disabled:hover { box-shadow: var(--elev-raised); }
-.ui-select .ui-icon { position: absolute; right: 9px; color: var(--ink-3); pointer-events: none; }
+.ui-select { display: inline-flex; flex: none; align-items: center; gap: 8px; box-sizing: border-box; height: 30px; max-width: 260px; padding: 0 9px 0 11px; border: 0; border-radius: var(--radius-control); font: 14px/1 var(--font); color: var(--ink); background: var(--field); box-shadow: var(--elev-raised); cursor: pointer; transition: box-shadow var(--quick) var(--ease); }
+.ui-select > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ui-select:hover { box-shadow: var(--elev-raised-hover); }
+/* Open, it sinks into the page as Business's trigger does (data-[state=open]:shadow-well). */
+.ui-select[aria-expanded='true'] { box-shadow: var(--elev-well); }
+.ui-select .ui-icon { flex: none; margin-left: auto; color: var(--ink-3); }
+/* The choices scroll under the key hints, which stay. The tick sits in a gutter every row keeps, so the tray is as wide whichever is chosen. */
+.ui-select-list { max-height: 296px; overflow-y: auto; scrollbar-width: thin; }
+.ui-select-list .ed-menu-item { position: relative; padding-right: 34px; }
+.ui-select-list .ed-menu-item .ui-icon { position: absolute; right: 10px; }
 
 .ui-field { box-sizing: border-box; width: 220px; height: 30px; padding: 0 10px; border: 0; border-radius: var(--radius-control); font: 14px/1 var(--font); color: var(--ink); background: var(--field); box-shadow: var(--elev-raised); transition: box-shadow var(--quick) var(--ease); }
 .ui-field:focus { box-shadow: var(--elev-well); }

@@ -1,4 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
+import { Menu, MenuKeys } from '../editor/Menu';
 import { Icon, type IconName } from './Icon';
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'quiet' | 'danger'; icon?: IconName; small?: boolean };
@@ -55,14 +56,48 @@ export function Segmented<T extends string>({ value, options, onChange, label }:
   </div>;
 }
 
-/// A menu of choices: the Mac's own pop-up, so it reads and works like one.
-export function Select<T extends string>({ value, options, onChange, label }: { value: T; options: readonly Option<T>[]; onChange: (value: T) => void; label: string }) {
-  return <span className="ui-select">
-    <select value={value} aria-label={label} onChange={event => onChange(event.target.value as T)}>
-      {options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-    </select>
-    <Icon name="chevronDown" size={14} />
-  </span>;
+/// A menu of choices, as Business's Select: the choice on a field, and under it the inverted tray (Menu) with
+/// the chosen row ticked. A click, Return, Space or an arrow opens it on the chosen row; arrows walk, Return
+/// picks, Escape or Tab puts it away, and typing jumps to a row by its name (the same letter again, the next).
+export function Select<T extends string>({ value, options, onChange, label, className = '' }: { value: T; options: readonly Option<T>[]; onChange: (value: T) => void; label: string; className?: string }) {
+  const field = useRef<HTMLButtonElement>(null), list = useRef<HTMLDivElement>(null), typed = useRef({ text: '', at: 0 });
+  const [open, setOpen] = useState(false);
+  const close = () => { setOpen(false); field.current?.focus(); };
+  useLayoutEffect(() => {
+    const box = list.current, row = box?.querySelector<HTMLElement>('[aria-selected="true"]') ?? box?.querySelector<HTMLElement>('[role="option"]');
+    if (!open || !box || !row) return;
+    box.scrollTop = row.offsetTop - (box.clientHeight - row.offsetHeight) / 2;
+    row.focus({ preventScroll: true });
+  }, [open]);
+  const jump = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Tab') { event.preventDefault(); close(); return; }
+    if (event.key.length !== 1 || event.metaKey || event.ctrlKey || event.altKey) return;
+    const t = typed.current, now = performance.now();
+    t.text = now - t.at > 700 ? event.key : t.text + event.key;
+    t.at = now;
+    if (t.text === ' ') return; // Space on its own picks the row
+    event.preventDefault();
+    const rows = [...event.currentTarget.querySelectorAll<HTMLElement>('[role="option"]')], from = rows.indexOf(document.activeElement as HTMLElement);
+    const same = [...t.text].every(key => key === t.text[0]), find = (same ? t.text[0] : t.text).toLocaleLowerCase();
+    const order = same ? [...rows.slice(from + 1), ...rows.slice(0, from + 1)] : rows;
+    order.find(row => row.textContent!.toLocaleLowerCase().startsWith(find))?.focus();
+  };
+  return <>
+    <button ref={field} type="button" className={`ui-select ${className}`} aria-haspopup="listbox" aria-expanded={open} aria-label={label} onClick={() => open ? close() : setOpen(true)}
+      onKeyDown={event => { if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); setOpen(true); } }}>
+      <span>{options.find(option => option.value === value)?.label}</span>
+      <Icon name="chevronDown" size={14} />
+    </button>
+    {open && field.current && <Menu role="listbox" anchor={field.current} label={label} onClose={close} minWidth={field.current.offsetWidth}>
+      <div ref={list} className="ui-select-list" onKeyDown={jump}>
+        {options.map(option => <button key={option.value} type="button" role="option" aria-selected={option.value === value} className="ed-menu-item"
+          onClick={() => { close(); if (option.value !== value) onChange(option.value); }}>
+          {option.label}{option.value === value && <Icon name="check" size={16} />}
+        </button>)}
+      </div>
+      <MenuKeys />
+    </Menu>}
+  </>;
 }
 
 /// Text that is saved when you press Return or leave the field, not on every key.
