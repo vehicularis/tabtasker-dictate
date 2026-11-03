@@ -178,6 +178,8 @@ const stickyChange = (id: unknown, edit: (one: Sticky) => void) => { const found
 mock.handle('sticky_show', ({ id }) => stickyChange(id, one => { one.closed = false; one.archived = false; }));
 mock.handle('sticky_close', ({ id }) => stickyChange(id, one => { one.closed = true; }));
 mock.handle('sticky_archive', ({ id, archived }) => stickyChange(id, one => { one.archived = !!archived; one.closed = true; }));
+mock.handle('sticky_watch', () => {});
+mock.handle('sticky_hold', () => {});
 mock.handle('sticky_pin', ({ id, pinned }) => { const found = stickies.find(one => one.id === id); if (!found) throw 'That sticky is gone.'; found.pinned = !!pinned; return copy(found); });
 mock.handle('sticky_fold', ({ id, folded }) => { const found = stickies.find(one => one.id === id); if (!found) throw 'That sticky is gone.'; found.folded = !!folded; return copy(found); });
 mock.handle('sticky_remove', ({ id }) => { const at = stickies.findIndex(one => one.id === id); if (at >= 0) stickies.splice(at, 1); emit('dictate-stickies', { count: stickies.length }); });

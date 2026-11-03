@@ -45,25 +45,18 @@ jobs:
         with:
           workspaces: src-tauri
       - name: Fetch sherpa-onnx's libraries again when the cache dropped them
-        # sherpa-onnx-sys unpacks its prebuilt static libraries into target/sherpa-onnx-prebuilt, a
-        # folder rust-cache leaves out, while the build script's fingerprint is kept. A restored cache
-        # whose sherpa-onnx-sys crate needs recompiling (a bumped dependency) then fails to find
-        # libsherpa-onnx-c-api.a. With the libraries gone, forget the script ran so it downloads them.
+        # sherpa-onnx-sys unpacks its prebuilt static libraries into target/sherpa-onnx-prebuilt. rust-cache
+        # keeps that folder's directories but not its files, and the build script, seeing a lib directory,
+        # doesn't download again; a run that has to recompile sherpa-onnx-sys (a bumped dependency) then
+        # fails to find libsherpa-onnx-c-api.a. With no libraries there, the folder goes, and so does the
+        # script's fingerprint, so it runs again and downloads them.
         run: |
-          echo "prebuilt, as restored:"; find src-tauri/target/sherpa-onnx-prebuilt -maxdepth 3 2>/dev/null | head -20
-          echo "build dirs:"; ls -d src-tauri/target/*/build/sherpa-onnx-sys-* src-tauri/target/*/.fingerprint/sherpa-onnx-sys-* 2>/dev/null
           if ! ls src-tauri/target/sherpa-onnx-prebuilt/*/lib/libsherpa-onnx-c-api.a >/dev/null 2>&1; then
-            echo "no libraries: the build script runs again"
             rm -rf src-tauri/target/sherpa-onnx-prebuilt src-tauri/target/*/build/sherpa-onnx-sys-* src-tauri/target/*/.fingerprint/sherpa-onnx-sys-*
           fi
       - name: Clippy
         working-directory: src-tauri
         run: cargo clippy --all-targets --locked -- -D warnings
-      - name: Where sherpa-onnx's libraries are, after Clippy
-        run: |
-          find src-tauri/target/sherpa-onnx-prebuilt -maxdepth 3 2>/dev/null | head -20
-          for f in src-tauri/target/debug/build/sherpa-onnx-sys-*/output; do echo "== $f"; grep -i 'link-search\|link-lib=static=sherpa-onnx-c-api' "$f"; done
-          ls -la src-tauri/target/debug/build | grep sherpa
       - name: Tests
         working-directory: src-tauri
         run: cargo test --locked
