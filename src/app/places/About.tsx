@@ -4,7 +4,7 @@ import { invoke } from '../../bridge';
 import type { PageProps } from '../../store';
 import { Button, Icon, Section, Tile, TileGroup, type IconName } from '../../ui';
 import { BusinessMark, Logo, otterBars } from '../../overlay/icons';
-import city from '../assets/otter-city.webp';
+import studio from '../assets/otter-studio.png';
 import licence from '../../../LICENSE?raw';
 import notices from '../../../THIRD_PARTY_NOTICES.txt?raw';
 
@@ -45,7 +45,7 @@ const PRIVACY: [string, string][] = [
   ['What Dictate collects', 'Nothing. There is no account, no analytics and no crash reports; the app never phones home. The one download is the speech model from GitHub on first run, which shows GitHub your IP address as any download does.'],
   ['Your voice', 'It is turned into text on your Mac by Whisper, and the audio is discarded once that is done. A meeting’s recording is kept only until its transcript is saved, or until you discard a leftover.'],
   ['What you write', 'Notes, meetings, stickies, history and settings are files on your Mac, in folders you choose. Dictate never uploads them.'],
-  ['AI, only if you connect it', 'With Claude, the text you turn it on for goes to Anthropic under Anthropic’s terms and privacy policy: a dictation to polish, a note’s words for its title, a meeting’s transcript for its summary, a spoken command. Your key stays in the macOS Keychain. With a local model, nothing leaves your Mac.'],
+  ['AI, only if you connect it', 'With a service you connect (Anthropic’s Claude, OpenAI or any that speaks the OpenAI API), the text you turn it on for goes to that service under its own terms and privacy policy: a dictation to polish, a note’s words for its title, a meeting’s transcript for its summary, a spoken command. Your key stays in the macOS Keychain. With a local model, nothing leaves your Mac.'],
   ['Permissions', 'The microphone, to hear you. Accessibility, to type where your cursor is and to see the Dock. Screen and audio recording, only for a meeting’s other side. Each is used for that alone.'],
   ['Your rights', 'Everything is on your Mac, so deleting it is deleting the files; there is nothing to ask us for. Questions or complaints go to info@vehicularis.com, or to the UK Information Commissioner’s Office.'],
 ];
@@ -53,7 +53,7 @@ const TERMS: [string, string][] = [
   ['Open source', 'TabTasker | Dictate is licensed under the Apache License 2.0: use it, copy it, change it and share it under that licence.'],
   ['As it is', 'It comes without warranty, and to the extent the law allows, Vehicularis is not liable for loss from using it. The licence says the same, at length.'],
   ['Your recordings', 'You are responsible for what you record and transcribe. Where the law requires it, get the consent of the people in a meeting before you record it.'],
-  ['Services you connect', 'Anthropic’s Claude, or a model running on your Mac, comes with its own terms; Dictate only carries your text to it.'],
+  ['Services you connect', 'A model you connect, whether Anthropic’s, OpenAI’s, another service’s or one running on your Mac, comes with its own terms; Dictate only carries your text to it.'],
   ['The marks', 'TabTasker, Dictate and the otter are Vehicularis’s marks. The licence covers the code, not them.'],
   ['The law', 'These terms are governed by the law of England and Wales.'],
 ];
@@ -101,8 +101,8 @@ export function About(_: PageProps) {
     <Section title="Privacy">
       <TileGroup label="Privacy">
         <Pledge icon="mic" title="Your voice stays on your Mac">It’s turned into text right there, and the audio is deleted once that’s done.</Pledge>
-        <Pledge icon="agents" title="Agents only if you connect them">They only ever see text, and only for the things you turn them on for. Your Claude key is kept in the Keychain.</Pledge>
-        <Pledge icon="folder" title="Notes stay on your Mac">They’re plain files in a folder you choose. Claude Code and Claude Desktop can only read what you allow in Agents.</Pledge>
+        <Pledge icon="agents" title="Agents only if you connect them">They only ever see text, and only for the things you turn them on for. Your API key is kept in the Keychain.</Pledge>
+        <Pledge icon="folder" title="Notes stay on your Mac">They’re plain files in a folder you choose. Agents can only read what you allow in Agents.</Pledge>
         <Pledge icon="shield" title="No account, no analytics">There’s nothing to sign up for, and nothing about how you use Dictate is sent anywhere.</Pledge>
       </TileGroup>
     </Section>
@@ -137,7 +137,6 @@ export function About(_: PageProps) {
       </TileGroup>
     </Section>
     <footer className="about-end">
-      <img className="about-city" src={city} alt="" width={2172} height={724} draggable={false} loading="lazy" decoding="async" />
       <div className="about-card">
         <p className="about-lockup"><Logo size={24} /><span>TabTasker</span><i>|</i><span>Dictate</span></p>
         <div className="about-chips" aria-label="About this build">
@@ -153,6 +152,7 @@ export function About(_: PageProps) {
         </nav>
         <p className="about-made">Made with <BusinessMark size={18} /> by Vehicularis in the UK. © 2026 Vehicularis Limited.</p>
       </div>
+      <img className="about-city" src={studio} alt="" width={2172} height={724} draggable={false} loading="lazy" decoding="async" />
     </footer>
   </>;
 }

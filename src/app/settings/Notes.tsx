@@ -153,7 +153,7 @@ export function Notes({ settings, update }: PageProps) {
 
     <Section title="With AI" note={claude
       ? 'If the AI is slow or can’t be reached, the note is saved as it is.'
-      : <>These need Claude or a local model. <button type="button" className="link" onClick={() => { location.hash = 'settings/agents'; }}>Connect one</button></>}>
+      : <>These need AI. <button type="button" className="link" onClick={() => { location.hash = 'settings/agents'; }}>Connect one</button></>}>
       <TileGroup>
         <Tile title="Name notes with AI" dim={!claude}>
           <Toggle label="Name notes with AI" checked={notes.claudeTitle} onChange={claudeTitle => update({ notes: { claudeTitle } })} />

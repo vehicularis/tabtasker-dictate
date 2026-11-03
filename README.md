@@ -33,7 +33,7 @@ talk into for as long as you like, a sticky that stays on top of your windows, o
 - Stickies that float over your windows until you close them. Say “sticky: call Thomas” while you dictate
   and one appears.
 - Meeting recordings that tell the voices apart, including the other side of a call.
-- AI if you want it. Connect Claude or a model running on your Mac, and it’ll name your notes, summarise
+- AI if you want it. Connect Claude, OpenAI or any service that speaks the OpenAI API, or a model running on your Mac, and it’ll name your notes, summarise
   your meetings and tidy up what you dictate.
 
 <p align="center">

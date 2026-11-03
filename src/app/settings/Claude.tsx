@@ -49,18 +49,18 @@ export function Claude({ settings, update }: PageProps) {
   // The way in use once connected, else the one being chosen: Haiku, Sonnet, Opus and effort are Claude's alone,
   // so a local model (named under Connection) shows only what applies to it.
   const [choosing, setChoosing] = useState<ClaudeVia>(claude.claudeCode ? 'claudeCode' : 'api');
-  const local = (claude.enabled ? claude.via : choosing) === 'local';
+  const custom = ['local', 'openAi'].includes(claude.enabled ? claude.via : choosing); // a model named by hand: Haiku, Sonnet, Opus and effort are Claude's alone
   const keys = settings.shortcuts;
   const commandsHow = keys.command === 'off'
     ? 'Turn on Ask AI in Shortcuts to use commands.'
-    : `Hold ${KEY_NAMES[keys.dictate]} with ${COMMAND_GLYPHS[keys.command]} and tell ${local ? 'the model' : 'Claude'} what to do with the selected text, or ask it something.`;
+    : `Hold ${KEY_NAMES[keys.dictate]} with ${COMMAND_GLYPHS[keys.command]} and tell the AI what to do with the selected text, or ask it something.`;
 
   return <>
     <GroupHeader title="AI">AI only ever gets the text of what you say, never your voice. If you’d rather nothing left your Mac, use a local model.</GroupHeader>
     <Connection claude={claude} home={status?.home} via={choosing} onVia={setChoosing} />
-    <Section title={local ? undefined : 'Model and effort'} note={claude.enabled ? undefined : local ? 'This applies once you’re connected.' : 'These apply once you’re connected.'}>
+    <Section title={custom ? undefined : 'Model and effort'} note={claude.enabled ? undefined : custom ? 'This applies once you’re connected.' : 'These apply once you’re connected.'}>
       <TileGroup>
-        {!local && <>
+        {!custom && <>
           <Tile title="Model" detail={ABOUT[claude.model]}>
             <Segmented label="Model" value={claude.model} options={MODELS} onChange={model => void update({ claude: { model } })} />
           </Tile>
@@ -85,7 +85,7 @@ export function Claude({ settings, update }: PageProps) {
   </>;
 }
 
-const VIAS: { value: ClaudeVia; label: string }[] = [{ value: 'claudeCode', label: 'Claude Code' }, { value: 'api', label: 'Anthropic key' }, { value: 'local', label: 'Local model' }];
+const VIAS: { value: ClaudeVia; label: string }[] = [{ value: 'claudeCode', label: 'Claude Code' }, { value: 'api', label: 'Anthropic key' }, { value: 'openAi', label: 'OpenAI & others' }, { value: 'local', label: 'Local model' }];
 
 /// Two ways in: the Claude Code on this Mac, with the account signed in there, or a key pasted once,
 /// tested, then shown only as saved. Connected, the way in use shows with Test and a way out. Focus never
@@ -98,6 +98,9 @@ function Connection({ claude, home, via, onVia: setVia }: { claude: Settings['cl
   const [key, setKey] = useState('');
   const [endpoint, setEndpoint] = useState(claude.localEndpoint);
   const [localModel, setLocalModel] = useState(claude.localModel);
+  const [openEndpoint, setOpenEndpoint] = useState(claude.openAiEndpoint);
+  const [openModel, setOpenModel] = useState(claude.openAiModel);
+  const [openKey, setOpenKey] = useState('');
   const [busy, setBusy] = useState<'connect' | 'test' | null>(null);
   const [removing, setRemoving] = useState(false);
   const [note, setNote] = useState<{ text: string; error?: boolean } | null>(null);
@@ -134,10 +137,17 @@ function Connection({ claude, home, via, onVia: setVia }: { claude: Settings['cl
     void invoke('claude_connect_local', { endpoint, model: localModel }).then(() => { setNote({ text: `Connected to ${localModel}.` }); focus('test'); },
       error => { setNote({ text: message(error, 'Couldn’t reach the local model. Make sure it’s running.'), error: true }); focus('code'); }).finally(() => setBusy(null));
   };
+  const connectOpenAi = (event: FormEvent) => {
+    event.preventDefault();
+    if (busy) return;
+    setBusy('connect'); setNote(null);
+    void invoke('claude_connect_open_ai', { endpoint: openEndpoint, key: openKey, model: openModel }).then(() => { setOpenKey(''); setNote({ text: `Connected to ${openModel}. The key is in your Keychain.` }); focus('test'); },
+      error => { setNote({ text: message(error, 'Couldn’t connect. Check the address, the model and the key.'), error: true }); focus('key'); }).finally(() => setBusy(null));
+  };
   const test = () => {
     if (busy) return;
     setBusy('test'); setNote(null);
-    void invoke<number>('claude_test').then(ms => setNote({ text: `${claude.via === 'local' ? claude.localModel : NAME[model]} answered in ${seconds(ms)}.` }),
+    void invoke<number>('claude_test').then(ms => setNote({ text: `${claude.via === 'local' ? claude.localModel : claude.via === 'openAi' ? claude.openAiModel : NAME[model]} answered in ${seconds(ms)}.` }),
       error => setNote({ text: message(error, 'The test didn’t go through. Try again in a moment.'), error: true })).finally(() => setBusy(null));
   };
   const confirm = () => { setRemoving(true); setNote(null); focus('cancel'); };
@@ -152,7 +162,7 @@ function Connection({ claude, home, via, onVia: setVia }: { claude: Settings['cl
   const codeWhere = claude.claudeCode ? tilde(claude.claudeCode, home) : null;
   if (!connected) return <Section title="Connection" note={said ?? 'Nothing’s sent until you connect.'}>
     <TileGroup>
-      <Tile title="Connect through" detail={via === 'claudeCode' ? 'Uses whichever Claude account Claude Code is signed in to.' : undefined}>
+      <Tile title="Connect through" detail={via === 'claudeCode' ? 'Uses whichever Claude account Claude Code is signed in to.' : via === 'openAi' ? 'Any service that speaks the OpenAI API, with its own key.' : via === 'local' ? 'A model running on this Mac. Nothing leaves it.' : 'Anthropic’s API with your own key.'} stack>
         <Segmented label="Connect through" value={via} options={VIAS} onChange={setVia} />
       </Tile>
       {via === 'claudeCode' && <Tile title="Claude Code" detail={codeWhere ? undefined : 'Install Claude Code and sign in once in Terminal, then click Find below.'}>
@@ -172,6 +182,14 @@ function Connection({ claude, home, via, onVia: setVia }: { claude: Settings['cl
           <Button type="submit" variant="primary" disabled={!endpoint.trim() || !localModel.trim()} aria-busy={!!busy}>{busy ? 'Testing…' : 'Connect'}</Button>
         </form>
       </Tile>}
+      {via === 'openAi' && <Tile title="OpenAI-compatible service" detail="OpenAI, Mistral, Groq, OpenRouter or any service that speaks the OpenAI API: its address, the model’s name and your key. Dictate checks that they work together, then keeps the key in your Keychain." stack>
+        <form className="pair" onSubmit={connectOpenAi}>
+          <input className="ui-field mono" type="text" value={openEndpoint} aria-label="Service address" placeholder="https://api.openai.com" spellCheck={false} readOnly={!!busy} onChange={event => setOpenEndpoint(event.target.value)} />
+          <input className="ui-field mono" type="text" value={openModel} aria-label="Model name" placeholder="gpt-4.1-mini" spellCheck={false} readOnly={!!busy} onChange={event => setOpenModel(event.target.value)} />
+          <input id={`${id}-key`} className="ui-field mono" type="password" value={openKey} aria-label="API key" placeholder="sk-…" autoComplete="off" spellCheck={false} readOnly={!!busy} onChange={event => setOpenKey(event.target.value)} />
+          <Button type="submit" variant="primary" disabled={!openEndpoint.trim() || !openModel.trim() || !openKey.trim()} aria-busy={!!busy}>{busy ? 'Testing…' : 'Connect'}</Button>
+        </form>
+      </Tile>}
       {via === 'api' && <Tile title="No key yet?" detail="Make one in the Anthropic Console, which bills you for what you use.">
         <Button variant="quiet" icon="external" onClick={() => void invoke('claude_open_console').catch(() => {})}>Get a key</Button>
       </Tile>}
@@ -181,6 +199,16 @@ function Connection({ claude, home, via, onVia: setVia }: { claude: Settings['cl
   if (claude.via === 'claudeCode') return <Section title="Connection" note={said ?? 'Requests go through Claude Code, so any Anthropic key you saved isn’t used.'}>
     <TileGroup>
       <Tile title="Claude Code">
+        <span className="state" data-on><Icon name="check" size={14} />Connected</span>
+        <Button id={`${id}-test`} aria-busy={busy === 'test'} onClick={test}>{busy === 'test' ? 'Testing…' : 'Test'}</Button>
+        <Button id={`${id}-remove`} disabled={busy === 'test'} onClick={disconnect}>Disconnect</Button>
+      </Tile>
+    </TileGroup>
+  </Section>;
+
+  if (claude.via === 'openAi') return <Section title="Connection" note={said ?? 'The key is in your Keychain and won’t be shown again.'}>
+    <TileGroup>
+      <Tile title="OpenAI-compatible service" detail={`${claude.openAiModel} at ${claude.openAiEndpoint.replace(/^https?:\/\//, '')}.`}>
         <span className="state" data-on><Icon name="check" size={14} />Connected</span>
         <Button id={`${id}-test`} aria-busy={busy === 'test'} onClick={test}>{busy === 'test' ? 'Testing…' : 'Test'}</Button>
         <Button id={`${id}-remove`} disabled={busy === 'test'} onClick={disconnect}>Disconnect</Button>
@@ -200,7 +228,7 @@ function Connection({ claude, home, via, onVia: setVia }: { claude: Settings['cl
 
   return <Section title="Connection" note={said ?? 'Your Anthropic key is in your Keychain and won’t be shown again.'}>
     <TileGroup>
-      <Tile title={removing ? 'Remove the key?' : 'Anthropic API key'} detail={removing ? 'Claude stays off until you add a key again.' : undefined}>
+      <Tile title={removing ? 'Remove the key?' : 'Anthropic API key'} detail={removing ? 'AI stays off until you add a key again.' : undefined}>
         {removing
           ? <><Button id={`${id}-cancel`} variant="quiet" onClick={cancel} onKeyDown={escape}>Cancel</Button><Button variant="danger" onClick={remove} onKeyDown={escape}>Remove</Button></>
           : <><span className="state" data-on><Icon name="check" size={14} />Connected</span>
@@ -211,7 +239,7 @@ function Connection({ claude, home, via, onVia: setVia }: { claude: Settings['cl
   </Section>;
 }
 
-/// What goes to Anthropic, feature by feature, as the settings stand now.
+/// What goes to the model, feature by feature, as the settings stand now.
 function Seen({ settings }: { settings: Settings }) {
   const { claude, apps, notes, meetings, shortcuts } = settings;
   const polished = apps.styles.filter(app => app.polish && app.style !== 'raw').length;
@@ -223,7 +251,7 @@ function Seen({ settings }: { settings: Settings }) {
     { title: 'Notes', detail: 'Reads each saved note to name it and list its to-dos.', on: notes.claudeTitle || notes.claudeActions, state: notes.claudeTitle || notes.claudeActions ? 'On' : 'Off', route: 'settings/notes', place: 'Notes' },
     { title: 'Meetings', detail: 'Reads the transcript to write the summary.', on: meetings.summarize, state: meetings.summarize ? 'On' : 'Off', route: 'settings/meetings', place: 'Meetings' },
   ];
-  return <Section title="What the model sees" note={claude.via === 'local' ? 'Text goes to your local model and nowhere else.' : claude.via === 'claudeCode' ? 'Text goes to Anthropic through Claude Code.' : 'Text goes straight to Anthropic over an encrypted connection.'}>
+  return <Section title="What the model sees" note={claude.via === 'local' ? 'Text goes to your local model and nowhere else.' : claude.via === 'openAi' ? `Text goes to ${claude.openAiEndpoint.replace(/^https?:\/\//, '')} and nowhere else.` : claude.via === 'claudeCode' ? 'Text goes to Anthropic through Claude Code.' : 'Text goes straight to Anthropic over an encrypted connection.'}>
     <TileGroup>
       {rows.map(row => <Tile key={row.title} title={row.title} detail={row.detail} dim={!claude.enabled}>
         {row.route && <Button variant="quiet" small onClick={() => { location.hash = row.route!; }} aria-label={`Open ${row.place}`}>{row.place}</Button>}

@@ -234,14 +234,18 @@ pub struct Claude {
   /// A model on this Mac behind Ollama's API (LM Studio speaks it too): where, and which.
   pub local_endpoint: String,
   pub local_model: String,
+  /// Any service that speaks the OpenAI API (OpenAI, Mistral, Groq, OpenRouter, a hosted gateway): where, and
+  /// which model; its key is in the Keychain under "openai".
+  pub open_ai_endpoint: String,
+  pub open_ai_model: String,
 }
 impl Default for Claude {
-  fn default() -> Self { Self { enabled: false, via: ClaudeVia::Api, model: ClaudeModel::Haiku, effort: Effort::Medium, commands: true, claude_code: None, local_endpoint: "http://localhost:11434".into(), local_model: "llama3.2".into() } }
+  fn default() -> Self { Self { enabled: false, via: ClaudeVia::Api, model: ClaudeModel::Haiku, effort: Effort::Medium, commands: true, claude_code: None, local_endpoint: "http://localhost:11434".into(), local_model: "llama3.2".into(), open_ai_endpoint: "https://api.openai.com".into(), open_ai_model: String::new() } }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub enum ClaudeVia { Api, ClaudeCode, Local }
+pub enum ClaudeVia { Api, ClaudeCode, Local, OpenAi }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -349,6 +353,8 @@ impl Settings {
     folder(&self.notes.folder) && folder(&self.meetings.folder) && folder(&self.claude.claude_code)
       && (local.local_endpoint.starts_with("http://") || local.local_endpoint.starts_with("https://")) && local.local_endpoint.len() <= 200 && !local.local_endpoint.contains(char::is_whitespace)
       && !local.local_model.trim().is_empty() && local.local_model.len() <= 80
+      && (local.open_ai_endpoint.starts_with("http://") || local.open_ai_endpoint.starts_with("https://")) && local.open_ai_endpoint.len() <= 200 && !local.open_ai_endpoint.contains(char::is_whitespace)
+      && local.open_ai_model.len() <= 80
       && chords.iter().all(|chord| chord.valid()) && distinct
       && !file_name.contains(['/', ':', '\0']) && !file_name.trim_start().starts_with('.')
       && SOUNDS.contains(&self.dictation.start_sound.as_str()) && SOUNDS.contains(&self.dictation.stop_sound.as_str())
@@ -630,7 +636,7 @@ mod tests {
     assert!(value["apps"]["styles"].as_array().unwrap().iter().any(|app| app["bundleId"] == "com.apple.Terminal" && app["style"] == "code" && app["polish"] == false));
     assert_eq!(value["notes"], json!({ "folder": null, "fileName": "{date} {title}", "frontmatter": true, "dailyNote": false, "tags": [], "claudeTitle": true, "claudeActions": false }));
     assert_eq!(value["meetings"], json!({ "folder": null, "systemAudio": true, "summarize": true, "you": "You", "others": "Others", "speakers": true, "decisions": true, "actionItems": true }));
-    assert_eq!(value["claude"], json!({ "enabled": false, "via": "api", "model": "claude-haiku-5-5", "effort": "medium", "commands": true, "claudeCode": null, "localEndpoint": "http://localhost:11434", "localModel": "llama3.2" }));
+    assert_eq!(value["claude"], json!({ "enabled": false, "via": "api", "model": "claude-haiku-5-5", "effort": "medium", "commands": true, "claudeCode": null, "localEndpoint": "http://localhost:11434", "localModel": "llama3.2", "openAiEndpoint": "https://api.openai.com", "openAiModel": "" }));
     assert_eq!(value["agents"], json!({ "mcp": true, "shareHistory": false, "shareNotes": true, "shareMeetings": true, "allowWrite": false }));
     assert_eq!(value["history"], json!({ "keep": "week" }));
     assert_eq!(value["appearance"], json!({ "theme": "system", "edge": "right", "size": "medium", "idle": "dots", "hint": true, "pill": ["note", "write", "sticky", "meeting", "library", "settings"], "margin": 8, "avoidDock": true }));

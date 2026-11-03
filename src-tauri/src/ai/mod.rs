@@ -38,21 +38,21 @@ pub enum Error { NoKey, BadKey, Forbidden, Billing, Model, TooLong, Rejected, Ra
 impl std::fmt::Display for Error {
   fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
     f.write_str(match self {
-      Self::NoKey => "Connect Claude in Settings first.",
-      Self::BadKey => "Anthropic didn’t accept the key. Check it and paste it again.",
-      Self::Forbidden => "This key isn’t allowed to use Claude. Check its workspace in the Anthropic Console.",
-      Self::Billing => "Your Anthropic account is out of credit. Add some in the Anthropic Console.",
-      Self::Model => "This key can’t use the model you picked. Choose another in Settings.",
-      Self::TooLong => "That’s too much text for Claude at once.",
-      Self::Rejected => "Claude couldn’t take that request.",
+      Self::NoKey => "Connect AI in Agents first.",
+      Self::BadKey => "The service didn’t accept the key. Check it and paste it again.",
+      Self::Forbidden => "This key isn’t allowed to use that model. Check it with the service.",
+      Self::Billing => "The account behind this key is out of credit. Top it up with the service.",
+      Self::Model => "This key can’t use the model you picked. Choose another in Agents.",
+      Self::TooLong => "That’s too much text for the model at once.",
+      Self::Rejected => "The model couldn’t take that request.",
       Self::RateLimited => "Too many requests for this key right now. Try again in a minute.",
-      Self::Busy => "Claude is busy right now. Try again in a moment.",
-      Self::Offline => "Can’t reach Anthropic. Check your internet connection.",
-      Self::Timeout => "Claude took too long to answer. Try again.",
-      Self::Refused => "Claude declined this one.",
-      Self::Cut => "Claude’s answer was cut short.",
-      Self::Broken => "Claude’s answer didn’t come through. Try again.",
-      Self::Empty => "Claude didn’t send anything back. Try again.",
+      Self::Busy => "The model is busy right now. Try again in a moment.",
+      Self::Offline => "Can’t reach the service. Check your internet connection.",
+      Self::Timeout => "The model took too long to answer. Try again.",
+      Self::Refused => "The model declined this one.",
+      Self::Cut => "The answer was cut short.",
+      Self::Broken => "The answer didn’t come through. Try again.",
+      Self::Empty => "Nothing came back. Try again.",
       Self::NoClaudeCode => "Claude Code isn’t installed any more. Install it again, or connect with a key instead.",
       Self::NotSignedIn => "Claude Code isn’t signed in. Run claude in Terminal and sign in, then try again.",
       Self::CodeFailed => "Claude Code couldn’t answer that. Try again.",
@@ -262,7 +262,7 @@ async fn check(endpoint: &str, key: &str, model: ClaudeModel) -> Result<(), Erro
 /// How a request reaches Claude: Anthropic's API with the person's key, or Claude Code on this Mac with
 /// the account they signed in to there.
 #[derive(Clone, Debug)]
-pub(crate) enum Route { Api { endpoint: String, key: String }, Code { program: PathBuf }, Local { endpoint: String, model: String } }
+pub(crate) enum Route { Api { endpoint: String, key: String }, Code { program: PathBuf }, Local { endpoint: String, model: String }, OpenAi { endpoint: String, key: String, model: String } }
 
 /// Claude's reply, and whether it read the person's notes, meetings or history on the way (Claude Code
 /// took more than one turn): what came out of those files is material, so such an answer is shown for
@@ -279,7 +279,47 @@ async fn ask_with(route: &Route, request: &Request, timeout: Duration) -> Result
       tauri::async_runtime::spawn_blocking(move || code_call(&program, &request, timeout)).await.map_err(|_| Error::CodeFailed)?
     }
     Route::Local { endpoint, model } => local_call(endpoint, model, request, timeout).await.map(|text| Answer { text, read_files: false }),
+    Route::OpenAi { endpoint, key, model } => open_ai_call(endpoint, key, model, request, timeout).await.map(|text| Answer { text, read_files: false }),
   }
+}
+
+/// Any service that speaks the OpenAI chat API: one turn, whole. A schema goes as `response_format`: OpenAI's own
+/// `json_schema`; for the others, `json_object` with the schema told in the system prompt, since few of them take
+/// the stricter form. OpenAI wants `max_completion_tokens`; everyone else still reads `max_tokens`.
+async fn open_ai_call(endpoint: &str, key: &str, model: &str, request: &Request, timeout: Duration) -> Result<String, Error> {
+  let client = client()?;
+  let own = endpoint.contains("api.openai.com");
+  let mut system = request.system.clone();
+  let mut body = json!({ "model": model, "messages": [{ "role": "system", "content": system }, { "role": "user", "content": request.user }] });
+  if let Some(schema) = &request.schema {
+    if own { body["response_format"] = json!({ "type": "json_schema", "json_schema": { "name": "answer", "schema": schema } }); }
+    else {
+      system.push_str("\n\nReply with JSON only, matching this schema: ");
+      system.push_str(&schema.to_string());
+      body["messages"][0]["content"] = Value::String(system);
+      body["response_format"] = json!({ "type": "json_object" });
+    }
+  }
+  body[if own { "max_completion_tokens" } else { "max_tokens" }] = json!(request.max_tokens);
+  let url = format!("{}/v1/chat/completions", endpoint.trim_end_matches('/'));
+  let response = client.post(&url).header("authorization", format!("Bearer {key}")).header("content-type", "application/json").body(body.to_string()).timeout(timeout).send().await
+    .map_err(|e| if e.is_timeout() { Error::Timeout } else { Error::Offline })?;
+  let status = response.status().as_u16();
+  let bytes = response.bytes().await.map_err(|_| Error::Broken)?;
+  let value: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
+  if status != 200 {
+    let said = value["error"]["message"].as_str().unwrap_or_default().to_ascii_lowercase();
+    log::warn!("openai-compatible: {status}: {}", said.chars().take(120).collect::<String>());
+    return Err(match status {
+      401 => Error::BadKey, 402 => Error::Billing, 403 => Error::Forbidden, 404 => Error::Model, 429 => Error::RateLimited,
+      400 if said.contains("context") || said.contains("too long") || said.contains("maximum") => Error::TooLong,
+      400 if said.contains("model") => Error::Model,
+      500..=599 => Error::Busy, _ => Error::Rejected,
+    });
+  }
+  let text = value["choices"][0]["message"]["content"].as_str().map(str::trim).unwrap_or_default().to_owned();
+  if text.is_empty() { return Err(Error::Empty); }
+  Ok(text)
 }
 
 /// A model on this Mac behind Ollama's API (LM Studio and others speak it too): one chat turn, whole.
@@ -313,7 +353,7 @@ async fn ask(route: &Route, request: &Request, timeout: Duration) -> Result<Stri
 async fn probe(route: &Route, model: ClaudeModel) -> Result<(), Error> {
   match route {
     Route::Api { endpoint, key } => check(endpoint, key, model).await,
-    Route::Code { .. } | Route::Local { .. } => {
+    Route::Code { .. } | Route::Local { .. } | Route::OpenAi { .. } => {
       let request = Request { model, system: "Reply with one word.".into(), user: "Hi".into(), max_tokens: 8, effort: "low", schema: None, tools: false };
       ask(route, &request, TEST_TIME).await.map(|_| ())
     }
@@ -408,17 +448,21 @@ fn code_program(app: Option<&AppHandle>) -> Option<PathBuf> {
 // ---------- the key ----------
 
 extern "C" {
-  fn dictate_keychain_set(key: *const c_char) -> bool;
-  fn dictate_keychain_get(output: *mut c_char, capacity: usize) -> bool;
-  fn dictate_keychain_exists() -> bool;
-  fn dictate_keychain_delete() -> bool;
+  fn dictate_keychain_set(account: *const c_char, key: *const c_char) -> bool;
+  fn dictate_keychain_get(account: *const c_char, output: *mut c_char, capacity: usize) -> bool;
+  fn dictate_keychain_exists(account: *const c_char) -> bool;
+  fn dictate_keychain_delete(account: *const c_char) -> bool;
   fn dictate_command_result(request: *const c_char, text: *const c_char, action: *const c_char);
   fn dictate_claude_front(bundle_id: *const c_char, activate: bool) -> bool;
 }
 
-fn saved_key() -> Option<String> {
+/// The Keychain's name for each provider's key.
+const ANTHROPIC: &std::ffi::CStr = c"anthropic";
+const OPENAI: &std::ffi::CStr = c"openai";
+fn saved_key() -> Option<String> { key_of(ANTHROPIC) }
+fn key_of(account: &std::ffi::CStr) -> Option<String> {
   let mut buffer = vec![0u8; 1024];
-  let key = unsafe { dictate_keychain_get(buffer.as_mut_ptr().cast(), buffer.len()) }
+  let key = unsafe { dictate_keychain_get(account.as_ptr(), buffer.as_mut_ptr().cast(), buffer.len()) }
     .then(|| CStr::from_bytes_until_nul(&buffer).ok().map(|key| key.to_string_lossy().into_owned())).flatten();
   buffer.fill(0);
   key
@@ -441,6 +485,7 @@ fn route() -> Result<(Route, ClaudeModel), Error> {
     ClaudeVia::Api => Route::Api { endpoint: MESSAGES.into(), key: saved_key().ok_or(Error::NoKey)? },
     ClaudeVia::ClaudeCode => Route::Code { program: claude.claude_code.map(PathBuf::from).filter(|path| executable(path)).ok_or(Error::NoClaudeCode)? },
     ClaudeVia::Local => Route::Local { endpoint: claude.local_endpoint.clone(), model: claude.local_model.clone() },
+    ClaudeVia::OpenAi => Route::OpenAi { endpoint: claude.open_ai_endpoint.clone(), key: key_of(OPENAI).ok_or(Error::NoKey)?, model: claude.open_ai_model.clone() },
   };
   Ok((route, claude.model))
 }
@@ -454,9 +499,10 @@ pub fn init(app: &AppHandle) {
   let _ = APP.set(app.clone());
   let claude = settings::get().claude;
   let enabled = match claude.via {
-    ClaudeVia::Api => unsafe { dictate_keychain_exists() },
+    ClaudeVia::Api => unsafe { dictate_keychain_exists(ANTHROPIC.as_ptr()) },
     ClaudeVia::ClaudeCode => claude.claude_code.as_deref().is_some_and(|path| executable(Path::new(path))),
     ClaudeVia::Local => claude.enabled, // a local server may be down for now; it is tried when asked
+    ClaudeVia::OpenAi => unsafe { dictate_keychain_exists(OPENAI.as_ptr()) },
   };
   if enabled != claude.enabled {
     if let Err(e) = settings::update(app, &json!({ "claude": { "enabled": enabled } })) { log::warn!("claude: {e}"); }
@@ -692,7 +738,7 @@ pub async fn claude_save_key(app: AppHandle, key: String) -> Result<settings::Se
   let key = key_shape(&key)?.to_owned();
   check(MESSAGES, &key, settings::get().claude.model).await.map_err(|e| e.to_string())?;
   let stored = CString::new(key).map_err(|_| "Invalid key".to_owned())?;
-  if !unsafe { dictate_keychain_set(stored.as_ptr()) } { return Err("Couldn’t save the key in your Keychain.".into()); }
+  if !unsafe { dictate_keychain_set(ANTHROPIC.as_ptr(), stored.as_ptr()) } { return Err("Couldn’t save the key in your Keychain.".into()); }
   settings::update(&app, &json!({ "claude": { "enabled": true, "via": "api" } }))
 }
 
@@ -709,7 +755,7 @@ pub async fn claude_test() -> Result<u64, String> {
 /// Removes the key. Claude stays on only if it is connected through Claude Code instead.
 #[tauri::command]
 pub fn claude_remove_key(app: AppHandle) -> Result<settings::Settings, String> {
-  if !unsafe { dictate_keychain_delete() } { return Err("Couldn’t remove the key from your Keychain.".into()); }
+  if !unsafe { dictate_keychain_delete(ANTHROPIC.as_ptr()) } { return Err("Couldn’t remove the key from your Keychain.".into()); }
   let claude = settings::get().claude;
   let enabled = claude.via == ClaudeVia::ClaudeCode && claude.claude_code.as_deref().is_some_and(|path| executable(Path::new(path)));
   settings::update(&app, &json!({ "claude": { "enabled": enabled } }))
@@ -747,11 +793,29 @@ pub async fn claude_connect_local(app: AppHandle, endpoint: String, model: Strin
   settings::update(&app, &json!({ "claude": { "enabled": true, "via": "local", "localEndpoint": endpoint, "localModel": model } }))
 }
 
-/// Back from Claude Code or a local model: Claude stays on only if a key is saved to fall back to.
+/// Back from Claude Code, a local model or an OpenAI-compatible service (whose key goes with it): AI stays on
+/// only if an Anthropic key is saved to fall back to.
 #[tauri::command]
 pub fn claude_disconnect(app: AppHandle) -> Result<settings::Settings, String> {
-  let enabled = unsafe { dictate_keychain_exists() };
+  if settings::get().claude.via == ClaudeVia::OpenAi && !unsafe { dictate_keychain_delete(OPENAI.as_ptr()) } { return Err("Couldn’t remove the key from your Keychain.".into()); }
+  let enabled = unsafe { dictate_keychain_exists(ANTHROPIC.as_ptr()) };
   settings::update(&app, &json!({ "claude": { "enabled": enabled, "via": "api" } }))
+}
+
+/// Any service that speaks the OpenAI API (OpenAI, Mistral, Groq, OpenRouter, a gateway): a one-word request
+/// with the pasted key proves the three go together, and only then is the key kept in the Keychain and the
+/// service the way in. `endpoint` is the service's base address, `model` the name it knows the model by.
+#[tauri::command]
+pub async fn claude_connect_open_ai(app: AppHandle, endpoint: String, key: String, model: String) -> Result<settings::Settings, String> {
+  let endpoint = endpoint.trim().trim_end_matches('/').trim_end_matches("/v1").to_owned();
+  let (key, model) = (key.trim().to_owned(), model.trim().to_owned());
+  if !(endpoint.starts_with("http://") || endpoint.starts_with("https://")) || endpoint.len() > 200 || endpoint.contains(char::is_whitespace) { return Err("Use the service’s address, like https://api.openai.com.".into()); }
+  if model.is_empty() || model.len() > 80 { return Err("Name the model as the service knows it, like gpt-4.1-mini.".into()); }
+  if key.is_empty() || key.len() > 400 || key.contains(char::is_whitespace) { return Err("Paste the service’s API key.".into()); }
+  probe(&Route::OpenAi { endpoint: endpoint.clone(), key: key.clone(), model: model.clone() }, settings::get().claude.model).await.map_err(|e| e.to_string())?;
+  let stored = CString::new(key).map_err(|_| "Invalid key".to_owned())?;
+  if !unsafe { dictate_keychain_set(OPENAI.as_ptr(), stored.as_ptr()) } { return Err("Couldn’t save the key in your Keychain.".into()); }
+  settings::update(&app, &json!({ "claude": { "enabled": true, "via": "openAi", "openAiEndpoint": endpoint, "openAiModel": model } }))
 }
 
 /// Where to make a key, in the browser.
