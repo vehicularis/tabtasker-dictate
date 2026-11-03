@@ -272,7 +272,7 @@ export function App() {
       <main key={`${tab.id}:${place}`} className="content" aria-label={here.title}>
         {props && place === 'notes' && <NotePage kind="note" path={arg} items={listed} {...props} onError={setToast} onOpen={go} />}
         {props && place === 'meetings' && <NotePage kind="meeting" path={arg} items={listed} {...props} onError={setToast} onOpen={go} />}
-        {props && place === 'stickies' && <div className="page wide"><StickiesView onError={setToast} /></div>}
+        {props && place === 'stickies' && <StickiesView onError={setToast} />}
         {props && place === 'about' && <div className="page"><About {...props} /></div>}
         {props && place === 'help' && <div className="page help"><HelpView settings={props.settings} /></div>}
         {props && settingsOpen && <div key={here.route} className="page">{(() => { const Page = (SETTINGS.find(p => p.route === here.route) ?? SETTINGS[0]).Page; return <Page {...props} />; })()}</div>}

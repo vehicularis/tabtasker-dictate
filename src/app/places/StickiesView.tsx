@@ -42,12 +42,14 @@ export function StickiesView({ onError }: { onError: (message: string) => void }
   const shelf = useRef<HTMLDivElement>(null);
   useFlip(shelf, stickies);
   if (!stickies) return null;
-  if (!stickies.length) return <div className="stickies-first">
-    <StickyGlyph size={48} />
+  // Nothing yet: the editor pane's own empty state, straight in the content as Notes and Meetings have theirs, so it
+  // centres the same way (editor-pane.css); with stickies, the wide page.
+  if (!stickies.length) return <div className="editor-pane"><div className="empty-pane first">
+    <span className="empty-icon"><StickyGlyph size={48} /></span>
     <strong>No stickies yet</strong>
     <p>Stickies stay on top of your other windows. Make one here, or start a dictation with the word “sticky”.</p>
     <Button variant="primary" icon="plus" onClick={make}>New sticky</Button>
-  </div>;
+  </div></div>;
   const kept = stickies.filter(sticky => !sticky.archived), archived = stickies.filter(sticky => sticky.archived);
   const showing = archived.length ? view : 'stickies';
   const many = (n: number) => `${n} ${n === 1 ? 'sticky' : 'stickies'}`;
@@ -107,7 +109,7 @@ export function StickiesView({ onError }: { onError: (message: string) => void }
     {title && <h2 className="stickies-heading" data-flip={`heading:${title}`}>{title}</h2>}
     <div className="stickies-grid">{list.map(paper)}</div>
   </section>;
-  return <>
+  return <div className="page wide">
     <div className="stickies-top">
       <PageHeader icon="sticky" title="Stickies" />
       {picked.length ? <span className="stickies-bulk" role="toolbar" aria-label="Selected stickies">
@@ -152,5 +154,5 @@ export function StickiesView({ onError }: { onError: (message: string) => void }
           : <p className="stickies-none" data-flip="none">All your stickies are in the archive.</p>
         : group(null, archived)}
     </div>
-  </>;
+  </div>;
 }
