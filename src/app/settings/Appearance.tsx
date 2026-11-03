@@ -153,7 +153,7 @@ function Preview({ look, keyName, moment, onMoment }: { look: Settings['appearan
           </div>
         </div>
         <span ref={dock} className="look-dock">
-          <span className="look-dots"><i /><i /><i /></span>
+          <span className="look-dots">{[6, 12, 10, 11, 11, 10, 12, 6].map((h, i) => <i key={i} style={{ '--h': h } as CSSProperties} />)}</span>
           <span className="look-pill">{look.pill.map(name => <i key={name}>{BUTTONS[name].glyph}</i>)}</span>
           <LiveOrb talking={moment === 'talking'} />
           {look.hint && <span className="look-hint"><kbd>{keyName}</kbd>hold to type</span>}

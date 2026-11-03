@@ -17,7 +17,7 @@ export function register(mock: Mock) {
     lastCall: scene === 'missing' ? null
       : scene === 'elsewhere' ? { atMs: Date.now() - 4 * 60_000, tool: 'search_notes', client: 'cursor-vscode', clientTitle: 'Cursor', ok: true }
       : { atMs: Date.now() - 4 * 60_000, tool: 'search_notes', client: 'claude-code', clientTitle: null, ok: true },
-    problem: scene === 'dmg' ? 'Move TabTasker Dictate to Applications first, so agents can always find it.' : null,
+    problem: scene === 'dmg' ? 'Move TabTasker | Dictate to Applications first, so agents can always find it.' : null,
   };
   const failures = {
     claudeCode: 'Claude Code couldn’t add it: MCP server tabtasker-dictate already exists',

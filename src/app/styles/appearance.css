@@ -59,10 +59,12 @@
 .look[data-edge='right'] .look-dock { left: calc(100% - 30px * var(--s)); bottom: auto; top: calc(50% + 5px); }
 /* A moment's parts spring in as the overlay's do and fall away quickly: in on the spring, out on --ease-in. */
 .look-dock > * { position: absolute; left: 0; top: 0; display: flex; align-items: center; translate: -50% -50%; opacity: 0; scale: .7; transition: opacity var(--quick) var(--ease-in), scale var(--quick) var(--ease-in); }
-.look-dots { gap: calc(4px * var(--s)); padding: calc(5px * var(--s)) calc(9px * var(--s)); border-radius: var(--radius-pill); background: var(--glass); box-shadow: var(--lift); }
-.look-dots i { width: calc(4px * var(--s)); height: calc(4px * var(--s)); border-radius: 50%; background: var(--win-dim); }
-.look-pill { gap: calc(4px * var(--s)); padding: calc(4px * var(--s)); border-radius: var(--radius-pill); background: var(--glass); box-shadow: var(--lift); }
-.look-pill i { display: grid; place-items: center; width: calc(30px * var(--s)); height: calc(30px * var(--s)); border-radius: 50%; color: var(--win-ink); background: var(--win-rule); }
+/* The otter at rest, as the overlay has it: eight bars in ink, the ears above the head. */
+.look-dots { gap: calc(2px * var(--s)); align-items: flex-end; height: calc(14px * var(--s)); box-sizing: content-box; padding: calc(4px * var(--s)) calc(6px * var(--s)); border-radius: var(--radius-pill); background: var(--glass); box-shadow: var(--lift); }
+.look-dots i { width: calc(2.2px * var(--s)); height: calc(var(--h) * 1px * var(--s)); border-radius: 2px; background: var(--win-ink); opacity: .5; }
+/* The capsule: a hairline rim, 30-point rounds on a 2-point gap, no plate under a button at rest. */
+.look-pill { gap: calc(2px * var(--s)); padding: calc(4px * var(--s)); border-radius: var(--radius-pill); background: var(--glass); box-shadow: var(--lift); }
+.look-pill i { display: grid; place-items: center; width: calc(30px * var(--s)); height: calc(30px * var(--s)); border-radius: 50%; color: var(--win-ink); background: none; }
 .look-pill svg { width: calc(17px * var(--s)); height: calc(17px * var(--s)); }
 /* The orb as the overlay draws it: a smoked disc under glass, with bars in the accent. */
 /* The orb as the overlay draws it, in miniature (LiveOrb paints the glass and the bars on its canvases). */

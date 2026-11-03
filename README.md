@@ -2,7 +2,7 @@
   <img src="docs/images/icon.png" width="112" alt="">
 </p>
 
-<h1 align="center">TabTasker Dictate</h1>
+<h1 align="center">TabTasker | Dictate</h1>
 
 <p align="center">
   <strong>Talk, and it’s typed.</strong><br>
@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/window.png" alt="The TabTasker Dictate window with a note open">
+  <img src="docs/images/window.png" alt="The TabTasker | Dictate window with a note open">
 </p>
 
 Dictate lives in a few small dots at the edge of your screen. Wherever your cursor is, hold your key and

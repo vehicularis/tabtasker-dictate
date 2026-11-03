@@ -9,7 +9,7 @@ const ROUTES: &[&str] = &["notes", "meetings", "stickies", "settings", "setup", 
 
 pub(crate) fn overlay(app: &AppHandle) -> tauri::Result<()> {
   let window = WebviewWindowBuilder::new(app, OVERLAY, WebviewUrl::App("index.html".into()))
-    .title("TabTasker Dictate")
+    .title("TabTasker | Dictate")
     .decorations(false).transparent(true).shadow(false)
     .always_on_top(true).visible_on_all_workspaces(true).skip_taskbar(true).resizable(false).focused(false)
     .visible(false) // dictate.m shows it once the page has drawn the overlay
@@ -32,7 +32,7 @@ pub(crate) fn show_main(app: &AppHandle, route: Option<&str>) -> tauri::Result<(
     return window.set_focus();
   }
   let window = WebviewWindowBuilder::new(app, MAIN, WebviewUrl::App(format!("app.html#{}", route.unwrap_or("notes")).into()))
-    .title("TabTasker Dictate")
+    .title("TabTasker | Dictate")
     .inner_size(1040.0, 700.0).min_inner_size(840.0, 580.0).center()
     .title_bar_style(TitleBarStyle::Overlay).hidden_title(true) // the lights where AppKit puts them, centred on the page's 40-point bar by its toolbar (panels.m)
     .build()?;

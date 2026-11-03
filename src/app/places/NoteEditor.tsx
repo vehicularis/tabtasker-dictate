@@ -32,7 +32,7 @@ export function NoteEditor({ path, kind, onChanged, onDeleted, onMoved, onError 
       setDoc(found); setTitle(found.title); latest.current = { title: found.title, body: found.body }; setState('clean'); loaded.current = true;
       setWindowTitle(found.title || (kind === 'meeting' ? 'Meeting' : 'Note'));
     }, error => { onError(message(error, 'This note has been moved or deleted.')); setState('error'); });
-    return () => setWindowTitle('TabTasker Dictate');
+    return () => setWindowTitle('TabTasker | Dictate');
   }, [path, kind, onError]);
   const save = useCallback(() => {
     clearTimeout(timer.current);

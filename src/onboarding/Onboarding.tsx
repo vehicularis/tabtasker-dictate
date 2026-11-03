@@ -239,7 +239,7 @@ function Welcome({ settings, frame }: Step) {
   const t = useLoop(8400, 5200);
   const mode = t >= 900 && t < 3700 ? 'listening' : t >= 3700 && t < 4200 ? 'thinking' : 'idle';
   const said = mode === 'listening' && t >= 1100 ? WORDS.slice(0, Math.floor((t - 1100) / 260) + 1).join(' ') : '';
-  return <Split frame={frame} title={<span className="setup-brand"><Logo size={44} /><span>Welcome to TabTasker Dictate</span></span>}
+  return <Split frame={frame} title={<span className="setup-brand"><Logo size={44} /><span>Welcome to TabTasker | Dictate</span></span>}
     why={<>
       <Why>Hold {KEY_NAMES[settings.shortcuts.dictate]} and talk. When you let go, what you said is typed wherever your cursor is.</Why>
       <Why>Everything happens on your Mac, so your voice never leaves it, and there’s no account to make.</Why>
@@ -273,7 +273,7 @@ function Microphone({ status, frame }: Step) {
       </span>
       {mic === 'denied' && <HowTo steps={[
         <>Click <b>Open System Settings</b>.</>,
-        <>In <b>Privacy &amp; Security › Microphone</b>, turn on <b>TabTasker Dictate</b>.</>,
+        <>In <b>Privacy &amp; Security › Microphone</b>, turn on <b>TabTasker | Dictate</b>.</>,
         <>Come back here, and this step updates on its own.</>,
       ]} />}
     </>}
@@ -297,8 +297,8 @@ function Accessibility({ status, frame }: Step) {
       </span>
       <HowTo steps={[
         <>Click <b>Open System Settings</b>. If macOS asks first, choose <b>Open System Settings</b> there too.</>,
-        <>In <b>Privacy &amp; Security › Accessibility</b>, turn on <b>TabTasker Dictate</b>.</>,
-        <>If it still says off after a few seconds, select <b>TabTasker Dictate</b>, remove it with <b>−</b> and add it back with <b>+</b>.</>,
+        <>In <b>Privacy &amp; Security › Accessibility</b>, turn on <b>TabTasker | Dictate</b>.</>,
+        <>If it still says off after a few seconds, select <b>TabTasker | Dictate</b>, remove it with <b>−</b> and add it back with <b>+</b>.</>,
       ]} />
     </>}
   </Split>;
@@ -486,7 +486,7 @@ function Extra({ shown }: { shown: Sheet }) {
 function waysOf(settings: Settings): [string, ReactNode][] {
   const { shortcuts, claude, general } = settings;
   // With the dots hidden until the key is held, there is nothing to right-click.
-  const menu = settings.appearance.idle === 'dots' ? 'right-click the dots' : 'open TabTasker Dictate from Spotlight';
+  const menu = settings.appearance.idle === 'dots' ? 'right-click the dots' : 'open TabTasker | Dictate from Spotlight';
   const name = KEY_NAMES[shortcuts.dictate];
   const ways: [string, ReactNode][] = [['Type where your cursor is', <>hold <Kbd>{name}</Kbd></>]];
   if (shortcuts.handsFree) ways.push(['Talk without holding', <>double-tap <Kbd>{name}</Kbd></>]);

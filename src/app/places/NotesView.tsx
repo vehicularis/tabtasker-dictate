@@ -144,7 +144,7 @@ export function NotePage({ kind, path, items, settings, onError, onOpen }: Props
   if (items && !items.length) return <div className="editor-pane"><div className="empty-pane first">
     <span className="empty-icon">{(() => { const Glyph = PLACE_GLYPHS[kind === 'note' ? 'notes' : 'meetings']; return <Glyph size={48} />; })()}</span>
     <strong>{kind === 'note' ? 'No notes yet' : 'No meetings yet'}</strong>
-    <p>{kind === 'note' ? `Write one here, or click the note on the dots and talk.${settings.notes.folder ? '' : ' They’re saved in Documents › TabTasker Dictate.'}`
+    <p>{kind === 'note' ? `Write one here, or click the note on the dots and talk.${settings.notes.folder ? '' : ' They’re saved in Documents › TabTasker | Dictate.'}`
       : 'Start one here or from the dots, and you’ll get a transcript of everyone in the room or on the call.'}</p>
     {kind === 'note' ? <Button variant="primary" icon="compose" onClick={() => newNote(onOpen, onError)}>New note</Button> : <><MeetingAction onError={onError} labelled /><MeetingStrip onError={onError} /></>}
   </div></div>;
