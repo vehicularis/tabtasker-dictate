@@ -534,7 +534,7 @@ pub async fn save_note(app: tauri::AppHandle, title: String, text: String, stamp
     let settings = settings::get();
     let claude = settings.claude.enabled;
     let (title, actions) = std::thread::scope(|scope| {
-      let naming = (claude && settings.notes.claude_title && !(named.unwrap_or(false) && !title.trim().is_empty())).then(|| scope.spawn(|| crate::ai::title(&text)));
+      let naming = (claude && settings.notes.claude_title && (!named.unwrap_or(false) || title.trim().is_empty())).then(|| scope.spawn(|| crate::ai::title(&text)));
       let listing = (claude && settings.notes.claude_actions).then(|| scope.spawn(|| crate::ai::summarize(crate::ai::Kind::Note, &text)));
       let title = naming.and_then(|job| job.join().ok().flatten()).and_then(|named| claude_title(&named)).unwrap_or(title);
       (title, listing.and_then(|job| job.join().ok().flatten()))

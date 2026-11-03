@@ -25,6 +25,9 @@ const SEGMENTATION_ONNX: &str = "speakers/pyannote-segmentation-3-0.onnx";
 const ARCHIVE_MEMBER: &str = "sherpa-onnx-pyannote-segmentation-3-0/model.onnx";
 /// How far apart two voiceprints must be to count as two people: sherpa-onnx's default. Higher merges more.
 const THRESHOLD: f32 = 0.5;
+/// A voice heard for less than this, over the whole recording, isn't a person but a slip of the clustering (a
+/// cough, the room's echo of the call, one line cut in two): its turns go to the voice heard nearest in time.
+const SLIVER: f32 = 4.0;
 const RATE: f32 = 16_000.0;
 
 /// One stretch of one voice, in samples from the start of the stream.
@@ -71,6 +74,7 @@ pub fn prepare_in_background() {
 /// meeting (about a tenth of its length); run it where waiting is fine.
 pub fn diarize(root: &Path, samples: &[f32]) -> Result<Vec<Turn>, String> {
   if !ready(root) { return Err("The speaker models aren’t downloaded yet.".into()); }
+  // Six threads: eight measured no faster, and the other stream runs alongside.
   let threads = std::thread::available_parallelism().map_or(4, |n| n.get().clamp(2, 6)) as i32;
   let config = OfflineSpeakerDiarizationConfig {
     segmentation: OfflineSpeakerSegmentationModelConfig {
@@ -89,12 +93,43 @@ pub fn diarize(root: &Path, samples: &[f32]) -> Result<Vec<Turn>, String> {
     .map(|segment| Turn { start: (segment.start * RATE) as u64, end: (segment.end * RATE) as u64, speaker: segment.speaker as u32 })
     .collect();
   turns.sort_by_key(|turn| turn.start);
-  Ok(turns)
+  Ok(settle(turns))
+}
+
+/// The voices as people: a voice with under SLIVER seconds in all gives its turns to the voice heard nearest in
+/// time, before or after. The voice heard most always stands, however short the recording.
+pub fn settle(mut turns: Vec<Turn>) -> Vec<Turn> {
+  turns.sort_by_key(|turn| turn.start);
+  let mut spoke: std::collections::HashMap<u32, u64> = std::collections::HashMap::new();
+  for turn in &turns { *spoke.entry(turn.speaker).or_default() += turn.end - turn.start; }
+  let longest = spoke.values().copied().max().unwrap_or(0);
+  let stands = |voice: u32| spoke[&voice] >= (SLIVER * RATE) as u64 || spoke[&voice] == longest;
+  let anchors: Vec<Turn> = turns.iter().copied().filter(|turn| stands(turn.speaker)).collect();
+  for turn in turns.iter_mut().filter(|turn| !stands(turn.speaker)) {
+    let gap = |anchor: &Turn| anchor.start.saturating_sub(turn.end).max(turn.start.saturating_sub(anchor.end));
+    if let Some(nearest) = anchors.iter().min_by_key(|anchor| gap(anchor)) { turn.speaker = nearest.speaker; }
+  }
+  turns
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  fn turn(start: f32, end: f32, speaker: u32) -> Turn { Turn { start: (start * RATE) as u64, end: (end * RATE) as u64, speaker } }
+
+  #[test]
+  fn a_sliver_of_a_voice_goes_to_the_voice_nearest_in_time() {
+    let turns = settle(vec![turn(0.0, 6.0, 0), turn(6.2, 7.0, 7), turn(9.0, 15.0, 1), turn(15.1, 16.0, 7), turn(16.5, 17.0, 3)]);
+    assert_eq!(turns.iter().map(|turn| turn.speaker).collect::<Vec<_>>(), vec![0, 0, 1, 1, 1]);
+  }
+
+  #[test]
+  fn the_voice_heard_most_stands_however_short() {
+    let turns = settle(vec![turn(0.0, 1.0, 4), turn(1.5, 2.0, 2)]);
+    assert_eq!(turns.iter().map(|turn| turn.speaker).collect::<Vec<_>>(), vec![4, 4]);
+    assert!(settle(Vec::new()).is_empty());
+  }
 
   /// Runs the real models over a recording: `DICTATE_SPEAKER_PCM` is 16-bit little-endian 16 kHz mono,
   /// `DICTATE_MODELS_ROOT` the voice-models folder with `speakers/` in it. Ignored by default, since
