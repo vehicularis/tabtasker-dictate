@@ -50,17 +50,17 @@ export function Claude({ settings, update }: PageProps) {
   const keys = settings.shortcuts;
   const commandsHow = keys.command === 'off'
     ? 'The command key is off in Shortcuts, so commands can’t be given.'
-    : `Hold ${DICTATE[keys.dictate]} with ${COMMAND[keys.command]} and say what to do. With text selected, Claude rewrites it; otherwise it answers or writes at the cursor.`;
+    : `Hold ${DICTATE[keys.dictate]} with ${COMMAND[keys.command]} and say what to do. With text selected, Claude rewrites it. Without, it answers or writes at the cursor.`;
 
   return <>
-    <GroupHeader title="How it connects">Polish, commands, titles and summaries: through the Claude Code on this Mac, with your own Anthropic key, or with a model running on this Mac. Nothing opens; it all happens under the hood.</GroupHeader>
+    <GroupHeader title="How it connects">Use Claude Code on this Mac, your own Anthropic key, or a model running on this Mac.</GroupHeader>
     <Connection claude={claude} home={status?.home} />
     <Section title="Model and effort" note={claude.enabled ? undefined : 'These take effect once a model is connected.'}>
       <TileGroup>
         <Tile title="Model" detail={ABOUT[claude.model]}>
           <Segmented label="Model" value={claude.model} options={MODELS} onChange={model => void update({ claude: { model } })} />
         </Tile>
-        <Tile title="Effort" detail={claude.via === 'local' ? 'Claude’s alone: a local model answers as it is set up in Ollama.' : { low: 'Low: quickest, best for polish while you type.', medium: 'Medium: a balance for titles, summaries and commands.', high: 'High: thinks longest; for long meetings and careful rewrites.' }[claude.effort]} dim={claude.via === 'local'}>
+        <Tile title="Effort" detail={claude.via === 'local' ? 'Claude only. A local model uses its own Ollama settings.' : { low: 'Low: quickest, best for polish while you type.', medium: 'Medium: a balance for titles, summaries and commands.', high: 'High: slowest, for long meetings and careful rewrites.' }[claude.effort]} dim={claude.via === 'local'}>
           <Segmented label="Effort" value={claude.effort} options={[{ value: 'low', label: 'Low' }, { value: 'medium', label: 'Medium' }, { value: 'high', label: 'High' }]} onChange={effort => void update({ claude: { effort } })} />
         </Tile>
         <Tile title="Commands" detail={commandsHow}>
@@ -69,7 +69,7 @@ export function Claude({ settings, update }: PageProps) {
       </TileGroup>
     </Section>
     <Seen settings={settings} />
-    <Section title="Claude Code" note={problem ?? 'Where the Claude Code on this Mac is. Found on its own; set it only if it lives somewhere unusual.'}>
+    <Section title="Claude Code" note={problem ?? 'Where Claude Code is on this Mac. Found automatically. Set it only if Claude Code is somewhere else.'}>
       <TileGroup>
         <Tile title="Claude Code" detail={claude.claudeCode ? 'Found on this Mac.' : 'Not found yet. It is looked for each time the app opens.'}>
           <TextField key={refused} label="Claude Code path" monospace value={tilde(claude.claudeCode ?? '', status?.home)} placeholder="~/.local/bin/claude" onCommit={path} />
@@ -147,7 +147,7 @@ function Connection({ claude, home }: { claude: Settings['claude']; home?: strin
   const codeWhere = claude.claudeCode ? tilde(claude.claudeCode, home) : null;
   if (!connected) return <Section title="Connection" note={said ?? 'Claude sees text only, never your voice. Nothing is sent until you connect.'}>
     <TileGroup>
-      <Tile title="Connect through" detail={via === 'claudeCode' ? 'Claude Code runs on this Mac with the Claude account you signed in to there. Nothing else to set up or pay for.' : 'Your own Anthropic key, billed to your Anthropic account.'}>
+      <Tile title="Connect through" detail={via === 'claudeCode' ? 'Claude Code runs on this Mac with the Claude account you signed in to there.' : 'Your own Anthropic key, billed to your Anthropic account.'}>
         <Segmented label="Connect through" value={via} options={VIAS} onChange={setVia} />
       </Tile>
       {via === 'claudeCode' && <Tile title="Claude Code" detail={codeWhere ? `Found at ${codeWhere}. A tiny request to the model below checks it is signed in.` : 'Not found on this Mac. Install Claude Code, run it once in Terminal and sign in, then choose Find below.'}>

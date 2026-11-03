@@ -44,7 +44,7 @@ export function Meetings({ settings, update }: PageProps) {
     const neighbour = leftovers[at + 1] ?? leftovers[at - 1];
     focusNext.current = neighbour ? `${base}-save-${neighbour.id}` : `${base}-start`;
     void invoke('meeting_recover', { id, save }).then(refresh, (error: unknown) => {
-      setRecoverProblem(typeof error === 'string' ? sentence(error) : 'Couldn’t do that. Try again.');
+      setRecoverProblem(typeof error === 'string' ? sentence(error) : save ? 'Couldn’t save the recording. Try again.' : 'Couldn’t discard the recording. Try again.');
       refresh();
     });
   };
@@ -73,7 +73,7 @@ export function Meetings({ settings, update }: PageProps) {
     ? 'Needs macOS 14.2 or later. On this Mac, meetings record your microphone only.'
     : `Includes the Mac’s own sound, such as the other side of a call.${permission === 'notDetermined' ? ' macOS asks once, when the first meeting starts.' : ''}`;
   return <>
-    <PageHeader icon="meeting" title="Meetings">Record a call or a room, and get a transcript with who said what. Start one from the dots’ pill, their menu, the menu bar, or here.</PageHeader>
+    <PageHeader icon="meeting" title="Meetings">Record a call or a room and get a transcript with who said what.</PageHeader>
     <Section note={startProblem ?? undefined}>
       <TileGroup>
         <Tile title={recording ? 'Recording a meeting' : 'Start a meeting'}
@@ -102,13 +102,13 @@ export function Meetings({ settings, update }: PageProps) {
     </Section>}
     <Section title="Recording" note="Your microphone has echo cancellation, so speakers work as well as headphones. Audio is transcribed on this Mac as the meeting goes, and kept safe until the file is saved.">
       <TileGroup>
-        <Tile title="Record other people too" detail={systemDetail} dim={unsupported}>
-          <Toggle label="Record other people too" checked={meetings.systemAudio && !unsupported} disabled={unsupported} onChange={systemAudio => update({ meetings: { systemAudio } })} />
+        <Tile title="Record the other side of calls" detail={systemDetail} dim={unsupported}>
+          <Toggle label="Record the other side of calls" checked={meetings.systemAudio && !unsupported} disabled={unsupported} onChange={systemAudio => update({ meetings: { systemAudio } })} />
         </Tile>
         {meetings.systemAudio && permission === 'denied' && <Tile title="System audio isn’t allowed" detail="Meetings record your microphone only. In Privacy & Security, turn on TabTasker Dictate under System Audio Recording Only.">
           <Button onClick={() => void invoke('meeting_privacy').catch(() => {})}>Open System Settings</Button>
         </Tile>}
-        <Tile title="Summary" detail={settings.claude.enabled ? 'The model names the meeting and writes a summary under the title.' : 'The model names the meeting and writes a summary once Claude or a local model is connected.'}>
+        <Tile title="Summary" detail={settings.claude.enabled ? 'Claude or your local model names the meeting and writes a summary under the title.' : 'Names the meeting and writes a summary under the title, once Claude or a local model is connected.'}>
           <Toggle label="Summary" checked={meetings.summarize} onChange={summarize => update({ meetings: { summarize } })} />
         </Tile>
         <Tile title="Decisions" detail="A Decisions list in the summary." dim={!meetings.summarize}>
@@ -121,7 +121,7 @@ export function Meetings({ settings, update }: PageProps) {
     </Section>
     <Section title="Transcript">
       <TileGroup>
-        <Tile title="Tell speakers apart" detail={meetings.speakers ? 'Each voice gets its own label, Person 1, Person 2 and on, whether it comes through the microphone or the call; yours keeps your name. Two small models (47 MB) download when a meeting first needs them, and the telling apart happens on this Mac after Stop.' : 'Lines are labelled by where they came from: your microphone, or the Mac’s sound.'}>
+        <Tile title="Tell speakers apart" detail={meetings.speakers ? 'Each voice gets a label, Person 1, Person 2 and so on. Yours keeps your name. Two small models (47 MB) download the first time, and it all runs on this Mac after Stop.' : 'Lines are labelled by where they came from: your microphone, or the Mac’s sound.'}>
           <Toggle label="Tell speakers apart" checked={meetings.speakers} onChange={speakers => update({ meetings: { speakers } })} />
         </Tile>
         <Tile title="Your name" detail="How your lines are labelled."><TextField label="Your name" value={meetings.you} onCommit={you => update({ meetings: { you } })} /></Tile>

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { invoke, listen } from '../bridge';
 import type { Events } from '../store';
 import { X } from './icons';
+import { leave } from '../ui/motion';
 import { PREVIEW } from './preview';
 import './MeetingPill.css';
 
@@ -131,7 +132,7 @@ export function MeetingPill() {
   const live = (() => {
     if (recording) {
       const onlyMic = !!system && system !== 'on' && system !== 'pending';
-      return <div className="glass meeting-pill meeting-card" data-glass data-hit role="group" aria-label="Meeting recording">
+      return <div ref={leave} className="glass meeting-pill meeting-card" data-glass data-hit role="group" aria-label="Meeting recording">
         <span className="meeting-dot" aria-hidden="true" />
         <span className="meeting-text">
           <span className="meeting-line"><b>Meeting</b><time>{recording.since ? elapsed(recording.since) : '0:00'}</time>
@@ -143,7 +144,7 @@ export function MeetingPill() {
     }
     if (outcome || !leftover) return null;
     const title = discarding ? 'Discard this recording?' : leftover.saved ? 'A meeting has gaps' : 'A meeting wasn’t saved';
-    return <div className="glass meeting-pill meeting-card" data-glass data-hit role="status">
+    return <div ref={leave} className="glass meeting-pill meeting-card" data-glass data-hit role="status">
       <span className="meeting-text"><span className="meeting-line"><b>{title}</b></span>
         <small>{discarding ? (leftover.saved ? 'The saved meeting stays.' : 'It can’t be undone.') : `${meetingWhen(leftover.sinceMs)} · ${meetingLength(leftover.seconds)}`}</small></span>
       {discarding
@@ -154,7 +155,7 @@ export function MeetingPill() {
   })();
   const finished = (() => {
     if (outcome?.state === 'saving') {
-      return <p className="glass meeting-pill meeting-card" data-glass data-state="saving" role="status">
+      return <p ref={leave} className="glass meeting-pill meeting-card" data-glass data-state="saving" role="status">
         <span className="meeting-dot" aria-hidden="true" />
         <span className="meeting-text"><span className="meeting-line"><b>Saving the meeting</b></span><small>{outcome.message ?? 'Finishing the transcript'}</small></span>
       </p>;
@@ -162,12 +163,12 @@ export function MeetingPill() {
     if (outcome?.state === 'saved' && outcome.path) {
       const path = outcome.path, kept = outcome.leftover;
       if (!outcome.message && !kept) {
-        return <button type="button" className="glass said saved meeting-card" data-glass data-hit onClick={() => { void invoke('note_open', { path }).catch(() => reveal(path)); setOutcome(null); }}>
+        return <button ref={leave} type="button" className="glass said saved meeting-card" data-glass data-hit onClick={() => { void invoke('note_open', { path }).catch(() => reveal(path)); setOutcome(null); }}>
           <small>Meeting saved · Open</small><span>{path.split('/').pop()?.replace(/\.md$/, '')}</span>
         </button>;
       }
       // Saved, with something to say: it stopped early, or parts are still audio.
-      return <div className="glass meeting-pill meeting-card" data-glass data-hit role="status">
+      return <div ref={leave} className="glass meeting-pill meeting-card" data-glass data-hit role="status">
         <span className="meeting-text"><span className="meeting-line"><b>Meeting saved</b></span><small>{outcome.message}</small></span>
         <button type="button" className="btn" title="Show in Finder" aria-label="Show in Finder" onClick={() => reveal(path)}>Show</button>
         {kept && <button type="button" className="btn primary" onClick={() => recover(kept, true)}>Try again</button>}
@@ -176,7 +177,7 @@ export function MeetingPill() {
     }
     if (outcome?.state === 'error') {
       const kept = outcome.leftover;
-      return <div className="glass meeting-pill meeting-card" data-glass data-hit role="alert">
+      return <div ref={leave} className="glass meeting-pill meeting-card" data-glass data-hit role="alert">
         <span className="meeting-text"><span className="meeting-line"><b>{kept ? 'The meeting wasn’t saved' : outcome.message}</b></span>
           {kept && <small>{outcome.message} The recording is kept.</small>}</span>
         {kept

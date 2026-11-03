@@ -1,6 +1,6 @@
 /* The meeting pill near the dots: a recording dot in the accent, the time and Stop; then saving, saved,
    and a recording left unsaved. */
-.meeting-pill { display: flex; margin: 0; align-items: center; gap: 10px; box-sizing: border-box; max-width: 380px; min-height: 40px; padding: 6px 6px 6px 14px; border-radius: 20px; font-size: 13px; animation: pop .25s var(--ease) both; }
+.meeting-pill { display: flex; margin: 0; align-items: center; gap: 10px; box-sizing: border-box; max-width: 380px; min-height: 40px; padding: 6px 6px 6px 14px; border-radius: var(--radius-pill); font-size: 13px; }
 .meeting-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: meeting-beat 1.6s ease-in-out infinite; }
 .meeting-pill[data-state='saving'] .meeting-dot { background: var(--ink-3); }
 @keyframes meeting-beat { 50% { opacity: .3; } }
@@ -18,7 +18,7 @@
 .dock:has(.menu) .meeting-card { display: none; }
 
 /* Stop: a red round with the stop square, as the record button in the window. */
-.meeting-stop { flex: none; display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%; background: #e5484d; box-shadow: var(--elev-control); cursor: pointer; transition: filter var(--quick, .15s) ease, transform var(--quick, .15s) ease; }
+.meeting-stop { flex: none; display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%; background: var(--accent-button); box-shadow: var(--elev-control); cursor: pointer; transition: filter var(--quick, .15s) ease, transform var(--quick, .15s) ease; }
 .meeting-stop i { display: block; width: 10px; height: 10px; border-radius: 2px; background: #fff; }
 .meeting-stop:hover { filter: brightness(1.1); }
 .meeting-stop:active { transform: scale(.95); }

@@ -108,7 +108,7 @@ export function AppStyles({ settings, update }: PageProps) {
       </TileGroup>
     </Section>
     <Section title="Apps" note={<>Send presses Return once your words are typed, as in a chat: on by default in Slack, Messages, WhatsApp, Teams, Telegram, Discord and Signal. Saying “send” at the end sends one message anywhere.
-      {claude ? ' Polish asks Claude to tidy your words in that app, within a few seconds; your own words stand if it can’t.'
+      {claude ? ' Polish asks Claude to tidy your words in that app. If Claude takes more than a few seconds, your own words are typed.'
         : <> Claude can also polish your words in the apps you choose. <button type="button" className="link" onClick={() => { location.hash = 'settings/agents'; }}>Connect Claude</button></>}</>}>
       <TileGroup label="Apps">
         <Tile title={picking ? 'Add an app' : `${apps.styles.length} ${apps.styles.length === 1 ? 'app' : 'apps'}`} stack={picking}>
@@ -124,7 +124,7 @@ export function AppStyles({ settings, update }: PageProps) {
         </Tile>)}
       </TileGroup>
     </Section>
-    <Section title="The styles" note="Every style is applied on this Mac as you speak, live words included.">
+    <Section title="The styles" note="Every style is applied on this Mac, before your words are typed.">
       <TileGroup label="The styles">
         {STYLES.map(style => <Tile key={style.value} title={style.label} detail={style.detail}>
           {style.said && <span className="style-example" aria-label={`${style.said} becomes ${style.typed}`}>{style.said}<Icon name="chevronRight" size={12} /><b>{style.typed}</b></span>}

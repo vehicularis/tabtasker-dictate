@@ -1,3 +1,4 @@
+import { ICON_GLYPHS } from '../../overlay/glyphs';
 import { useEffect, useState, type ReactNode } from 'react';
 import { invoke } from '../../bridge';
 import type { PageProps } from '../../store';
@@ -29,7 +30,7 @@ const Notices = ({ label, text }: { label: string; text: (Paragraph | null)[] })
 
 // A promise with its icon in front, as macOS lists privacy.
 const Pledge = ({ icon, title, children }: { icon: IconName; title: string; children: ReactNode }) => <div className="ui-tile pledge">
-  <span className="pledge-icon"><Icon name={icon} size={18} /></span>
+  <span className="pledge-icon">{(() => { const Glyph = ICON_GLYPHS[icon]; return Glyph ? <Glyph size={26} /> : <Icon name={icon} size={18} />; })()}</span>
   <div className="what"><span className="title">{title}</span><span className="detail">{children}</span></div>
 </div>;
 
@@ -46,10 +47,10 @@ export function About(_: PageProps) {
     </header>
     <Section title="Privacy">
       <TileGroup label="Privacy">
-        <Pledge icon="shield" title="Your voice stays on this Mac">Whisper transcribes it here. Audio is never uploaded or shared, and isn’t kept once it’s transcribed.</Pledge>
-        <Pledge icon="claude" title="Claude only if you connect it">It gets text, never audio: your commands, plus the dictations it polishes, notes it titles and meetings it summarizes while those are on. Your key stays in the Keychain.</Pledge>
-        <Pledge icon="folder" title="Your words are yours">Notes, meetings and history are kept on this Mac. Claude Code and Claude Desktop read only what Claude & AI lets them.</Pledge>
-        <Pledge icon="check" title="No account and no analytics">Nothing to sign in to, and nothing about how you use it is sent anywhere.</Pledge>
+        <Pledge icon="mic" title="Your voice stays on this Mac">Whisper transcribes it here. Audio is never uploaded or shared, and isn’t kept once it’s transcribed.</Pledge>
+        <Pledge icon="claude" title="Claude only if you connect it">It gets text, never audio. Only your commands, and the dictations, notes and meetings you turn it on for. Your key stays in the Keychain.</Pledge>
+        <Pledge icon="folder" title="Notes stay on this Mac">Notes, meetings and history are kept here. Claude Code and Claude Desktop read only what Settings › Agents allows.</Pledge>
+        <Pledge icon="shield" title="No account and no analytics">Nothing to sign in to, and nothing about how you use it is sent anywhere.</Pledge>
       </TileGroup>
     </Section>
     <Section title="Licence">
@@ -60,7 +61,7 @@ export function About(_: PageProps) {
         {reading && <div className="ui-tile stack"><Notices label="Apache License 2.0" text={LICENCE} /></div>}
       </TileGroup>
     </Section>
-    <Section title="Third-party notices" note="The voice models, libraries and fonts inside TabTasker Dictate, with their licences.">
+    <Section title="Third-party notices" note="The speech models, libraries and fonts inside TabTasker Dictate, with their licences.">
       <TileGroup label="Third-party notices">
         <div className="ui-tile stack"><Notices label="Third-party notices" text={NOTICES} /></div>
       </TileGroup>

@@ -286,3 +286,30 @@ fn with_no_model_loaded_one_on_this_mac_answers_while_the_chosen_one_downloads()
   assert_eq!(first_load(&root, Turbo, false), Small);
   std::fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn a_window_is_silence_only_when_whisper_is_unsure_of_its_words_too() {
+  assert!(super::silent(0.9, -1.6), "no speech, and the words a guess");
+  assert!(!super::silent(0.9, -0.3), "clear words after a pause are kept");
+  assert!(!super::silent(0.4, -1.6), "unsure words where someone spoke are kept");
+  assert!(super::silent(0.7, f32::NEG_INFINITY), "a window with no words at all");
+}
+
+#[test]
+fn a_recited_vocabulary_is_told_from_a_sentence_that_uses_it() {
+  let words: Vec<String> = ["Kubernetes", "Vercel", "TabTasker", "Maria Lopez"].iter().map(|word| word.to_string()).collect();
+  assert!(super::echoes_prompt("Kubernetes, Vercel, TabTasker.", &words), "the list, in its order");
+  assert!(super::echoes_prompt("Vercel Vercel Vercel", &words), "one word over and over");
+  assert!(super::echoes_prompt("TabTasker,", &words), "a short run ending in a comma");
+  assert!(!super::echoes_prompt("Deploy it to Vercel before Maria Lopez gets in.", &words), "a sentence using two of them");
+  assert!(!super::echoes_prompt("Vercel", &words), "one vocabulary word said alone is a word");
+  assert!(!super::echoes_prompt("Kubernetes, Vercel", &[]), "nothing to echo without a vocabulary");
+}
+
+#[test]
+fn audio_quieter_than_a_breath_is_silence() {
+  assert!(super::silent_audio(&vec![0.0005; 16_000]));
+  let mut said = vec![0.0005; 16_000];
+  for (i, sample) in said[4_000..6_000].iter_mut().enumerate() { *sample = 0.02 * (i as f32 * 0.3).sin(); } // a quiet word on the built-in mic
+  assert!(!super::silent_audio(&said));
+}

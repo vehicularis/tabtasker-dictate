@@ -49,7 +49,7 @@ export function register(mock: Mock) {
       if (mock.settings().dictation.model !== want) { clearInterval(timer); step = null; changed(); return; }
       if (failing && percent >= 40) {
         clearInterval(timer);
-        step = { model: want, message: 'Couldn’t download the voice model. Check your connection and try again.', percent: null, failed: true };
+        step = { model: want, message: 'Couldn’t download the speech model. Check your connection and try again.', percent: null, failed: true };
       } else if (percent < 100) {
         percent = Math.min(100, percent + 6);
         step = { model: want, message: `Downloading ${LABEL[want]} · ${percent}%`, percent, failed: false };

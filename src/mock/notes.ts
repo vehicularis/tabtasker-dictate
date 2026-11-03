@@ -46,8 +46,18 @@ export function register(mock: Mock) {
     { path: `${folder()}/2026-11-02 Note 2.md`, title: '2026-11-02 Note 2', kind: 'note', modifiedMs: now - 2 * hour, words: 0, excerpt: '' }, // a note just made, empty
     { path: `${folder()}/2026-11-01 Ideas for the launch.md`, title: 'Ideas for the launch', kind: 'note', modifiedMs: now - 26 * hour, words: 310, excerpt: 'A short video first, then the three screenshots, then the pricing. Ask Sam whether the onboarding emails can go out the same morning.' },
     { path: `${folder()}/Meetings/2026-10-30 Weekly.md`, title: 'Weekly', kind: 'meeting', modifiedMs: now - 70 * hour, words: 2890, excerpt: 'You 00:00:02 Quick round, then the roadmap. Priya 00:00:15 The board deck has no draft yet…' },
-  ];
-  mock.handle('library_list', () => library);
+    { path: `${folder()}/Archive/2026-10-12 Old plan.md`, title: 'Old plan', kind: 'note', modifiedMs: now - 500 * hour, words: 120, excerpt: 'The first plan for the launch, before the pricing changed.', archived: true },
+  ].map(item => ({ archived: false, ...item }));
+  mock.handle('library_list', () => library.map(item => ({ ...item }))); // fresh, as the app's IPC answers: the same array again would never re-render
+  // Into the folder's Archive/ and back, as notes.rs moves the file.
+  mock.handle('note_archive', ({ path, archived }) => {
+    const found = library.find(item => item.path === path);
+    if (!found) throw 'That file isn’t there any more.';
+    const name = String(path).split('/').pop()!, dir = String(path).slice(0, -name.length - 1);
+    found.archived = !!archived;
+    found.path = archived ? (dir.endsWith('/Archive') ? found.path : `${dir}/Archive/${name}`) : (dir.endsWith('/Archive') ? `${dir.slice(0, -8)}/${name}` : found.path);
+    return found.path;
+  });
   mock.handle('library_open', () => {});
   // The editor: a note's title and body, in memory. A library item it has never seen reads as its excerpt.
   const docs = new Map<string, { title: string; body: string }>();
@@ -76,7 +86,7 @@ export function register(mock: Mock) {
     const note = compose(mock.settings().notes, title as string, text as string, null, stamp as string);
     const path = `${folder()}/${note.stem}.md`;
     docs.set(path, { title: title as string, body: text as string });
-    library.unshift({ path, title: (title as string) || note.stem, kind: 'note', modifiedMs: Date.now(), words: (text as string).split(/\s+/).filter(Boolean).length, excerpt: (text as string).slice(0, 160) });
+    library.unshift({ path, title: (title as string) || note.stem, kind: 'note', modifiedMs: Date.now(), words: (text as string).split(/\s+/).filter(Boolean).length, excerpt: (text as string).slice(0, 160), archived: false });
     return path;
   });
   mock.handle('note_open', ({ path }) => { const item = library.find(one => one.path === path); location.hash = `${item?.kind === 'meeting' ? 'meetings' : 'notes'}/${encodeURIComponent(path as string)}`; });

@@ -3,6 +3,7 @@ import { invoke, listen } from '../bridge';
 import type { Events } from '../store';
 import { Icon } from '../ui/Icon';
 import { X } from './icons';
+import { leave } from '../ui/motion';
 import { PREVIEW } from './preview';
 import './CommandCard.css';
 
@@ -59,7 +60,7 @@ export function CommandCard() {
 
   if (command.phase !== 'answer') {
     const error = command.phase === 'error';
-    return <div className="glass claude-bubble" data-glass data-hit data-error={error || undefined} role={error ? 'alert' : 'status'} onKeyDown={escape}>
+    return <div ref={leave} className="glass claude-bubble" data-glass data-hit data-error={error || undefined} role={error ? 'alert' : 'status'} onKeyDown={escape}>
       <span className="what">
         <small>{error ? 'Claude couldn’t do that' : <>Claude is working<span className="claude-wait" aria-hidden="true"><i /><i /><i /></span></>}</small>
         <span>{error ? command.text : command.instruction}</span>
@@ -80,7 +81,7 @@ export function CommandCard() {
   const keys = (event: KeyboardEvent) => {
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); if (command.typed) copy(); else insert(); } else escape(event);
   };
-  return <article className="glass card claude-card" data-glass data-hit aria-label="Claude’s answer" onKeyDown={keys}>
+  return <article ref={leave} className="glass card claude-card" data-glass data-hit aria-label="Claude’s answer" onKeyDown={keys}>
     <header className="head"><span className="name"><Icon name="claude" size={16} />Claude</span></header>
     {command.instruction && <p className="claude-asked">{command.instruction}</p>}
     <div className="claude-answer" tabIndex={0} aria-label="Answer">{text}</div>

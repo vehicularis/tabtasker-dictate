@@ -3,4 +3,5 @@ export { Button, ChipList, Segmented, Select, Slider, TextField, Toggle, type Op
 export { chordOf, Kbd, KeyRecorder, MODIFIERS } from './keys';
 export { EmptyState, GroupHeader, PageHeader, ProgressBar, Section, Tile, TileGroup, Toast } from './layout';
 export { Icon, type IconName } from './Icon';
+export { leave, reduced, timing, useFlip } from './motion';
 export { applyTheme, isDark } from './theme';

@@ -1,5 +1,5 @@
-// Rewrites the library half of THIRD_PARTY_NOTICES.txt: every Rust crate compiled into the app, the npm
-// packages in the pages and the bundled fonts, each with the licence text it ships. The model notices
+// Rewrites the library half of THIRD_PARTY_NOTICES.txt: every Rust crate compiled into the app, every npm
+// package the pages can bundle and the bundled fonts, each with the licence text it ships. The model notices
 // above the marker are written by hand and kept as they are. Run after changing a dependency:
 //   node scripts/notices.mjs
 import { execFileSync } from 'node:child_process';
@@ -30,10 +30,15 @@ const pick = (files, licence) => {
 };
 const entries = [
   ...crates.map(pkg => ({ name: `${pkg.name} ${pkg.version}`, licence: pkg.license ?? pkg.license_file ?? 'see text', dir: dirname(pkg.manifest_path), url: pkg.repository })),
-  ...['react', 'react-dom', 'scheduler'].map(name => {
-    const dir = join(ROOT, 'node_modules', name), pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
-    return { name: `${name} ${pkg.version} (npm)`, licence: pkg.license, dir, url: 'https://github.com/facebook/react' };
-  }),
+  // Every npm package the pages can bundle: package-lock's installed packages that are not dev-only
+  // (`dev`, `devOptional`), the build tools left out the same way the Rust build dependencies are.
+  ...Object.entries(JSON.parse(readFileSync(join(ROOT, 'package-lock.json'), 'utf8')).packages)
+    .filter(([path, entry]) => path.startsWith('node_modules/') && !entry.dev && !entry.devOptional)
+    .map(([path]) => {
+      const dir = join(ROOT, path), pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
+      const url = (typeof pkg.repository === 'string' ? pkg.repository : pkg.repository?.url)?.replace(/^git\+/, '') ?? pkg.homepage;
+      return { name: `${pkg.name} ${pkg.version} (npm)`, licence: typeof pkg.license === 'string' ? pkg.license : pkg.license?.type, dir, url };
+    }),
   { name: 'Source Sans 3 (font)', licence: 'OFL-1.1', dir: join(ROOT, 'public/fonts'), files: ['source-sans-3-LICENSE.txt'], url: 'https://github.com/adobe-fonts/source-sans' },
   { name: 'Stack Sans Headline (font)', licence: 'OFL-1.1', dir: join(ROOT, 'public/fonts'), files: ['stack-sans-headline-LICENSE.txt'], url: 'https://github.com/DylanYoungKoto/Stack-Sans' },
 ];

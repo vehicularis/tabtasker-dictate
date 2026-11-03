@@ -3,9 +3,9 @@ import { isDark } from '../ui/theme';
 import { createGlass, flatWave, paintInside, type Glass } from './glass';
 
 // The orb, as TabTasker Business draws its own: a smoked disc under glass, with level bars that follow your
-// voice while you talk, a text cursor while your words type, and the wave while what you said is
-// transcribed. `words` are the live words while typing: they go into the field itself, never into the orb;
-// here they only tell the cursor when to hold still (solid while words are going in, blinking once they stop).
+// voice while you talk, your words being written while you dictate (they go into the field once, when you let
+// go), and the wave while what you said is transcribed. `words` are the live words: the orb writes them in at
+// a steady pace behind a text cursor, keeping what still agrees when Whisper changes its mind about the rest.
 export function Orb({ mode, level, typing, words, onClick }: { mode: string; level: { current: number }; typing: boolean; words: string; onClick: () => void }) {
   const host = useRef<HTMLSpanElement>(null);
   const glass = useRef<Glass | null>(null);
@@ -46,7 +46,8 @@ export function Orb({ mode, level, typing, words, onClick }: { mode: string; lev
     }
     let frame = 0, energy = .3, peak = .005;
     const started = performance.now();
-    let said = heard.current, movedAt = started;
+    // What the orb has written so far, toward the newest live words, about 45 characters a second.
+    let written = '', toward = '', pen = 0, movedAt = started, last = started;
     const draw = (now: number) => {
       const background = isDark() ? [.09, .1, .11] : [.97, .97, .97]; // the theme can change mid-hold
       // Mic gain differs from Mac to Mac, so everything follows your voice against its own recent peak:
@@ -56,9 +57,19 @@ export function Orb({ mode, level, typing, words, onClick }: { mode: string; lev
       energy += (target - energy) * (target > energy ? .35 : .1);
       const time = 1.9 + (now - started) * (still ? 0 : .0024);
       const kind = thinking.current ? null : caret.current ? 'caret' : 'bars';
-      if (heard.current !== said) { said = heard.current; movedAt = now; }
+      if (heard.current !== toward) {
+        toward = heard.current;
+        let same = 0;
+        while (same < written.length && same < toward.length && written[same] === toward[same]) same++;
+        written = written.slice(0, same); pen = same;
+      }
+      if (written.length < toward.length) {
+        pen = still ? toward.length : Math.min(toward.length, pen + (now - last) * .045);
+        if (Math.floor(pen) > written.length) { written = toward.slice(0, Math.floor(pen)); movedAt = now; }
+      }
+      last = now;
       glass.current?.draw(time, background, energy, 4, kind ? 0 : 1);
-      if (inside.current) paintInside(inside.current, kind, energy, time, now - movedAt, kind === 'caret' ? colour('--orb-ink', '#f4efe6') : colour('--orb-bars', accent));
+      if (inside.current) paintInside(inside.current, kind, energy, time, now - movedAt, kind === 'caret' ? colour('--orb-ink', '#f4efe6') : colour('--orb-bars', accent), written);
       frame = requestAnimationFrame(draw);
     };
     frame = requestAnimationFrame(draw);

@@ -1,38 +1,46 @@
-import { useRef, useState, type MouseEvent, type ReactNode } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
-import { Extension, type Editor as TipTap } from '@tiptap/core';
-import { EditorContent, useEditor, useEditorState } from '@tiptap/react';
-import { BubbleMenu } from '@tiptap/react/menus';
-import { DragHandle } from '@tiptap/extension-drag-handle-react';
-import Suggestion, { type SuggestionProps } from '@tiptap/suggestion';
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
+import { Extension, posToDOMRect, type Editor as TipTap } from '@tiptap/core';
+import { EditorContent, NodeViewContent, NodeViewWrapper, ReactNodeViewRenderer, useEditor, type NodeViewProps } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { TaskItem, TaskList } from '@tiptap/extension-list';
 import { Highlight } from '@tiptap/extension-highlight';
 import { TableKit } from '@tiptap/extension-table';
 import Image from '@tiptap/extension-image';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
+import { NodeRange } from '@tiptap/extension-node-range';
 import { Placeholder } from '@tiptap/extensions';
 import { Markdown } from '@tiptap/markdown';
 import { common, createLowlight } from 'lowlight';
 import { fileSrc, invoke } from '../bridge';
-import { Icon, type IconName } from '../ui/Icon';
-import { filterSlash, SlashMenu, slashItems, type SlashItem, type SlashMenuHandle } from './SlashMenu';
+import { Icon } from '../ui/Icon';
+import { BlockDrop, TaskListMarkdownShortcut } from './blocks';
+import { BlockHandles } from './BlockHandles';
+import { Bubble } from './Bubble';
+import { FindBar, FindReplace } from './Find';
+import { Menu } from './Menu';
+import { SlashCommand } from './SlashMenu';
+import { MarkdownTableHeader, TableControls } from './TableControls';
+import { Toolbar } from './Toolbar';
 import './editor.css';
 
 const lowlight = createLowlight(common);
 
-// The Text editor, as TabTasker Business writes with it (RichEditor.tsx, on TipTap): headings, lists and
-// to-do lists, quotes, code with colours, tables, pictures, links and highlights, typed with Markdown
-// shortcuts, from the bar above, from "/" or from the bar that comes up over a selection; a handle to
-// drag a block by. Kept as Markdown, so a note is still a plain file any other app can read. `compact`
-// is a sticky: the same editor with no bar above and no handle, but "/" and the selection bar, in smaller type. `notePath` is the file the note is, for
-// pictures: a pasted or dropped one is saved beside it and shown from there.
+// The Text editor, as TabTasker Business's Atlas pages write with it (RichEditor.tsx, on TipTap): the
+// formatting bar that folds into "More" as the pane narrows, the bar over a selection, "/" for blocks,
+// a handle beside every block to drag it, add under it, turn it into something else or delete it, and
+// the table's own row and column controls. Kept as Markdown, so a note is still a plain file any other
+// app can read: nothing is offered that Markdown cannot hold. `compact` is a sticky: the same editor
+// with no bar above and no handles, but "/" and the selection bar, in smaller type. `notePath` is the
+// file the note is, for pictures: a pasted or dropped one is saved beside it and shown from there.
 export function Editor({ markdown, onChange, placeholder, compact = false, autoFocus = false, label, bar, notePath }: {
   markdown: string; onChange: (markdown: string) => void; placeholder?: string; compact?: boolean; autoFocus?: boolean; label: string; bar?: ReactNode; notePath?: string;
 }) {
   const folder = notePath ? notePath.slice(0, notePath.lastIndexOf('/')) : null;
   const pathRef = useRef(notePath); pathRef.current = notePath;
   const files = useRef<HTMLInputElement>(null);
+  const root = useRef<HTMLDivElement>(null);
+  const wrap = useRef<HTMLDivElement>(null);
+  const linkRef = useRef(() => {});
   // Pictures: saved beside the note, then put in by their relative path, shown from the file.
   const attach = async (editor: TipTap, file: File, at?: number) => {
     const path = pathRef.current;
@@ -46,11 +54,13 @@ export function Editor({ markdown, onChange, placeholder, compact = false, autoF
   };
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({ heading: { levels: [1, 2, 3] }, link: { openOnClick: false, autolink: true, defaultProtocol: 'https' }, codeBlock: false }),
-      CodeBlockLowlight.configure({ lowlight }),
-      TaskList, TaskItem.configure({ nested: true }),
+      // No drop cursor: BlockDrop draws the line and lands a block by the vertical half of the row.
+      StarterKit.configure({ heading: { levels: [1, 2, 3] }, link: { openOnClick: false, autolink: true, defaultProtocol: 'https' }, codeBlock: false, dropcursor: false }),
+      CodeBlockLowlight.extend({ addNodeView: () => ReactNodeViewRenderer(CodeBlockView) }).configure({ lowlight }),
+      TaskList, TaskItem.configure({ nested: true }), TaskListMarkdownShortcut,
       Highlight,
-      TableKit.configure({ table: { resizable: false } }),
+      // Column widths are not Markdown, so a table sizes to its content and nobody drags its edges.
+      TableKit.configure({ table: { resizable: false } }), MarkdownTableHeader,
       // A relative `src` (`attachments/…`) is the note's own; it is shown from the file beside the note.
       Image.extend({
         renderHTML({ HTMLAttributes }) {
@@ -59,9 +69,15 @@ export function Editor({ markdown, onChange, placeholder, compact = false, autoF
           return ['img', { ...HTMLAttributes, src: shown, 'data-src': src }];
         },
       }).configure({ allowBase64: true }),
-      Placeholder.configure({ placeholder: placeholder ?? 'Type, or hold fn and talk' }),
+      Placeholder.configure({ placeholder: placeholder ?? 'Type, or hold your key and talk' }),
       Markdown,
-      slash(() => files.current?.click()),
+      SlashCommand.configure({ onImage: notePath ? () => files.current?.click() : undefined }),
+      BlockDrop,
+      // The drag handle's peer: what lets a drag pick up a whole block. Its keymap is dropped, as Atlas
+      // drops it: ⌘A would otherwise select the page invisibly.
+      NodeRange.extend({ addKeyboardShortcuts: () => ({}) }),
+      FindReplace,
+      Extension.create({ name: 'linkKey', addKeyboardShortcuts: () => ({ 'Mod-k': () => { linkRef.current(); return true; } }) }),
     ],
     content: markdown, contentType: 'markdown',
     autofocus: autoFocus ? 'end' : false,
@@ -84,160 +100,88 @@ export function Editor({ markdown, onChange, placeholder, compact = false, autoF
     onUpdate: ({ editor, transaction }) => { if (transaction.docChanged) onChange(editor.getMarkdown()); },
   });
   const editorRef = useRef<TipTap | null>(null); editorRef.current = editor;
-  return <div className={`ed${compact ? ' compact' : ''}`}>
-    {!compact && editor && <Toolbar editor={editor} tail={bar} onImage={notePath ? () => files.current?.click() : undefined} />}
-    {editor && <BubbleMenu editor={editor} className="ed-bubble" shouldShow={({ editor, state }) => !state.selection.empty && !editor.isActive('codeBlock') && !editor.isActive('image')}>
-      <Bubble editor={editor} />
-    </BubbleMenu>}
-    {!compact && editor && <DragHandle editor={editor} className="ed-handle"><Icon name="grip" size={14} /></DragHandle>}
-    <EditorContent editor={editor} className="ed-content" />
+
+  // The link: off when the caret is on one, otherwise a field at the selection asks for the address.
+  const [linking, setLinking] = useState<{ rect: DOMRect; href: string } | null>(null);
+  linkRef.current = () => {
+    if (!editor) return;
+    if (editor.isActive('link')) { editor.chain().focus().unsetLink().run(); return; }
+    const { from, to } = editor.state.selection;
+    setLinking({ rect: posToDOMRect(editor.view, from, to), href: '' });
+  };
+  const setLink = (text: string) => {
+    setLinking(null);
+    if (!editor) return;
+    const address = text.trim();
+    if (!address) { editor.commands.focus(); return; }
+    const href = /^[a-z][a-z0-9+.-]*:/i.test(address) ? address : `https://${address}`;
+    if (editor.state.selection.empty) editor.chain().focus().insertContent({ type: 'text', text: address, marks: [{ type: 'link', attrs: { href } }] }).run();
+    else editor.chain().focus().setLink({ href }).run();
+  };
+
+  // ⌘F: the find bar, for the editor the press belongs to. With the caret in another editor that one
+  // takes it; with the caret nowhere, the first editor on screen that anybody could click.
+  const [finding, setFinding] = useState(false);
+  useEffect(() => {
+    if (compact) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.repeat || !(event.metaKey || event.ctrlKey) || event.altKey || event.key.toLowerCase() !== 'f') return;
+      const here = root.current;
+      const usable = (el: HTMLElement) => el.checkVisibility?.() !== false && getComputedStyle(el).pointerEvents !== 'none';
+      if (!here || !usable(here)) return;
+      const target = event.target instanceof Element ? event.target.closest('.ed') : null;
+      if (target && target !== here) return;
+      if (!target && [...document.querySelectorAll<HTMLElement>('.ed:not(.compact)')].find(usable) !== here) return;
+      event.preventDefault();
+      setFinding(true);
+    };
+    addEventListener('keydown', onKey);
+    return () => removeEventListener('keydown', onKey);
+  }, [compact]);
+
+  // A click under the last line, in the scroller's own space, keeps writing at the end.
+  const below = (event: MouseEvent) => {
+    if (!editor || event.target !== event.currentTarget || event.clientY <= editor.view.dom.getBoundingClientRect().bottom) return;
+    event.preventDefault();
+    editor.commands.focus('end');
+  };
+
+  return <div ref={root} className={`ed${compact ? ' compact' : ''}`}>
+    {!compact && editor && <div className="ed-bar">
+      <div className="ed-tools">
+        <Toolbar editor={editor} onImage={notePath ? () => files.current?.click() : undefined} onLink={() => linkRef.current()} />
+        {bar && <span className="ed-tail">{bar}</span>}
+      </div>
+      {finding && <FindBar editor={editor} onClose={() => setFinding(false)} />}
+    </div>}
+    {editor && <Bubble editor={editor} onLink={() => linkRef.current()} />}
+    <div ref={wrap} className="ed-content" onMouseDown={below}>
+      {!compact && editor && <TableControls editor={editor} wrap={wrap} />}
+      {!compact && editor && <BlockHandles editor={editor} wrap={wrap} />}
+      <EditorContent editor={editor} className="ed-doc" />
+    </div>
+    {linking && <Menu plain keep={false} anchor={() => linking.rect} label="Link" onClose={() => { setLinking(null); editor?.commands.focus(); }}>
+      <form className="ed-link" onSubmit={event => { event.preventDefault(); setLink(linking.href); }}>
+        <Icon name="link" size={14} />
+        <input autoFocus value={linking.href} placeholder="Paste or type a link" aria-label="Link address" spellCheck={false} onChange={event => setLinking({ ...linking, href: event.target.value })} />
+        <button type="submit" className="ed-tool" aria-label="Add the link" title="Add the link"><Icon name="check" size={14} /></button>
+      </form>
+    </Menu>}
     {notePath && <input ref={files} type="file" accept="image/*" hidden aria-label="Add a picture" onChange={event => { const file = event.target.files?.[0]; if (file && editorRef.current) void attach(editorRef.current, file).catch(() => {}); event.target.value = ''; }} />}
   </div>;
 }
 
-/// "/" at the start of a line, or after a space: the menu of things to put in.
-function slash(onImage: () => void) {
-  return Extension.create({
-    name: 'slash',
-    addProseMirrorPlugins() {
-      let root: Root | null = null, box: HTMLDivElement | null = null, handle: SlashMenuHandle | null = null;
-      const items = slashItems(onImage);
-      const place = (props: SuggestionProps<SlashItem>) => {
-        const rect = props.clientRect?.();
-        if (!box || !rect) return;
-        const below = rect.bottom + 6, height = Math.min(360, innerHeight - below - 12);
-        box.style.left = `${Math.min(rect.left, innerWidth - 300)}px`;
-        box.style.top = `${height > 160 ? below : rect.top - 6 - Math.min(360, rect.top - 12)}px`;
-        box.style.maxHeight = `${Math.max(160, height)}px`;
-      };
-      return [Suggestion<SlashItem>({
-        editor: this.editor, char: '/', startOfLine: false, allowSpaces: false,
-        items: ({ query }) => filterSlash(items, query),
-        command: ({ editor, range, props }) => props.run(editor, range),
-        render: () => ({
-          onStart: props => {
-            box = document.createElement('div'); box.className = 'ed-slash-box'; document.body.append(box);
-            root = createRoot(box);
-            root.render(<SlashMenu ref={h => { handle = h; }} items={props.items} command={item => props.command(item)} />);
-            place(props);
-          },
-          onUpdate: props => { root?.render(<SlashMenu ref={h => { handle = h; }} items={props.items} command={item => props.command(item)} />); place(props); },
-          onKeyDown: ({ event }) => { if (event.key === 'Escape') { return true; } return handle?.onKeyDown(event) ?? false; },
-          onExit: () => { const r = root, b = box; root = null; box = null; handle = null; queueMicrotask(() => { r?.unmount(); b?.remove(); }); },
-        }),
-      })];
-    },
-  });
-}
-
-type Tool = { id: string; label: string; icon?: IconName; text?: string; active?: boolean; disabled?: boolean; run: () => void };
-
-/// What the editor is doing at the cursor, read live.
-function useFormat(editor: TipTap) {
-  return useEditorState({
-    editor,
-    selector: ({ editor }) => ({
-      bold: editor.isActive('bold'), italic: editor.isActive('italic'), underline: editor.isActive('underline'), strike: editor.isActive('strike'),
-      code: editor.isActive('code'), highlight: editor.isActive('highlight'), link: editor.isActive('link'),
-      h1: editor.isActive('heading', { level: 1 }), h2: editor.isActive('heading', { level: 2 }), h3: editor.isActive('heading', { level: 3 }),
-      bullets: editor.isActive('bulletList'), numbers: editor.isActive('orderedList'), tasks: editor.isActive('taskList'),
-      quote: editor.isActive('blockquote'), codeBlock: editor.isActive('codeBlock'), table: editor.isActive('table'),
-      canUndo: editor.can().undo(), canRedo: editor.can().redo(),
-    }),
-  });
-}
-
-/// The text tools, shared by the bar above and the bar over a selection.
-function useTextTools(editor: TipTap, on: ReturnType<typeof useFormat>, link: () => void): Tool[] {
-  const chain = () => editor.chain().focus();
-  return [
-    { id: 'bold', label: 'Bold (⌘B)', icon: 'bold', active: on?.bold, run: () => chain().toggleBold().run() },
-    { id: 'italic', label: 'Italic (⌘I)', icon: 'italic', active: on?.italic, run: () => chain().toggleItalic().run() },
-    { id: 'underline', label: 'Underline (⌘U)', icon: 'underline', active: on?.underline, run: () => chain().toggleUnderline().run() },
-    { id: 'strike', label: 'Strikethrough (⌘⇧X)', icon: 'strike', active: on?.strike, run: () => chain().toggleStrike().run() },
-    { id: 'code', label: 'Inline code (⌘E)', icon: 'code', active: on?.code, run: () => chain().toggleCode().run() },
-    { id: 'highlight', label: 'Highlight (⌘⇧H)', icon: 'highlight', active: on?.highlight, run: () => chain().toggleHighlight().run() },
-    { id: 'link', label: on?.link ? 'Remove link' : 'Link (⌘K)', icon: 'link', active: on?.link, run: link },
-  ];
-}
-
-const keep = (event: MouseEvent) => event.preventDefault(); // a press on a bar must not take the selection out of the text
-
-function ToolButton({ tool }: { tool: Tool }) {
-  return <button type="button" className="ed-tool" aria-label={tool.label} title={tool.label} aria-pressed={tool.active} disabled={tool.disabled} onMouseDown={keep} onClick={tool.run}>
-    {tool.icon ? <Icon name={tool.icon} size={16} /> : <b>{tool.text}</b>}
-  </button>;
-}
-
-/// The link field: open with the link's address (or nothing) while a link is being written.
-function useLink(editor: TipTap, on: ReturnType<typeof useFormat>) {
-  const [linking, setLinking] = useState<string | null>(null);
-  const link = () => {
-    if (on?.link) { editor.chain().focus().extendMarkRange('link').unsetLink().run(); return; }
-    setLinking((editor.getAttributes('link').href as string | undefined) ?? '');
-  };
-  const setLink = (text: string) => {
-    const address = text.trim();
-    if (address) editor.chain().focus().extendMarkRange('link').setLink({ href: /^[a-z][a-z0-9+.-]*:/i.test(address) ? address : `https://${address}` }).run();
-    else editor.commands.focus();
-    setLinking(null);
-  };
-  const field = linking !== null && <form className="ed-link" onSubmit={event => { event.preventDefault(); setLink(linking); }}>
-    <Icon name="link" size={14} />
-    <input autoFocus value={linking} placeholder="Paste or type a link" aria-label="Link address" spellCheck={false} onChange={event => setLinking(event.target.value)}
-      onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); setLinking(null); editor.commands.focus(); } }} />
-    <button type="submit" className="ed-tool" aria-label="Add the link" title="Add the link"><Icon name="check" size={14} /></button>
-  </form>;
-  return { link, field };
-}
-
-/// Business's formatting bar: text styles, headings, blocks, history, in rounds of small buttons.
-function Toolbar({ editor, tail, onImage }: { editor: TipTap; tail?: ReactNode; onImage?: () => void }) {
-  const on = useFormat(editor);
-  const { link, field } = useLink(editor, on);
-  const text = useTextTools(editor, on, link);
-  const chain = () => editor.chain().focus();
-  const groups: Tool[][] = [
-    text,
-    [
-      { id: 'h1', label: 'Heading 1 (⌘⌥1)', text: 'H1', active: on?.h1, run: () => chain().toggleHeading({ level: 1 }).run() },
-      { id: 'h2', label: 'Heading 2 (⌘⌥2)', text: 'H2', active: on?.h2, run: () => chain().toggleHeading({ level: 2 }).run() },
-      { id: 'h3', label: 'Heading 3 (⌘⌥3)', text: 'H3', active: on?.h3, run: () => chain().toggleHeading({ level: 3 }).run() },
-    ],
-    [
-      { id: 'bullets', label: 'Bulleted list (⌘⇧8)', icon: 'bullets', active: on?.bullets, run: () => chain().toggleBulletList().run() },
-      { id: 'numbers', label: 'Numbered list (⌘⇧7)', icon: 'numbers', active: on?.numbers, run: () => chain().toggleOrderedList().run() },
-      { id: 'tasks', label: 'To-do list (⌘⇧9)', icon: 'tasks', active: on?.tasks, run: () => chain().toggleTaskList().run() },
-      { id: 'quote', label: 'Quote (⌘⇧B)', icon: 'quote', active: on?.quote, run: () => chain().toggleBlockquote().run() },
-      { id: 'codeBlock', label: 'Code block (⌘⌥C)', icon: 'codeBlock', active: on?.codeBlock, run: () => chain().toggleCodeBlock().run() },
-      { id: 'table', label: on?.table ? 'Table' : 'Table (3 × 3)', icon: 'table', active: on?.table, run: () => { if (!on?.table) chain().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(); } },
-      ...(onImage ? [{ id: 'image', label: 'Picture', icon: 'image' as IconName, run: onImage }] : []),
-      { id: 'divider', label: 'Divider', icon: 'divider', run: () => chain().setHorizontalRule().run() },
-    ],
-    [
-      { id: 'undo', label: 'Undo (⌘Z)', icon: 'undo', disabled: !on?.canUndo, run: () => chain().undo().run() },
-      { id: 'redo', label: 'Redo (⌘⇧Z)', icon: 'redo', disabled: !on?.canRedo, run: () => chain().redo().run() },
-    ],
-  ];
-  const tableTools: Tool[] = on?.table ? [
-    { id: 'row-after', label: 'Add a row below', icon: 'rowAdd', run: () => chain().addRowAfter().run() },
-    { id: 'col-after', label: 'Add a column after', icon: 'colAdd', run: () => chain().addColumnAfter().run() },
-    { id: 'row-del', label: 'Remove this row', icon: 'rowRemove', run: () => chain().deleteRow().run() },
-    { id: 'col-del', label: 'Remove this column', icon: 'colRemove', run: () => chain().deleteColumn().run() },
-    { id: 'table-del', label: 'Remove the table', icon: 'trash', run: () => chain().deleteTable().run() },
-  ] : [];
-  return <div className="ed-bar" role="toolbar" aria-label="Formatting" onKeyDown={event => { if (event.key === 'k' && event.metaKey) { event.preventDefault(); link(); } }}>
-    {groups.map((tools, i) => <span key={i} className="ed-group">{tools.map(tool => <ToolButton key={tool.id} tool={tool} />)}</span>)}
-    {tableTools.length > 0 && <span className="ed-group">{tableTools.map(tool => <ToolButton key={tool.id} tool={tool} />)}</span>}
-    {field}
-    {tail && <span className="ed-tail">{tail}</span>}
-  </div>;
-}
-
-/// The bar over a selection: the text styles, close to hand.
-function Bubble({ editor }: { editor: TipTap }) {
-  const on = useFormat(editor);
-  const { link, field } = useLink(editor, on);
-  const text = useTextTools(editor, on, link);
-  return <>{text.map(tool => <ToolButton key={tool.id} tool={tool} />)}{field}</>;
+/// Business's CodeBlockView: the highlighted code with a language picker tucked into its corner, shown
+/// on hover. The language is the fence's info string, so it is kept in the file.
+function CodeBlockView({ node, updateAttributes, extension }: NodeViewProps) {
+  const languages = ((extension.options.lowlight as { listLanguages: () => string[] } | undefined)?.listLanguages() ?? []).slice().sort();
+  const current = (node.attrs.language as string) || 'auto';
+  return <NodeViewWrapper className="ed-codeblock">
+    <select className="ed-codeblock-lang" contentEditable={false} value={current} aria-label="Language"
+      onMouseDown={event => event.stopPropagation()} onChange={event => updateAttributes({ language: event.target.value === 'auto' ? null : event.target.value })}>
+      <option value="auto">auto</option>
+      {languages.map(language => <option key={language} value={language}>{language}</option>)}
+    </select>
+    <pre spellCheck={false}><NodeViewContent<'code'> as="code" /></pre>
+  </NodeViewWrapper>;
 }

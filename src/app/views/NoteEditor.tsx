@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { invoke, setWindowTitle } from '../../bridge';
 import { Editor } from '../../editor/Editor';
-import type { NoteDoc } from '../../store';
+import { useSettings, type NoteDoc } from '../../store';
+import { KEY_NAMES } from '../../overlay/Dock';
 import { Button, Icon } from '../../ui';
 
 const message = (error: unknown, fallback: string) => typeof error === 'string' ? error : fallback;
@@ -13,8 +14,9 @@ const peopleIn = (body: string) => [...new Set([...body.matchAll(/^\*\*([^*\n]+)
 // One note or meeting, edited in place: its title above its words, saved back into the same Markdown file
 // as you type (front matter kept), ⌘S for the impatient. A meeting shows the people heard in it, each
 // renamable in one go. Hold the dictate key with the words focused to talk into it.
-export function NoteEditor({ path, kind, onChanged, onDeleted, onError }: { path: string; kind: 'note' | 'meeting'; onChanged: () => void; onDeleted: () => void; onError: (message: string) => void }) {
+export function NoteEditor({ path, kind, onChanged, onDeleted, onMoved, onError }: { path: string; kind: 'note' | 'meeting'; onChanged: () => void; onDeleted: () => void; onMoved: (path: string, archived: boolean) => void; onError: (message: string) => void }) {
   const [doc, setDoc] = useState<NoteDoc | null>(null);
+  const dictateKey = KEY_NAMES[useSettings()?.shortcuts.dictate ?? 'fn'];
   const [title, setTitle] = useState('');
   const [seed, setSeed] = useState(0); // bumps when the body is replaced from outside the editor (a rename)
   const [state, setState] = useState<State>('reading');
@@ -26,7 +28,7 @@ export function NoteEditor({ path, kind, onChanged, onDeleted, onError }: { path
   useEffect(() => {
     void invoke<NoteDoc>('note_read', { path }).then(found => {
       setDoc(found); setTitle(found.title); latest.current = { title: found.title, body: found.body }; setState('clean');
-      setWindowTitle(`${found.title || (kind === 'meeting' ? 'Meeting' : 'Note')} — TabTasker Dictate`);
+      setWindowTitle(found.title || (kind === 'meeting' ? 'Meeting' : 'Note'));
     }, error => { onError(message(error, 'This note isn’t there any more.')); setState('error'); });
     return () => setWindowTitle('TabTasker Dictate');
   }, [path, kind, onError]);
@@ -56,6 +58,9 @@ export function NoteEditor({ path, kind, onChanged, onDeleted, onError }: { path
   const file = doc ? doc.path.split('/').pop() : '';
   const reveal = () => void invoke('show_notes', { file: doc?.path }).catch(() => onError('Couldn’t show that in Finder.'));
   const elsewhere = () => void invoke('library_open', { path: doc?.path }).catch(() => onError('Couldn’t open that file.'));
+  // Into the folder's Archive/ or back out, saved first; the list then follows it to where it is.
+  const archived = /\/Archive\/[^/]+$/.test(path);
+  const archive = (on: boolean) => { clearTimeout(timer.current); void save().then(() => invoke<string>('note_archive', { path, archived: on })).then(moved => onMoved(moved, on), error => onError(message(error, on ? 'Couldn’t archive that.' : 'Couldn’t restore that.'))); };
   const remove = () => { clearTimeout(timer.current); dirty.current = false; void invoke('note_delete', { path }).then(onDeleted, error => onError(message(error, 'Couldn’t move that to the Trash.'))); };
   const rename = (event: FormEvent) => {
     event.preventDefault();
@@ -72,10 +77,13 @@ export function NoteEditor({ path, kind, onChanged, onDeleted, onError }: { path
   if (!doc) return <div className="editor-pane"><p className="empty-pane">{state === 'error' ? 'This note isn’t there any more.' : ''}</p></div>;
   return <div className="editor-pane" onKeyDown={event => { if (event.key === 's' && event.metaKey) { event.preventDefault(); void save(); } }}>
     <div className="editor-top">
-      <span className="file" title={doc.path}>{kind === 'meeting' ? 'Meeting' : 'Note'} · {file}</span>
+      <span className="file" title={doc.path}>{archived ? 'Archived' : kind === 'meeting' ? 'Meeting' : 'Note'} · {file}</span>
       <span className="note-state" data-state={state}>{WORDS[state]}</span>
       <Button small variant="quiet" icon="folder" aria-label="Show in Finder" title="Show in Finder" onClick={reveal} />
       <Button small variant="quiet" icon="external" aria-label="Open in another app" title="Open in another app" onClick={elsewhere} />
+      {archived
+        ? <Button small variant="quiet" onClick={() => archive(false)}>Restore</Button>
+        : <Button small variant="quiet" icon="archive" aria-label="Archive" title="Archive: out of the list, kept in the Archive folder" onClick={() => archive(true)} />}
       {deleting
         ? <><span className="ask-confirm">Move to the Trash?</span><Button small variant="quiet" onClick={() => setDeleting(false)}>Keep</Button><Button small variant="danger" onClick={remove}>Trash</Button></>
         : <Button small variant="quiet" icon="trash" aria-label="Move to the Trash" title="Move to the Trash" onClick={() => setDeleting(true)} />}
@@ -93,7 +101,7 @@ export function NoteEditor({ path, kind, onChanged, onDeleted, onError }: { path
           : <button key={person} type="button" className="chip" title={`Rename ${person} everywhere in this meeting`} onClick={() => setRenaming({ from: person, to: person })}>{person}</button>)}
       </div>}
       <Editor key={`${doc.path}:${seed}`} markdown={doc.body} label={kind === 'meeting' ? 'Meeting' : 'Note'} autoFocus={!doc.body} notePath={doc.path}
-        placeholder="Type, or hold fn and talk. Markdown works: # for a heading, - for a list, [ ] for a to-do, / for everything else."
+        placeholder={`Type, or hold ${dictateKey} and talk. Markdown works: # for a heading, - for a list, [ ] for a to-do, / for everything else.`}
         onChange={body => changed({ body })} />
     </div>
   </div>;

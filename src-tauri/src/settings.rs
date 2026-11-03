@@ -101,7 +101,6 @@ pub struct Dictation {
   /// `auto` or a Whisper language code.
   pub language: String,
   pub translate_to_english: bool,
-  pub live_typing: bool,
   pub remove_fillers: bool,
   pub sounds: bool,
   /// 0 to 1, for both cues.
@@ -113,7 +112,7 @@ pub struct Dictation {
 }
 impl Default for Dictation {
   fn default() -> Self {
-    Self { language: "auto".into(), translate_to_english: false, live_typing: true, remove_fillers: true, sounds: true, sound_volume: DEFAULT_VOLUME, start_sound: "Tink".into(), stop_sound: "Pop".into(), model: Model::Turbo }
+    Self { language: "auto".into(), translate_to_english: false, remove_fillers: true, sounds: true, sound_volume: DEFAULT_VOLUME, start_sound: "Tink".into(), stop_sound: "Pop".into(), model: Model::Turbo }
   }
 }
 
@@ -275,17 +274,27 @@ pub enum Size { Small, #[default] Medium, Large }
 #[serde(rename_all = "camelCase")]
 pub enum Idle { #[default] Dots, Hidden }
 
+/// A button on the pill the dots open into. The pill keeps this order, whatever order they were picked in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PillButton { Note, Write, Sticky, Meeting, Library, Settings }
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Appearance {
   pub theme: Theme, pub edge: Edge, pub size: Size, pub idle: Idle, pub hint: bool,
+  /// The buttons on the pill, in its order; never none.
+  pub pill: Vec<PillButton>,
   /// How far the dots sit from the screen's edge, in points (0 to 120).
   pub margin: u32,
   /// Keep clear of the Dock and the menu bar (the screen's visible area), rather than the whole screen.
   pub avoid_dock: bool,
 }
 impl Default for Appearance {
-  fn default() -> Self { Self { theme: Theme::System, edge: Edge::Bottom, size: Size::Medium, idle: Idle::Dots, hint: true, margin: 8, avoid_dock: true } }
+  fn default() -> Self {
+    use PillButton::*;
+    Self { theme: Theme::System, edge: Edge::Bottom, size: Size::Medium, idle: Idle::Dots, hint: true, pill: vec![Note, Write, Sticky, Meeting, Library, Settings], margin: 8, avoid_dock: true }
+  }
 }
 
 impl Default for Settings {
@@ -352,6 +361,10 @@ impl Settings {
     let volume = &mut self.dictation.sound_volume;
     *volume = if volume.is_finite() { volume.clamp(0.0, 1.0) } else { DEFAULT_VOLUME };
     self.appearance.margin = self.appearance.margin.min(120);
+    let pill = &mut self.appearance.pill;
+    pill.sort();
+    pill.dedup();
+    if pill.is_empty() { *pill = Appearance::default().pill; }
     let vocabulary = &mut self.vocabulary;
     clip_list(&mut vocabulary.words, MAX_LIST, MAX_WORD);
     clip_list(&mut vocabulary.suggestions, MAX_LIST, MAX_WORD);
@@ -549,6 +562,14 @@ pub fn reset_settings(app: AppHandle) -> Result<Settings, String> {
 
 #[cfg(test)]
 mod tests {
+  #[test]
+  fn the_pill_keeps_its_order_once_each_and_never_goes_empty() {
+    let picked = Settings::default().patched(&json!({ "appearance": { "pill": ["settings", "note", "note", "sticky"] } }));
+    assert_eq!(picked.appearance.pill, vec![PillButton::Note, PillButton::Sticky, PillButton::Settings]);
+    let none = Settings::default().patched(&json!({ "appearance": { "pill": [] } }));
+    assert_eq!(none.appearance.pill, Appearance::default().pill);
+  }
+
   use super::*;
   use serde_json::json;
 
@@ -603,7 +624,7 @@ mod tests {
     assert_eq!(value["version"], 1);
     assert_eq!(value["general"], json!({ "menuBarIcon": true, "showInDock": false }));
     assert_eq!(value["shortcuts"], json!({ "dictate": "fn", "handsFree": true, "command": "control", "note": null, "meeting": null, "pasteLast": null, "writeNote": null, "sticky": null, "ask": null }));
-    assert_eq!(value["dictation"], json!({ "language": "auto", "translateToEnglish": false, "liveTyping": true, "removeFillers": true, "sounds": true, "soundVolume": 0.3, "startSound": "Tink", "stopSound": "Pop", "model": "turbo" }));
+    assert_eq!(value["dictation"], json!({ "language": "auto", "translateToEnglish": false, "removeFillers": true, "sounds": true, "soundVolume": 0.3, "startSound": "Tink", "stopSound": "Pop", "model": "turbo" }));
     assert_eq!(value["vocabulary"], json!({ "words": [], "replacements": [], "learn": true, "suggestions": [] }));
     assert_eq!(value["apps"]["defaultStyle"], "default");
     assert!(value["apps"]["styles"].as_array().unwrap().iter().any(|app| app["bundleId"] == "com.apple.Terminal" && app["style"] == "code" && app["polish"] == false));
@@ -612,7 +633,7 @@ mod tests {
     assert_eq!(value["claude"], json!({ "enabled": false, "via": "api", "model": "claude-haiku-5-5", "effort": "medium", "commands": true, "claudeCode": null, "localEndpoint": "http://localhost:11434", "localModel": "llama3.2" }));
     assert_eq!(value["agents"], json!({ "mcp": true, "shareHistory": false, "shareNotes": true, "shareMeetings": true, "allowWrite": false }));
     assert_eq!(value["history"], json!({ "keep": "week" }));
-    assert_eq!(value["appearance"], json!({ "theme": "system", "edge": "bottom", "size": "medium", "idle": "dots", "hint": true, "margin": 8, "avoidDock": true }));
+    assert_eq!(value["appearance"], json!({ "theme": "system", "edge": "bottom", "size": "medium", "idle": "dots", "hint": true, "pill": ["note", "write", "sticky", "meeting", "library", "settings"], "margin": 8, "avoidDock": true }));
   }
 
   #[test]
@@ -623,7 +644,7 @@ mod tests {
     assert_eq!(after.dictation.language, "tr");
     assert_eq!(after.shortcuts.note, Some(Chord { key_code: 45, modifiers: 1_572_864, label: "⌥⌘N".into() }));
     assert_eq!(after.appearance.theme, before.appearance.theme);
-    assert_eq!(after.dictation.live_typing, before.dictation.live_typing);
+    assert_eq!(after.dictation.remove_fillers, before.dictation.remove_fillers);
     assert_eq!(after.apps, before.apps);
     // Clearing a chord is a null.
     assert_eq!(after.patched(&json!({ "shortcuts": { "note": null } })).shortcuts.note, None);

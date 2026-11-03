@@ -104,7 +104,7 @@ mod tests {
   fn diarizes_a_recording_into_its_voices() {
     let (Ok(pcm), Ok(root)) = (std::env::var("DICTATE_SPEAKER_PCM"), std::env::var("DICTATE_MODELS_ROOT")) else { panic!("set DICTATE_SPEAKER_PCM and DICTATE_MODELS_ROOT") };
     let bytes = std::fs::read(pcm).unwrap();
-    let samples: Vec<f32> = bytes.chunks_exact(2).map(|pair| i16::from_le_bytes([pair[0], pair[1]]) as f32 / 32768.0).collect();
+    let samples: Vec<f32> = bytes.as_chunks::<2>().0.iter().map(|pair| i16::from_le_bytes(*pair) as f32 / 32768.0).collect();
     let began = std::time::Instant::now();
     let turns = diarize(Path::new(&root), &samples).unwrap();
     let voices: std::collections::BTreeSet<u32> = turns.iter().map(|turn| turn.speaker).collect();

@@ -44,7 +44,7 @@ impl LocalSpeech {
     let energy = pcm.iter().map(|sample| (*sample as f64).powi(2)).sum::<f64>() / pcm.len().max(1) as f64;
     if pcm.len() < 4000 || energy < 1e-7 { return Ok(Vec::new()); }
     let mut vad = self.vad.lock().unwrap();
-    let vad = vad.as_mut().ok_or("Voice is still loading")?;
+    let vad = vad.as_mut().ok_or("The speech model is still loading.")?;
     vad.detect_speech(pcm).map_err(|_| "Couldn’t understand that")?;
     let mut keen = WhisperVadParams::default();
     keen.set_threshold(0.3); keen.set_min_speech_duration(0);
@@ -184,7 +184,7 @@ extern "C" fn dictate_note_finish(id: *const c_char, base: usize, samples: *cons
     // Waits for a step still running, so its piece is in before the rest is read.
     let result = match state.engine.lock().unwrap().as_mut() {
       Some(engine) => state.note_finish(engine, &id, base, &pcm, cancelled.clone()),
-      None => Err("Voice is still loading".into()),
+      None => Err("The speech model is still loading.".into()),
     };
     state.job.lock().unwrap().take();
     if cancelled.load(Ordering::Relaxed) || !state.enabled.load(Ordering::Relaxed) { return; }
