@@ -293,7 +293,7 @@ pub struct Appearance {
 impl Default for Appearance {
   fn default() -> Self {
     use PillButton::*;
-    Self { theme: Theme::System, edge: Edge::Bottom, size: Size::Medium, idle: Idle::Dots, hint: true, pill: vec![Note, Write, Sticky, Meeting, Library, Settings], margin: 8, avoid_dock: true }
+    Self { theme: Theme::System, edge: Edge::Right, size: Size::Medium, idle: Idle::Dots, hint: true, pill: vec![Note, Write, Sticky, Meeting, Library, Settings], margin: 8, avoid_dock: true }
   }
 }
 
@@ -633,7 +633,7 @@ mod tests {
     assert_eq!(value["claude"], json!({ "enabled": false, "via": "api", "model": "claude-haiku-5-5", "effort": "medium", "commands": true, "claudeCode": null, "localEndpoint": "http://localhost:11434", "localModel": "llama3.2" }));
     assert_eq!(value["agents"], json!({ "mcp": true, "shareHistory": false, "shareNotes": true, "shareMeetings": true, "allowWrite": false }));
     assert_eq!(value["history"], json!({ "keep": "week" }));
-    assert_eq!(value["appearance"], json!({ "theme": "system", "edge": "bottom", "size": "medium", "idle": "dots", "hint": true, "pill": ["note", "write", "sticky", "meeting", "library", "settings"], "margin": 8, "avoidDock": true }));
+    assert_eq!(value["appearance"], json!({ "theme": "system", "edge": "right", "size": "medium", "idle": "dots", "hint": true, "pill": ["note", "write", "sticky", "meeting", "library", "settings"], "margin": 8, "avoidDock": true }));
   }
 
   #[test]
@@ -666,7 +666,7 @@ mod tests {
     }));
     assert_eq!(after.version, 1);
     assert_eq!(after.appearance.theme, Theme::Dark);
-    assert_eq!(after.appearance.edge, Edge::Bottom);
+    assert_eq!(after.appearance.edge, Edge::Right); // the default, since the one given was no edge
     assert!(after.appearance.hint);
     assert!(after.general.menu_bar_icon);
     assert!(!after.patched(&json!({ "general": { "menuBarIcon": false } })).general.menu_bar_icon);
