@@ -163,15 +163,17 @@ const folderOf = () => settings.notes.folder ?? status.notes;
 const stickies: Sticky[] = [{ id: 'demo', text: 'Call the venue about Thursday', hue: 'amber', x: 120, y: 140, width: 240, height: 200, pinned: true, folded: false, closed: false, archived: false, createdMs: Date.now(), updatedMs: Date.now() },
   { id: 'list', text: 'Groceries\n- milk\n- coffee', hue: 'sage', x: 380, y: 160, width: 240, height: 200, pinned: false, folded: false, closed: true, archived: false, createdMs: Date.now() - 86_400_000, updatedMs: Date.now() - 86_400_000 },
   { id: 'old', text: 'Book the dentist', hue: 'sky', x: 200, y: 260, width: 240, height: 200, pinned: true, folded: false, closed: true, archived: true, createdMs: Date.now() - 9 * 86_400_000, updatedMs: Date.now() - 9 * 86_400_000 }].filter(() => new URLSearchParams(location.search).get('stickies') !== 'empty') as Sticky[];
+for (const one of stickies) Object.assign(one, one.id === 'demo' ? { title: 'Venue', titled: true, tilt: 'slight', weight: 'bold' } : { title: '', titled: false, tilt: 'none', weight: 'bold' });
 const stickyHue = (hue: unknown): Sticky['hue'] => (typeof hue === 'string' && hue in STICKY_HUES ? hue : 'amber') as Sticky['hue'];
 mock.handle('sticky_list', () => copy(stickies));
 mock.handle('sticky_get', ({ id }) => { const found = stickies.find(one => one.id === id) ?? stickies[0]; if (!found) throw 'That sticky is gone.'; return copy(found); });
 mock.handle('sticky_new', ({ hue, text }) => {
   const last = stickies.at(-1);
-  const made: Sticky = { id: Math.random().toString(16).slice(2, 14), text: typeof text === 'string' ? text : '', hue: stickyHue(hue ?? ['amber', 'sky', 'sage', 'coral', 'violet', 'teal'][stickies.length % 6]), x: (last?.x ?? 92) + 28, y: (last?.y ?? 112) + 28, width: 240, height: 200, pinned: true, folded: false, closed: false, archived: false, createdMs: Date.now(), updatedMs: Date.now() };
+  const made: Sticky = { id: Math.random().toString(16).slice(2, 14), text: typeof text === 'string' ? text : '', hue: stickyHue(hue ?? ['amber', 'sky', 'sage', 'coral', 'violet', 'teal'][stickies.length % 6]), x: (last?.x ?? 92) + 28, y: (last?.y ?? 112) + 28, width: last?.width ?? 240, height: last?.height ?? 200, pinned: true, folded: false, closed: false, title: '', titled: last?.titled ?? false, tilt: last?.tilt ?? 'none', weight: last?.weight ?? 'bold', archived: false, createdMs: Date.now(), updatedMs: Date.now() };
   stickies.push(made); emit('dictate-stickies', { count: stickies.length }); return copy(made);
 });
-mock.handle('sticky_update', ({ id, text, hue }) => { const found = stickies.find(one => one.id === id); if (!found) throw 'That sticky is gone.'; if (typeof text === 'string') found.text = text; if (hue) found.hue = stickyHue(hue); found.updatedMs = Date.now(); return copy(found); });
+mock.handle('sticky_update', ({ id, text, hue, title, titled, tilt, weight }) => { const found = stickies.find(one => one.id === id); if (!found) throw 'That sticky is gone.'; if (typeof text === 'string') found.text = text; if (hue) found.hue = stickyHue(hue); if (typeof title === 'string') found.title = title; if (typeof titled === 'boolean') found.titled = titled; if (tilt === 'none' || tilt === 'slight' || tilt === 'random') found.tilt = tilt; if (weight === 'regular' || weight === 'bold') found.weight = weight; found.updatedMs = Date.now(); return copy(found); });
+mock.handle('sticky_size', ({ id, width, height }) => { const found = stickies.find(one => one.id === id); if (!found) throw 'That sticky is gone.'; found.width = Number(width); found.height = Number(height); return copy(found); });
 const stickyChange = (id: unknown, edit: (one: Sticky) => void) => { const found = stickies.find(one => one.id === id); if (!found) throw 'That sticky is gone.'; edit(found); emit('dictate-stickies', { count: stickies.length }); };
 mock.handle('sticky_show', ({ id }) => stickyChange(id, one => { one.closed = false; one.archived = false; }));
 mock.handle('sticky_close', ({ id }) => stickyChange(id, one => { one.closed = true; }));
@@ -203,6 +205,7 @@ mock.handle('meeting', () => false);
 mock.handle('open_app', ({ route }) => { open(`/app.html${location.search}#${typeof route === 'string' ? route : 'notes'}`, '_blank'); });
 mock.handle('paste_last', () => emit('dictate-notice', { message: 'Nothing to paste yet' }));
 mock.handle('quit', () => emit('dictate-notice', { message: 'Quit (in the app, it would)' }));
+mock.handle('open_site', ({ url }) => { window.open(url as string, '_blank', 'noopener'); });
 mock.handle('save_note', ({ title, stamp }) => `${status.notes}/${stamp} ${title || 'Note'}.md`);
 mock.handle('show_notes', () => {});
 mock.handle('plugin:app|version', () => '0.1.0');

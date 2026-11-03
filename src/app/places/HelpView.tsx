@@ -22,7 +22,7 @@ type Placed = { badge: { x: number; y: number }; bracket: string; line: string }
 const SCREEN: Callout[] = [
   { target: '.demo-typed', side: 'left', title: 'Hold your key and talk', text: 'When you let go, what you said is typed wherever your cursor is. End with “send” to press Return as well.' },
   { target: '.orb', side: 'bottom', title: 'The orb', text: 'While you talk, the dots turn into the orb and show your words as you say them.' },
-  { target: '.sticky-bar', side: 'right', title: 'Stickies', text: 'Small notes that stay on top of your other windows. Say “sticky” before your words to make one by voice.' },
+  { target: '.sticky-band', side: 'right', title: 'Stickies', text: 'Small notes that stay on top of your other windows. Say “sticky” before your words to make one by voice.' },
 ];
 // Every button the pill can hold, in its order (PILL_BUTTONS); Appearance picks which ones it shows.
 const DOTS: Callout[] = [
@@ -67,7 +67,7 @@ export function HelpView({ settings }: { settings: Settings }) {
       <Desk>
         <Field label="Message to Maria" style={{ left: 48, top: 70, width: 380 }}><p className="demo-typed"><Caret /></p></Field>
         <div className="help-stick" style={{ left: 520, top: 64 }}>
-          <Sheet hue="amber" folded={false} pinned text={STICKY} actions={{ fold: noop, pin: noop, more: noop, close: noop }}>
+          <Sheet id="help" hue="amber" folded={false} pinned text={STICKY} title="" titled={false} tilt="slight" weight="bold" actions={{ fold: noop, pin: noop, note: noop, close: noop, recolour: noop, retitle: noop, more: noop }}>
             <Editor compact markdown={STICKY} label="A sticky" onChange={noop} />
           </Sheet>
         </div>

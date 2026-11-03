@@ -1083,9 +1083,12 @@ static CGFloat TTDockStrip(NSRectEdge *edge) {
   dictate_log([NSString stringWithFormat:@"dock: %@", strip > 0 ? [NSString stringWithFormat:@"hides at the %s, a strip of %.0f; the dots step aside while it is out", TTEdgeName(edge), strip] : @"stays, or there is none to step aside for"].UTF8String);
   if (!strip && self.dockShown) { self.dockShown = NO; self.dockPushed = NO; dictate_ui_dock(false, 0, TTEdgeName(edge)); }
 }
-/// Is the Dock out? It comes out when the pointer pushes its edge and goes once the pointer leaves its
-/// strip, so the pointer says most of it; with leave to read the Dock, the Dock itself says whether it is on
-/// the screen (asked at most ten times a second, and only while the pointer is near it).
+/// Is the Dock out? With leave to read the Dock, the Dock itself says whether it is on the screen, asked
+/// at most ten times a second while the pointer is anywhere near its edge or the dots have stepped
+/// aside. Without, the pointer says: the Dock comes out when the pointer pushes its edge and goes a
+/// moment after the pointer leaves its neighbourhood, which is wider than its strip (the pointer on the
+/// lifted dots is still beside the Dock). And while the pointer is on the dots or the pill, nothing
+/// moves: the pill must never slide out from under the pointer because the Dock went.
 - (void)watchDock:(CFAbsoluteTime)now {
   if (now - self.dockRead > 5) [self readDock];
   if (self.dockStrip <= 0) return;
@@ -1094,21 +1097,23 @@ static CGFloat TTDockStrip(NSRectEdge *edge) {
   NSRectEdge edge = self.dockEdge;
   CGFloat depth = edge == NSRectEdgeMinY ? at.y - NSMinY(whole) : edge == NSRectEdgeMinX ? at.x - NSMinX(whole) : NSMaxX(whole) - at.x;
   BOOL onMain = NSPointInRect(at, NSInsetRect(whole, -1, -1));
-  BOOL atEdge = onMain && depth <= 1.5, inStrip = onMain && depth <= self.dockStrip + 2;
+  BOOL atEdge = onMain && depth <= 1.5, near = onMain && depth <= self.dockStrip * 2 + 24;
   BOOL shown = self.dockShown;
-  if (inStrip) {
-    self.dockLeft = 0;
-    if (atEdge) self.dockPushed = YES;
-    if (self.dockPushed) {
-      shown = YES;
-      if (AXIsProcessTrusted() && now - self.dockPolled > 0.1) {
-        self.dockPolled = now;
-        NSRect list = TTDockListFrame();
-        if (!NSIsEmptyRect(list)) { NSRect seen = NSIntersectionRect(list, whole); shown = NSWidth(seen) * NSHeight(seen) > 0.5 * NSWidth(list) * NSHeight(list); }
-      }
+  if (atEdge) self.dockPushed = YES;
+  if (self.pointerOver) {
+    self.dockLeft = 0; // hold still under the pointer
+  } else if (AXIsProcessTrusted()) {
+    if ((near || shown) && now - self.dockPolled > 0.1) {
+      self.dockPolled = now;
+      NSRect list = TTDockListFrame();
+      if (!NSIsEmptyRect(list)) { NSRect seen = NSIntersectionRect(list, whole); shown = NSWidth(seen) * NSHeight(seen) > 0.5 * NSWidth(list) * NSHeight(list); }
     }
+    if (!shown) self.dockPushed = NO;
+  } else if (self.dockPushed && near) {
+    self.dockLeft = 0;
+    shown = YES;
   } else if (shown || self.dockPushed) {
-    // Gone from the strip: the Dock slides back a moment later.
+    // Gone from the Dock's neighbourhood: it slides back a moment later.
     if (!self.dockLeft) self.dockLeft = now;
     if (now - self.dockLeft > 0.25) { shown = NO; self.dockPushed = NO; self.dockLeft = 0; }
   }

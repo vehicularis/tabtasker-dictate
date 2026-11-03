@@ -36,11 +36,11 @@ pub fn run() {
   log::info!("TabTasker Dictate {} starting", env!("CARGO_PKG_VERSION"));
   tauri::Builder::default()
     .invoke_handler(tauri::generate_handler![
-      commands::quit,
+      commands::quit, commands::open_site,
       commands::status, commands::set_enabled, commands::set_input, commands::set_open_at_login, commands::request, commands::layout, commands::meeting, commands::open_app, commands::paste_last, commands::play_sound,
       notes::save_note, notes::show_notes, notes::notes_folder, notes::preview_note, notes::choose_folder, notes::library_list, notes::library_open,
       notes::note_read, notes::note_write, notes::note_new, notes::note_delete, notes::note_attach, commands::note_open,
-      stickies::sticky_list, stickies::sticky_get, stickies::sticky_new, stickies::sticky_update, stickies::sticky_remove, stickies::sticky_to_note, stickies::sticky_show, stickies::sticky_close, stickies::sticky_archive, notes::note_archive, stickies::sticky_pin, stickies::sticky_fold, settings::get_settings, settings::update_settings, settings::reset_settings,
+      stickies::sticky_list, stickies::sticky_get, stickies::sticky_new, stickies::sticky_update, stickies::sticky_size, stickies::sticky_remove, stickies::sticky_to_note, stickies::sticky_show, stickies::sticky_close, stickies::sticky_archive, notes::note_archive, stickies::sticky_pin, stickies::sticky_fold, settings::get_settings, settings::update_settings, settings::reset_settings,
       speech::speech_models, speech::prepare_model, speech::vocabulary_fit, text::list_apps,
       history::history_list, history::history_stats, history::history_delete, history::history_clear, history::history_type,
       ai::claude_save_key, ai::claude_test, ai::claude_remove_key, ai::claude_open_console, ai::claude_insert, ai::claude_dismiss,

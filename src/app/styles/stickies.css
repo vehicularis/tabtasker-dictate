@@ -19,10 +19,16 @@
 .sticky-card:not([data-closed]):hover { translate: 0 -2px; }
 .sticky-card[data-closed] { box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--ink) 18%, transparent); }
 .sticky-card[data-folded] { aspect-ratio: auto; }
-.sticky-card .sticky-bar { cursor: default; }
+/* The card's own bar, in place of the sticker's band: the page's tools, always there. */
+.sticky-card { --tilt: 0deg; --fit: 1; }
+.sticky-card .sticky-bar { position: relative; display: flex; flex: none; align-items: center; gap: 6px; height: 34px; padding: 0 6px 0 12px; cursor: default; }
+.sticky-card .sticky-tools { display: flex; flex: none; gap: 1px; margin-left: auto; opacity: 0; transition: opacity var(--quick) var(--ease); }
+.sticky-card:hover .sticky-tools, .sticky-card .sticky-tools:focus-within { opacity: 1; }
+.sticky-card .sticky-tool { color: var(--dim); }
+.sticky-card .sticky-tool:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 9%, transparent); }
 .sticky-card .sticky-peek { padding: 0; border: 0; font-family: var(--font); text-align: left; background: none; cursor: pointer; }
 /* The words as the sticky's editor sets them (sticky.css), under the same edge. */
-.sticky-face { display: flex; flex-direction: column; justify-content: flex-start; flex: 1; min-height: 0; overflow: hidden; padding: 0 14px 14px; border: 0; border-radius: 0 0 6px 6px; color: inherit; background: none; text-align: left; font: 400 15px/1.5 var(--font); white-space: pre-wrap; overflow-wrap: anywhere; cursor: pointer;
+.sticky-face { display: flex; flex-direction: column; justify-content: flex-start; flex: 1; min-height: 0; overflow: hidden; padding: 0 12px 12px; border: 0; border-radius: 0 0 2px 2px; color: inherit; background: none; text-align: left; font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; cursor: pointer;
   mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent); }
 .sticky-card[data-archived] .sticky-face { cursor: default; }
 /* Picked (⌘ or ⇧ click): the paper keeps its colour (it's what the sticky is) and its cell fills in the accent around it,
