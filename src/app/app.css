@@ -15,7 +15,7 @@ button, input, select { font-family: var(--font); }
 .link { padding: 0; border: 0; background: none; font: inherit; color: var(--accent-ink); text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); text-underline-offset: 3px; cursor: pointer; }
 .link:hover { text-decoration-color: currentColor; }
 
-.window { --bar: 40px; --gap: 12px; --overlap: 24px; --column: clamp(224px, 20vw, 280px); position: relative; display: flex; flex-direction: column; box-sizing: border-box; height: 100%; padding: var(--bar) var(--gap) var(--gap) 0; background: var(--shell-frame); }
+.window { --bar: 40px; --gap: 12px; --overlap: 24px; --column: clamp(224px, 20vw, 280px); --column-extra: 0px; position: relative; display: flex; flex-direction: column; box-sizing: border-box; height: 100%; padding: var(--bar) var(--gap) var(--gap) 0; background: var(--shell-frame); }
 .row { position: relative; display: flex; flex: 1; min-width: 0; min-height: 0; }
 
 /* ---------- the title bar: Business's DesktopTitleBar. 28-point ghost tools, then the tabs, each a 28-point pill of 13-point text,
@@ -64,12 +64,21 @@ button, input, select { font-family: var(--font); }
 /* ---------- the column: Business's rail column (SidebarRail, CollapsiblePanel). A leaf raised beside the spine, rounded on its left,
    reaching 24 points under the pane; the frame's tone blends down its first 64 points. Its head is the place's name at 18 points with one
    action flush right; the search is a well under it; the rows scroll in groups under 10-point uppercase headings that fold ---------- */
-.column { display: flex; flex: none; flex-direction: column; width: calc(var(--column) + var(--overlap)); min-height: 0; box-sizing: border-box; margin-right: calc(-1 * var(--overlap)); padding: 8px calc(4px + var(--overlap)) 8px 4px; border-radius: 20px 0 0 20px; background-color: var(--shell-leaf); background-image: linear-gradient(to bottom, var(--shell-frame), transparent 64px); box-shadow: var(--elev-raised); user-select: none; -webkit-user-select: none;
+.column { display: flex; flex: none; flex-direction: column; width: calc(var(--column) + var(--column-extra) + var(--overlap)); min-height: 0; box-sizing: border-box; margin-right: calc(-1 * var(--overlap)); padding: 8px calc(4px + var(--overlap)) 8px 4px; border-radius: 20px 0 0 20px; background-color: var(--shell-leaf); background-image: linear-gradient(to bottom, var(--shell-frame), transparent 64px); box-shadow: var(--elev-raised); user-select: none; -webkit-user-select: none;
   --leave: translateX(-8px); animation: fade-in var(--quick) var(--ease) backwards, column-in var(--slow) var(--ease) backwards; }
 @keyframes column-in { from { translate: calc(-8px * var(--motion)) 0; } }
 /* The leaf comes in from the spine as Business's does, and goes back to it over the page, which already has the
    room (motion.ts leave). What is in it changing (notes, meetings, settings; the list or the archive) fades. */
 .column[data-leaving] { z-index: 2; }
+/* Its edge, where the page begins, drags it up to 100 points wider, as Business's does (panel-resize-handle.css): 8 points
+   straddling the seam over the page, taking no room, with a short line that shows on hover and turns the accent while it moves.
+   The width is set on the window it is in (ColumnResizer), so the window drawn in Help keeps its own. */
+.column-resize { position: relative; z-index: 2; flex: none; width: 8px; margin: 0 -4px; cursor: col-resize; touch-action: none; }
+.column-resize:focus-visible { outline: none; }
+.column-resize::after { content: ''; position: absolute; top: 50%; left: 50%; width: 2px; height: 28px; border-radius: 2px; translate: -50% -50%; background: color-mix(in srgb, var(--ink-3) 40%, transparent); opacity: 0; pointer-events: none; transition: opacity var(--quick) var(--ease); }
+.column-resize:is(:hover, :focus-visible)::after, .window[data-resizing] .column-resize::after { opacity: 1; }
+.column-resize:focus-visible::after, .window[data-resizing] .column-resize::after { background: var(--accent); }
+.window[data-resizing], .window[data-resizing] * { cursor: col-resize !important; user-select: none; -webkit-user-select: none; }
 .column > * { animation: fade-in var(--quick) var(--ease) backwards; }
 .column-head { display: flex; flex: none; align-items: center; gap: 4px; min-height: 40px; padding: 4px 12px; }
 .column-head h2 { flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 18px; font-weight: 550; line-height: 1.4; }
@@ -110,7 +119,7 @@ button, input, select { font-family: var(--font); }
 .list-item .x { display: -webkit-box; margin-top: 1px; font-size: 12px; line-height: 1.35; color: var(--ink-2); -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .list-item[aria-current='true'] .x { color: inherit; opacity: .8; }
 .list-item .m { display: block; margin-top: 2px; font-size: 11px; line-height: 14px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
-.column-views { margin: 0 10px 8px; } .column-views .ui-segmented { display: flex; } .column-views .ui-segmented button { flex: 1; }
+.column-views { margin: 8px 12px 0; } .column-views .ui-segmented { display: flex; } .column-views .ui-segmented button { flex: 1; }
 .list-none { margin: 20px 12px; font-size: 12.5px; line-height: 1.45; color: var(--ink-3); text-align: center; }
 /* The record button in the column's head: a 28-point round with the mic; recording, a red stop square breathing. */
 .column-head .record, .column-head .record.only-icon { width: 28px; height: 28px; padding: 0; border-radius: 50%; }

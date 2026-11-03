@@ -6,7 +6,7 @@ import { PLACE_GLYPHS, SETTINGS_GLYPHS } from '../overlay/glyphs';
 import { Logo } from '../overlay/icons';
 import { updateSettings, useSettings, type PageProps, type Patch } from '../store';
 import { applyTheme, Icon, leave, Toast, useFlip, type IconName } from '../ui';
-import { ColumnHead } from './Column';
+import { ColumnHead, ColumnResizer } from './Column';
 import { About } from './pages/About';
 import { Appearance } from './pages/Appearance';
 import { AppStyles } from './pages/AppStyles';
@@ -266,6 +266,7 @@ export function App() {
         {props && place === 'meetings' && <NotesColumn kind="meeting" path={arg} items={items} {...props} onError={setToast} onOpen={go} />}
         {props && settingsOpen && <SettingsColumn current={here.route} onOpen={go} />}
       </aside>}
+      {withColumn && <ColumnResizer />}
       <main key={`${tab.id}:${place}`} className="content" aria-label={here.title}>
         {props && place === 'notes' && <NotePage kind="note" path={arg} items={listed} {...props} onError={setToast} onOpen={go} />}
         {props && place === 'meetings' && <NotePage kind="meeting" path={arg} items={listed} {...props} onError={setToast} onOpen={go} />}
