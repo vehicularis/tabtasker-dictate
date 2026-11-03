@@ -72,7 +72,7 @@ export function HelpView({ settings }: { settings: Settings }) {
           <p className="help-typed"><i className="help-caret" /></p>
         </div>
         <div className="help-stick" style={{ left: 520, top: 64 }}>
-          <Sheet hue="amber" folded={false} pinned text={STICKY} picking={false} onPicking={noop} actions={{ recolour: noop, fold: noop, pin: noop, note: noop, close: noop }}>
+          <Sheet hue="amber" folded={false} pinned text={STICKY} actions={{ fold: noop, pin: noop, more: noop, close: noop }}>
             <Editor compact markdown={STICKY} label="A sticky" onChange={noop} />
           </Sheet>
         </div>
