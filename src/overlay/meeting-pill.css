@@ -19,6 +19,6 @@
 
 /* Stop: a red round with the stop square, as the record button in the window. */
 .meeting-stop { flex: none; display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%; background: var(--accent-button); box-shadow: var(--elev-control); cursor: pointer; transition: filter var(--quick, .15s) ease, transform var(--quick, .15s) ease; }
-.meeting-stop i { display: block; width: 10px; height: 10px; border-radius: 2px; background: #fff; }
+.meeting-stop i { display: block; width: 10px; height: 10px; border-radius: 2px; background: var(--on-accent); } /* the accent is ink: dark by day, white by night */
 .meeting-stop:hover { filter: brightness(1.1); }
 .meeting-stop:active { transform: scale(.95); }
