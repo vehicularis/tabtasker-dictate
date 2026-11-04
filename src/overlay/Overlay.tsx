@@ -187,7 +187,7 @@ export function Overlay() {
       const to = dots.current.getBoundingClientRect();
       dock.current.animate([{ translate: `${from.x - to.x}px ${from.y - to.y}px` }, { translate: '0 0' }], { duration: 450, easing: 'cubic-bezier(.34, 1.36, .64, 1)' });
       setDropped(next);
-      if (!PREVIEW) void updateSettings({ appearance: { edge: next } }).catch(() => setToast('Couldn’t move the dots there.'));
+      if (!PREVIEW) void updateSettings({ appearance: { edge: next } }).catch(() => setToast('Couldn’t move the pill there.'));
     };
     addEventListener('pointermove', move);
     addEventListener('pointerup', up);

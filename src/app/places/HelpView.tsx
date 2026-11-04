@@ -4,36 +4,59 @@ import { KEY_NAMES } from '../../lib/keyNames';
 import { MeetingGlyph, NoteGlyph, SettingsGlyph, StickyGlyph } from '../../overlay/glyphs';
 import { Logo } from '../../overlay/icons';
 import { Sheet } from '../../sticky/Sheet';
-import type { Settings } from '../../store';
+import type { Chord, Settings } from '../../store';
 import { Icon, Kbd, PageHeader, Section, Tile, TileGroup } from '../../ui';
 import { ColumnGroup, ColumnHead } from '../Column';
 import { Caret, Desk, Dots, Field } from '../demo/Demo';
 import '../../sticky/sticky.css';
+import '../../overlay/meeting-pill.css';
 
 // How the app works, on one page, the way TabTasker Business's guides explain a screen: the real parts (the
 // overlay's own dots and orb and the desk they sit on, from demo/, the real sticky sheet, the window from the
 // shell's own parts with the real editor), each figure in a well with a number in its margin for every part, a straight line and a bracket
 // on the part, and the list under it; then every shortcut as it is set right now.
 type Side = 'left' | 'right' | 'top' | 'bottom';
-type Callout = { target: string; side: Side; at?: number; title: string; text: string };
+type Callout = { target: string; side: Side; at?: number; title: string; text: ReactNode };
 type Box = { x: number; y: number; w: number; h: number };
 type Placed = { badge: { x: number; y: number }; bracket: string; line: string };
 
-const SCREEN: Callout[] = [
-  { target: '.demo-typed', side: 'left', title: 'Hold your key and talk', text: 'When you let go, what you said is typed wherever your cursor is. End with “send” to press Return as well.' },
-  { target: '.orb', side: 'bottom', title: 'The orb', text: 'While you talk, the dots turn into the orb and show your words as you say them.' },
-  { target: '.sticky-band', side: 'right', title: 'Stickies', text: 'Small notes that stay on top of your other windows. Say “sticky” before your words to make one by voice.' },
-];
-// Every button the pill can hold, in its order (PILL_BUTTONS); Appearance picks which ones it shows.
-const DOTS: Callout[] = [
-  { target: '.pill button:nth-child(1)', side: 'top', title: 'Speak a note', text: 'Talk for as long as you like, and it’s saved as a note when you stop.' },
-  { target: '.pill button:nth-child(2)', side: 'top', title: 'Write a note', text: 'Opens a blank note to type into.' },
-  { target: '.pill button:nth-child(3)', side: 'top', title: 'New sticky', text: 'Puts a blank sticky on your screen, on top of your other windows.' },
-  { target: '.pill button:nth-child(4)', side: 'top', title: 'Start a meeting', text: 'Records the room or both sides of a call, and works out who said what. With AI connected, you get a summary too.' },
-  { target: '.pill button:nth-child(5)', side: 'top', title: 'Your notes', text: 'Opens the window with everything you’ve saved.' },
-  { target: '.pill button:nth-child(6)', side: 'top', title: 'Settings', text: 'Opens Settings, where Appearance lets you choose which of these buttons show. You can also drag the dots to another edge, or right-click them for a menu.' },
-  { target: '.dots-hint > span', side: 'bottom', title: 'The hint', text: 'Shows which key to hold. You can turn it off in Settings › Appearance.' },
-];
+/// The guide's words for the keys as they are set right now: the key to hold, in its cap, and each
+/// shortcut where there is one ("Or press ⌃⌥N."), nothing where there isn't.
+function guide(keys: Settings['shortcuts']) {
+  const key = KEY_NAMES[keys.dictate], hold = <Kbd>{key}</Kbd>;
+  const or = (chord: Chord | null, again = false) => chord && <> Or press <Kbd>{chord.label}</Kbd>{again ? ' to start and stop it' : ''}.</>;
+  const screen: Callout[] = [
+    { target: '.demo-typed', side: 'left', title: `Hold ${key} and talk`, text: <>When you let go of {hold}, what you said is typed wherever your cursor is. End with “send” to press Return as well.{keys.handsFree && <> Tap {hold} twice to talk without holding it, and tap it again when you’re done.</>}</> },
+    { target: '.orb', side: 'bottom', title: 'The orb', text: <>While you hold {hold}, the pill turns into the orb and shows your words as you say them.</> },
+    { target: '.sticky-band', side: 'right', title: 'Stickies', text: 'Small notes that stay on top of your other windows. There’s more about them below.' },
+  ];
+  // Every button the pill can hold, in its order (PILL_BUTTONS); Appearance picks which ones it shows.
+  const pill: Callout[] = [
+    { target: '.pill > :nth-child(1) > button', side: 'top', title: 'Speak a note', text: <>Talk for as long as you like, and it’s saved as a note when you stop.{or(keys.note)}</> },
+    { target: '.pill > :nth-child(2) > button', side: 'top', title: 'Write a note', text: <>Opens a blank note to type into.{or(keys.writeNote)}</> },
+    { target: '.pill > :nth-child(3) > button', side: 'top', title: 'New sticky', text: <>Puts a blank sticky on your screen, on top of your other windows.{or(keys.sticky)}</> },
+    { target: '.pill > :nth-child(4) > button', side: 'top', title: 'Start a meeting', text: <>Records the room or both sides of a call. There’s more about meetings below.{or(keys.meeting)}</> },
+    { target: '.pill > :nth-child(5) > button', side: 'top', title: 'Your notes', text: 'Opens the window with everything you’ve saved.' },
+    { target: '.pill > :nth-child(6) > button', side: 'top', title: 'Settings', text: 'Opens Settings, where Appearance lets you choose which of these buttons show. You can also drag the pill to another edge, or right-click it for a menu.' },
+    { target: '.dots-hint > span', side: 'bottom', title: 'The hint', text: <>Reminds you to hold {hold}. You can turn it off in Settings › Appearance.</> },
+  ];
+  const sticky: Callout[] = [
+    { target: '.sticky .ed', side: 'left', at: .4, title: 'Make one', text: <>Click the sticky on the pill{keys.sticky && <>, press <Kbd>{keys.sticky.label}</Kbd>,</>} or hold {hold} and start with “sticky”: “sticky, call Thomas before 3”.</> },
+    { target: '.sticky-swatch', side: 'top', title: 'Colour', text: 'Its paper, in one of eight colours.' },
+    { target: '.sticky-tool[aria-label="Fold up"]', side: 'top', title: 'Fold up', text: 'Rolls it up to its first line. Double-clicking its top does the same.' },
+    { target: '.sticky-tool[data-on]', side: 'top', title: 'Keep on top', text: 'It stays above your other windows until you turn this off.' },
+    { target: '.sticky-tool[aria-label="Save as a note"]', side: 'top', title: 'Save as a note', text: 'Makes it a note in your notes folder.' },
+    { target: '.sticky-more', side: 'top', title: 'Look and size', text: 'Its colour, a title, bold or regular type, a tilt and its size. Right-click it for the same menu.' },
+    { target: '.sticky-tool[aria-label="Close"]', side: 'top', title: 'Close', text: 'Puts it away. Every sticky is under Stickies in the window, where you can show it again, archive it or delete it.' },
+    { target: '.sticky-band', side: 'right', title: 'Move it', text: 'Drag it by its top. It stays where you leave it.' },
+  ];
+  const meeting: Callout[] = [
+    { target: '.dots', side: 'bottom', title: 'Start one', text: <>Point at the pill and click the meeting{keys.meeting ? <>, or press <Kbd>{keys.meeting.label}</Kbd></> : ''}. Ask the people in it first.</> },
+    { target: '.meeting-line', side: 'top', title: 'While it records', text: 'The pill shows how long it’s been going. It hears your microphone and, if you let it, the other side of a call. You don’t need headphones.' },
+    { target: '.meeting-stop', side: 'right', title: 'Stop', text: <>Saves it under Meetings in the window, with who said what. With AI connected, a summary, the decisions and the action items come first.{or(keys.meeting, true)}</> },
+  ];
+  return { screen, pill, sticky, meeting };
+}
 const WINDOW: Callout[] = [
   { target: '.tabs .tab', side: 'top', at: .3, title: 'Tabs', text: 'Everything opens in its own tab. Press ⌘ T for a new one and ⌘ W to close it.' },
   { target: '.rail', side: 'left', at: .25, title: 'Sidebar', text: 'Switch between notes, meetings and stickies, with Settings at the bottom.' },
@@ -47,6 +70,7 @@ const noop = () => {};
 export function HelpView({ settings }: { settings: Settings }) {
   const keys = settings.shortcuts;
   const key = KEY_NAMES[keys.dictate];
+  const parts = guide(keys);
   const command = { control: '⌃', option: '⌥', command: '⌘', shift: '⇧', off: '' }[keys.command];
   const chords: [string, string][] = [
     [`Hold ${key}`, 'Dictate into any app'],
@@ -63,7 +87,7 @@ export function HelpView({ settings }: { settings: Settings }) {
   ];
   return <>
     <PageHeader icon="help" title="How TabTasker | Dictate works">Talk instead of typing, in any app.</PageHeader>
-    <Figure title="On your screen" width={760} height={380} callouts={SCREEN}>
+    <Figure title="On your screen" width={760} height={380} callouts={parts.screen}>
       <Desk>
         <Field label="Message to Maria" style={{ left: 48, top: 70, width: 380 }}><p className="demo-typed"><Caret /></p></Field>
         <div className="help-stick" style={{ left: 520, top: 64 }}>
@@ -74,8 +98,28 @@ export function HelpView({ settings }: { settings: Settings }) {
         <Dots mode="listening" typing words="Thursday works. Can we take the bigger room?" at={{ left: 48, top: 0, width: 380, height: 380 }} />
       </Desk>
     </Figure>
-    <Figure title="When you point at the dots" width={480} height={120} callouts={DOTS}>
+    <Figure title="When you point at the pill" width={480} height={120} callouts={parts.pill}>
       <Desk menubar={false}><Dots mode="hover" hint at={{ left: 0, top: 0, width: 330, height: 120 }} /></Desk>
+    </Figure>
+    <Figure title="A sticky" width={420} height={250} callouts={parts.sticky}>
+      <Desk menubar={false}>
+        <div className="help-stick" style={{ left: 110, top: 62 }}>
+          <Sheet id="help-sticky" hue="amber" folded={false} pinned text={STICKY} title="" titled={false} tilt="none" weight="bold" data-hover actions={{ fold: noop, pin: noop, note: noop, close: noop, recolour: noop, retitle: noop, more: noop }}>
+            <Editor compact markdown={STICKY} label="A sticky" onChange={noop} />
+          </Sheet>
+        </div>
+      </Desk>
+    </Figure>
+    <Figure title="A meeting" width={420} height={120} callouts={parts.meeting}>
+      <Desk menubar={false}>
+        <Dots mode="idle" at={{ inset: 0 }}>
+          <div className="glass meeting-pill meeting-card">
+            <span className="meeting-dot" />
+            <span className="meeting-text"><span className="meeting-line"><b>Meeting</b><time>12:04</time></span></span>
+            <button type="button" className="meeting-stop"><i /></button>
+          </div>
+        </Dots>
+      </Desk>
     </Figure>
     <Figure title="The window" width={1040} height={620} callouts={WINDOW}><MiniWindow /></Figure>
     <Section title="Shortcuts" note="Change them in Settings › Shortcuts.">

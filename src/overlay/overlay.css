@@ -46,36 +46,36 @@
    around them is bigger (room for the pill and the orb, all centred on one another), so the dock sits that
    much further out, and comes in by the difference while the pill (on hover) or the orb (while you talk) is
    the thing at the edge. */
-/* The otter's capsule is 44 by 22 along its edge, in a 48-point spot: 13 points of spot show past it. */
-.layer { --out: calc(13px * var(--scale)); }
+/* The otter's capsule is 44 by 12 along its edge, in a 48-point spot: 18 points of spot show past it. */
+.layer { --out: calc(18px * var(--scale)); }
 .layer[data-mode='hover'] { --out: calc(4px * var(--scale)); }
 .layer:is([data-mode='listening'], [data-mode='thinking']) { --out: calc(-8px * var(--scale)); }
 /* While you point, the spot keeps the pointer everywhere that started the hover: 16 px round the spot (the
-   dots' own reach) and the 13 px it slid in by toward the edge, where the resting dots' halo was. Without it
+   dots' own reach) and the 18 px it slid in by toward the edge, where the resting dots' halo was. Without it
    a pointer at the screen's edge starts the hover on the dots, falls off it as the spot slides in and the
    pill springs up from 60 %, and starts it again as the dots come back: the flicker. A hit for the window too
    (data-hit), so the native pointer test agrees with the page's. Under the dots and the pill, which keep
    their clicks. */
 .keep { display: none; position: absolute; inset: -16px; }
 .layer[data-mode='hover'] .keep { display: block; }
-.layer[data-edge='bottom'] .keep { bottom: calc(-16px - 13px * var(--scale)); }
-.layer[data-edge='left'] .keep { left: calc(-16px - 13px * var(--scale)); }
-.layer[data-edge='right'] .keep { right: calc(-16px - 13px * var(--scale)); }
-/* A small glass capsule behind the otter, so it reads on any wallpaper: along the edge, so on a side edge it
+.layer[data-edge='bottom'] .keep { bottom: calc(-16px - 18px * var(--scale)); }
+.layer[data-edge='left'] .keep { left: calc(-16px - 18px * var(--scale)); }
+.layer[data-edge='right'] .keep { right: calc(-16px - 18px * var(--scale)); }
+/* A thin glass capsule behind the otter, so it reads on any wallpaper: along the edge, so on a side edge it
    stands, and the otter in it turns with it. */
-.capsule { position: absolute; width: 44px; height: 22px; border-radius: 11px; opacity: .9; transition: opacity .2s; }
-.layer:is([data-edge='left'], [data-edge='right']) .capsule { width: 22px; height: 44px; }
+.capsule { position: absolute; width: 44px; height: 12px; border-radius: 6px; opacity: .9; transition: opacity .2s; }
+.layer:is([data-edge='left'], [data-edge='right']) .capsule { width: 12px; height: 44px; }
 .layer[data-edge='right'] .otter { rotate: -90deg; }
 .layer[data-edge='left'] .otter { rotate: 90deg; }
 .layer:is([data-mode='hover'], [data-mode='listening'], [data-mode='thinking']) .capsule { opacity: 0; }
-/* The resting mark: the otter as the Logo draws it, eight bars with rounded caps, 14 points tall, in ink at a little
+/* The resting mark: the otter as the Logo draws it, eight bars with rounded caps, 7 points tall (the Logo's at .55), in ink at a little
    under half strength, breathing slowly from the foot of each bar a beat after the one to its left. The one thing
    on the screen that is unmistakably Dictate. */
 .dots { position: relative; display: flex; align-items: center; justify-content: center; width: 48px; height: 30px; padding: 0; border: 0; background: none; color: var(--ink); cursor: grab; transition: opacity .2s; }
 .layer:is([data-edge='left'], [data-edge='right']) .dots { width: 30px; height: 48px; }
 .dots::before { content: ''; position: absolute; inset: -12px -22px; }
-.otter { display: flex; align-items: flex-end; gap: 2px; height: 14px; opacity: .45; transition: opacity .25s var(--ease); }
-.otter i { width: 2.2px; height: calc(var(--h) * 1px); border-radius: 2px; background: currentColor; transform-origin: 50% 100%; animation: otter-breathe 2.6s ease-in-out infinite; animation-delay: calc(var(--i) * .16s); }
+.otter { display: flex; align-items: flex-end; gap: 1.8px; height: 7px; opacity: .45; transition: opacity .25s var(--ease); }
+.otter i { width: 1.8px; height: calc(var(--h) * .55px); border-radius: 1px; background: currentColor; transform-origin: 50% 100%; animation: otter-breathe 2.6s ease-in-out infinite; animation-delay: calc(var(--i) * .16s); }
 @keyframes otter-breathe { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(.72); } }
 /* The model loading at launch: the bars light up one after another until it is ready. */
 .layer[data-loading] .otter { opacity: .9; }
