@@ -15,25 +15,22 @@
 .notices { max-height: 240px; margin: 0; padding: 2px 2px 2px 0; overflow: auto; font: 11px/1.55 var(--font-mono); color: var(--ink-2); overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; }
 .notices p { margin: 0; }
 .notices:focus-visible { outline-offset: 6px; border-radius: 2px; }
-/* The end of the page, as Business ends its own: the otter city in ink (Business's footer art, a transparent WebP) the
-   width of the pane on warm paper, its bottom edge the page's; over its sky a frosted card with the lockup, chips
-   for the build, the way out and who makes Dictate, plain on the paper. Paper by day and by night: ink needs paper. It reaches past the page's column to the pane's edges with container units (pane.css
-   makes .content a container). */
-.about-end { position: relative; width: 100cqw; margin: 28px 0 -36px calc(50% - 50cqw); padding: 26px 30px 0; box-sizing: border-box; overflow: hidden; isolation: isolate; color: #2a2622; background: linear-gradient(#f7f5f0, #efece4); }
-/* The scene, whole, under the card, its floor the page's bottom edge: the studio drawn for Dictate in Business's hand. */
-.about-city { display: block; width: calc(100% + 60px); max-width: none; height: auto; margin: 14px -30px 0; -webkit-user-drag: none; pointer-events: none; }
-/* Plain on the paper, as Business sets its footer's words: no card around them. */
-.about-card { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 14px; max-width: 560px; padding: 4px 6px 0; }
-.about-lockup { display: flex; align-items: center; gap: 9px; margin: 0; font: 600 18px/1 var(--font-display); letter-spacing: -.01em; color: #1d1a17; }
+/* The end of the page, as Business ends its own: the lockup and three links, then the otters' studio the width of
+   the pane, its floor the page's bottom edge. It reaches past the page's column to the pane's edges with container
+   units (pane.css makes .content a container). */
+.about-end { position: relative; width: 100cqw; margin: 48px 0 -36px calc(50% - 50cqw); padding: 0 36px; box-sizing: border-box; overflow: hidden; }
+.about-card { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px 32px; }
+.about-lockup { display: flex; align-items: center; gap: 9px; margin: 0; font: 600 18px/1 var(--font-display); letter-spacing: -.01em; color: var(--ink); }
 .about-lockup svg { display: block; }
-.about-lockup i { font-style: normal; font-weight: 400; color: #8a847c; }
-.about-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.about-chip { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px; border: 0; border-radius: 8px; font: 500 12.5px/1 var(--font); color: #3f3933; background: rgb(0 0 0 / .055); white-space: nowrap; }
-.about-chip.link { cursor: pointer; transition: background var(--quick) var(--ease), color var(--quick) var(--ease); }
-.about-chip.link:hover { color: #1d1a17; background: rgb(0 0 0 / .1); }
-.about-chip svg { color: #8a847c; }
-.about-made { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 2px 0 0; font-size: 13px; color: #4a433d; }
-.about-made svg { display: block; border-radius: 4px; }
+.about-lockup i { font-style: normal; font-weight: 400; color: var(--ink-3); }
+.about-links { display: flex; gap: 28px; }
+.about-links button { padding: 0; border: 0; background: none; font: 500 13px/1 var(--font); color: var(--ink-2); cursor: pointer; transition: color var(--quick) var(--ease); }
+.about-links button:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+/* The drawing is ink on nothing (otter-studio.png is clear wherever it isn't a line): by day it sits on the page
+   itself; by night it keeps its ink and gets paper of its own, in the night's own light ink, never a negative. */
+.about-city { display: block; width: calc(100% + 72px); max-width: none; height: auto; margin: 36px -36px 0; -webkit-user-drag: none; pointer-events: none; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .about-city { background: var(--ink); } }
+:root[data-theme='dark'] .about-city { background: var(--ink); }
 /* The policy and the terms: a term in ink, its words beside it, nothing else. */
 .legal { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 2px 0; font-size: 13px; line-height: 1.5; user-select: text; -webkit-user-select: text; }
 .legal > div { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 12px; }
