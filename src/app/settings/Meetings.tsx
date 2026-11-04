@@ -78,7 +78,7 @@ export function Meetings({ settings, update }: PageProps) {
       <TileGroup>
         <Tile title={recording ? 'Recording a meeting' : 'Start a meeting'}
           detail={recording?.since ? `You started recording at ${new Date(recording.since).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}.`
-            : `You can also start one from the dots${chord ? ` or with ${chord}` : ''}.`}>
+            : `You can also start one from the pill${chord ? ` or with ${chord}` : ''}.`}>
           <Button id={`${base}-start`} variant={recording ? 'secondary' : 'primary'} disabled={!state} onClick={startOrStop}>{recording ? 'Stop' : 'Start'}</Button>
         </Tile>
         {outcomeTile}

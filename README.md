@@ -17,12 +17,12 @@
   <img src="docs/images/window.png" alt="The TabTasker | Dictate window with a note open">
 </p>
 
-Dictate lives in a few small dots at the edge of your screen. Wherever your cursor is, hold your key and
-talk, and your words are typed in when you let go. The dots open up for everything else: a note you can
+Dictate lives in a thin pill at the edge of your screen. Wherever your cursor is, hold your key and
+talk, and your words are typed in when you let go. The pill opens up for everything else: a note you can
 talk into for as long as you like, a sticky that stays on top of your windows, or a meeting recording.
 
 <p align="center">
-  <img src="docs/images/dots.png" width="340" alt="The dots, opened into their buttons">
+  <img src="docs/images/dots.png" width="340" alt="The pill, opened into its buttons">
 </p>
 
 ## What’s in it

@@ -21,7 +21,7 @@ type Placed = { badge: { x: number; y: number }; bracket: string; line: string }
 
 const SCREEN: Callout[] = [
   { target: '.demo-typed', side: 'left', title: 'Hold your key and talk', text: 'When you let go, what you said is typed wherever your cursor is. End with “send” to press Return as well.' },
-  { target: '.orb', side: 'bottom', title: 'The orb', text: 'While you talk, the dots turn into the orb and show your words as you say them.' },
+  { target: '.orb', side: 'bottom', title: 'The orb', text: 'While you talk, the pill turns into the orb and show your words as you say them.' },
   { target: '.sticky-band', side: 'right', title: 'Stickies', text: 'Small notes that stay on top of your other windows. Say “sticky” before your words to make one by voice.' },
 ];
 // Every button the pill can hold, in its order (PILL_BUTTONS); Appearance picks which ones it shows.
@@ -31,7 +31,7 @@ const DOTS: Callout[] = [
   { target: '.pill button:nth-child(3)', side: 'top', title: 'New sticky', text: 'Puts a blank sticky on your screen, on top of your other windows.' },
   { target: '.pill button:nth-child(4)', side: 'top', title: 'Start a meeting', text: 'Records the room or both sides of a call, and works out who said what. With AI connected, you get a summary too.' },
   { target: '.pill button:nth-child(5)', side: 'top', title: 'Your notes', text: 'Opens the window with everything you’ve saved.' },
-  { target: '.pill button:nth-child(6)', side: 'top', title: 'Settings', text: 'Opens Settings, where Appearance lets you choose which of these buttons show. You can also drag the dots to another edge, or right-click them for a menu.' },
+  { target: '.pill button:nth-child(6)', side: 'top', title: 'Settings', text: 'Opens Settings, where Appearance lets you choose which of these buttons show. You can also drag the pill to another edge, or right-click it for a menu.' },
   { target: '.dots-hint > span', side: 'bottom', title: 'The hint', text: 'Shows which key to hold. You can turn it off in Settings › Appearance.' },
 ];
 const WINDOW: Callout[] = [
@@ -74,7 +74,7 @@ export function HelpView({ settings }: { settings: Settings }) {
         <Dots mode="listening" typing words="Thursday works. Can we take the bigger room?" at={{ left: 48, top: 0, width: 380, height: 380 }} />
       </Desk>
     </Figure>
-    <Figure title="When you point at the dots" width={480} height={120} callouts={DOTS}>
+    <Figure title="When you point at the pill" width={480} height={120} callouts={DOTS}>
       <Desk menubar={false}><Dots mode="hover" hint at={{ left: 0, top: 0, width: 330, height: 120 }} /></Desk>
     </Figure>
     <Figure title="The window" width={1040} height={620} callouts={WINDOW}><MiniWindow /></Figure>

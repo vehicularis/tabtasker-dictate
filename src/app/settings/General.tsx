@@ -25,7 +25,7 @@ export function General({ settings, update }: PageProps) {
             onChange={on => run(invoke('set_open_at_login', { enabled: on }), 'Couldn’t change whether Dictate opens at login.')} />
         </Tile>
         <Tile title="Menu bar icon" detail={icon ? undefined
-          : `You can still get back here from Spotlight${settings.appearance.idle === 'dots' ? ' or by right-clicking the dots' : ''}.`}>
+          : `You can still get back here from Spotlight${settings.appearance.idle === 'dots' ? ' or by right-clicking the pill' : ''}.`}>
           <Toggle label="Menu bar icon" checked={icon} onChange={menuBarIcon => void update({ general: { menuBarIcon } })} />
         </Tile>
         <Tile title="Show in the Dock" detail={settings.general.showInDock ? undefined : 'Dictate only shows in the Dock while its window is open.'}>
