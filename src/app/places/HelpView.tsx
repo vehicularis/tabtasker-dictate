@@ -32,7 +32,7 @@ const DOTS: Callout[] = [
   { target: '.pill button:nth-child(4)', side: 'top', title: 'Start a meeting', text: 'Records the room or both sides of a call, and works out who said what. With AI connected, you get a summary too.' },
   { target: '.pill button:nth-child(5)', side: 'top', title: 'Your notes', text: 'Opens the window with everything you’ve saved.' },
   { target: '.pill button:nth-child(6)', side: 'top', title: 'Settings', text: 'Opens Settings, where Appearance lets you choose which of these buttons show. You can also drag the dots to another edge, or right-click them for a menu.' },
-  { target: '.label > span', side: 'bottom', title: 'The hint', text: 'Shows which key to hold. You can turn it off in Settings › Appearance.' },
+  { target: '.dots-hint > span', side: 'bottom', title: 'The hint', text: 'Shows which key to hold. You can turn it off in Settings › Appearance.' },
 ];
 const WINDOW: Callout[] = [
   { target: '.tabs .tab', side: 'top', at: .3, title: 'Tabs', text: 'Everything opens in its own tab. Press ⌘ T for a new one and ⌘ W to close it.' },

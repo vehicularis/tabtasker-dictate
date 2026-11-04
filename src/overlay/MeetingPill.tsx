@@ -138,7 +138,7 @@ export function MeetingPill() {
         <span className="meeting-text">
           <span className="meeting-line"><b>Meeting</b><time>{recording.since ? elapsed(recording.since) : '0:00'}</time>
             {onlyMic && <span className="only" title={system && ONLY_MIC[system]}>Mic only</span>}</span>
-          {explain && system && ONLY_MIC[system] && <small>{ONLY_MIC[system]}{system === 'denied' && <> <button type="button" className="link" onClick={() => void invoke('meeting_privacy').catch(() => {})}>Allow it</button></>}</small>}
+          {explain && system && ONLY_MIC[system] && <small>{ONLY_MIC[system]}{system === 'denied' && <> <button type="button" className="dots-link" onClick={() => void invoke('meeting_privacy').catch(() => {})}>Allow it</button></>}</small>}
         </span>
         <button type="button" className="meeting-stop" aria-label="Stop the meeting" title="Stop the meeting" onClick={stop}><i /></button>
       </div>;
@@ -149,7 +149,7 @@ export function MeetingPill() {
       <span className="meeting-text"><span className="meeting-line"><b>{title}</b></span>
         <small>{discarding ? (leftover.saved ? 'The saved meeting stays as it is.' : 'You can’t undo this.') : `${meetingWhen(leftover.sinceMs)} · ${meetingLength(leftover.seconds)}`}</small></span>
       {discarding
-        ? <><button type="button" className="btn" onClick={() => setDiscarding(false)}>Keep</button><button type="button" className="btn danger" onClick={() => recover(leftover.id, false)}>Discard</button></>
+        ? <><button type="button" className="btn" onClick={() => setDiscarding(false)}>Keep</button><button type="button" className="btn dots-danger" onClick={() => recover(leftover.id, false)}>Discard</button></>
         : <><button type="button" className="btn" onClick={() => setDiscarding(true)}>Discard</button><button type="button" className="btn primary" onClick={() => recover(leftover.id, true)}>{leftover.saved ? 'Try again' : 'Save'}</button>
           <button type="button" className="close" aria-label="Later" title="Later" onClick={() => putOff(leftover.id)}><X /></button></>}
     </div>;

@@ -20,7 +20,7 @@ export function Learned() {
       .then(() => setWord(null), () => setFailed(true));
   };
   return <div ref={leave} className="glass learned" data-glass data-hit role="status">
-    <span className="what"><small>{failed ? 'Couldn’t add the word. Try again.' : 'Add this to your words?'}</small>{word}</span>
+    <span className="dots-what"><small>{failed ? 'Couldn’t add the word. Try again.' : 'Add this to your words?'}</small>{word}</span>
     <button type="button" className="btn" onClick={() => setWord(null)}>Not now</button>
     <button type="button" className="btn primary" onClick={add}>Add</button>
   </div>;

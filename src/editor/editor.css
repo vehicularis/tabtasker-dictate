@@ -144,10 +144,11 @@
 .ed-body a { color: var(--accent-ink); text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); text-underline-offset: 3px; }
 .ed-body hr { height: 1px; margin: 1.2em 0; border: 0; background: var(--surface-3); }
 .ed-body hr.ProseMirror-selectednode { background: var(--accent); }
-/* The block picked up or dropped. @tiptap/extension-node-range ships no stylesheet, so a block range is drawn here. */
-.ed-body :is(.ProseMirror-selectednode, .ProseMirror-selectednoderange) { outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; border-radius: 4px; }
-.ed-body .ProseMirror-noderangeselection *::selection { background: transparent; }
-.ed-body .ProseMirror-noderangeselection { border-radius: 4px; background: color-mix(in srgb, var(--accent) 14%, transparent); }
+/* The block picked up or dropped, filled as a block range is, never ringed. @tiptap/extension-node-range ships no
+   stylesheet, so a block range is drawn here. */
+.ed-body :is(.ProseMirror-selectednode, .ProseMirror-selectednoderange) { border-radius: 4px; background: color-mix(in srgb, var(--accent) 14%, transparent); }
+/* The range's own class is on the editor (each block in it is .ProseMirror-selectednoderange, above). */
+.ed-body.ProseMirror-noderangeselection *::selection { background: transparent; }
 .ed-body p.is-editor-empty:first-child::before { content: attr(data-placeholder); float: left; height: 0; color: var(--ink-3); pointer-events: none; }
 .ed-body .ProseMirror-gapcursor::after { border-top-color: var(--ink); }
 /* ProseMirror's own helpers inside empty lines: WebKit must never draw them as anything. */
