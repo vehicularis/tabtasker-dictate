@@ -10,6 +10,11 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/vehicularis/tabtasker-dictate/releases/latest"><strong>Download for Mac</strong></a><br>
+  For Apple silicon, on macOS 13 or later
+</p>
+
+<p align="center">
   <a href="https://github.com/vehicularis/tabtasker-dictate/actions/workflows/ci.yml"><img src="https://github.com/vehicularis/tabtasker-dictate/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 </p>
 
@@ -47,7 +52,9 @@ connect an AI model, it only ever gets text, and Settings shows you exactly what
 
 ## Get started
 
-You’ll need a Mac with Apple silicon on macOS 13 or later. The first time it opens, Dictate downloads its
+Download the DMG from the [latest release](https://github.com/vehicularis/tabtasker-dictate/releases/latest), open it and
+drag TabTasker Dictate into Applications. You’ll need a Mac with Apple silicon on macOS 13 or later. It’s
+signed and notarized, so it opens without a warning. The first time it opens, Dictate downloads its
 speech model (about 875 MB) and walks you through the two permissions it needs.
 
 To build it yourself, install Rust, Node 22 and Xcode’s command line tools, then:
@@ -57,6 +64,9 @@ npm install
 npm run tauri dev      # run from source
 npm run tauri build    # TabTasker Dictate.app and a DMG in src-tauri/target/release/bundle
 ```
+
+A release, signed with the Developer ID, notarized and stapled, comes from
+[scripts/release-mac.sh](scripts/release-mac.sh); it says at its top what it needs once per Mac.
 
 The full design is written up in [docs/spec/v1.md](docs/spec/v1.md).
 
