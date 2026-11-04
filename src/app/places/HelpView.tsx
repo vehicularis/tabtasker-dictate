@@ -32,12 +32,13 @@ function guide(keys: Settings['shortcuts']) {
   ];
   // Every button the pill can hold, in its order (PILL_BUTTONS); Appearance picks which ones it shows.
   const pill: Callout[] = [
-    { target: '.pill > :nth-child(1) > button', side: 'top', title: 'Speak a note', text: <>Talk for as long as you like, and it’s saved as a note when you stop.{or(keys.note)}</> },
-    { target: '.pill > :nth-child(2) > button', side: 'top', title: 'Write a note', text: <>Opens a blank note to type into.{or(keys.writeNote)}</> },
-    { target: '.pill > :nth-child(3) > button', side: 'top', title: 'New sticky', text: <>Puts a blank sticky on your screen, on top of your other windows.{or(keys.sticky)}</> },
-    { target: '.pill > :nth-child(4) > button', side: 'top', title: 'Start a meeting', text: <>Records the room or both sides of a call. There’s more about meetings below.{or(keys.meeting)}</> },
-    { target: '.pill > :nth-child(5) > button', side: 'top', title: 'Your notes', text: 'Opens the window with everything you’ve saved.' },
-    { target: '.pill > :nth-child(6) > button', side: 'top', title: 'Settings', text: 'Opens Settings, where Appearance lets you choose which of these buttons show. You can also drag the pill to another edge, or right-click it for a menu.' },
+    { target: '.pill > span:nth-of-type(1) > button', side: 'top', title: 'Speak a note', text: <>Talk for as long as you like, and it’s saved as a note when you stop.{or(keys.note)}</> },
+    { target: '.pill > span:nth-of-type(2) > button', side: 'top', title: 'Write a note', text: <>Opens a blank note to type into.{or(keys.writeNote)}</> },
+    { target: '.pill > span:nth-of-type(3) > button', side: 'top', title: 'New sticky', text: <>Puts a blank sticky on your screen, on top of your other windows.{or(keys.sticky)}</> },
+    { target: '.pill > span:nth-of-type(4) > button', side: 'top', title: 'Start a meeting', text: <>Records the room or both sides of a call. There’s more about meetings below.{or(keys.meeting)}</> },
+    { target: '.pill > span:nth-of-type(5) > button', side: 'top', title: 'Your notes', text: 'Opens the window with everything you’ve saved.' },
+    { target: '.pill > span:nth-of-type(6) > button', side: 'top', title: 'Settings', text: 'Opens Settings, where Appearance lets you choose which of these buttons show. Right-click the pill for a menu with everything.' },
+    { target: '.pill-grip', side: 'left', title: 'Move it', text: 'Drag the grip to put the pill on another edge of your screen: the bottom, the left or the right.' },
     { target: '.dots-hint > span', side: 'bottom', title: 'The hint', text: <>Reminds you to hold {hold}. You can turn it off in Settings › Appearance.</> },
   ];
   const sticky: Callout[] = [
