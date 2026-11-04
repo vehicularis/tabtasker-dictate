@@ -1,8 +1,9 @@
 #!/bin/zsh
 # Builds a TabTasker Dictate release for Apple silicon that opens without a warning when downloaded:
 # the app signed with the Developer ID (hardened runtime, secure timestamp), notarized and stapled; then a
-# DMG of it beside an Applications link, signed, notarized and stapled too; then both checked the way
-# Gatekeeper checks a download. The DMG lands in release/, named for the version in tauri.conf.json.
+# DMG of it that opens on its own window, the app and an Applications link on design/dmg-background.tiff
+# (laid out by dmgbuild from scripts/dmg-settings.py, no Finder scripting), signed, notarized and stapled
+# too; then both checked the way Gatekeeper checks a download. The DMG lands in release/, named for the version in tauri.conf.json.
 #
 #   scripts/release-mac.sh [notarytool keychain profile]     (default: tabtasker-dictate)
 #
@@ -37,12 +38,10 @@ xcrun notarytool submit "$ZIP" --keychain-profile "$PROFILE" --wait
 xcrun stapler staple "$APP"
 rm -f "$ZIP"
 
-echo "== the DMG, notarized"
-STAGE=$(mktemp -d)
-ditto "$APP" "$STAGE/TabTasker Dictate.app"
-ln -s /Applications "$STAGE/Applications"
-hdiutil create -volname "TabTasker Dictate" -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov "$DMG" >/dev/null
-rm -rf "$STAGE"
+echo "== the DMG, laid out and notarized"
+[[ -x release/.venv/bin/dmgbuild ]] || { /usr/bin/python3 -m venv release/.venv && release/.venv/bin/pip install -q dmgbuild==1.6.5; }
+rm -f "$DMG"
+release/.venv/bin/dmgbuild -s scripts/dmg-settings.py -D app="$APP" "TabTasker Dictate" "$DMG" >/dev/null
 codesign --sign "$IDENTITY" --timestamp "$DMG"
 xcrun notarytool submit "$DMG" --keychain-profile "$PROFILE" --wait
 xcrun stapler staple "$DMG"
