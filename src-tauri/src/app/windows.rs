@@ -35,6 +35,10 @@ pub(crate) fn show_main(app: &AppHandle, route: Option<&str>) -> tauri::Result<(
     .title("TabTasker | Dictate")
     .inner_size(1040.0, 700.0).min_inner_size(840.0, 580.0).center()
     .title_bar_style(TitleBarStyle::Overlay).hidden_title(true) // the lights where AppKit puts them, centred on the page's 40-point bar by its toolbar (panels.m)
+    // Tauri's file-drop handler answers every drag itself and never hands it to WebKit, so the page saw no
+    // dragover or drop at all: a block dragged by its grip showed no line and never landed. The page takes
+    // its own drops (an image into a note), and app/main.tsx stops a stray file opening in the window.
+    .disable_drag_drop_handler()
     .build()?;
   if let Ok(native) = window.ns_window() { unsafe { dictate_window_toolbar(native) }; }
   // The frame's colour behind the page, as Business's window: the page paints the same, so the window's

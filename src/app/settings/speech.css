@@ -16,7 +16,7 @@
 .app-name .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .app-picker { display: flex; flex-direction: column; gap: 10px; width: 100%; }
-.app-picker .head { display: flex; gap: 6px; }
+.app-picker .head { display: flex; align-items: center; gap: 6px; }
 .app-picker ul { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; max-height: 280px; margin: 0; padding: 4px; overflow-y: auto; list-style: none; } /* room for the focus ring */
 .app-picker li button { display: flex; align-items: center; gap: 10px; width: 100%; height: 40px; padding: 0 10px; border: 0; border-radius: var(--radius-control);
   font: 14px/1.2 var(--font); color: var(--ink); text-align: left; background: none; cursor: pointer; transition: background var(--quick) var(--ease); }

@@ -28,7 +28,7 @@ export function HandsFree() {
   const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
   return <div ref={leave} className="glass hands-free" data-glass data-hit role="group" aria-label="Hands-free">
     <i className="live" aria-hidden="true" />
-    <span className="what">
+    <span className="dots-what">
       <b>Hands-free <time>{clock(seconds)} of {clock(LIMIT)}</time></b>
       <small>Tap <kbd>{KEY_NAMES[settings.shortcuts.dictate]}</kbd> to finish, <kbd>esc</kbd> to cancel</small>
     </span>

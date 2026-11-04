@@ -110,6 +110,7 @@ fn open(app: &AppHandle, sticky: &Sticky) -> tauri::Result<()> {
     .always_on_top(sticky.pinned).visible_on_all_workspaces(true).skip_taskbar(true)
     .resizable(!sticky.folded).min_inner_size(160.0, (if sticky.folded { FOLDED } else { 120.0 }) + GUTTER).inner_size(sticky.width, (if sticky.folded { FOLDED } else { sticky.height }) + GUTTER).position(sticky.x, sticky.y)
     .accept_first_mouse(true)
+    .disable_drag_drop_handler() // the page's own drags and drops, as the main window's (windows.rs)
     .build()?;
   window.set_focus()
 }
