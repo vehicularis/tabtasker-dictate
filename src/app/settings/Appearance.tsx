@@ -4,7 +4,7 @@ import { createGlass, flatWave, paintInside, type Glass } from '../../overlay/gl
 import { LibraryGlyph, MeetingGlyph, NoteGlyph, SettingsGlyph, StickyGlyph, WriteGlyph } from '../../overlay/glyphs';
 import { isDark } from '../../ui/theme';
 import { PILL_BUTTONS, type Edge, type PageProps, type Patch, type PillButton, type Settings, type Size, type Theme } from '../../store';
-import { PageHeader, reduced, Section, Segmented, Slider, Tile, TileGroup, timing, Toggle } from '../../ui';
+import { Icon, PageHeader, reduced, Section, Segmented, Slider, Tile, TileGroup, timing, Toggle } from '../../ui';
 
 const THEMES: { value: Theme; label: string }[] = [{ value: 'system', label: 'Automatic' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }];
 const EDGES: { value: Edge; label: string }[] = [{ value: 'left', label: 'Left' }, { value: 'bottom', label: 'Bottom' }, { value: 'right', label: 'Right' }];
@@ -153,8 +153,8 @@ function Preview({ look, keyName, moment, onMoment }: { look: Settings['appearan
           </div>
         </div>
         <span ref={dock} className="look-dock">
-          <span className="look-dots">{[6, 12, 10, 11, 11, 10, 12, 6].map((h, i) => <i key={i} style={{ '--h': h } as CSSProperties} />)}</span>
-          <span className="look-pill">{look.pill.map(name => <i key={name}>{BUTTONS[name].glyph}</i>)}</span>
+          <span className="look-dots" />
+          <span className="look-pill"><b className="look-grip"><Icon name="grip" size={10} /></b>{look.pill.map(name => <i key={name}>{BUTTONS[name].glyph}</i>)}</span>
           <LiveOrb talking={moment === 'talking'} />
           {look.hint && <span className="look-hint"><kbd>{keyName}</kbd>hold to type</span>}
           <svg className="look-pointer" viewBox="0 0 12 18"><path d="M1 1v14l3.6-3.4 2.3 5.4 2.3-1-2.3-5.3H12z" /></svg>

@@ -346,14 +346,14 @@ function Model({ status, settings, update, frame }: Step) {
   const preparing = status.modelPreparing;
   const stalled = status.enabled && !ready && !preparing; // on, but the last download or load failed
   const percent = Number(/(\d+(?:\.\d+)?)%/.exec(status.modelMessage)?.[1] ?? NaN);
-  // The overlay's own sign: while the model gets ready, the dots light up one after another (overlay.css).
+  // The overlay's own sign: while the model gets ready, the pill pulses (overlay.css).
   // Once it's ready, what it does: you talk, let go, and the orb's wave is your Mac writing it down.
   const loading = status.enabled && preparing && !ready;
   const t = useLoop(5200, 2600);
   const mode = !ready ? 'idle' : t >= 800 && t < 2200 ? 'listening' : t >= 2200 && t < 4000 ? 'thinking' : 'idle';
   return <Split frame={frame} title="Speech model" why={<Why>This is what turns your voice into text, right on your Mac. It downloads once and works offline after that.</Why>}
     stage={<Zoom width={200} height={84} max={1.6}><Dots mode={mode} loading={loading} still={reduced()} at={{ inset: 0 }} /></Zoom>}
-    caption={loading ? 'While it gets ready, the bars on the pill light up one after another.' : ready ? 'When you let go, the orb’s wave is your Mac turning what you said into text.' : 'Once it’s downloaded, the pill is all you’ll see until you hold your key.'}>
+    caption={loading ? 'While it gets ready, the pill on your screen pulses.' : ready ? 'When you let go, the orb’s wave is your Mac turning what you said into text.' : 'Once it’s downloaded, the pill is all you’ll see until you hold your key.'}>
     <div className="setup-row">
       <span className="setup-row-text"><span className="setup-row-title">Language</span><span className="setup-row-detail">Choosing yours helps it get the first few words right.</span></span>
       <Select label="Language" value={language} options={languages} onChange={next => void update({ dictation: { language: next } })} />

@@ -3,6 +3,7 @@ import { KEY_NAMES } from '../lib/keyNames';
 import { PILL_BUTTONS, useSettings, type PillButton } from '../store';
 import { LibraryGlyph, MeetingGlyph, NoteGlyph, SettingsGlyph, StickyGlyph, WriteGlyph } from './glyphs';
 import { Orb } from './Orb';
+import { Icon } from '../ui/Icon';
 
 // The dots, the pill they open into on hover (the buttons Appearance picks: a spoken note, a note to type, a
 // sticky, a meeting, the window with your notes, the settings), and the orb they become while you talk.
@@ -10,8 +11,6 @@ import { Orb } from './Orb';
 // overrides the setting (Help shows them all). The key's hint shows only while the pointer is on the spoken
 // note, the button it is the other way to, as Business shows its fn hint only on its mic; `hintShown` keeps
 // it up (Help).
-/// The otter's eight bars at rest, in points, left to right: the ears stand above the head's dome, the sides fall away.
-const OTTER = [6, 12, 10, 11, 11, 10, 12, 6];
 
 export function Dock({ mode, menu, dots, label, hint, hintShown = false, quiet, level, typing, words, recording, buttons, onHover, onMenu, onGrab, onDots, onNote, onWrite, onSticky, onMeeting, onOpen, onSettings, onOrb }: {
   mode: string; menu: ReactNode; dots: RefObject<HTMLButtonElement | null>; label: string; hint: boolean; hintShown?: boolean; quiet: boolean; level: { current: number }; typing: boolean; words: string; recording: boolean; buttons?: readonly PillButton[];
@@ -37,10 +36,10 @@ export function Dock({ mode, menu, dots, label, hint, hintShown = false, quiet, 
     <span className="keep" data-hit aria-hidden="true" />
     <span className="glass capsule" data-glass aria-hidden="true" />
     <button ref={dots} type="button" className="dots" data-hit={quiet ? undefined : 16} aria-label={label} onPointerDown={onGrab} onClick={onDots}>
-      {/* The resting mark is the otter itself: the Logo's eight bars, small, breathing slowly (overlay.css .otter). */}
-      <span className="otter" aria-hidden="true">{OTTER.map((h, i) => <i key={i} style={{ '--h': h, '--i': i } as CSSProperties} />)}</span>
     </button>
-    <div className="glass pill" data-glass data-hit aria-hidden={mode !== 'hover'} onPointerDown={onGrab}>{pill.map((name, i) => <span key={name} style={{ display: 'contents', '--i': i } as CSSProperties}>{button[name]}</span>)}</div>
+    <div className="glass pill" data-glass data-hit aria-hidden={mode !== 'hover'} onPointerDown={onGrab}>
+      <i className="pill-grip" title="Drag to move" aria-hidden="true"><Icon name="grip" size={14} /></i>
+      {pill.map((name, i) => <span key={name} style={{ display: 'contents', '--i': i } as CSSProperties}>{button[name]}</span>)}</div>
     <Orb mode={mode} level={level} typing={typing} words={words} onClick={onOrb} />
     {hint && <span className="dots-hint" aria-hidden="true"><span className="glass"><kbd>{key}</kbd> hold to type</span></span>}
   </div>;

@@ -33,7 +33,7 @@ const PATHS = {
   box: <rect x="3.75" y="3.75" width="12.5" height="12.5" rx="3" />,
   boxCheck: <><rect x="3.75" y="3.75" width="12.5" height="12.5" rx="3" /><path d="m6.9 10.2 2.1 2.1 4.2-4.6" /></>,
   power: <><path d="M10 3.25v6.5" /><path d="M6.1 5.9a5.5 5.5 0 1 0 7.8 0" /></>,
-  sidebar: <><rect x="2.75" y="3.75" width="14.5" height="12.5" rx="2" /><path d="M7.5 3.75v12.5" /></>,
+  sidebar: <><rect x="2.75" y="3.75" width="14.5" height="12.5" rx="2" /><rect className="ui-sidebar-panel" x="2.75" y="3.75" width="4.75" height="12.5" rx="2" /><path className="ui-sidebar-edge" d="M7.5 3.75v12.5" /></>, // panel and edge move with the button (titlebar.css)
   compose: <><path d="M9 4.25H5.25A1.5 1.5 0 0 0 3.75 5.75v9a1.5 1.5 0 0 0 1.5 1.5h9a1.5 1.5 0 0 0 1.5-1.5V11" /><path d="m14.6 3.9 1.5 1.5-6.2 6.2-2.2.7.7-2.2z" /></>,
   check: <path d="m4.5 10.5 3.5 3.5 7.5-8" />,
   close: <path d="m5.5 5.5 9 9m0-9-9 9" />,
