@@ -37,7 +37,7 @@ export function Appearance({ settings, update }: PageProps) {
         </Tile>
       </TileGroup>
     </Section>
-    <Section title="The dots" note="You can also drag the dots to another edge.">
+    <Section title="The pill" note="You can also drag the pill to another edge.">
       <TileGroup>
         <Tile title="Edge">
           <Segmented label="Edge" value={look.edge} options={EDGES} onChange={edge => change({ edge })} />
@@ -46,14 +46,14 @@ export function Appearance({ settings, update }: PageProps) {
           <Segmented label="Size" value={look.size} options={SIZES} onChange={size => change({ size })} />
         </Tile>
         <Tile title="When idle" detail={`With Hidden, nothing shows until you hold ${key}.`}>
-          <Segmented label="When idle" value={look.idle} options={[{ value: 'dots', label: 'Dots' }, { value: 'hidden', label: 'Hidden' }]} onChange={idle => change({ idle }, 'idle')} />
+          <Segmented label="When idle" value={look.idle} options={[{ value: 'dots', label: 'Pill' }, { value: 'hidden', label: 'Hidden' }]} onChange={idle => change({ idle }, 'idle')} />
         </Tile>
-        <Tile title="Hint" detail={look.pill.includes('note') ? `Reminds you to hold ${key} when you point at the dots.` : 'Turn on Speak a note below to use this.'} dim={!look.pill.includes('note')}>
+        <Tile title="Hint" detail={look.pill.includes('note') ? `Reminds you to hold ${key} when you point at the pill.` : 'Turn on Speak a note below to use this.'} dim={!look.pill.includes('note')}>
           <Toggle label="Hint" checked={look.hint} disabled={!look.pill.includes('note')} onChange={hint => change({ hint }, 'hover')} />
         </Tile>
       </TileGroup>
     </Section>
-    <Section title="Buttons on the dots" note="Right-click the dots for everything, including what’s turned off here.">
+    <Section title="Buttons on the pill" note="Right-click the pill for everything, including what’s turned off here.">
       <TileGroup>
         {PILL_BUTTONS.map(name => {
           const on = look.pill.includes(name);
@@ -68,7 +68,7 @@ export function Appearance({ settings, update }: PageProps) {
         <Tile title="Margin">
           <Slider label="Margin" min={0} max={120} step={2} value={look.margin} format={value => `${value} pt`} onChange={margin => change({ margin })} />
         </Tile>
-        <Tile title="Stay clear of the Dock" detail={look.avoidDock ? undefined : 'The Dock can cover the dots.'}>
+        <Tile title="Stay clear of the Dock" detail={look.avoidDock ? undefined : 'The Dock can cover the pill.'}>
           <Toggle label="Stay clear of the Dock" checked={look.avoidDock} onChange={avoidDock => change({ avoidDock })} />
         </Tile>
       </TileGroup>
@@ -114,7 +114,7 @@ function LiveOrb({ talking }: { talking: boolean }) {
 
 function Preview({ look, keyName, moment, onMoment }: { look: Settings['appearance']; keyName: string; moment: Moment; onMoment: (moment: Moment) => void }) {
   const hidden = look.idle === 'hidden' && moment === 'idle';
-  const said = { idle: hidden ? `Nothing shows until you hold ${keyName}` : 'The dots wait at the edge', hover: look.hint ? 'Pointing at the dots opens their buttons and a hint' : 'Pointing at the dots opens their buttons', talking: `As you talk, the orb shows your words. When you let go of ${keyName}, they’re typed at your cursor` }[moment];
+  const said = { idle: hidden ? `Nothing shows until you hold ${keyName}` : 'The pill waits at the edge', hover: look.hint ? 'Pointing at the pill opens its buttons and a hint' : 'Pointing at the pill opens its buttons', talking: `As you talk, the orb shows your words. When you let go of ${keyName}, they’re typed at your cursor` }[moment];
   // A new edge or size: the dots travel there from where they are, on the spring the real ones land on when dropped.
   const dock = useRef<HTMLSpanElement>(null), at = useRef<{ x: number; y: number } | null>(null);
   useLayoutEffect(() => {
@@ -130,7 +130,7 @@ function Preview({ look, keyName, moment, onMoment }: { look: Settings['appearan
     el.animate({ translate: [`${dx}px ${dy}px`, '0 0'] }, { ...timing('--pop', '--spring'), id: 'edge' });
   }, [look.edge, look.size]);
   return <figure className="look" style={{ '--buttons': look.pill.length } as CSSProperties} data-edge={look.edge} data-size={look.size} data-moment={moment} data-quiet={look.idle === 'hidden' || undefined}>
-    <div className="look-mac" role="img" aria-label={`The dots at the ${look.edge} edge, ${look.size}. ${said}.`}>
+    <div className="look-mac" role="img" aria-label={`The pill at the ${look.edge} edge, ${look.size}. ${said}.`}>
       <div className="look-screen" aria-hidden="true">
         <div className="look-menubar">
           <svg className="apple" viewBox="0 0 14 17"><path d="M11.6 9c0-2 1.6-2.9 1.7-3a3.7 3.7 0 0 0-2.9-1.6c-1.2-.1-2.4.7-3 .7s-1.6-.7-2.6-.7A3.9 3.9 0 0 0 1.5 6.4c-1.4 2.4-.4 6 1 8 .7 1 1.5 2 2.5 2s1.4-.6 2.6-.6 1.5.6 2.6.6 1.7-1 2.4-2a8.4 8.4 0 0 0 1-2.2A3.4 3.4 0 0 1 11.6 9zM9.6 3.1A3.3 3.3 0 0 0 10.4.7a3.5 3.5 0 0 0-2.3 1.2 3.2 3.2 0 0 0-.8 2.3 2.9 2.9 0 0 0 2.3-1.1z" /></svg>

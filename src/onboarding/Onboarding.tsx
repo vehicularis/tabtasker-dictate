@@ -24,7 +24,7 @@ import './onboarding.css';
 type StepId = 'welcome' | 'microphone' | 'accessibility' | 'key' | 'model' | 'dots' | 'try' | 'extras' | 'done';
 const STEPS: { id: StepId; name: string }[] = [
   { id: 'welcome', name: 'Welcome' }, { id: 'microphone', name: 'Microphone' }, { id: 'accessibility', name: 'Accessibility' },
-  { id: 'key', name: 'Your key' }, { id: 'model', name: 'Speech' }, { id: 'dots', name: 'The dots' },
+  { id: 'key', name: 'Your key' }, { id: 'model', name: 'Speech' }, { id: 'dots', name: 'The pill' },
   { id: 'try', name: 'Try it' }, { id: 'extras', name: 'Extras' }, { id: 'done', name: 'Done' },
 ];
 // A hold this long is a hold, not a tap: the same as the overlay's key test.
@@ -248,7 +248,7 @@ function Welcome({ settings, frame }: Step) {
       <Field label="Message to Maria" style={FIELD}><p className="demo-typed">{t >= 4200 && t < 7800 && <span className="setup-landed">{SAID}</span>}<Caret /></p></Field>
       <Dots mode={mode} typing words={said} still={reduced()} at={BOTTOM} />
     </Desk>}
-    caption="The dots at the edge of your screen turn into the orb while you talk." />;
+    caption="The pill at the edge of your screen turns into the orb while you talk." />;
 }
 
 function Microphone({ status, frame }: Step) {
@@ -258,7 +258,7 @@ function Microphone({ status, frame }: Step) {
   const t = useLoop(5600, 2500);
   return <Split frame={frame} title="Your microphone" why={<Why>Dictate only listens while you’re holding your key or recording a note.</Why>}
     stage={<Zoom width={200} height={84} max={1.6}><Dots mode={t >= 1200 && t < 4600 ? 'listening' : 'idle'} still={reduced()} at={{ inset: 0 }} /></Zoom>}
-    caption="The orb shows up while Dictate is listening and turns back into dots when you let go.">
+    caption="The orb shows up while Dictate is listening and turns back into the pill when you let go.">
     {mic === 'allowed' ? <>
       <Allowed>Allowed</Allowed>
       <div className="setup-row">
@@ -353,7 +353,7 @@ function Model({ status, settings, update, frame }: Step) {
   const mode = !ready ? 'idle' : t >= 800 && t < 2200 ? 'listening' : t >= 2200 && t < 4000 ? 'thinking' : 'idle';
   return <Split frame={frame} title="Speech model" why={<Why>This is what turns your voice into text, right on your Mac. It downloads once and works offline after that.</Why>}
     stage={<Zoom width={200} height={84} max={1.6}><Dots mode={mode} loading={loading} still={reduced()} at={{ inset: 0 }} /></Zoom>}
-    caption={loading ? 'While it gets ready, the dots on your screen light up one after another.' : ready ? 'When you let go, the orb’s wave is your Mac turning what you said into text.' : 'Once it’s downloaded, the dots are all you’ll see until you hold your key.'}>
+    caption={loading ? 'While it gets ready, the bars on the pill light up one after another.' : ready ? 'When you let go, the orb’s wave is your Mac turning what you said into text.' : 'Once it’s downloaded, the pill is all you’ll see until you hold your key.'}>
     <div className="setup-row">
       <span className="setup-row-text"><span className="setup-row-title">Language</span><span className="setup-row-detail">Choosing yours helps it get the first few words right.</span></span>
       <Select label="Language" value={language} options={languages} onChange={next => void update({ dictation: { language: next } })} />
@@ -383,14 +383,14 @@ const PILL_ROWS: [string, string][] = [
 
 function TheDots({ frame }: Step) {
   const [active, setActive] = useState<number | null>(null);
-  return <Split frame={frame} title="The dots" why={<Why>They sit at the edge of your screen and open into buttons when you point at them.</Why>}
+  return <Split frame={frame} title="The pill" why={<Why>It sits at the edge of your screen and opens into buttons when you point at it.</Why>}
     stage={<Zoom width={320} height={110} max={1.7}>
       <div className="setup-pill" data-active={active ?? undefined}>
         <Dots mode="hover" at={{ inset: 0 }} />
         <ol className="setup-marks">{PILL_ROWS.map(([title], i) => <li key={title} data-dim={(active !== null && active !== i) || undefined}><b>{i + 1}</b></li>)}</ol>
       </div>
     </Zoom>}
-    caption={active === null ? 'When you point at the dots, they open into these buttons.' : PILL_ROWS[active][1]}>
+    caption={active === null ? 'When you point at the pill, it opens into these buttons.' : PILL_ROWS[active][1]}>
     <ol className="setup-buttons" onPointerLeave={() => setActive(null)}>
       {PILL_ROWS.map(([title, detail], i) => <li key={title} tabIndex={0} aria-description={detail} data-on={active === i || undefined}
         onPointerEnter={() => setActive(i)} onFocus={() => setActive(i)} onBlur={() => setActive(null)}><b className="setup-mark">{i + 1}</b>{title}</li>)}
@@ -433,7 +433,7 @@ function TryIt({ status, settings, dictateKey, practiced, onPracticed, go, frame
 }
 
 const EXTRA_CAPTIONS: Record<Sheet, string> = {
-  claude: 'The AI’s answers show up by the dots, ready to insert where you were typing.',
+  claude: 'The AI’s answers show up by the pill, ready to insert where you were typing.',
   meetings: 'A meeting records until you stop it, both sides of a call included.',
   notes: 'Every note you speak is saved as a file in this folder.',
 };
@@ -487,12 +487,12 @@ function Extra({ shown }: { shown: Sheet }) {
 function waysOf(settings: Settings): [string, ReactNode][] {
   const { shortcuts, claude, general } = settings;
   // With the dots hidden until the key is held, there is nothing to right-click.
-  const menu = settings.appearance.idle === 'dots' ? 'right-click the dots' : 'open TabTasker | Dictate from Spotlight';
+  const menu = settings.appearance.idle === 'dots' ? 'right-click the pill' : 'open TabTasker | Dictate from Spotlight';
   const name = KEY_NAMES[shortcuts.dictate];
   const ways: [string, ReactNode][] = [['Type where your cursor is', <>hold <Kbd>{name}</Kbd></>]];
   if (shortcuts.handsFree) ways.push(['Talk without holding', <>double-tap <Kbd>{name}</Kbd></>]);
   if (claude.enabled && claude.commands && shortcuts.command !== 'off') ways.push(['Ask AI', <>hold <Kbd>{name}</Kbd> with <Kbd>{COMMAND_GLYPHS[shortcuts.command]}</Kbd></>]);
-  ways.push(['Speak a note', shortcuts.note ? <Kbd>{shortcuts.note.label}</Kbd> : 'the note button on the dots']);
+  ways.push(['Speak a note', shortcuts.note ? <Kbd>{shortcuts.note.label}</Kbd> : 'the note button on the pill']);
   ways.push(['Record a meeting', shortcuts.meeting ? <Kbd>{shortcuts.meeting.label}</Kbd> : general.menuBarIcon ? 'the menu bar icon' : menu]);
   if (shortcuts.pasteLast) ways.push(['Paste the last transcript', <Kbd>{shortcuts.pasteLast.label}</Kbd>]);
   ways.push(['Settings and more', general.menuBarIcon ? 'the menu bar icon' : menu]);
