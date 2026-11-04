@@ -138,9 +138,11 @@ export function Overlay() {
         const box = (element: Element, pad = 0) => { const r = element.getBoundingClientRect(); return [r.x - pad, r.y - pad, r.width + pad * 2, r.height + pad * 2]; };
         const glass = [...node.querySelectorAll<HTMLElement>('[data-glass]')].filter(element => element.getClientRects().length).map(element => {
           const style = getComputedStyle(element);
-          // The radius as drawn: the box comes scaled (Appearance size, springs), the computed radius doesn't.
+          // The radius as drawn: the box comes scaled (Appearance size, springs), the computed radius doesn't;
+          // and a pill's 999px is drawn as half its height, where the native mask would square the blur's corners.
           const scale = element.offsetWidth ? element.getBoundingClientRect().width / element.offsetWidth : 1;
-          return [...box(element), (parseFloat(style.borderTopLeftRadius) || 0) * scale, +style.opacity];
+          const [x, y, width, height] = box(element);
+          return [x, y, width, height, Math.min((parseFloat(style.borderTopLeftRadius) || 0) * scale, width / 2, height / 2), +style.opacity];
         });
         // Only what can take the pointer: the pill at rest is laid out but invisible and pointer-events none, and
         // as a hit it would make the window catch clicks over nothing and disagree with the page's own test.

@@ -139,18 +139,11 @@ export function About(_: PageProps) {
     <footer className="about-end">
       <div className="about-card">
         <p className="about-lockup"><Logo size={24} /><span>TabTasker</span><i>|</i><span>Dictate</span></p>
-        <div className="about-chips" aria-label="About this build">
-          <span className="about-chip">{version ? `Version ${version}` : 'Version'}</span>
-          <span className="about-chip">Apache License 2.0</span>
-          <span className="about-chip">Built with Tauri, Rust and Whisper</span>
-        </div>
-        <nav className="about-chips" aria-label="More from TabTasker">
-          <button type="button" className="about-chip link" onClick={site(BUSINESS)}>TabTasker | Business<Icon name="external" size={11} /></button>
-          <button type="button" className="about-chip link" onClick={site(`${BUSINESS}/privacy`)}>Privacy</button>
-          <button type="button" className="about-chip link" onClick={site(`${BUSINESS}/terms`)}>Terms</button>
-          <button type="button" className="about-chip link" onClick={site('https://github.com/vehicularis/tabtasker-dictate')}>Source</button>
+        <nav className="about-links" aria-label="Links">
+          <button type="button" onClick={site(`${BUSINESS}/privacy`)}>Privacy</button>
+          <button type="button" onClick={site(`${BUSINESS}/terms`)}>Terms</button>
+          <button type="button" onClick={site('https://github.com/vehicularis/tabtasker-dictate')}>GitHub</button>
         </nav>
-        <p className="about-made">Made with <BusinessMark size={18} /> by Vehicularis in the UK. © 2026 Vehicularis Limited.</p>
       </div>
       <img className="about-city" src={studio} alt="" width={2172} height={724} draggable={false} loading="lazy" decoding="async" />
     </footer>
