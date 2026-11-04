@@ -470,10 +470,10 @@ function Extra({ shown }: { shown: Sheet }) {
   const seconds = Math.floor(useLoop(3_600_000, 0, 1000) / 1000) + 754;
   const settings = useSettings();
   if (shown === 'claude') return <article className="glass card claude-card">
-    <header className="head"><span className="name"><Icon name={settings ? aiIcon(settings.claude) : 'claude'} size={16} />{settings ? aiName(settings.claude) : 'AI'}</span></header>
+    <header className="dots-head"><span className="dots-name"><Icon name={settings ? aiIcon(settings.claude) : 'claude'} size={16} />{settings ? aiName(settings.claude) : 'AI'}</span></header>
     <p className="claude-asked">How do I say “see you Thursday” in Spanish?</p>
     <div className="claude-answer">Nos vemos el jueves.</div>
-    <footer className="actions"><span className="ask" /><button type="button" className="btn">Close</button><button type="button" className="btn">Copy</button><button type="button" className="btn primary">Insert</button></footer>
+    <footer className="dots-actions"><span className="ask" /><button type="button" className="btn">Close</button><button type="button" className="btn">Copy</button><button type="button" className="btn primary">Insert</button></footer>
   </article>;
   if (shown === 'meetings') return <div className="glass meeting-pill meeting-card">
     <span className="meeting-dot" />

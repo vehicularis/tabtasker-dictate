@@ -11,7 +11,7 @@
 .meeting-line b { overflow: hidden; font-weight: 600; text-overflow: ellipsis; }
 .meeting-line time { font-variant-numeric: tabular-nums; color: var(--ink-2); }
 .meeting-line .only { color: var(--ink-3); }
-.meeting-pill .link { font-size: 11.5px; color: var(--ink-2); }
+.meeting-pill .dots-link { font-size: 11.5px; color: var(--ink-2); }
 .meeting-pill .close { flex: none; margin-left: 0; }
 /* The dots' menu opens over the cards above the dots: the meeting steps aside while it is open, and the
    menu offers Stop meeting meanwhile. */
