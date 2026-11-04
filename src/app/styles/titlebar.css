@@ -5,6 +5,13 @@
 .bar-tool { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px; color: var(--ink-2); background: none; cursor: pointer; -webkit-app-region: no-drag; transition: background var(--quick) var(--ease), color var(--quick) var(--ease); }
 .bar-tool:hover:not(:disabled), .bar-tool[aria-pressed='true']:not(:disabled) { color: var(--ink); background: var(--surface-2); }
 .bar-tool:disabled { opacity: .4; cursor: default; }
+/* The sidebar button draws the sidebar: open, its panel is filled and its edge stands beside it; shut, the panel
+   folds away to the left and the edge goes with it, so what the icon shows is what the window does. */
+.bar-tool .ui-sidebar-panel { stroke: none; fill: currentColor; opacity: .28; transform-box: fill-box; transform-origin: 0 50%; transition: transform var(--slow) var(--ease), opacity var(--slow) var(--ease); }
+.bar-tool .ui-sidebar-edge { transition: transform var(--slow) var(--ease), opacity var(--slow) var(--ease); }
+.bar-tool[aria-pressed='false'] .ui-sidebar-panel { transform: scaleX(0); opacity: 0; }
+.bar-tool[aria-pressed='false'] .ui-sidebar-edge { transform: translateX(-4.75px); opacity: 0; }
+@media (prefers-reduced-motion: reduce) { .bar-tool :is(.ui-sidebar-panel, .ui-sidebar-edge) { transition-duration: 0s; } }
 .tabs { position: relative; display: flex; flex: 1; align-items: center; gap: 4px; min-width: 0; margin-left: 8px; overflow-x: auto; scrollbar-width: none; }
 .tabs::-webkit-scrollbar { display: none; }
 .tab { position: relative; display: flex; flex: 1; align-items: center; min-width: 96px; max-width: 224px; height: 28px; padding-right: 4px; border-radius: 10px; font-size: 13px; color: var(--ink-3); background: color-mix(in srgb, var(--ink) 5%, transparent); -webkit-app-region: no-drag; transition: background var(--quick), color var(--quick), box-shadow var(--quick); }
