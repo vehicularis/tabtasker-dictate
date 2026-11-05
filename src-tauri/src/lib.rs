@@ -12,7 +12,7 @@ pub mod meetings;
 pub mod settings;
 
 use ai::mcp;
-use app::{commands, logger::FileLog, menu, windows, APP, FIRST_RUN};
+use app::{commands, logger::FileLog, menu, updates, windows, APP, FIRST_RUN};
 use dictation::{history, speech, text};
 use library::{notes, stickies};
 use std::sync::atomic::Ordering;
@@ -35,6 +35,7 @@ pub fn run() {
   if log::set_logger(Box::leak(Box::new(FileLog::open()))).is_ok() { log::set_max_level(log::LevelFilter::Info); } // one logger for the process's life
   log::info!("TabTasker Dictate {} starting", env!("CARGO_PKG_VERSION"));
   tauri::Builder::default()
+    .plugin(tauri_plugin_updater::Builder::new().default_version_comparator(|current, release| updates::newer(&current, &release.version)).build())
     .invoke_handler(tauri::generate_handler![
       commands::quit, commands::open_site,
       commands::status, commands::set_enabled, commands::set_input, commands::set_open_at_login, commands::request, commands::layout, commands::meeting, commands::open_app, commands::paste_last, commands::play_sound,
@@ -47,6 +48,7 @@ pub fn run() {
       ai::claude_code_find, ai::claude_code_set, ai::claude_connect_code, ai::claude_connect_local, ai::claude_connect_open_ai, ai::claude_disconnect, ai::claude_ask,
       mcp::agents_status, mcp::agents_add,
       meetings::meeting_state, meetings::meeting_recover, meetings::meeting_reveal, meetings::meeting_privacy,
+      updates::update_state, updates::update_check, updates::update_restart,
     ])
     .setup(|app| {
       app.set_activation_policy(ActivationPolicy::Accessory); // a menu bar app: no Dock icon
@@ -66,6 +68,7 @@ pub fn run() {
       menu::tray(&handle, status["enabled"] == true)?;
       notes::watch(&handle);
       stickies::show_all(&handle);
+      updates::watch(&handle);
       if first { first_run(&handle, &status); }
       Ok(())
     })

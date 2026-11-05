@@ -801,6 +801,9 @@ fn busy(meetings: &Meetings) -> Vec<String> {
   meetings.recording.iter().map(|job| job.spool.id()).chain(meetings.finishing.iter().cloned()).collect()
 }
 
+/// A meeting recording or being saved, which a restart for an update waits for.
+pub(crate) fn in_progress() -> bool { !busy(&state()).is_empty() }
+
 /// What the pill shows when the overlay loads, and what Settings shows: the meeting recording, those
 /// being saved, the recordings kept, and whether macOS lets the Mac's sound be recorded.
 #[tauri::command]

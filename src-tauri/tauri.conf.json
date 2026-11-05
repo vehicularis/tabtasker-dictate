@@ -24,6 +24,7 @@
       "app",
       "dmg"
     ],
+    "createUpdaterArtifacts": true,
     "category": "Productivity",
     "copyright": "\u00a9 2026 Vehicularis Limited",
     "icon": [
@@ -36,6 +37,13 @@
     "macOS": {
       "minimumSystemVersion": "13.0",
       "entitlements": "Entitlements.plist"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZCQzA1NTcyMzNBODA3Q0MKUldUTUI2Z3pjbFhBYTJMdk1McUJNMVl6MmlrbUxrdHZldHl1MUhTdzZ4TDRUU2ZHOERzWWlGYWIK",
+      "endpoints": ["https://github.com/vehicularis/tabtasker-dictate/releases/latest/download/latest.json"],
+      "requireSignedVersion": true
     }
   }
 }

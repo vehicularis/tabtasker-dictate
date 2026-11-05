@@ -1,7 +1,7 @@
 import { useEffect, useRef, type KeyboardEvent } from 'react';
 import { SIZES, type Size, type Status } from '../store';
 import { Icon } from '../ui/Icon';
-import { AlarmIcon, Caret, Check, GearIcon, LibraryIcon, MeetingIcon, MicIcon, NoteIcon, PasteIcon, SetupIcon } from './icons';
+import { AlarmIcon, Caret, Check, GearIcon, LibraryIcon, MeetingIcon, MicIcon, NoteIcon, PasteIcon, SetupIcon, UpdateIcon } from './icons';
 
 const itemsOf = (menu: Element) => [...menu.querySelectorAll<HTMLElement>(':scope > [role^="menuitem"], :scope > .sub > [role^="menuitem"]')];
 
@@ -9,9 +9,9 @@ export type Sub = 'mics' | 'size';
 
 // The dots' right-click menu. It works from the keyboard like a Mac menu: arrows move, → and ← open and
 // close a row's list (the microphones, the sizes), Escape closes a level.
-export function Menu({ status, sub, size, meeting, onSub, onNote, onWriteNote, onSticky, onMeeting, onOpen, onPasteLast, onPickMic, onSize, onLogin, onHide, onSettings, onSetup, onQuit }: {
-  status: Status | null; sub: Sub | null; size: Size; meeting: boolean; onSub: (sub: Sub | null) => void; onNote: () => void; onWriteNote: () => void; onSticky: () => void; onMeeting: () => void; onOpen: () => void; onPasteLast: () => void;
-  onPickMic: (id: string | null) => void; onSize: (size: Size) => void; onLogin: () => void; onHide: () => void; onSettings: () => void; onSetup: () => void; onQuit: () => void;
+export function Menu({ status, sub, size, meeting, updateReady, onSub, onNote, onWriteNote, onSticky, onMeeting, onOpen, onPasteLast, onPickMic, onSize, onLogin, onHide, onSettings, onSetup, onUpdate, onQuit }: {
+  status: Status | null; sub: Sub | null; size: Size; meeting: boolean; updateReady: boolean; onSub: (sub: Sub | null) => void; onNote: () => void; onWriteNote: () => void; onSticky: () => void; onMeeting: () => void; onOpen: () => void; onPasteLast: () => void;
+  onPickMic: (id: string | null) => void; onSize: (size: Size) => void; onLogin: () => void; onHide: () => void; onSettings: () => void; onSetup: () => void; onUpdate: () => void; onQuit: () => void;
 }) {
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => root.current?.focus({ preventScroll: true }), []);
@@ -66,6 +66,7 @@ export function Menu({ status, sub, size, meeting, onSub, onNote, onWriteNote, o
     <button type="button" role="menuitem" tabIndex={-1} onClick={onHide}><AlarmIcon />Hide for an hour</button>
     <button type="button" role="menuitem" tabIndex={-1} onClick={onSettings}><GearIcon />Settings…</button>
     <button type="button" role="menuitem" tabIndex={-1} onClick={onSetup}><SetupIcon />Set up…</button>
+    <button type="button" role="menuitem" tabIndex={-1} onClick={onUpdate}><UpdateIcon />{updateReady ? 'Restart to update' : 'Check for updates…'}</button>
     <i className="rule" role="separator" />
     <button type="button" role="menuitem" tabIndex={-1} onClick={onQuit}><Icon name="power" size={16} />Quit TabTasker | Dictate</button>
   </div>;

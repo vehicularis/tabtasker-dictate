@@ -7,6 +7,9 @@ notarized DMG, is on the [releases page](https://github.com/vehicularis/tabtaske
 
 ### Added
 
+- Dictate updates itself. Every few hours it looks for a new release, downloads it in the background and
+  offers to restart, never while you’re dictating or recording a meeting. Turn it off or check now in
+  Settings › General, or choose Check for updates… in the pill’s menu or the menu bar.
 - Every release is built in the open by a GitHub workflow, with a SHA256SUMS file and an attestation that
   says which commit and workflow built the DMG. The README says how to check a download with them.
 

@@ -46,6 +46,12 @@ pub(crate) fn app_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
 static RECENT: OnceLock<(Submenu<Wry>, Mutex<Vec<PathBuf>>)> = OnceLock::new();
 static PAUSED: OnceLock<CheckMenuItem<Wry>> = OnceLock::new();
 static MEETING: OnceLock<MenuItem<Wry>> = OnceLock::new();
+static UPDATES: OnceLock<MenuItem<Wry>> = OnceLock::new();
+
+/// The tray's update item says what it will do.
+pub(crate) fn update_changed(ready: bool) {
+  if let Some(item) = UPDATES.get() { let _ = item.set_text(if ready { "Restart to Update" } else { "Check for Updates…" }); }
+}
 
 /// The tray's meeting item says what it will do.
 pub(crate) fn meeting_changed(recording: bool) {
@@ -89,6 +95,7 @@ pub(crate) fn tray(app: &AppHandle, enabled: bool) -> tauri::Result<()> {
   let recent = Submenu::with_id(app, "recent", "Recent Notes", true)?;
   let paused = CheckMenuItem::with_id(app, "pause", "Pause Dictation", true, !enabled, None::<&str>)?;
   let meeting = MenuItem::with_id(app, "meeting", "Start Meeting", true, None::<&str>)?;
+  let updates = MenuItem::with_id(app, "updates", "Check for Updates…", true, None::<&str>)?;
   let menu = Menu::with_items(app, &[
     &MenuItem::with_id(app, "note", "Speak a Note", true, None::<&str>)?,
     &MenuItem::with_id(app, "write", "Write a Note", true, None::<&str>)?,
@@ -99,6 +106,7 @@ pub(crate) fn tray(app: &AppHandle, enabled: bool) -> tauri::Result<()> {
     &MenuItem::with_id(app, "open", "Open TabTasker | Dictate", true, None::<&str>)?,
     &MenuItem::with_id(app, "settings", "Settings…", true, Some("CmdOrCtrl+,"))?,
     &MenuItem::with_id(app, "setup", "Set Up…", true, None::<&str>)?,
+    &updates,
     &MenuItem::with_id(app, "notes", "Show Notes in Finder", true, None::<&str>)?, &separator()?,
     &paused, &separator()?,
     &MenuItem::with_id(app, "quit", "Quit TabTasker | Dictate", true, Some("CmdOrCtrl+Q"))?,
@@ -106,6 +114,7 @@ pub(crate) fn tray(app: &AppHandle, enabled: bool) -> tauri::Result<()> {
   let _ = RECENT.set((recent, Mutex::default()));
   let _ = PAUSED.set(paused);
   let _ = MEETING.set(meeting);
+  let _ = UPDATES.set(updates);
   recent_changed(app);
   // The mark alone, in black: macOS tints a template icon for the menu bar's light or dark look.
   let icon = tauri::image::Image::from_bytes(include_bytes!("../../icons/tray@2x.png"))?;
@@ -153,6 +162,7 @@ pub(crate) fn menu_event(app: &AppHandle, id: &str) {
     "settings" => { let _ = show_main(app, Some("settings")); }
     "about" => { let _ = show_main(app, Some("about")); }
     "setup" => { let _ = show_main(app, Some("setup")); }
+    "updates" => super::updates::menu_item(app),
     // The item has already flipped its own check.
     "pause" => {
       let paused = PAUSED.get().and_then(|item| item.is_checked().ok()).unwrap_or(false);

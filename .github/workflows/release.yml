@@ -1,8 +1,9 @@
 name: Release
 
 # A pushed vX.Y.Z tag builds the release in the open with scripts/release-mac.sh: the app and its DMG signed with
-# the Developer ID, notarized, stapled and checked by Gatekeeper, a SHA256SUMS file, and a build provenance
-# attestation for the DMG. It leaves them on a draft release, which a person checks and publishes.
+# the Developer ID, notarized, stapled and checked by Gatekeeper, the signed update and latest.json that installed
+# copies update from, a SHA256SUMS file, and a build provenance attestation for the DMG. It leaves them on a draft
+# release, which a person checks and publishes.
 # Run by hand, or from a pull request that changes how a release is built, it's a dry run: the same build
 # signed ad hoc, with no secrets, no attestation and no release. The DMG is on the run's page.
 on:
@@ -98,6 +99,9 @@ jobs:
         env:
           NOTARY_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
           NOTARY_ISSUER: ${{ secrets.NOTARY_API_ISSUER_ID }}
+          # Signs the update the installed copies download (empty in a dry run, which then makes none).
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           [[ "$GITHUB_EVENT_NAME" == push ]] || export DICTATE_SIGNING_IDENTITY=-
           scripts/release-mac.sh
@@ -116,6 +120,8 @@ jobs:
           name: release
           path: |
             release/*.dmg
+            release/*.app.tar.gz
+            release/latest.json
             release/SHA256SUMS
           if-no-files-found: error
 

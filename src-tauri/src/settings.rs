@@ -30,9 +30,11 @@ pub struct General {
   pub menu_bar_icon: bool,
   /// An icon in the Dock as well, which opens Settings; otherwise only while Settings is open.
   pub show_in_dock: bool,
+  /// Look for a new release now and then, download it and offer a restart (app/updates.rs).
+  pub check_for_updates: bool,
 }
 impl Default for General {
-  fn default() -> Self { Self { menu_bar_icon: true, show_in_dock: false } }
+  fn default() -> Self { Self { menu_bar_icon: true, show_in_dock: false, check_for_updates: true } }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -656,7 +658,7 @@ mod tests {
   fn defaults_are_the_documented_ones_in_camel_case() {
     let value = serde_json::to_value(Settings::default()).unwrap();
     assert_eq!(value["version"], 1);
-    assert_eq!(value["general"], json!({ "menuBarIcon": true, "showInDock": false }));
+    assert_eq!(value["general"], json!({ "menuBarIcon": true, "showInDock": false, "checkForUpdates": true }));
     assert_eq!(value["shortcuts"], json!({ "dictate": "fn", "handsFree": true, "command": "control", "note": null, "meeting": null, "pasteLast": null, "writeNote": null, "sticky": null, "ask": null }));
     assert_eq!(value["dictation"], json!({ "language": "auto", "translateToEnglish": false, "removeFillers": true, "sounds": true, "soundVolume": 0.3, "startSound": "Tink", "stopSound": "Pop", "model": "turbo" }));
     assert_eq!(value["vocabulary"], json!({ "words": [], "replacements": [], "learn": true, "suggestions": [] }));

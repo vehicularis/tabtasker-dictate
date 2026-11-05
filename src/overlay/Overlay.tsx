@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Poin
 import { invoke, listen } from '../bridge';
 import { stamp } from '../lib/dates';
 import { message } from '../lib/errors';
-import { needsSetup, setupDone, updateSettings, useSettings, type Edge, type Events, type Size, type Status } from '../store';
+import { needsSetup, setupDone, updateSettings, useSettings, useUpdates, type Edge, type Events, type Size, type Status } from '../store';
 import { applyTheme, isDark } from '../ui/theme';
 import { leave } from '../ui/motion';
 import { CommandCard } from './CommandCard';
@@ -44,6 +44,14 @@ export function Overlay() {
   const [sub, setSub] = useState<Sub | null>(PREVIEW === 'mics' || PREVIEW === 'size' ? PREVIEW : null);
   const [meetings, lookMeetings] = useMeetingState();
   const [hidden, setHidden] = useState(false);
+  // An update downloaded: offered once, quietly, by the dots for a few seconds, and from then on in the menu. The
+  // offer never cuts into a hold, a spoken note or a meeting: it waits until the dots are at rest.
+  const updates = useUpdates();
+  const updateReady = !!updates?.ready;
+  const [offer, setOffer] = useState(false);
+  useEffect(() => { if (updateReady) setOffer(true); }, [updateReady]);
+  const offering = offer && phase === 'idle' && !meetings?.recording && !meetings?.saving.length && !setup && !saved && !hidden;
+  useEffect(() => { if (!offering) return; const timer = setTimeout(() => setOffer(false), 8000); return () => clearTimeout(timer); }, [offering]);
   // The edge from before settings kept it, used until it has moved over.
   const [legacyEdge, setLegacyEdge] = useState(() => PREVIEW ? null : stored<Edge | null>(EDGE, null));
   const [dropped, setDropped] = useState<Edge | null>(null); // where a drag just left the dots, while that saves
@@ -224,6 +232,8 @@ export function Overlay() {
     void invoke<boolean>('meeting', { action }).then(changed => { if (!changed && action === 'start') setToast('Couldn’t start the meeting.'); })
       .catch((error: unknown) => setToast(message(error, 'Couldn’t start the meeting.')));
   };
+  const restartToUpdate = () => { setMenu(false); setOffer(false); void invoke('update_restart').catch(error => setToast(message(error, 'Couldn’t restart Dictate.'))); };
+  const checkForUpdates = () => { setMenu(false); if (updateReady) restartToUpdate(); else void invoke('update_check', { tell: true }).catch(() => {}); };
   const hideForAnHour = () => { setMenu(false); setHidden(true); setTimeout(() => setHidden(false), 60 * 60 * 1000); };
   const pickSize = (size: Size) => { setMenu(false); void updateSettings({ appearance: { size } }).catch(() => setToast('Couldn’t change the size. Try again.')); };
   const pickMic = (id: string | null) => { setMenu(false); void invoke('set_input', { id }).then(refresh).catch(() => setToast('Couldn’t switch to that microphone. Try again.')); };
@@ -254,7 +264,7 @@ export function Overlay() {
   </div>;
   const mode = phase === 'listening' ? 'listening' : phase !== 'idle' ? 'thinking' : hover || menu ? 'hover' : 'idle';
   const card = setup;
-  const quiet = settings.appearance.idle === 'hidden' && mode === 'idle' && !card && !saved && !toast;
+  const quiet = settings.appearance.idle === 'hidden' && mode === 'idle' && !card && !saved && !toast && !offering;
   return <div ref={root} className="layer" data-edge={edge} data-mode={mode} data-size={settings.appearance.size} data-quiet={quiet || undefined} data-loading={loading || undefined}
     style={{ '--margin': `${settings.appearance.margin}px`, '--dock-inset': `${dockInset}px` } as CSSProperties}
     data-card={card || undefined} data-dragging={dragging || undefined}>
@@ -266,6 +276,9 @@ export function Overlay() {
       {saved && !card && <button ref={leave} type="button" className="glass said saved" data-glass data-hit onClick={() => { void invoke('note_open', { path: saved }).catch(() => {}); setSaved(null); }}>
         <small>Saved · Open</small><span>{saved.split('/').pop()?.replace(/\.md$/, '')}</span>
       </button>}
+      {offering && <button ref={leave} type="button" className="glass said saved" data-glass data-hit onClick={restartToUpdate}>
+        <small>Update ready · Restart</small><span>TabTasker Dictate {updates?.version ?? ''}</span>
+      </button>}
       <CommandCard />
       <MeetingPill />
       <HandsFree />
@@ -274,9 +287,9 @@ export function Overlay() {
       <Dock mode={mode} dots={dots} label="TabTasker | Dictate" hint={settings.appearance.hint} quiet={quiet} level={level} typing={dictating} words={noting ? '' : live ?? ''}
         onHover={setHover} onGrab={grab} onDots={clickDots} onNote={takeNote} onWrite={writeNote} onSticky={newSticky} onMeeting={startMeeting} recording={!!meetings?.recording} onOpen={() => openApp('notes')} onSettings={openSettings} onOrb={() => { if (noting) takeNote(); }}
         onMenu={() => { if (phase === 'idle') { setMenu(true); refresh(); lookMeetings(); } }}
-        menu={menu && <Menu status={status} sub={sub} size={settings.appearance.size} meeting={!!meetings?.recording} onSub={setSub} onNote={() => { setMenu(false); takeNote(); }} onWriteNote={writeNote} onSticky={newSticky} onMeeting={startMeeting}
+        menu={menu && <Menu status={status} sub={sub} size={settings.appearance.size} meeting={!!meetings?.recording} updateReady={updateReady} onSub={setSub} onNote={() => { setMenu(false); takeNote(); }} onWriteNote={writeNote} onSticky={newSticky} onMeeting={startMeeting}
           onOpen={() => openApp()} onPasteLast={() => { setMenu(false); void invoke('paste_last').catch(() => {}); }} onPickMic={pickMic} onSize={pickSize} onLogin={login}
-          onHide={hideForAnHour} onSettings={openSettings} onSetup={openSetup} onQuit={() => { setMenu(false); void invoke('quit').catch(() => {}); }} />} />
+          onHide={hideForAnHour} onSettings={openSettings} onSetup={openSetup} onUpdate={checkForUpdates} onQuit={() => { setMenu(false); void invoke('quit').catch(() => {}); }} />} />
     </div>
   </div>;
 }

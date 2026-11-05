@@ -26,7 +26,7 @@ const CHAT_APPS = ['com.tinyspeck.slackmacgap', 'com.apple.MobileSMS', 'net.what
 export const sendsByDefault = (bundleId: string) => CHAT_APPS.some(chat => chat.toLowerCase() === bundleId.toLowerCase());
 export type Settings = {
   version: 1;
-  general: { menuBarIcon: boolean; showInDock: boolean };
+  general: { menuBarIcon: boolean; showInDock: boolean; checkForUpdates: boolean };
   shortcuts: { dictate: DictateKey; handsFree: boolean; command: CommandKey; note: Chord | null; meeting: Chord | null; pasteLast: Chord | null; writeNote: Chord | null; sticky: Chord | null; ask: Chord | null };
   dictation: { language: string; translateToEnglish: boolean; removeFillers: boolean; sounds: boolean; soundVolume: number; startSound: string; stopSound: string; model: 'turbo' | 'small' };
   vocabulary: { words: string[]; replacements: { from: string; to: string }[]; learn: boolean; suggestions: string[] };
@@ -70,7 +70,20 @@ export type Events = {
   'dictate-dock': { shown: boolean; strip: number; edge: 'bottom' | 'left' | 'right' };
   /// A sticky's pill rising or falling, as the Mac sees the pointer (stickies.rs, to that sticky's window).
   'dictate-sticky-hover': { id: string; up: boolean };
+  'dictate-update': UpdateState;
 };
+
+/// Where updates stand (updates.rs): checking or downloading while `busy`, a newer `version` there to install once `ready`.
+export type UpdateState = { current: string; busy: boolean; version: string | null; ready: boolean; latest: boolean; problem: string | null };
+/// The updates, kept current by dictate-update, which every window hears; null until they arrive.
+export function useUpdates(): UpdateState | null {
+  const [state, setState] = useState<UpdateState | null>(null);
+  useEffect(() => {
+    void invoke<UpdateState>('update_state').then(first => setState(heard => heard ?? first)).catch(() => {});
+    return listen<UpdateState>('dictate-update', setState);
+  }, []);
+  return state;
+}
 
 // NSEvent modifier flags, as the native side matches them.
 export const MODIFIERS = { control: 1 << 18, option: 1 << 19, shift: 1 << 17, command: 1 << 20 } as const;

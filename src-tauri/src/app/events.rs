@@ -16,6 +16,7 @@ fn text(text: *const c_char) -> Option<String> {
 extern "C" fn dictate_ui_state(phase: *const c_char, level: f64, dictating: bool) {
   let Some(phase) = text(phase) else { return };
   if !level.is_finite() { return; }
+  super::updates::heard(&phase);
   emit("dictate-state", serde_json::json!({ "phase": phase, "level": level.clamp(0.0, 1.0), "dictating": dictating }));
 }
 #[no_mangle]

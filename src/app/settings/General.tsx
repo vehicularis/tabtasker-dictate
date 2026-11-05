@@ -1,7 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { invoke } from '../../bridge';
+import { message } from '../../lib/errors';
 import { ask } from '../../lib/request';
-import { resetSettings, useStatus, type PageProps } from '../../store';
+import { resetSettings, useStatus, useUpdates, type PageProps, type UpdateState } from '../../store';
 import { Button, Icon, PageHeader, Section, Select, Tile, TileGroup, Toggle } from '../../ui';
 
 export function General({ settings, update }: PageProps) {
@@ -14,6 +15,9 @@ export function General({ settings, update }: PageProps) {
   useEffect(() => { if (!resetting && refocus.current) { refocus.current = false; document.getElementById(resetId)?.focus(); } }, [resetting, resetId]);
   const confirm = (open: boolean) => { refocus.current = !open; setResetting(open); };
   const run = (work: Promise<unknown>, failed: string) => { setProblem(null); void work.then(refresh).catch(() => setProblem(failed)); };
+  const updates = useUpdates();
+  const [restartProblem, setRestartProblem] = useState<string | null>(null);
+  const restart = () => { setRestartProblem(null); void invoke('update_restart').catch(error => setRestartProblem(message(error, 'Couldn’t restart Dictate.'))); };
   const icon = settings.general.menuBarIcon;
   const mic = status?.microphone;
   return <>
@@ -44,6 +48,18 @@ export function General({ settings, update }: PageProps) {
           : 'Your microphone stays off while dictation is paused.'}>
           <Toggle label="Pause dictation" checked={!!status && !status.enabled} disabled={!status}
             onChange={paused => run(invoke('set_enabled', { enabled: !paused }), paused ? 'Couldn’t pause dictation.' : 'Couldn’t start dictation again.')} />
+        </Tile>
+      </TileGroup>
+    </Section>
+    <Section title="Updates" note={restartProblem}>
+      <TileGroup>
+        <Tile title="Check for updates automatically" detail="A new version downloads in the background, and Dictate asks before it restarts.">
+          <Toggle label="Check for updates automatically" checked={settings.general.checkForUpdates} onChange={checkForUpdates => void update({ general: { checkForUpdates } })} />
+        </Tile>
+        <Tile title={`TabTasker Dictate ${updates?.current ?? ''}`} detail={updates && updateDetail(updates)}>
+          {updates?.ready
+            ? <Button variant="primary" onClick={restart}>Restart to update</Button>
+            : <Button disabled={!updates || updates.busy} onClick={() => { setRestartProblem(null); void invoke('update_check', { tell: false }).catch(() => {}); }}>Check now</Button>}
         </Tile>
       </TileGroup>
     </Section>
@@ -79,5 +95,11 @@ export function General({ settings, update }: PageProps) {
     </Section>
   </>;
 }
+
+/// What the version row says under its name: the last check's answer, or the download under way.
+const updateDetail = (updates: UpdateState) =>
+  updates.problem ?? (updates.ready ? `Version ${updates.version} is downloaded and ready.`
+    : updates.busy ? (updates.version ? `Downloading version ${updates.version}…` : 'Checking for a new version…')
+    : updates.latest ? 'You’re up to date.' : undefined);
 
 const State = ({ children }: { children: string }) => <span className="state" data-on><Icon name="check" size={14} />{children}</span>;
