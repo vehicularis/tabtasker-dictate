@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Poin
 import { invoke, listen } from '../bridge';
 import { stamp } from '../lib/dates';
 import { message } from '../lib/errors';
-import { needsSetup, setupDone, updateSettings, useSettings, type Edge, type Events, type Status } from '../store';
+import { needsSetup, setupDone, updateSettings, useSettings, type Edge, type Events, type Size, type Status } from '../store';
 import { applyTheme, isDark } from '../ui/theme';
 import { leave } from '../ui/motion';
 import { CommandCard } from './CommandCard';
@@ -10,7 +10,7 @@ import { Dock } from './Dock';
 import { HandsFree } from './HandsFree';
 import { Learned } from './Learned';
 import { MeetingPill, useMeetingState } from './MeetingPill';
-import { Menu } from './Menu';
+import { Menu, type Sub } from './Menu';
 import { PREVIEW, PREVIEW_EDGE, SAMPLE, SETUP } from './preview';
 import { Setup } from './Setup';
 
@@ -39,9 +39,9 @@ export function Overlay() {
   const [toast, setToast] = useState<string | null>(null);
   // The setup steps, as a card by the dots: for something only the person can do, or when asked for.
   const [setup, setSetup] = useState(!!PREVIEW && PREVIEW in SETUP);
-  const [hover, setHover] = useState(PREVIEW === 'hover' || PREVIEW === 'menu' || PREVIEW === 'mics');
-  const [menu, setMenu] = useState(PREVIEW === 'menu' || PREVIEW === 'mics');
-  const [mics, setMics] = useState(PREVIEW === 'mics');
+  const [hover, setHover] = useState(PREVIEW === 'hover' || PREVIEW === 'menu' || PREVIEW === 'mics' || PREVIEW === 'size');
+  const [menu, setMenu] = useState(PREVIEW === 'menu' || PREVIEW === 'mics' || PREVIEW === 'size');
+  const [sub, setSub] = useState<Sub | null>(PREVIEW === 'mics' || PREVIEW === 'size' ? PREVIEW : null);
   const [meetings, lookMeetings] = useMeetingState();
   const [hidden, setHidden] = useState(false);
   // The edge from before settings kept it, used until it has moved over.
@@ -71,7 +71,7 @@ export function Overlay() {
     const timer = setInterval(() => setClock(tick => tick + 1), 1000);
     return () => clearInterval(timer);
   }, [noting, phase]);
-  useEffect(() => { if (!menu) setMics(false); }, [menu]);
+  useEffect(() => { if (!menu) setSub(null); }, [menu]);
 
   // ---------- settings: the theme, and the edge moved over once from this page's own storage ----------
   const theme = settings?.appearance.theme;
@@ -225,6 +225,7 @@ export function Overlay() {
       .catch((error: unknown) => setToast(message(error, 'Couldn’t start the meeting.')));
   };
   const hideForAnHour = () => { setMenu(false); setHidden(true); setTimeout(() => setHidden(false), 60 * 60 * 1000); };
+  const pickSize = (size: Size) => { setMenu(false); void updateSettings({ appearance: { size } }).catch(() => setToast('Couldn’t change the size. Try again.')); };
   const pickMic = (id: string | null) => { setMenu(false); void invoke('set_input', { id }).then(refresh).catch(() => setToast('Couldn’t switch to that microphone. Try again.')); };
   const login = () => { const on = !status?.openAtLogin; void invoke<boolean>('set_open_at_login', { enabled: on }).then(refresh).catch(() => setToast('Couldn’t change whether Dictate opens at login.')); };
   // A click on the dots: stops a note being taken, finishes setup, or opens the window.
@@ -273,8 +274,8 @@ export function Overlay() {
       <Dock mode={mode} dots={dots} label="TabTasker | Dictate" hint={settings.appearance.hint} quiet={quiet} level={level} typing={dictating} words={noting ? '' : live ?? ''}
         onHover={setHover} onGrab={grab} onDots={clickDots} onNote={takeNote} onWrite={writeNote} onSticky={newSticky} onMeeting={startMeeting} recording={!!meetings?.recording} onOpen={() => openApp('notes')} onSettings={openSettings} onOrb={() => { if (noting) takeNote(); }}
         onMenu={() => { if (phase === 'idle') { setMenu(true); refresh(); lookMeetings(); } }}
-        menu={menu && <Menu status={status} mics={mics} meeting={!!meetings?.recording} onMics={setMics} onNote={() => { setMenu(false); takeNote(); }} onWriteNote={writeNote} onSticky={newSticky} onMeeting={startMeeting}
-          onOpen={() => openApp()} onPasteLast={() => { setMenu(false); void invoke('paste_last').catch(() => {}); }} onPickMic={pickMic} onLogin={login}
+        menu={menu && <Menu status={status} sub={sub} size={settings.appearance.size} meeting={!!meetings?.recording} onSub={setSub} onNote={() => { setMenu(false); takeNote(); }} onWriteNote={writeNote} onSticky={newSticky} onMeeting={startMeeting}
+          onOpen={() => openApp()} onPasteLast={() => { setMenu(false); void invoke('paste_last').catch(() => {}); }} onPickMic={pickMic} onSize={pickSize} onLogin={login}
           onHide={hideForAnHour} onSettings={openSettings} onSetup={openSetup} onQuit={() => { setMenu(false); void invoke('quit').catch(() => {}); }} />} />
     </div>
   </div>;
