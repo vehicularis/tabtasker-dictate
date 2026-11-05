@@ -1,0 +1,15 @@
+name: Idea
+description: Something Dictate could do, or do better.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What would you like Dictate to do?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: When would you use it?
+      description: The last time you wished Dictate did this, and what you did instead.
