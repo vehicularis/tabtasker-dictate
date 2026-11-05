@@ -126,4 +126,6 @@ if [[ -z "${NO_UPDATE[*]}" ]]; then
 fi
 
 (cd release && shasum -a 256 "${FILES[@]}" | tee SHA256SUMS)
+[[ "$IDENTITY" == - ]] || printf 'For Casks/tabtasker-dictate.rb in vehicularis/homebrew-tap, once it is published:\n  version "%s"\n  sha256 "%s"\n' \
+  "$VERSION" "$(grep " ${DMG:t}$" release/SHA256SUMS | cut -d" " -f1)"
 echo "Ready: ${FILES[*]} and SHA256SUMS in release/, from $(git rev-parse --short HEAD)."

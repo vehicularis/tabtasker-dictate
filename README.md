@@ -70,6 +70,12 @@ and drag TabTasker Dictate into Applications. You’ll need a Mac with Apple sil
 macOS 14.2 or later to record the other side of a call. The first time it opens, Dictate downloads its speech
 model (about 875 MB) and walks you through the two permissions it needs.
 
+Or with [Homebrew](https://brew.sh):
+
+```sh
+brew install --cask vehicularis/tap/tabtasker-dictate
+```
+
 It’s signed by Vehicularis Limited and notarized by Apple, so it opens without a warning. Each release is built
 in the open, by this repository’s [release workflow](.github/workflows/release.yml) from a tagged commit on main.
 To check a download yourself, compare its SHA-256 with the release’s SHA256SUMS file, ask Gatekeeper, and ask
@@ -87,7 +93,8 @@ Dictate updates itself. Every few hours it looks for a new release, downloads it
 it’s signed by us, and offers to restart. It never restarts while you’re dictating or recording a meeting.
 Turn that off, or check now, in Settings › General; the pill’s menu has Check for updates… too. Your settings,
 notes and speech model stay where they are. 0.1.1 and earlier can’t update themselves: download the newest
-release once and replace the app. What changed in each release is in [CHANGELOG.md](CHANGELOG.md).
+release once and replace the app, or run `brew upgrade --cask tabtasker-dictate` if you installed it with
+Homebrew. What changed in each release is in [CHANGELOG.md](CHANGELOG.md).
 
 ## Questions
 
@@ -121,8 +128,9 @@ for example, in Settings › Notes.
 Quit Dictate (Quit TabTasker | Dictate is at the bottom of the pill’s menu) and move it from Applications to
 the Trash. Its settings, history, stickies and speech model are in
 `~/Library/Application Support/com.tabtasker.dictate`, and its log is in `~/Library/Logs/TabTasker Dictate`.
-Delete those folders to remove them too. Your notes stay in your Documents folder. If you connected an AI
-service, its key is in Keychain Access under `com.tabtasker.dictate`.
+Delete those folders to remove them too. If you installed it with Homebrew, quit Dictate and
+`brew uninstall --zap --cask tabtasker-dictate` does the rest. Your notes stay in your Documents folder. If you
+connected an AI service, its key is in Keychain Access under `com.tabtasker.dictate`.
 
 ## Build from source
 
