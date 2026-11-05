@@ -31,6 +31,8 @@ const PATHS = {
   chevronRight: <path d="m8 6 4 4-4 4" />,
   chevronLeft: <path d="m12 6-4 4 4 4" />,
   box: <rect x="3.75" y="3.75" width="12.5" height="12.5" rx="3" />,
+  // Two corners pulled out along the diagonal: a size.
+  size: <path d="M11.25 3.75h5v5M8.75 16.25h-5v-5M16.25 3.75l-4.5 4.5M3.75 16.25l4.5-4.5" />,
   boxCheck: <><rect x="3.75" y="3.75" width="12.5" height="12.5" rx="3" /><path d="m6.9 10.2 2.1 2.1 4.2-4.6" /></>,
   power: <><path d="M10 3.25v6.5" /><path d="M6.1 5.9a5.5 5.5 0 1 0 7.8 0" /></>,
   sidebar: <><rect x="2.75" y="3.75" width="14.5" height="12.5" rx="2" /><rect className="ui-sidebar-panel" x="2.75" y="3.75" width="4.75" height="12.5" rx="2" /><path className="ui-sidebar-edge" d="M7.5 3.75v12.5" /></>, // panel and edge move with the button (titlebar.css)

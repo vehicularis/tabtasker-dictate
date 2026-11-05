@@ -1,6 +1,7 @@
 import type { Edge, Status } from '../store';
 
-// `?preview=…` shows one state without the app around it, for checking the design in a browser.
+// `?preview=…` shows one state without the app around it, for checking the design in a browser (menu, and
+// mics or size for the menu with that list open, among them).
 export const PREVIEW = new URLSearchParams(location.search).get('preview');
 export const PREVIEW_EDGE = new URLSearchParams(location.search).get('edge') as Edge | null;
 export const SAMPLE: Status = { enabled: true, microphone: 'allowed', accessibility: true, modelReady: true, modelPreparing: false, modelMessage: '', notes: '/Users/you/Documents/TabTasker | Dictate', globeKey: '', openAtLogin: true,
