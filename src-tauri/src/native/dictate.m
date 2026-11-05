@@ -20,6 +20,7 @@ extern void dictate_ui_dock(bool shown, double strip, const char *edge);
 extern void dictate_ui_said(const char *text, bool dictated, bool live);
 extern void dictate_ui_notice(const char *message);
 extern void dictate_log(const char *line);
+extern size_t dictate_live_next(const char *typed, const char *previous, const char *now, char *out, size_t capacity);
 
 extern void dictate_cancel(const char *request);
 extern void dictate_prepare_models(void);
@@ -213,6 +214,12 @@ typedef NS_ENUM(NSUInteger, TTVoicePhase) { TTVoiceIdle, TTVoiceListening, TTVoi
 @property BOOL restarted, onDefault;
 @property (copy) NSString *typed; // dictation: what this hold put at the cursor
 @property BOOL typingStopped; // the person clicked or typed after our words went in
+// Live: what this hold has typed into the field so far, as heard (its lead space included), and into which app.
+// Stopped once the person clicks or types during the hold: the field is theirs, and nothing is typed or erased live.
+@property (copy) NSString *live;
+@property (copy) NSString *liveHeard; // the last pass's words, which the next has to agree with
+@property BOOL liveStopped;
+@property pid_t livePid;
 // Everything dictation typed into one field over consecutive holds, while the person has not clicked
 // or typed there since: a hold that continues it starts with a space.
 @property (copy) NSString *dictated, *lead; // lead: the space a hold that continues it types first
@@ -271,6 +278,8 @@ static const int64_t TTVoiceMark = TT_VOICE_MARK;
 void TTInsertText(NSString *text, pid_t pid, NSString *bundle, void (^done)(TTInserted how));
 void TTInsertPrepare(void);
 void TTInsertReturn(pid_t pid);
+void TTInsertEdit(NSString *from, NSString *to, pid_t pid, void (^done)(void));
+BOOL TTInsertHasBreak(NSString *text);
 // Appearance › Stay clear of the Dock: the overlay window covers the screen's visible area (above the Dock,
 // below the menu bar), else the whole screen, so the dots can sit behind an auto-hidden Dock's edge.
 static BOOL TTOverlayAvoidsDock = YES;
@@ -395,9 +404,9 @@ static void TTVoiceCopy(NSString *text) {
     self.levelTimer = [NSTimer timerWithTimeInterval:1.0 / 30 repeats:YES block:^(NSTimer *timer) { (void)timer; [weak tick]; }];
     [NSRunLoop.mainRunLoop addTimer:self.levelTimer forMode:NSRunLoopCommonModes];
     // Live passes, again as soon as the last is done (a tick that finds one still running skips): the words
-    // the orb writes while you talk, a command's for its card, a hands-free session's pieces. None is typed:
-    // the field gets the words once, on release, as OpenWhispr types them. A release frees the engine of a
-    // pass that hasn't heard the end (speech.rs finish).
+    // the orb writes while you talk, a command's for its card, a hands-free session's pieces. A hold that types
+    // puts them in the field as they come too (typeLive), put right as they're heard again, and the finished
+    // words replace them on release. A release frees the engine of a pass that hasn't heard the end (speech.rs finish).
     self.draftTimer = [NSTimer timerWithTimeInterval:0.2 repeats:YES block:^(NSTimer *timer) { (void)timer; [weak draft]; }];
     [NSRunLoop.mainRunLoop addTimer:self.draftTimer forMode:NSRunLoopCommonModes];
   } else if (phase != TTVoiceListening) {
@@ -460,6 +469,10 @@ static void TTVoiceCopy(NSString *text) {
   [self stopCapture];
   self.audio = nil;
   if (self.request) dictate_cancel(self.request.UTF8String);
+  // A hold given up (Escape, nothing heard, an error) takes back what it typed live, unless the person has
+  // touched the field since.
+  if (self.live.length && !self.liveStopped) TTInsertEdit(self.live, @"", self.livePid, nil);
+  self.live = nil;
   [self settleTyped];
   self.request = nil; self.dictating = NO; self.noting = NO; self.commanding = NO; self.selection = nil; self.app = nil; self.sendAfter = NO;
   self.phase = TTVoiceIdle;
@@ -470,7 +483,7 @@ static void TTVoiceCopy(NSString *text) {
   if (self.typed.length) self.dictated = self.typingStopped ? nil : [(self.dictated ?: @"") stringByAppendingString:self.typed];
   [self forgetTyped];
 }
-- (void)forgetTyped { self.typed = nil; self.typingStopped = NO; self.lead = @""; }
+- (void)forgetTyped { self.typed = nil; self.typingStopped = NO; self.lead = @""; self.live = nil; self.liveHeard = nil; self.liveStopped = NO; }
 - (void)fail:(NSString *)message {
   [self cancel];
   dictate_ui_error(message.UTF8String);
@@ -720,18 +733,70 @@ static void TTVoicePlaySound(NSString *name, double volume) {
   self.request = nil; // not forgotten: Claude reads the hold's context while it works
   [self cancel];
 }
+// Whether a space goes before this hold's words in `field` of `app`: when they carry on from the last hold's,
+// which didn't end in one. Notes the field as the one this hold types into.
+- (void)leadFor:(id)field app:(pid_t)app {
+  BOOL continues = self.dictated.length && app == self.dictatedApp && TTVoiceSameField(field, self.dictatedField);
+  if (!continues) { self.dictated = nil; self.dictatedApp = app; self.dictatedField = field; }
+  BOOL spaced = !continues || [NSCharacterSet.whitespaceAndNewlineCharacterSet characterIsMember:[self.dictated characterAtIndex:self.dictated.length - 1]];
+  self.lead = spaced ? @"" : @" ";
+}
+// Live: the words go into the field as they're heard, once two passes in a row agree on them (text.rs
+// live_next): the field grows while the key is held, and a typed word is put right only when two passes in a
+// row hear it differently; what they still disagree on waits in the orb, and release puts the finished words
+// in place (insert:then:).
+// Only a hold that types, in the app it began in, into a field that shows what's typed; never once the
+// person has clicked or typed during it. Line breaks wait for the end: typed, one would press Return.
+- (void)typeLive:(NSString *)heard {
+  if (!self.dictating || self.noting || self.commanding || self.locked || self.liveStopped || self.phase != TTVoiceListening || !AXIsProcessTrusted()) return;
+  if (!self.live) {
+    pid_t app = NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier;
+    if (!self.app || app != self.app.processIdentifier) return;
+    id field = TTVoiceFocusedField();
+    if (!field || (app == getpid() && !TTVoiceTextField(field))) return;
+    CFTypeRef subrole = NULL;
+    BOOL secure = AXUIElementCopyAttributeValue((__bridge AXUIElementRef)field, kAXSubroleAttribute, &subrole) == kAXErrorSuccess && subrole && CFEqual(subrole, kAXSecureTextFieldSubrole);
+    if (subrole) CFRelease(subrole);
+    if (secure) { self.liveStopped = YES; return; } // a password field gets its words once, at the end
+    [self leadFor:field app:app];
+    self.live = @""; self.liveHeard = @""; self.livePid = app;
+  }
+  NSString *flat = [[heard componentsSeparatedByCharactersInSet:NSCharacterSet.newlineCharacterSet] componentsJoinedByString:@" "];
+  NSString *typed = self.live.length ? [self.live substringFromIndex:self.lead.length] : @"";
+  NSMutableData *next = [NSMutableData dataWithLength:32768];
+  size_t length = dictate_live_next(typed.UTF8String, self.liveHeard.UTF8String, flat.UTF8String, next.mutableBytes, next.length);
+  self.liveHeard = flat;
+  if (!length) return;
+  NSString *words = [[NSString alloc] initWithBytes:next.bytes length:length encoding:NSUTF8StringEncoding];
+  if (!words.length) return;
+  NSString *now = [self.lead stringByAppendingString:words];
+  TTInsertEdit(self.live, now, self.livePid, nil);
+  self.live = now;
+}
 // Dictation: puts `text` at the cursor of the app in front, once, pasted (or typed where pasting is unreliable,
 // insert.m). `then` runs on the main thread once the words are in, with how they went in and the app they went to.
+// After live typing, the field already holds the words as heard: they're put right into the finished ones,
+// in place, unless the person took the field over meanwhile (then it keeps what it has).
 - (void)insert:(NSString *)text then:(void (^)(TTInserted how, pid_t pid))then {
+  if (self.live) {
+    NSString *was = self.live;
+    pid_t pid = self.livePid;
+    self.live = nil; // given over: the cancel that follows takes nothing back
+    if (self.liveStopped) { self.typed = was; return; }
+    self.typed = [self.lead stringByAppendingString:text];
+    if (!TTInsertHasBreak(self.typed)) { TTInsertEdit(was, self.typed, pid, ^{ if (then) then(TTInsertTyped, pid); }); return; }
+    // A line break can't be typed: the words as heard go, and the finished ones are pasted.
+    NSString *words = self.typed;
+    NSRunningApplication *front = self.app;
+    TTInsertEdit(was, @"", pid, ^{ TTInsertText(words, pid, front.bundleIdentifier, ^(TTInserted how) { if (then) then(how, pid); }); });
+    return;
+  }
   pid_t app = NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier;
   // A click on the overlay brings this app forward for a moment: the words wait for theirs to come back.
   if (app == getpid() && self.app.processIdentifier != app) return;
   id field = TTVoiceFocusedField();
   if (app == getpid() && !TTVoiceTextField(field)) return;
-  BOOL continues = self.dictated.length && app == self.dictatedApp && TTVoiceSameField(field, self.dictatedField);
-  if (!continues) { self.dictated = nil; self.dictatedApp = app; self.dictatedField = field; }
-  BOOL spaced = !continues || [NSCharacterSet.whitespaceAndNewlineCharacterSet characterIsMember:[self.dictated characterAtIndex:self.dictated.length - 1]];
-  self.lead = spaced ? @"" : @" ";
+  [self leadFor:field app:app];
   self.typed = [self.lead stringByAppendingString:text];
   NSRunningApplication *front = NSWorkspace.sharedWorkspace.frontmostApplication;
   TTInsertText(self.typed, front.processIdentifier, front.bundleIdentifier, ^(TTInserted how) { if (then) then(how, front.processIdentifier); });
@@ -786,7 +851,9 @@ static void TTVoicePlaySound(NSString *name, double volume) {
   BOOL mouse = event.type == NSEventTypeLeftMouseDown || event.type == NSEventTypeRightMouseDown;
   if (mouse && inApp && event.window && event.window == TTVoiceOverlayWindow()) return NO; // the overlay's own buttons
   // Any click or key of the person's own after our words went in can move the caret.
-  if (event.type != NSEventTypeFlagsChanged) { if (self.typed.length) self.typingStopped = YES; self.dictated = nil; }
+  // Escape isn't one: it cancels the hold, which takes back what it typed live.
+  BOOL escape = event.type == NSEventTypeKeyDown && event.keyCode == 53;
+  if (event.type != NSEventTypeFlagsChanged) { if (self.typed.length) self.typingStopped = YES; if (self.live && !escape) self.liveStopped = YES; self.dictated = nil; }
   if (mouse) {
     // A click with the key down (a shift-click, a command-click) is a shortcut, as a key would be.
     if (self.enabled && self.pressed) {
@@ -1542,7 +1609,8 @@ void dictate_result_sends(const char *request, bool send) {
 }
 void dictate_draft_result(const char *request, const char *text) {
   if (![voice.request isEqual:@(request)] || voice.phase != TTVoiceListening) return;
-  dictate_ui_said(text, voice.dictating, true); // for the overlay only: the field gets the words once, on release
+  dictate_ui_said(text, voice.dictating, true); // the orb writes them too
+  [voice typeLive:@(text)];
 }
 // A note's step: what is transcribed for good can go from the buffer, and the piece still being said
 // is the preview.

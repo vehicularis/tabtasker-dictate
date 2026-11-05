@@ -1,50 +1,71 @@
-/* Setup: the whole window, a step at a time. The steps down the left as contents, the step beside them (its
-   count, title, why and the one thing to do, Back and Continue at its foot), and the stage on the right: a
-   picture of your screen, on the overlay's wallpaper, drawn with the app's real parts. The step keeps its
-   width and the stage takes the rest; under 760 px the stage goes under the step. */
-.onboarding { display: grid; grid-template-columns: 100px 316px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); column-gap: 24px; box-sizing: border-box; height: 100%; padding: 54px 16px 16px 28px; background: var(--window); }
+/* Setup: the whole window, a step at a time. The steps down the left, numbered; the step beside them (title,
+   why and the one thing to do, then Continue and Back right under it); and the stage on the right: a picture
+   of your screen, on the overlay's wallpaper, drawn with the app's real parts. The steps and the step share one
+   top edge that stays put from step to step, whatever each one holds: a fixed share of the window's spare
+   height above a block about 400 px tall, so a typical step sits a little above the middle. The step keeps
+   its width and the stage takes the rest; under 760 px the stage goes under the step. */
+.onboarding { display: grid; grid-template-columns: 132px 316px minmax(0, 1fr); grid-template-rows: clamp(0px, calc((100vh - 470px) * .43), 220px) minmax(0, 1fr); column-gap: 28px; box-sizing: border-box; height: 100%; padding: 54px 16px 16px 28px; background: var(--window); }
 .setup-leave { position: fixed; top: 7px; right: 12px; z-index: 2; }
 
-/* ---------- the contents: every step's name, the current one in ink, the finished ones ticked ---------- */
-.setup-toc { position: relative; z-index: 1; margin-top: -5px; }
-.setup-toc ol { display: flex; flex-direction: column; gap: 1px; margin: 0; padding: 0; list-style: none; }
-.setup-toc button { display: flex; align-items: center; gap: 5px; width: calc(100% + 8px); height: 26px; margin-left: -8px; padding: 0 8px 0 6px; border: 0; border-radius: 7px; font: 13px/1 var(--font); color: var(--ink-3); background: none; text-align: left; white-space: nowrap; cursor: pointer;
+/* ---------- the steps: a number in a ring each, a tick once done, the current one filled like Continue ---------- */
+.setup-toc { position: relative; z-index: 1; grid-row: 2; align-self: start; margin-top: -4px; }
+.setup-toc ol { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.setup-toc button { display: flex; align-items: center; gap: 10px; width: calc(100% + 12px); height: 34px; margin-left: -6px; padding: 0 8px 0 6px; border: 0; border-radius: var(--radius-row); font: 13px/1 var(--font); color: var(--ink-3); background: none; text-align: left; white-space: nowrap; cursor: pointer;
   transition: color var(--quick) var(--ease), background var(--quick) var(--ease); }
 .setup-toc button:hover { color: var(--ink); background: var(--surface-2); }
-.setup-toc button[data-done] { color: var(--ink-2); }
+.setup-toc li[data-done] button { color: var(--ink-2); }
 .setup-toc button[aria-current] { color: var(--ink); font-weight: 600; }
-.setup-tick { display: grid; flex: none; place-items: center; width: 14px; color: var(--success); }
+.setup-num { display: grid; flex: none; place-items: center; width: 20px; height: 20px; box-sizing: border-box; border-radius: 50%; font: 600 10.5px/1 var(--font); font-variant-numeric: tabular-nums; color: var(--ink-3); box-shadow: inset 0 0 0 1px var(--surface-3);
+  transition: color var(--quick) var(--ease), background var(--quick) var(--ease), box-shadow var(--quick) var(--ease); }
+.setup-toc li[data-done] .setup-num { color: var(--success); background: var(--success-fill); box-shadow: none; }
+.setup-toc button[aria-current] .setup-num { color: var(--on-accent); background: var(--accent-button); box-shadow: var(--elev-control); }
 
 /* ---------- the step ---------- */
-.setup-step { position: relative; z-index: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; animation: fade-in var(--quick) var(--ease) backwards, setup-in var(--slow) var(--ease) backwards; }
+/* The rhythm, the same on every step: title 12 · why · 24 · the things to do, 16 apart · 28 · Continue. */
+.setup-step { position: relative; z-index: 1; grid-row: 2; display: flex; flex-direction: column; min-width: 0; min-height: 0; animation: fade-in var(--quick) var(--ease) backwards, setup-in var(--slow) var(--ease) backwards; }
 @keyframes setup-in { from { translate: 0 calc(6px * var(--motion)); } }
 /* Room either side for the focus rings; a step taller than the window fades out at the edge it scrolls on toward. */
-.setup-scroll { flex: 1; min-height: 0; margin: 0 -8px; padding: 0 8px; overflow-y: auto; }
+.setup-scroll { flex: 0 1 auto; min-height: 0; margin: 0 -8px; padding: 0 8px; overflow-y: auto; }
 .setup-scroll[data-more='down'] { -webkit-mask: linear-gradient(#000 calc(100% - 32px), transparent); mask: linear-gradient(#000 calc(100% - 32px), transparent); }
 .setup-scroll[data-more='up'] { -webkit-mask: linear-gradient(transparent, #000 32px); mask: linear-gradient(transparent, #000 32px); }
 .setup-scroll[data-more='up down'] { -webkit-mask: linear-gradient(transparent, #000 32px, #000 calc(100% - 32px), transparent); mask: linear-gradient(transparent, #000 32px, #000 calc(100% - 32px), transparent); }
-.setup-body { display: flex; flex-direction: column; align-items: flex-start; padding-bottom: 16px; }
-.setup-count { margin: 0 0 12px; font-size: 13px; line-height: 16px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.setup-body { display: flex; flex-direction: column; align-items: flex-start; padding: 2px 0 4px; }
 .setup-body h1 { margin: 0 0 12px; font: 500 26px/1.2 var(--font-display); letter-spacing: -.015em; text-wrap: balance; }
 .setup-body h1:focus { outline: none; }
-/* Welcome: the app's icon beside its name, as an About window has it. */
-.setup-brand { display: flex; align-items: center; gap: 14px; }
-.setup-brand svg { flex: none; }
-.setup-why { max-width: 46ch; margin: 0 0 8px; font-size: 15px; line-height: 1.5; color: var(--ink-2); text-wrap: pretty; }
+/* Welcome: the app's name as About has it, over the step; and what it promises, each beside its glyph. */
+.setup-lockup { display: flex; align-items: center; gap: 8px; margin: 0 0 28px; font: 600 15px/1 var(--font-display); letter-spacing: -.01em; color: var(--ink); }
+.setup-lockup svg { display: block; }
+.setup-lockup i { font-style: normal; font-weight: 400; color: var(--ink-3); }
+.setup-facts { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.setup-facts li { display: flex; align-items: center; gap: 12px; font-size: 14px; line-height: 1.4; color: var(--ink-2); }
+.setup-facts svg { flex: none; }
+.setup-facts li[data-todo] svg { opacity: .45; }
+.setup-facts .link { font-size: inherit; color: var(--accent-ink); }
+/* Done: the app's done glyph, landing with a little spring. */
+.setup-done { display: block; margin: 0 0 20px; animation: fade-in var(--quick) var(--ease) 120ms backwards, setup-pop var(--pop) var(--spring) 120ms backwards; }
+.setup-done svg { display: block; }
+@keyframes setup-pop { from { scale: calc(1 - .35 * var(--motion)); } }
+.setup-why + .setup-why { margin-top: 8px; }
+.setup-why { max-width: 46ch; margin: 0; font-size: 15px; line-height: 1.5; color: var(--ink-2); text-wrap: pretty; }
 .setup-why .ui-kbd, .setup-status .ui-kbd { margin: 0 1px; }
-.setup-do { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; width: 100%; margin-top: 16px; }
+.setup-do { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; width: 100%; margin-top: 24px; }
 
 /* A button with a line beside it on what happens next. */
 .setup-action { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 .setup-hint { font-size: 13px; line-height: 1.45; color: var(--ink-3); }
-/* A control with its name, as in Settings but on the page rather than in a card: the name and the control on
-   one line, and the line about it under both, so it doesn't wrap into a column of its own. */
-.setup-row, .setup-rows li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 16px; row-gap: 2px; width: 100%; box-sizing: border-box; }
-.setup-row-text { display: contents; }
-.setup-row-title { grid-column: 1; font-size: 14px; font-weight: 500; line-height: 1.35; color: var(--ink); }
-.setup-row-detail { grid-column: 1 / -1; font-size: 12.5px; line-height: 1.4; color: var(--ink-2); }
-.setup-row > :not(.setup-row-text), .setup-row-control { grid-column: 2; grid-row: 1; }
-.setup-path { font-family: var(--font-mono); font-size: 11.5px; word-break: break-all; }
+/* A setting on the page: its name, the control the full width under it (a long microphone name still fits),
+   and the line about it. */
+.setup-field { display: flex; flex-direction: column; align-items: stretch; gap: 6px; width: 100%; }
+.setup-field-label { font-size: 13px; font-weight: 500; line-height: 1.35; color: var(--ink); }
+.setup-field .ui-select { width: 100%; max-width: none; }
+.setup-field .ui-segmented { display: flex; }
+.setup-field .ui-segmented button { flex: 1; }
+.setup-row-title { font-size: 14px; font-weight: 500; line-height: 1.35; color: var(--ink); }
+.setup-row-detail { font-size: 12.5px; line-height: 1.4; color: var(--ink-2); }
+.setup-row-control { grid-column: 2; grid-row: 1; }
+/* A path breaks after a slash (Extras puts a <wbr> there, and glues each name's spaces with word joiners, since a
+   "|" is a break of its own), and mid-name only when one name is too long for the line. */
+.setup-path { font-family: var(--font-mono); font-size: 11.5px; overflow-wrap: break-word; }
 .setup-download { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%; }
 .setup-download .ui-progress { width: 100%; margin: 4px 0 2px; }
 .setup-download .ui-button { margin-top: 6px; }
@@ -55,10 +76,18 @@
 .setup-howto li::before { content: counter(howto); display: grid; flex: none; place-items: center; width: 20px; height: 20px; border-radius: 50%; font-size: 11px; font-weight: 600; line-height: 20px; color: var(--ink); background: var(--secondary); box-shadow: var(--elev-raised); }
 .setup-howto b, .setup-callout b { font-weight: 600; color: var(--ink); }
 
-.setup-status { min-height: 24px; margin: 0; font-size: 14px; line-height: 1.6; color: var(--ink-2); }
-.setup-status[data-ok] { font-weight: 500; color: var(--ink); }
-.setup-status > .ui-icon { display: inline-block; margin-right: 6px; vertical-align: -3px; color: var(--success); }
-.setup-note { margin: 0; font-size: 13px; line-height: 1.45; color: var(--ink-3); }
+/* Try it now: a panel with a light that waits, glows while the key is held, and turns into a tick. */
+.setup-status { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 46px; box-sizing: border-box; margin: 0; padding: 9px 14px; border-radius: var(--radius-row); font-size: 13.5px; line-height: 1.45; color: var(--ink-2); background: var(--surface); box-shadow: var(--elev-well); }
+.setup-status[data-ok] { color: var(--ink); background: var(--success-fill); box-shadow: none; }
+.setup-status > .ui-icon { flex: none; color: var(--success); }
+.setup-light { flex: none; width: 8px; height: 8px; margin: 0 4px; border-radius: 50%; background: var(--surface-3); transition: background var(--quick) var(--ease), box-shadow var(--quick) var(--ease); }
+.setup-status[data-live] { color: var(--ink); }
+.setup-status[data-live] .setup-light { background: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent); }
+/* The fine print, together. */
+.setup-notes { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; font-size: 12.5px; line-height: 1.45; color: var(--ink-3); }
+.setup-notes:empty { display: none; }
+.setup-notes .link { color: var(--accent-ink); }
+.setup-note { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--ink-3); }
 .setup-note .link { color: var(--accent-ink); }
 .setup-callout { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; font-size: 13.5px; line-height: 1.45; color: var(--ink-2); }
 .setup-callout p { margin: 0; }
@@ -71,19 +100,17 @@
 .setup-buttons li:focus-visible { outline-offset: -2px; }
 .setup-mark, .setup-marks b { display: inline-grid; flex: none; place-items: center; width: 20px; height: 20px; border-radius: 50%; font: 600 11px/1 var(--font); font-variant-numeric: tabular-nums; color: var(--on-accent); background: var(--accent-button); transition: opacity var(--quick) var(--ease); }
 
-/* The extras: plain rows, the one the stage shows picked out. */
-.setup-rows { display: flex; flex-direction: column; gap: 2px; width: calc(100% + 24px); margin: -6px -12px 0; padding: 0; list-style: none; }
-.setup-rows li { padding: 10px 12px 11px; border-radius: var(--radius-row); transition: background var(--quick) var(--ease); }
-.setup-rows li[data-shown] { background: var(--surface); }
-.setup-row-control { display: flex; align-items: center; gap: 8px; }
-.setup-more { grid-column: 1 / -1; justify-self: start; margin-top: 3px; font-size: 12.5px; }
+/* The extras: Settings' own tiles, the one the stage shows a shade deeper. */
+.setup-extras { width: 100%; }
+.setup-extras .ui-tile { transition: background var(--quick) var(--ease); }
+.setup-extras [data-shown] .ui-tile { background: color-mix(in srgb, var(--card), var(--ink) 4%); }
+.setup-extras .detail .link { font-size: inherit; color: var(--accent-ink); }
 
-/* ---------- Back and Continue, at the foot of the step ---------- */
-.setup-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 12px; }
-.setup-nav .end { display: flex; gap: 8px; }
+/* ---------- Continue, then Back, right under the step ---------- */
+.setup-nav { display: flex; flex: none; align-items: center; gap: 8px; padding-top: 24px; } /* + the body's 4 */
 
 /* ---------- the stage: your screen, in a well, with a line under it ---------- */
-.setup-stage { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 0; margin: -6px 0 0 12px; animation: fade-in var(--slow) var(--ease) backwards; }
+.setup-stage { position: relative; z-index: 1; grid-row: 1 / -1; grid-column: 3; display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 0; margin: -6px 0 0 12px; animation: fade-in var(--slow) var(--ease) backwards; }
 .setup-screen { --desk: var(--wallpaper); position: relative; flex: 1; min-height: 0; overflow: hidden; border-radius: var(--radius-section); background: var(--wallpaper); box-shadow: var(--elev-well); }
 .setup-stage figcaption { min-height: 19px; margin: 0; padding: 0 4px; font-size: 13px; line-height: 1.45; color: var(--ink-2); text-wrap: pretty; }
 /* The field's cursor blinks as a Mac's does; still under reduced motion. The words that land fade in where it is. */
@@ -98,12 +125,14 @@
 
 /* The dots, opened, a number over each button (32 px, 4 px apart, 4 px in: overlay.css's pill), on a stalk down to it. */
 .setup-pill { position: absolute; inset: 0; }
-.setup-marks { position: absolute; left: 50%; bottom: 52px; display: flex; gap: 4px; margin: 0; padding: 0 4px; list-style: none; translate: -50% 0; }
-.setup-marks li { display: flex; flex-direction: column; align-items: center; gap: 0; width: 32px; transition: opacity var(--quick) var(--ease); }
+/* Each number sits on its button's middle as measured (usePillMarks), its stalk stopping 3 px short of the pill. */
+.setup-marks { position: absolute; left: 0; right: 0; height: 0; margin: 0 0 3px; padding: 0; list-style: none; }
+.setup-marks li { position: absolute; bottom: 0; display: flex; flex-direction: column; align-items: center; translate: -50% 0; transition: opacity var(--quick) var(--ease); }
 .setup-marks li::after { content: ''; width: 1.25px; height: 14px; background: var(--accent); }
 .setup-marks li[data-dim] { opacity: .25; }
-.setup-pill[data-active='0'] .pill button:nth-child(1), .setup-pill[data-active='1'] .pill button:nth-child(2), .setup-pill[data-active='2'] .pill button:nth-child(3),
-.setup-pill[data-active='3'] .pill button:nth-child(4), .setup-pill[data-active='4'] .pill button:nth-child(5), .setup-pill[data-active='5'] .pill button:nth-child(6) { background: var(--surface-3); }
+/* Each button sits in a span of its own after the grip (Dock), so the n-th span holds the n-th button. */
+.setup-pill[data-active='0'] .pill > span:nth-of-type(1) > button, .setup-pill[data-active='1'] .pill > span:nth-of-type(2) > button, .setup-pill[data-active='2'] .pill > span:nth-of-type(3) > button,
+.setup-pill[data-active='3'] .pill > span:nth-of-type(4) > button, .setup-pill[data-active='4'] .pill > span:nth-of-type(5) > button, .setup-pill[data-active='5'] .pill > span:nth-of-type(6) > button { background: var(--surface-3); }
 
 /* The practice box: the other app's field holds a real one. */
 .setup-practice { display: block; width: 100%; min-height: 92px; box-sizing: border-box; margin: 0; padding: 0; border: 0; resize: none; font: 17px/1.45 var(--font); color: var(--ink); background: none; }
@@ -138,7 +167,7 @@
 .setup-cap b { position: absolute; top: 5px; right: 6px; font-size: 11px; font-weight: 500; }
 .setup-cap span { position: absolute; bottom: 5px; left: 5px; font-size: 8.5px; letter-spacing: -.01em; }
 .setup-cap[data-letter] b { position: static; font-size: 12px; }
-.setup-cap[data-chosen] { color: var(--accent-ink); box-shadow: var(--elev-raised), inset 0 0 0 1.5px var(--accent); }
+.setup-cap[data-chosen] { color: var(--ink); background: color-mix(in srgb, var(--card), var(--accent) 16%); }
 .setup-cap[data-chosen] b { font-weight: 700; }
 .setup-cap[data-down] { color: var(--on-accent); background: var(--accent-button); box-shadow: var(--elev-control); transform: translateY(1px); }
 /* The arrow keys, half height: ◀ and ▶ at the bottom, ▲ over ▼ between them. */

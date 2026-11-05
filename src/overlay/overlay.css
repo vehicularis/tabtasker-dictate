@@ -7,7 +7,7 @@
   --key: linear-gradient(#ffffff, #f1f1f3); --key-ink: rgb(0 0 0 / .55); --key-edge: rgb(0 0 0 / .14); --key-light: rgb(255 255 255 / .9);
   /* The orb as Business draws it: a smoked disc under glass, the bars and wave in its ink, the cursor too. */
   --orb-body: rgb(250 249 247 / .94); --orb-ink: #1d1d1f; --orb-bars: #1d1d1f; --orb-wave: #1d1d1f;
-  --wallpaper: radial-gradient(120% 90% at 20% 10%, #dfe7f5, #f3eee8 60%);
+  --wallpaper: radial-gradient(120% 90% at 20% 10%, #f0f0f1, #e3e3e5 60%);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
@@ -15,7 +15,7 @@
     --well: rgb(0 0 0 / .24); --well-shadow: rgb(0 0 0 / .35);
     --key: linear-gradient(#2d2e31, #232427); --key-ink: rgb(255 255 255 / .6); --key-edge: rgb(0 0 0 / .5); --key-light: rgb(255 255 255 / .08);
     --orb-body: rgb(22 22 25 / .92); --orb-ink: #f4efe6; --orb-bars: #f4efe6; --orb-wave: #f4efe6;
-    --wallpaper: radial-gradient(120% 90% at 20% 10%, #3b4a6b, #161a24 60%), #161a24;
+    --wallpaper: radial-gradient(120% 90% at 20% 10%, #4a4b50, #18181b 60%), #18181b;
   }
 }
 :root[data-theme='dark'] {
@@ -23,7 +23,7 @@
   --well: rgb(0 0 0 / .24); --well-shadow: rgb(0 0 0 / .35);
   --key: linear-gradient(#2d2e31, #232427); --key-ink: rgb(255 255 255 / .6); --key-edge: rgb(0 0 0 / .5); --key-light: rgb(255 255 255 / .08);
   --orb-body: rgb(22 22 25 / .92); --orb-ink: #f4efe6; --orb-bars: #f4efe6; --orb-wave: #f4efe6;
-  --wallpaper: radial-gradient(120% 90% at 20% 10%, #3b4a6b, #161a24 60%), #161a24;
+  --wallpaper: radial-gradient(120% 90% at 20% 10%, #4a4b50, #18181b 60%), #18181b;
 }
 /* The page's own rules (html, body, focus) live in page.css, so this file can be borrowed by the Help page for a real pill and orb. */
 

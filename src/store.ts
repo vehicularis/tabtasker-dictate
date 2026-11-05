@@ -19,6 +19,7 @@ export type Keep = 'off' | 'day' | 'week' | 'month' | 'forever';
 export type Theme = 'system' | 'light' | 'dark';
 export type Edge = 'bottom' | 'left' | 'right';
 export type Size = 'small' | 'medium' | 'large';
+export const SIZES: { value: Size; label: string }[] = [{ value: 'small', label: 'Small' }, { value: 'medium', label: 'Medium' }, { value: 'large', label: 'Large' }];
 export type AppStyle = { bundleId: string; name: string; style: Style; polish: boolean; send?: boolean | null };
 /// Apps where Return follows the words unless the app's style says otherwise (settings.rs CHAT_APPS).
 const CHAT_APPS = ['com.tinyspeck.slackmacgap', 'com.apple.MobileSMS', 'net.whatsapp.WhatsApp', 'com.microsoft.teams2', 'com.microsoft.teams', 'ru.keepcoder.Telegram', 'com.tdesktop.Telegram', 'com.hnc.Discord', 'com.facebook.archon', 'com.signal.desktop'];

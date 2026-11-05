@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ComponentType, type CSSProperties, type ReactNode, type RefObject } from 'react';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, type ComponentType, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { closeWindow, invoke, listen } from '../bridge';
 import { message } from '../lib/errors';
 import { COMMAND_GLYPHS, GLOBE, KEY_NAMES } from '../lib/keyNames';
@@ -8,15 +8,16 @@ import { Claude } from '../app/settings/Claude';
 import { Meetings } from '../app/settings/Meetings';
 import { Notes } from '../app/settings/Notes';
 import { aiIcon, aiName, setupDone, tilde, updateSettings, useSettings, useStatus, type DictateKey, type PageProps, type Patch, type Settings, type Status } from '../store';
-import { Button, Icon, Kbd, ProgressBar, reduced, Segmented, Select, Toast, Toggle } from '../ui';
+import { Button, Icon, Kbd, ProgressBar, reduced, Segmented, Select, Tile, TileGroup, Toast, Toggle } from '../ui';
 import { Logo } from '../overlay/icons';
+import { AccessGlyph, DownloadGlyph, ICON_GLYPHS } from '../overlay/glyphs';
 import { Globe, Keyboard } from './Keyboard';
 import '../overlay/command-card.css';
 import '../overlay/meeting-pill.css';
 import './onboarding.css';
 
-// The first run, a step at a time, in the whole window. The steps down the left as a list of contents; the
-// step beside it (what it's for, the one thing to do, Back and Continue); and on the right the stage, a
+// The first run, a step at a time, in the whole window. The steps down the left, numbered; the step beside
+// them (what it's for, the one thing to do, then Continue and Back under it); and on the right the stage, a
 // picture of your screen drawn with the app's real parts (demo/), showing what the step is about. Each
 // permission step shows what macOS says right now (polled while it is open) and never dead-ends: it says
 // what to click in System Settings and opens it, and every step can be skipped and finished later.
@@ -63,9 +64,9 @@ function useDictateKey(chosen: DictateKey | undefined): Key {
 type Sheet = 'claude' | 'meetings' | 'notes';
 const SHEETS: Record<Sheet, [string, ComponentType<PageProps>]> = { claude: ['AI', Claude], meetings: ['Meetings', Meetings], notes: ['Notes', Notes] };
 
-/// The frame Onboarding puts round every step: its count, Back and Continue, and the part that scrolls (for
-/// the fade at the edge it scrolls on toward).
-type Frame = { count: string; nav: ReactNode; scroll: RefObject<HTMLDivElement | null> };
+/// The frame Onboarding puts round every step: Continue and Back, and the part that scrolls (for the fade at
+/// the edge it scrolls on toward).
+type Frame = { nav: ReactNode; scroll: RefObject<HTMLDivElement | null> };
 type Step = {
   status: Status; settings: Settings; update: (patch: Patch) => Promise<Settings | undefined>; dictateKey: Key;
   practiced: boolean; onPracticed: () => void; go: (id: StepId) => void; open: (sheet: Sheet) => void; frame: Frame;
@@ -74,7 +75,8 @@ type Step = {
 export function Onboarding() {
   const settings = useSettings();
   const [status] = useStatus(1000);
-  const [at, setAt] = useState(0);
+  // `?step=key` opens on that step: the lab (lab.html) shows each one at once. The app never passes it.
+  const [at, setAt] = useState(() => Math.max(0, STEPS.findIndex(({ id }) => id === new URLSearchParams(location.search).get('step'))));
   const [practiced, setPracticed] = useState<DictateKey | null>(null);
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -125,31 +127,27 @@ export function Onboarding() {
   const done = (id: StepId, i: number) => ready(id) && (i < at || !['welcome', 'dots', 'extras', 'done'].includes(id));
   const last = at === STEPS.length - 1;
   const finished = setupDone(status);
+  // The way on first, under the step's own words where the eye already is, so it stays put from step to step.
   const nav = <footer className="setup-nav">
-    {at > 0 ? <Button variant="quiet" onClick={() => setAt(at - 1)}>Back</Button> : <span />}
-    <span className="end">
-      {last ? <>
-        <Button onClick={() => { location.hash = 'settings'; }}>Open Settings</Button>
-        <Button variant="primary" onClick={closeWindow}>{finished ? 'Start dictating' : 'Close'}</Button>
-      </> : ready(step.id)
-        ? <Button variant="primary" onClick={() => setAt(at + 1)}>{at === 0 ? 'Start' : 'Continue'}</Button>
-        : <Button onClick={() => setAt(at + 1)}>Skip for now</Button>}
-    </span>
+    {last ? <Button variant="primary" onClick={closeWindow}>{finished ? 'Start dictating' : 'Close'}</Button> : ready(step.id)
+      ? <Button variant="primary" onClick={() => setAt(at + 1)}>{at === 0 ? 'Get started' : 'Continue'}</Button>
+      : <Button onClick={() => setAt(at + 1)}>Skip for now</Button>}
+    {at > 0 && <Button variant="quiet" onClick={() => setAt(at - 1)}>Back</Button>}
   </footer>;
   const props: Step = { status, settings, update, dictateKey, practiced: practiced === chosen, onPracticed: () => setPracticed(chosen), go, open: setSheet,
-    frame: { count: `${at + 1} of ${STEPS.length}`, nav, scroll } };
+    frame: { nav, scroll } };
   const Body = BODIES[step.id];
 
   return <div className="onboarding">
     <div className="titlebar" data-tauri-drag-region />
-    {!last && <Button variant="quiet" small className="setup-leave" onClick={() => { location.hash = 'settings'; }}>Open Settings</Button>}
+    <Button variant="quiet" small className="setup-leave" onClick={() => { location.hash = 'settings'; }}>Open Settings</Button>
     <nav className="setup-toc" aria-label="Setup steps">
       <ol>
         {STEPS.map((candidate, i) => {
           const tick = done(candidate.id, i);
-          return <li key={candidate.id}>
-            <button type="button" aria-label={`${candidate.name}${tick ? ', done' : ''}`} aria-current={i === at ? 'step' : undefined} data-done={tick || undefined} onClick={() => setAt(i)}>
-              <span className="setup-tick">{tick && <Icon name="check" size={14} />}</span>{candidate.name}
+          return <li key={candidate.id} data-done={tick || undefined}>
+            <button type="button" aria-label={`${candidate.name}${tick ? ', done' : ''}`} aria-current={i === at ? 'step' : undefined} onClick={() => setAt(i)}>
+              <span className="setup-num" aria-hidden>{tick ? <Icon name="check" size={12} /> : i + 1}</span>{candidate.name}
             </button>
           </li>;
         })}
@@ -163,17 +161,17 @@ export function Onboarding() {
 
 // ---------- the step and its stage ----------
 
-/// One step: on the left its count, title, why and the one thing to do (`children`), then Back and Continue;
+/// One step: on the left its title, why and the one thing to do (`children`), then Continue and Back;
 /// on the right the stage and a line naming what's on it. The stage is a picture, kept from the keyboard and
 /// VoiceOver, unless it's `live` (the practice box, the keys you'll press).
-function Split({ frame, title, why, children, stage, caption, live = false }: {
-  frame: Frame; title: ReactNode; why: ReactNode; children?: ReactNode; stage: ReactNode; caption: ReactNode; live?: boolean;
+function Split({ frame, lead, title, why, children, stage, caption, live = false }: {
+  frame: Frame; lead?: ReactNode; title: ReactNode; why: ReactNode; children?: ReactNode; stage: ReactNode; caption: ReactNode; live?: boolean;
 }) {
   return <>
     <main className="setup-step" aria-labelledby="setup-title">
       <div ref={frame.scroll} className="setup-scroll">
         <div className="setup-body">
-          <p className="setup-count">{frame.count}</p>
+          {lead}
           <h1 id="setup-title" tabIndex={-1}>{title}</h1>
           {why}
           {children && <div className="setup-do">{children}</div>}
@@ -229,6 +227,7 @@ function Zoom({ width, height, min = 0, max = 1.5, lean, children }: { width?: n
 const FIELD: CSSProperties = { left: '50%', top: '34%', width: 'min(400px, calc(100% - 48px))', transform: 'translateX(-50%)' };
 const BOTTOM: CSSProperties = { left: 0, right: 0, bottom: 0, height: 160 };
 const SAID = 'Thursday works. Can we take the bigger room?';
+const MicGlyph = ICON_GLYPHS.mic!, ShieldGlyph = ICON_GLYPHS.shield!, KeyGlyph = ICON_GLYPHS.keyboard!, DoneGlyph = ICON_GLYPHS.check!;
 const WORDS = SAID.split(' ');
 
 // ---------- the steps ----------
@@ -239,16 +238,19 @@ function Welcome({ settings, frame }: Step) {
   const t = useLoop(8400, 5200);
   const mode = t >= 900 && t < 3700 ? 'listening' : t >= 3700 && t < 4200 ? 'thinking' : 'idle';
   const said = mode === 'listening' && t >= 1100 ? WORDS.slice(0, Math.floor((t - 1100) / 260) + 1).join(' ') : '';
-  return <Split frame={frame} title={<span className="setup-brand"><Logo size={44} /><span>Welcome to TabTasker | Dictate</span></span>}
-    why={<>
-      <Why>Hold {KEY_NAMES[settings.shortcuts.dictate]} and talk. When you let go, what you said is typed wherever your cursor is.</Why>
-      <Why>Everything happens on your Mac, so your voice never leaves it, and there’s no account to make.</Why>
-    </>}
+  return <Split frame={frame} lead={<p className="setup-lockup"><Logo size={26} /><span>TabTasker</span><i>|</i><span>Dictate</span></p>}
+    title="Talk instead of typing"
+    why={<Why>Hold <Kbd>{KEY_NAMES[settings.shortcuts.dictate]}</Kbd> in any app, say what you want to write, and let go.</Why>}
     stage={<Desk>
       <Field label="Message to Maria" style={FIELD}><p className="demo-typed">{t >= 4200 && t < 7800 && <span className="setup-landed">{SAID}</span>}<Caret /></p></Field>
       <Dots mode={mode} typing words={said} still={reduced()} at={BOTTOM} />
     </Desk>}
-    caption="The pill at the edge of your screen turns into the orb while you talk." />;
+    caption="The pill at the edge of your screen turns into the orb while you talk.">
+    <ul className="setup-facts">
+      <li><MicGlyph size={28} />Speech recognition runs on your Mac.</li>
+      <li><ShieldGlyph size={28} />You don’t need an account.</li>
+    </ul>
+  </Split>;
 }
 
 function Microphone({ status, frame }: Step) {
@@ -261,11 +263,10 @@ function Microphone({ status, frame }: Step) {
     caption="The orb shows up while Dictate is listening and turns back into the pill when you let go.">
     {mic === 'allowed' ? <>
       <Allowed>Allowed</Allowed>
-      <div className="setup-row">
-        <span className="setup-row-text"><span className="setup-row-title">Listen with</span><span className="setup-row-detail">{problem ?? `Right now that’s ${status.inputInUse}.`}</span></span>
+      <Setting label="Listen with" detail={problem ?? `Right now that’s ${status.inputInUse}.`}>
         <Select label="Microphone" value={status.input ?? ''} options={[{ value: '', label: 'Automatic' }, ...status.inputs.map(input => ({ value: input.id, label: input.name }))]}
           onChange={id => { setProblem(null); void invoke('set_input', { id: id || null }).catch(() => setProblem('Couldn’t switch to that microphone. Try again.')); }} />
-      </div>
+      </Setting>
     </> : <>
       <span className="setup-action">
         <Button variant="primary" onClick={() => ask('microphone')}>{mic === 'denied' ? 'Open System Settings' : 'Allow microphone'}</Button>
@@ -313,24 +314,26 @@ function ChooseKey({ status, settings, update, dictateKey, go, frame }: Step) {
   const chosen = settings.shortcuts.dictate;
   const name = KEY_NAMES[chosen];
   const globe = chosen === 'fn' && status.globeKey ? GLOBE[status.globeKey] : null;
-  return <Split frame={frame} title="Choose your key" why={<Why>Hold it while you talk and let go when you’re done. Pick the one that’s easiest for you to reach.</Why>}
+  return <Split frame={frame} title="Choose your key" why={<Why>Hold it while you talk. Pick the one that’s easiest to reach.</Why>}
     stage={<Zoom min={.72} max={1.25} lean={chosen === 'fn' ? 'start' : 'end'}><Keyboard chosen={chosen} down={dictateKey.down} /></Zoom>}
-    caption={dictateKey.down ? 'It lights up for as long as you hold it.' : `Your key is ringed. Hold ${name} and it lights up.`}>
+    caption={dictateKey.down ? 'It lights up for as long as you hold it.' : `Your key is shaded. Hold ${name} and it lights up.`}>
     <Segmented label="Key to hold" value={chosen} options={KEY_OPTIONS} onChange={dictate => void update({ shortcuts: { dictate } })} />
-    <p className="setup-status" role="status" data-ok={dictateKey.tested || undefined}>
-      {dictateKey.tested ? <><Icon name="check" size={16} />That works. Hold <Kbd>{name}</Kbd> whenever you want to talk.</>
+    <Check ok={dictateKey.tested} live={dictateKey.down}>
+      {dictateKey.tested ? <>That works. Hold <Kbd>{name}</Kbd> whenever you want to talk.</>
         : dictateKey.down ? 'Keep holding, then let go.'
-        : <>Hold <Kbd>{name}</Kbd> for a moment, then let go to try it.</>}
-    </p>
+        : <>Hold <Kbd>{name}</Kbd> for a moment, then let go.</>}
+    </Check>
     {globe && <div className="setup-callout">
       <p><b>Your globe key {globe}.</b> That gets in the way of fn, so set <b>Press <Globe size={11} /> key to</b> to <b>Do Nothing</b>.</p>
       <Button onClick={() => ask('keyboard')}>Open Keyboard Settings</Button>
     </div>}
-    {/* Dictate takes over the globe key's own shortcut itself; the warning above is for when it can't. */}
-    {chosen === 'fn' && !globe && <p className="setup-note">While fn is your key, Dictate turns off <Globe size={11} />’s own shortcut and puts it back when you quit.</p>}
-    {chosen === 'rightControl' && <p className="setup-note">Only some external keyboards have a right ⌃, since Apple’s put the arrow keys there.</p>}
-    {!status.accessibility ? <p className="setup-note">Until Accessibility is on, your key only works while this window is in front. <button type="button" className="link" onClick={() => go('accessibility')}>Turn it on</button></p>
-      : settings.shortcuts.handsFree && <p className="setup-note">You can also double-tap it to keep listening without holding, then tap again to finish.</p>}
+    <ul className="setup-notes">
+      {/* Dictate takes over the globe key's own shortcut itself; the warning above is for when it can't. */}
+      {chosen === 'fn' && !globe && <li>Dictate turns off <Globe size={11} />’s own shortcut while fn is your key, and puts it back when you quit.</li>}
+      {chosen === 'rightControl' && <li>Only some external keyboards have a right ⌃. Apple’s put the arrow keys there.</li>}
+      {!status.accessibility ? <li>Until Accessibility is on, your key only works while this window is in front. <button type="button" className="link" onClick={() => go('accessibility')}>Turn it on</button></li>
+        : settings.shortcuts.handsFree && <li>Double-tap it to talk without holding, and tap once more to finish.</li>}
+    </ul>
   </Split>;
 }
 
@@ -351,17 +354,15 @@ function Model({ status, settings, update, frame }: Step) {
   const loading = status.enabled && preparing && !ready;
   const t = useLoop(5200, 2600);
   const mode = !ready ? 'idle' : t >= 800 && t < 2200 ? 'listening' : t >= 2200 && t < 4000 ? 'thinking' : 'idle';
-  return <Split frame={frame} title="Speech model" why={<Why>This is what turns your voice into text, right on your Mac. It downloads once and works offline after that.</Why>}
+  return <Split frame={frame} title="Speech model" why={<Why>It turns your voice into text, right on your Mac. It downloads once, then works offline.</Why>}
     stage={<Zoom width={200} height={84} max={1.6}><Dots mode={mode} loading={loading} still={reduced()} at={{ inset: 0 }} /></Zoom>}
     caption={loading ? 'While it gets ready, the pill on your screen pulses.' : ready ? 'When you let go, the orb’s wave is your Mac turning what you said into text.' : 'Once it’s downloaded, the pill is all you’ll see until you hold your key.'}>
-    <div className="setup-row">
-      <span className="setup-row-text"><span className="setup-row-title">Language</span><span className="setup-row-detail">Choosing yours helps it get the first few words right.</span></span>
+    <Setting label="Language" detail="Choosing yours helps it get the first few words right.">
       <Select label="Language" value={language} options={languages} onChange={next => void update({ dictation: { language: next } })} />
-    </div>
-    <div className="setup-row">
-      <span className="setup-row-text"><span className="setup-row-title">Model</span><span className="setup-row-detail">{model === 'turbo' ? 'It’s the most accurate, at about 875 MB to download.' : 'It’s faster and lighter, but a little less accurate.'}</span></span>
+    </Setting>
+    <Setting label="Model" detail={model === 'turbo' ? 'The most accurate, about 875 MB to download.' : 'Faster and lighter, a little less accurate.'}>
       <Segmented label="Model" value={model} options={[{ value: 'turbo', label: 'Turbo' }, { value: 'small', label: 'Small' }]} onChange={next => void update({ dictation: { model: next } })} />
-    </div>
+    </Setting>
     {ready ? <Allowed>Ready</Allowed> : <div className="setup-download">
       <span className="setup-row-title">{preparing ? (/download/i.test(status.modelMessage) ? 'Downloading' : 'Getting it ready') : stalled ? 'The download stopped' : status.modelMessage ? 'Dictation is paused' : 'Not downloaded yet'}</span>
       {preparing && <ProgressBar label="Speech model download" value={Number.isNaN(percent) ? null : percent / 100} />}
@@ -381,13 +382,40 @@ const PILL_ROWS: [string, string][] = [
   ['Settings', 'Opens Settings, where you choose which of these buttons show.'],
 ];
 
+/// Where each of the pill's buttons is drawn, in the pill's own pixels: the middle of each, and how far the bar's
+/// top edge is from the pill's foot. Read off the screen (the dock is centred with a translate, which layout
+/// offsets don't see) and divided by the stage's zoom: again whenever Zoom places or rescales the scene, and
+/// once the pill has finished opening.
+function usePillMarks(host: RefObject<HTMLDivElement | null>) {
+  const [marks, setMarks] = useState<{ x: number[]; bottom: number } | null>(null);
+  useLayoutEffect(() => {
+    const pill = host.current;
+    if (!pill) return;
+    const place = () => {
+      const box = pill.getBoundingClientRect(), scale = box.width / pill.offsetWidth;
+      const bar = pill.querySelector<HTMLElement>('.pill'), buttons = [...pill.querySelectorAll<HTMLElement>('.pill button')];
+      if (!bar || !buttons.length || !scale) return; // the stage's zoom isn't placed yet
+      setMarks({ x: buttons.map(button => { const at = button.getBoundingClientRect(); return (at.left + at.width / 2 - box.left) / scale; }), bottom: (box.bottom - bar.getBoundingClientRect().top) / scale });
+    };
+    const watch = new ResizeObserver(place), zoomed = new MutationObserver(place);
+    watch.observe(pill);
+    const scene = pill.closest('.setup-scene');
+    if (scene) zoomed.observe(scene, { attributes: true, attributeFilter: ['style'] });
+    pill.addEventListener('transitionend', place);
+    return () => { watch.disconnect(); zoomed.disconnect(); pill.removeEventListener('transitionend', place); };
+  }, [host]);
+  return marks;
+}
+
 function TheDots({ frame }: Step) {
   const [active, setActive] = useState<number | null>(null);
+  const pill = useRef<HTMLDivElement>(null);
+  const marks = usePillMarks(pill);
   return <Split frame={frame} title="The pill" why={<Why>It sits at the edge of your screen and opens into buttons when you point at it.</Why>}
     stage={<Zoom width={320} height={110} max={1.7}>
-      <div className="setup-pill" data-active={active ?? undefined}>
+      <div ref={pill} className="setup-pill" data-active={active ?? undefined}>
         <Dots mode="hover" at={{ inset: 0 }} />
-        <ol className="setup-marks">{PILL_ROWS.map(([title], i) => <li key={title} data-dim={(active !== null && active !== i) || undefined}><b>{i + 1}</b></li>)}</ol>
+        {marks && <ol className="setup-marks" style={{ bottom: marks.bottom }}>{PILL_ROWS.map(([title], i) => <li key={title} style={{ left: marks.x[i] }} data-dim={(active !== null && active !== i) || undefined}><b>{i + 1}</b></li>)}</ol>}
       </div>
     </Zoom>}
     caption={active === null ? 'When you point at the pill, it opens into these buttons.' : PILL_ROWS[active][1]}>
@@ -425,10 +453,10 @@ function TryIt({ status, settings, dictateKey, practiced, onPracticed, go, frame
   </Desk>;
   return <Split frame={frame} title="Try it" live stage={stage} caption="This box stands in for any app you type in."
     why={<Why>{needs.length ? 'Finish what’s left, then you can practise here.' : <>Click in the box, hold <Kbd>{name}</Kbd> and say something, then let go.</>}</Why>}>
-    {needs.length ? <Left needs={needs} go={go} /> : <p className="setup-status" role="status" data-ok={practiced || undefined}>
-      {practiced ? <><Icon name="check" size={16} />That’s it. It works the same way in every app.</>
+    {needs.length ? <Left needs={needs} go={go} /> : <Check ok={practiced} live={dictateKey.down}>
+      {practiced ? 'That’s it. It works the same way in every app.'
         : dictateKey.down ? 'Listening…' : 'Try saying “Remind me to call Maria at three tomorrow.”'}
-    </p>}
+    </Check>}
   </Split>;
 }
 
@@ -442,25 +470,20 @@ function Extras({ status, settings, update, open, frame }: Step) {
   const [shown, setShown] = useState<Sheet>('claude');
   const connected = settings.claude.enabled;
   const row = (id: Sheet) => ({ onPointerEnter: () => setShown(id), onFocus: () => setShown(id), 'data-shown': shown === id || undefined });
-  return <Split frame={frame} title="Extras" why={<Why>These are all optional, and you’ll find them in Settings later too.</Why>}
+  return <Split frame={frame} title="Extras" why={<Why>These are optional, and they’re in Settings too.</Why>}
     stage={<Zoom width={420} height={shown === 'claude' ? 270 : 110} max={1.3}><Dots mode="idle" at={{ inset: 0 }}><Extra shown={shown} /></Dots></Zoom>}
     caption={EXTRA_CAPTIONS[shown]}>
-    <ul className="setup-rows">
-      <li {...row('claude')}>
-        <span className="setup-row-text"><span className="setup-row-title">Connect AI</span>{!connected && <span className="setup-row-detail">Ask it questions, or let it tidy up what you say.</span>}</span>
-        <span className="setup-row-control">{connected && <Allowed>Connected</Allowed>}<Button onClick={() => open('claude')}>{connected ? 'Open' : 'Connect…'}</Button></span>
-      </li>
-      <li {...row('meetings')}>
-        <span className="setup-row-text"><span className="setup-row-title">Record the other side of calls</span>
-          <span className="setup-row-detail">macOS asks the first time you record a call.</span>
-          <button type="button" className="link setup-more" onClick={() => open('meetings')}>Meeting settings</button></span>
-        <span className="setup-row-control"><Toggle label="Record the other side of calls" checked={settings.meetings.systemAudio} onChange={systemAudio => void update({ meetings: { systemAudio } })} /></span>
-      </li>
-      <li {...row('notes')}>
-        <span className="setup-row-text"><span className="setup-row-title">Notes folder</span><span className="setup-row-detail setup-path">{tilde(settings.notes.folder ?? status.notes, status.home)}</span></span>
-        <span className="setup-row-control"><Button onClick={() => open('notes')}>Change…</Button></span>
-      </li>
-    </ul>
+    <div className="setup-extras"><TileGroup label="Extras">
+      <div {...row('claude')}><Tile title="Connect AI" detail={connected ? undefined : 'Ask it questions, or let it tidy up what you say.'}>
+        {connected && <Allowed>Connected</Allowed>}<Button onClick={() => open('claude')}>{connected ? 'Open' : 'Connect…'}</Button>
+      </Tile></div>
+      <div {...row('meetings')}><Tile title="Record both sides of calls" detail={<>macOS asks the first time. <button type="button" className="link" onClick={() => open('meetings')}>Meeting settings</button></>}>
+        <Toggle label="Record both sides of calls" checked={settings.meetings.systemAudio} onChange={systemAudio => void update({ meetings: { systemAudio } })} />
+      </Tile></div>
+      <div {...row('notes')}><Tile title="Notes folder" detail={<span className="setup-path">{tilde(settings.notes.folder ?? status.notes, status.home).split('/').map((part, i) => <Fragment key={i}>{i > 0 && <>/<wbr /></>}{part.replace(/ /g, '\u2060\u00a0\u2060')}</Fragment>)}</span>}>
+        <Button onClick={() => open('notes')}>Change…</Button>
+      </Tile></div>
+    </TileGroup></div>
   </Split>;
 }
 
@@ -501,15 +524,27 @@ function waysOf(settings: Settings): [string, ReactNode][] {
 
 function Done({ status, settings, go, frame }: Step) {
   const needs = missing(status);
-  return <Split frame={frame} title={needs.length ? 'Still to do' : 'You’re all set'} live
-    why={<Why>{needs.length ? 'There are a few things left before you can dictate. Finish them now or later in Settings.' : 'Here’s what to press. Everything else is in Settings.'}</Why>}
+  const name = KEY_NAMES[settings.shortcuts.dictate];
+  const open = (id: StepId) => needs.some(([step]) => step === id);
+  // What setup set up, each with its glyph; what's still missing is a link to its step.
+  const made: [StepId, ComponentType<{ size?: number }>, ReactNode, string][] = [
+    ['microphone', MicGlyph, 'Microphone allowed', 'Allow the microphone'],
+    ['accessibility', AccessGlyph, 'Accessibility on', 'Turn on Accessibility'],
+    ['model', DownloadGlyph, 'Speech model downloaded', 'Download the speech model'],
+    ['key', KeyGlyph, <>Your key is <Kbd>{name}</Kbd></>, ''],
+  ];
+  return <Split frame={frame} lead={!needs.length && <span className="setup-done"><DoneGlyph size={48} /></span>} title={needs.length ? 'Almost there' : 'You’re all set'} live
+    why={<Why>{needs.length ? 'Finish these now, or later in Settings.' : <>Hold <Kbd>{name}</Kbd> in any app and talk.</>}</Why>}
     stage={<Zoom max={1.2}>
       <ul className="setup-keys" aria-label="What to press">
         {waysOf(settings).map(([what, how]) => <li key={what}><span>{what}</span><span className="how">{how}</span></li>)}
       </ul>
     </Zoom>}
     caption="Your keys as they’re set now. You can change them in Settings › Shortcuts.">
-    {needs.length > 0 && <Left needs={needs} go={go} />}
+    <ul className="setup-facts">
+      {made.map(([id, Glyph, done, todo]) => <li key={id} data-todo={open(id) || undefined}><Glyph size={28} />
+        {open(id) ? <button type="button" className="link" onClick={() => go(id)}>{todo}</button> : <span>{done}</span>}</li>)}
+    </ul>
   </Split>;
 }
 
@@ -541,6 +576,16 @@ function Left({ needs, go }: { needs: ReturnType<typeof missing>; go: (id: StepI
     <span className="setup-hint">You still need to {list}.</span>
   </span>;
 }
+
+/// A setting on the page: its name, the control the full width under it, and a line about it.
+const Setting = ({ label, detail, children }: { label: string; detail: ReactNode; children: ReactNode }) => <div className="setup-field">
+  <span className="setup-field-label">{label}</span>{children}<span className="setup-row-detail">{detail}</span>
+</div>;
+
+/// A try-it-now line in a panel, with its light: waiting, lit while the key is held, ticked once it worked.
+const Check = ({ ok, live, children }: { ok: boolean; live: boolean; children: ReactNode }) => <p className="setup-status" role="status" data-ok={ok || undefined} data-live={(live && !ok) || undefined}>
+  {ok ? <Icon name="check" size={16} /> : <i className="setup-light" aria-hidden />}<span>{children}</span>
+</p>;
 
 const Allowed = ({ children }: { children: ReactNode }) => <span className="state" data-on><Icon name="check" size={14} />{children}</span>;
 
