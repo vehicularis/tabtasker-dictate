@@ -15,7 +15,10 @@
 # Then publish it: gh release create vX.Y.Z release/TabTasker-Dictate-X.Y.Z-arm64.dmg --target <commit>
 set -euo pipefail
 cd "$(dirname "$0")/.."
-export PATH="/opt/homebrew/bin:$HOME/.nvm/versions/node/v22.16.0/bin:$HOME/.cargo/bin:$PATH"
+# Node 24 or later: nvm's newest v24 when there is one, else whatever is on the PATH.
+NODE24=( $HOME/.nvm/versions/node/v24.*/bin(N/n) )
+export PATH="${NODE24:+$NODE24[-1]:}/opt/homebrew/bin:$HOME/.cargo/bin:$PATH"
+node -e 'process.exit(+process.versions.node.split(".")[0] >= 24 ? 0 : 1)' 2>/dev/null || { echo "Dictate builds with Node 24 or later: nvm install 24"; exit 1; }
 PROFILE="${1:-tabtasker-dictate}"
 IDENTITY="${DICTATE_SIGNING_IDENTITY:-Developer ID Application: VEHICULARIS LIMITED (FZJT9G5S86)}"
 VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")

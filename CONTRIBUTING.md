@@ -11,7 +11,7 @@ Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md).
 
 ## Building
 
-You need a Mac with Apple silicon on macOS 13 or later, Rust (stable), Node 22 and Xcode's command line
+You need a Mac with Apple silicon on macOS 13 or later, Rust (stable), Node 24 and Xcode's command line
 tools.
 
 ```sh
@@ -25,14 +25,19 @@ Run `npm run dev` and open `http://localhost:1420/app.html` for the main window,
 
 ## Checks
 
-A pull request runs these in CI. Run them first:
+A pull request runs these in CI, the security checks before anything builds. Run them first:
 
 ```sh
+npm audit --audit-level=moderate                    # known vulnerabilities in the npm packages
 npm run build                                       # TypeScript and Vite
 cd src-tauri
+cargo deny check                                    # the crates' advisories, licences and sources
 cargo clippy --all-targets --locked -- -D warnings
 cargo test --locked
 ```
+
+`cargo deny` comes from `cargo install --locked cargo-deny`. CI also reviews the dependencies a pull request
+adds, and runs the security checks every Monday so a new advisory shows up without a push.
 
 ## Pull requests
 
@@ -43,7 +48,8 @@ cargo test --locked
 - Code comments say only what the code can't: the why, an invariant, a gotcha.
 - Dependencies: avoid one when the platform can do the job. A new one must be MIT, Apache-2.0, BSD, ISC or
   Zlib licensed, pinned to an exact version, and at least 14 days old. After changing dependencies, run
-  `node scripts/notices.mjs` to update [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt).
+  `node scripts/notices.mjs` to update [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt). The licences
+  CI accepts across the crates are in [src-tauri/deny.toml](src-tauri/deny.toml).
 
 ## Licence
 
