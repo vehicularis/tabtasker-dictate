@@ -55,7 +55,8 @@ echo "== $VERSION, built and signed"
 APPLE_SIGNING_IDENTITY="$IDENTITY" npm run tauri build -- --bundles app
 codesign --verify --deep --strict "$APP"
 SIG=$(codesign -dv --verbose=4 "$APP" 2>&1) # read whole: grep -q under pipefail would cut codesign off (SIGPIPE)
-[[ "$SIG" == *"flags=0x10000(runtime)"* ]] || { echo "No hardened runtime: notarization would refuse it."; exit 1; }
+# The flags read (runtime), or (adhoc,runtime) in a dry run.
+[[ "$SIG" =~ "flags=0x[0-9a-f]+\([^)]*runtime" ]] || { echo "No hardened runtime: notarization would refuse it."; exit 1; }
 [[ "$(lipo -archs "$APP/Contents/MacOS/tabtasker-dictate")" == arm64 ]] || { echo "Not an Apple silicon build."; exit 1; }
 
 echo "== the app, notarized"
@@ -75,6 +76,7 @@ echo "== checked as a download"
 MOUNT=$(mktemp -d)
 hdiutil attach -nobrowse -readonly -mountpoint "$MOUNT" "$DMG" >/dev/null
 if [[ "$IDENTITY" == - ]]; then
+  echo "Signed ad hoc, so only the signature is checked: Gatekeeper would refuse it."
   codesign --verify --deep --strict "$MOUNT/TabTasker Dictate.app"
 else
   xcrun stapler validate "$DMG"
