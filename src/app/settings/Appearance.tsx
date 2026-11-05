@@ -3,12 +3,11 @@ import { KEY_NAMES } from '../../lib/keyNames';
 import { createGlass, flatWave, paintInside, type Glass } from '../../overlay/glass';
 import { LibraryGlyph, MeetingGlyph, NoteGlyph, SettingsGlyph, StickyGlyph, WriteGlyph } from '../../overlay/glyphs';
 import { isDark } from '../../ui/theme';
-import { PILL_BUTTONS, type Edge, type PageProps, type Patch, type PillButton, type Settings, type Size, type Theme } from '../../store';
+import { PILL_BUTTONS, SIZES, type Edge, type PageProps, type Patch, type PillButton, type Settings, type Theme } from '../../store';
 import { Icon, PageHeader, reduced, Section, Segmented, Slider, Tile, TileGroup, timing, Toggle } from '../../ui';
 
 const THEMES: { value: Theme; label: string }[] = [{ value: 'system', label: 'Automatic' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }];
 const EDGES: { value: Edge; label: string }[] = [{ value: 'left', label: 'Left' }, { value: 'bottom', label: 'Bottom' }, { value: 'right', label: 'Right' }];
-const SIZES: { value: Size; label: string }[] = [{ value: 'small', label: 'Small' }, { value: 'medium', label: 'Medium' }, { value: 'large', label: 'Large' }];
 // The pill's buttons as Appearance names them, with their glyph for the preview.
 const BUTTONS: Record<PillButton, { title: string; detail: string; glyph: ReactNode }> = {
   note: { title: 'Speak a note', detail: '', glyph: <NoteGlyph size={18} /> },

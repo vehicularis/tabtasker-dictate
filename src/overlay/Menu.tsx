@@ -1,18 +1,19 @@
 import { useEffect, useRef, type KeyboardEvent } from 'react';
-import type { Status } from '../store';
+import { SIZES, type Size, type Status } from '../store';
 import { Icon } from '../ui/Icon';
 import { AlarmIcon, Caret, Check, GearIcon, LibraryIcon, MeetingIcon, MicIcon, NoteIcon, PasteIcon, SetupIcon } from './icons';
 
 const itemsOf = (menu: Element) => [...menu.querySelectorAll<HTMLElement>(':scope > [role^="menuitem"], :scope > .sub > [role^="menuitem"]')];
 
+export type Sub = 'mics' | 'size';
+
 // The dots' right-click menu. It works from the keyboard like a Mac menu: arrows move, → and ← open and
-// close the microphones, Escape closes a level.
-export function Menu({ status, mics, meeting, onMics, onNote, onWriteNote, onSticky, onMeeting, onOpen, onPasteLast, onPickMic, onLogin, onHide, onSettings, onSetup, onQuit }: {
-  status: Status | null; mics: boolean; meeting: boolean; onMics: (open: boolean) => void; onNote: () => void; onWriteNote: () => void; onSticky: () => void; onMeeting: () => void; onOpen: () => void; onPasteLast: () => void;
-  onPickMic: (id: string | null) => void; onLogin: () => void; onHide: () => void; onSettings: () => void; onSetup: () => void; onQuit: () => void;
+// close a row's list (the microphones, the sizes), Escape closes a level.
+export function Menu({ status, sub, size, meeting, onSub, onNote, onWriteNote, onSticky, onMeeting, onOpen, onPasteLast, onPickMic, onSize, onLogin, onHide, onSettings, onSetup, onQuit }: {
+  status: Status | null; sub: Sub | null; size: Size; meeting: boolean; onSub: (sub: Sub | null) => void; onNote: () => void; onWriteNote: () => void; onSticky: () => void; onMeeting: () => void; onOpen: () => void; onPasteLast: () => void;
+  onPickMic: (id: string | null) => void; onSize: (size: Size) => void; onLogin: () => void; onHide: () => void; onSettings: () => void; onSetup: () => void; onQuit: () => void;
 }) {
   const root = useRef<HTMLDivElement>(null);
-  const parent = useRef<HTMLButtonElement>(null);
   useEffect(() => root.current?.focus({ preventScroll: true }), []);
   const keys = (event: KeyboardEvent) => {
     const menu = (event.target as Element).closest('[role="menu"]');
@@ -23,8 +24,8 @@ export function Menu({ status, mics, meeting, onMics, onNote, onWriteNote, onSti
     const step = { ArrowDown: 1, ArrowUp: -1 }[event.key];
     if (step) items[at < 0 ? (step > 0 ? 0 : items.length - 1) : (at + step + items.length) % items.length]?.focus();
     else if (event.key === 'Home' || event.key === 'End') items[event.key === 'Home' ? 0 : items.length - 1]?.focus();
-    else if (event.key === 'ArrowRight' && !inSub && document.activeElement === parent.current) { onMics(true); focusSub(); }
-    else if ((event.key === 'ArrowLeft' || event.key === 'Escape') && inSub) { onMics(false); parent.current?.focus(); }
+    else if (event.key === 'ArrowRight' && !inSub && (document.activeElement as HTMLElement | null)?.dataset.sub) { onSub((document.activeElement as HTMLElement).dataset.sub as Sub); focusSub(); }
+    else if ((event.key === 'ArrowLeft' || event.key === 'Escape') && inSub) { const back = menu.parentElement?.querySelector<HTMLElement>('[data-sub]'); onSub(null); back?.focus(); }
     else return;
     event.preventDefault(); event.stopPropagation();
   };
@@ -35,7 +36,7 @@ export function Menu({ status, mics, meeting, onMics, onNote, onWriteNote, onSti
       // The pointer moves the selection, as in a Mac menu: the arrows carry on from the row under it, and
       // focus never sits in a list that a root row is about to close.
       if (row !== document.activeElement) row.focus({ preventScroll: true });
-      if (!row.closest('.submenu')) onMics(row.hasAttribute('aria-haspopup'));
+      if (!row.closest('.submenu')) onSub((row.dataset.sub as Sub | undefined) ?? null);
     }}>
     <button type="button" role="menuitem" tabIndex={-1} onClick={onNote}><NoteIcon />Speak a note</button>
     <button type="button" role="menuitem" tabIndex={-1} onClick={onWriteNote}><Icon name="keyboard" size={16} />Write a note</button>
@@ -45,8 +46,8 @@ export function Menu({ status, mics, meeting, onMics, onNote, onWriteNote, onSti
     <button type="button" role="menuitem" tabIndex={-1} onClick={onPasteLast}><PasteIcon />Paste last transcript</button>
     <i className="rule" role="separator" />
     {status && status.inputs.length > 0 && <div className="sub">
-      <button ref={parent} type="button" role="menuitem" tabIndex={-1} aria-haspopup="menu" aria-expanded={mics} onClick={() => onMics(!mics)}><MicIcon />Microphone<Caret /></button>
-      {mics && <div className="glass menu submenu" data-glass data-hit role="menu" aria-label="Microphone">
+      <button type="button" role="menuitem" tabIndex={-1} aria-haspopup="menu" aria-expanded={sub === 'mics'} data-sub="mics" onClick={() => onSub(sub === 'mics' ? null : 'mics')}><MicIcon />Microphone<Caret /></button>
+      {sub === 'mics' && <div className="glass menu submenu" data-glass data-hit role="menu" aria-label="Microphone">
         {[{ id: null, name: 'Automatic' }, ...status.inputs].map(({ id, name }) => {
           const on = (status.input ?? null) === id;
           return <button key={id ?? ''} type="button" role="menuitemradio" tabIndex={-1} aria-checked={on} onClick={() => onPickMic(id)}>{on ? <Check /> : <span className="icon" />}{name}</button>;
@@ -54,6 +55,12 @@ export function Menu({ status, mics, meeting, onMics, onNote, onWriteNote, onSti
         <i className="rule" role="separator" /><p className="in-use">Mic in use<span>{status.inputInUse}</span></p>
       </div>}
     </div>}
+    <div className="sub">
+      <button type="button" role="menuitem" tabIndex={-1} aria-haspopup="menu" aria-expanded={sub === 'size'} data-sub="size" onClick={() => onSub(sub === 'size' ? null : 'size')}><Icon name="size" size={16} />Size<Caret /></button>
+      {sub === 'size' && <div className="glass menu submenu" data-glass data-hit role="menu" aria-label="Size">
+        {SIZES.map(({ value, label }) => <button key={value} type="button" role="menuitemradio" tabIndex={-1} aria-checked={size === value} onClick={() => onSize(value)}>{size === value ? <Check /> : <span className="icon" />}{label}</button>)}
+      </div>}
+    </div>
     <button type="button" role="menuitemcheckbox" tabIndex={-1} aria-checked={!!status?.openAtLogin} onClick={onLogin}><Icon name={status?.openAtLogin ? 'boxCheck' : 'box'} size={16} />Open at login</button>
     <i className="rule" role="separator" />
     <button type="button" role="menuitem" tabIndex={-1} onClick={onHide}><AlarmIcon />Hide for an hour</button>
