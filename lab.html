@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Setup lab</title>
+    <!-- Every setup step at once, live from this server (each frame is app.html#setup on the browser mock, so an
+         edit shows everywhere as you save). Dev only: the build ships index, app and sticky, never this. The
+         choices live in the address, so a reload or a shared link keeps them. Click a step's name to see it alone. -->
+    <style>
+      :root { color-scheme: light dark; --bg: #e9e9ec; --ink: #1d1d1f; --ink-2: #6e6e73; --raised: #fff; --line: rgb(0 0 0 / .08); --shadow: 0 1px 2px rgb(0 0 0 / .08), 0 10px 30px rgb(0 0 0 / .1); }
+      @media (prefers-color-scheme: dark) { :root { --bg: #151517; --ink: #f5f5f7; --ink-2: #98989d; --raised: #2c2c2f; --line: rgb(255 255 255 / .09); --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 10px 30px rgb(0 0 0 / .35); } }
+      * { box-sizing: border-box; }
+      body { margin: 0; font: 13px/1.4 -apple-system, BlinkMacSystemFont, system-ui, sans-serif; color: var(--ink); background: var(--bg); }
+      header { position: sticky; top: 0; z-index: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px; padding: 14px 28px; background: color-mix(in srgb, var(--bg) 86%, transparent); backdrop-filter: blur(14px); box-shadow: 0 1px 0 var(--line); }
+      h1 { margin: 0 8px 0 0; font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+      .choice { display: flex; align-items: center; gap: 10px; color: var(--ink-2); }
+      .seg { display: flex; padding: 2px; border-radius: 9px; background: var(--line); }
+      .seg button { height: 26px; padding: 0 11px; border: 0; border-radius: 7px; font: inherit; color: var(--ink-2); background: none; cursor: pointer; }
+      .seg button:hover { color: var(--ink); }
+      .seg button[aria-pressed='true'] { color: var(--ink); background: var(--raised); box-shadow: 0 1px 2px rgb(0 0 0 / .14); }
+      .reload { margin-left: auto; height: 28px; padding: 0 12px; border: 0; border-radius: 8px; font: inherit; color: var(--ink); background: var(--raised); box-shadow: 0 1px 2px rgb(0 0 0 / .14); cursor: pointer; }
+      main { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--col), 1fr)); gap: 32px 28px; padding: 28px; }
+      main[data-alone] { grid-template-columns: minmax(0, 1fr); max-width: 1500px; margin: 0 auto; }
+      figure { margin: 0; min-width: 0; }
+      figcaption { display: flex; align-items: baseline; gap: 8px; margin: 0 2px 10px; color: var(--ink-2); }
+      figcaption button { padding: 0; border: 0; font: inherit; font-weight: 600; color: var(--ink); background: none; cursor: pointer; }
+      figcaption button:hover { text-decoration: underline; text-underline-offset: 3px; }
+      figcaption span { margin-left: auto; font-variant-numeric: tabular-nums; }
+      .frame { position: relative; overflow: hidden; border-radius: 12px; background: var(--raised); box-shadow: 0 0 0 1px var(--line), var(--shadow); }
+      .frame iframe { position: absolute; top: 0; left: 0; border: 0; transform-origin: 0 0; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Setup lab</h1>
+      <div class="choice">Theme <div class="seg" data-key="theme"></div></div>
+      <div class="choice">Mac <div class="seg" data-key="mac"></div></div>
+      <div class="choice">Window <div class="seg" data-key="win"></div></div>
+      <div class="choice">Size <div class="seg" data-key="col"></div></div>
+      <button type="button" class="reload">Reload frames</button>
+    </header>
+    <main></main>
+    <script type="module">
+      const STEPS = [['welcome', 'Welcome'], ['microphone', 'Microphone'], ['accessibility', 'Accessibility'], ['key', 'Your key'], ['model', 'Speech'],
+        ['dots', 'The pill'], ['try', 'Try it'], ['extras', 'Extras'], ['done', 'Done']];
+      // Each choice: its options as [value, label, what it adds to the frame's address].
+      const CHOICES = {
+        theme: [['light', 'Light'], ['dark', 'Dark'], ['both', 'Both']],
+        mac: [['ready', 'Set up', ''], ['new', 'Fresh', 'status=new'], ['stuck', 'Needs help', 'status=new&mic=denied&globe=emoji']],
+        win: [['840x580', '840 × 580'], ['1040x700', '1040 × 700'], ['1440x900', '1440 × 900']],
+        col: [['s', 'S', 340], ['m', 'M', 480], ['l', 'L', 720]],
+      };
+      const params = new URLSearchParams(location.search);
+      const state = Object.fromEntries(Object.entries(CHOICES).map(([key, options]) => [key, options.some(([value]) => value === params.get(key)) ? params.get(key) : options[key === 'win' ? 1 : 0][0]]));
+      state.alone = STEPS.some(([id]) => id === params.get('alone')) ? params.get('alone') : null;
+      const option = key => CHOICES[key].find(([value]) => value === state[key]);
+      const main = document.querySelector('main');
+
+      const save = () => {
+        const next = new URLSearchParams(Object.entries(state).filter(([, value]) => value));
+        history.replaceState(null, '', `?${next}`);
+      };
+      const segs = () => document.querySelectorAll('.seg').forEach(seg => {
+        seg.replaceChildren(...CHOICES[seg.dataset.key].map(([value, label]) => {
+          const button = Object.assign(document.createElement('button'), { type: 'button', textContent: label });
+          button.setAttribute('aria-pressed', String(state[seg.dataset.key] === value));
+          button.onclick = () => { state[seg.dataset.key] = value; save(); segs(); seg.dataset.key === 'col' ? fit() : draw(); };
+          return button;
+        }));
+      });
+
+      // Each frame is the window at its real size, scaled down to the column.
+      const fit = () => {
+        const [w, h] = state.win.split('x').map(Number);
+        main.style.setProperty('--col', `${option('col')[2]}px`);
+        for (const frame of main.querySelectorAll('.frame')) {
+          const scale = frame.clientWidth / w;
+          frame.style.height = `${Math.round(h * scale)}px`;
+          Object.assign(frame.firstElementChild.style, { width: `${w}px`, height: `${h}px`, transform: `scale(${scale})` });
+        }
+      };
+      new ResizeObserver(fit).observe(main);
+
+      const draw = () => {
+        const [w, h] = state.win.split('x');
+        const themes = state.theme === 'both' ? ['light', 'dark'] : [state.theme];
+        const steps = state.alone ? STEPS.filter(([id]) => id === state.alone) : STEPS;
+        main.toggleAttribute('data-alone', !!state.alone);
+        main.replaceChildren(...steps.flatMap(([id, name]) => themes.map(theme => {
+          const i = STEPS.findIndex(([step]) => step === id);
+          const figure = document.createElement('figure');
+          const caption = document.createElement('figcaption');
+          const title = Object.assign(document.createElement('button'), { type: 'button', textContent: `${i + 1}. ${name}`, title: state.alone ? 'Show every step' : 'Show this step alone' });
+          title.onclick = () => { state.alone = state.alone ? null : id; save(); draw(); };
+          caption.append(title, Object.assign(document.createElement('span'), { textContent: `${themes.length > 1 ? `${theme} · ` : ''}${w} × ${h}` }));
+          const frame = Object.assign(document.createElement('div'), { className: 'frame' });
+          const extra = option('mac')[2];
+          const iframe = Object.assign(document.createElement('iframe'), { title: `${name}, ${theme}`, loading: 'lazy', src: `app.html?theme=${theme}&step=${id}${extra ? `&${extra}` : ''}#setup` });
+          frame.append(iframe);
+          figure.append(caption, frame);
+          return figure;
+        })));
+        fit();
+      };
+
+      // A frame's own autofocus (Try it's box) scrolls the lab to it as it loads: only you scroll the lab.
+      let kept = scrollY, until = 0;
+      for (const type of ['wheel', 'keydown', 'pointerdown', 'touchstart']) addEventListener(type, () => { until = performance.now() + 1500; }, { capture: true, passive: true });
+      addEventListener('scroll', () => { if (performance.now() < until) kept = scrollY; else if (scrollY !== kept) scrollTo(0, kept); }, { passive: true });
+
+      document.querySelector('.reload').onclick = () => main.querySelectorAll('iframe').forEach(iframe => iframe.contentWindow?.location.reload());
+      segs();
+      draw();
+    </script>
+  </body>
+</html>

@@ -2,6 +2,8 @@ import type { Mock } from '.';
 import type { DictateKey } from '../store';
 
 // In a browser: the first-run flow and the General page, walkable from start to end.
+// - `?step=` opens the setup on a step (welcome, microphone, accessibility, key, model, dots, try, extras, done);
+//   lab.html shows them all side by side.
 // - `?status=new` starts as a Mac never set up; `&mic=denied` as one that said no to the microphone, and
 //   `&globe=emoji` as one whose globe key opens emoji.
 // - Asking for a permission grants it a moment later, as if done in System Settings.
