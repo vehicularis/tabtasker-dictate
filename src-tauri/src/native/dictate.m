@@ -317,6 +317,16 @@ static AudioObjectID TTVoiceInput(void) {
   return TTVoiceDefaultInput();
 }
 static NSString *TTVoiceInputName(void) { return TTVoiceDeviceString(TTVoiceInput(), kAudioObjectPropertyName) ?: @"?"; }
+// The input volume macOS gives a device (Sound › Input), for the log: its main control, or its first
+// channel's when it has only those; -1 when it has neither.
+static Float32 TTVoiceInputVolume(AudioObjectID device) {
+  for (AudioObjectPropertyElement element = kAudioObjectPropertyElementMain; element <= 1; element++) {
+    AudioObjectPropertyAddress address = { kAudioDevicePropertyVolumeScalar, kAudioObjectPropertyScopeInput, element };
+    Float32 volume = 0; UInt32 size = sizeof(volume);
+    if (AudioObjectHasProperty(device, &address) && AudioObjectGetPropertyData(device, &address, 0, NULL, &size, &volume) == noErr) return volume;
+  }
+  return -1;
+}
 
 static dispatch_queue_t TTVoiceAudioQueue(void) {
   static dispatch_queue_t queue;
@@ -615,9 +625,9 @@ static void TTVoicePlaySound(NSString *name, double volume) {
   BOOL running = self.engine.isRunning;
   NSData *pcm = [self.audio freeze];
   AVAudioFormat *heard = self.audio.heard;
-  NSString *line = [NSString stringWithFormat:@"capture: %.1fs held, %lu buffers, %.0f Hz x%u%@, %lu samples, loudest %.4f, %lu input changes, engine %@, input %@",
+  NSString *line = [NSString stringWithFormat:@"capture: %.1fs held, %lu buffers, %.0f Hz x%u%@, %lu samples, loudest %.4f, %lu input changes, engine %@, input volume %.2f, input %@",
     NSProcessInfo.processInfo.systemUptime - self.listeningSince, (unsigned long)self.audio.buffers, heard.sampleRate, heard.channelCount, self.audio.channelLevels,
-    (unsigned long)(pcm.length / sizeof(float)), self.audio.peak, (unsigned long)self.inputChanges, running ? @"running" : @"stopped",
+    (unsigned long)(pcm.length / sizeof(float)), self.audio.peak, (unsigned long)self.inputChanges, running ? @"running" : @"stopped", TTVoiceInputVolume(self.onDefault ? TTVoiceDefaultInput() : TTVoiceInput()),
     self.onDefault ? TTVoiceDeviceString(TTVoiceDefaultInput(), kAudioObjectPropertyName) ?: @"?" : TTVoiceInputName()];
   dictate_log(line.UTF8String);
   if (self.audio.failed) { [self fail:@"Couldn’t record that. Try again."]; return; }
