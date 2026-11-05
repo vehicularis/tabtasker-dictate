@@ -5,6 +5,11 @@ notarized DMG, is on the [releases page](https://github.com/vehicularis/tabtaske
 
 ## Unreleased
 
+### Added
+
+- Every release is built in the open by a GitHub workflow, with a SHA256SUMS file and an attestation that
+  says which commit and workflow built the DMG. The README says how to check a download with them.
+
 ### Fixed
 
 - A ticked task in a note shows its tick at night, where it was a plain white dot.

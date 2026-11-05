@@ -52,6 +52,29 @@ adds, and runs the security checks every Monday so a new advisory shows up witho
   `node scripts/notices.mjs` to update [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt). The licences
   CI accepts across the crates are in [src-tauri/deny.toml](src-tauri/deny.toml).
 
+## Releases
+
+A release is a commit on `main` that sets the version in `package.json`, `src-tauri/tauri.conf.json`,
+`src-tauri/Cargo.toml` and their lock files, and gives it a section in [CHANGELOG.md](CHANGELOG.md). Pushing
+its tag runs the [release workflow](.github/workflows/release.yml):
+
+```sh
+git tag v0.1.2 && git push origin v0.1.2
+```
+
+It runs the security checks, then [scripts/release-mac.sh](scripts/release-mac.sh): the app and its DMG signed
+with the Developer ID, notarized, stapled and checked by Gatekeeper, and a SHA256SUMS file. It attests where the
+DMG came from and leaves both files on a draft release. Write the notes, download the DMG and check it the way
+the README asks people to, then publish:
+
+```sh
+gh attestation verify TabTasker-Dictate-0.1.2-arm64.dmg -R vehicularis/tabtasker-dictate
+```
+
+Run the workflow by hand from the Actions tab for a dry run: the same build signed ad hoc, with no secrets and no
+release. A pull request that changes how a release is built runs one too. The script also builds a release on
+a Mac; it says at its top what it needs.
+
 ## Licence
 
 Dictate is licensed under [Apache-2.0](LICENSE). By contributing, you agree that your contribution is
