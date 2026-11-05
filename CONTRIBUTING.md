@@ -71,6 +71,9 @@ the README asks people to, then publish:
 gh attestation verify TabTasker-Dictate-0.1.2-arm64.dmg -R vehicularis/tabtasker-dictate
 ```
 
+Then give the Homebrew cask, `Casks/tabtasker-dictate.rb` in [vehicularis/homebrew-tap](https://github.com/vehicularis/homebrew-tap),
+the version and sha256 the workflow's log printed at the end of the build.
+
 Run the workflow by hand from the Actions tab for a dry run: the same build signed ad hoc, with no secrets and no
 release. A pull request that changes how a release is built runs one too. The script also builds a release on
 a Mac; it says at its top what it needs.
