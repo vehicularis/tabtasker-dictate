@@ -519,3 +519,24 @@ fn a_hold_kept_on_disk_comes_back_whole() {
   assert!(read_unsent(&dir.join("unsent/3.hold")).is_err());
   std::fs::remove_dir_all(dir).unwrap();
 }
+
+#[test]
+fn a_phrase_the_decoder_keeps_repeating_is_cut_to_what_the_time_allows() {
+  let looped = vec!["hello"; 400].join(" ");
+  let cut = unloop(&looped, 15.0);
+  assert_eq!(cut.split_whitespace().count(), 78, "five a second for 15 s, and three");
+  assert!(cut.split_whitespace().all(|word| word == "hello"));
+  // A loop after real words: the words stay, the loop gives way.
+  let tail = format!("Call the venue about Thursday. {}", vec!["Thank you."; 60].join(" "));
+  let cut = unloop(&tail, 4.0);
+  assert!(cut.starts_with("Call the venue about Thursday. Thank you."), "{cut}");
+  assert!(cut.split_whitespace().count() <= 23, "{cut}");
+  // Punctuation and case don't hide a repeat.
+  assert_eq!(unloop("Hello, hello. HELLO hello hello hello", 0.2), "Hello, hello. HELLO hello");
+  // What could have been said is left alone, repeats and all.
+  let said = "hello hello hello, can you hear me";
+  assert_eq!(unloop(said, 3.0), said);
+  // Too many words but no run to blame: nothing is cut.
+  let fast = "one two three four five six seven eight nine ten eleven twelve";
+  assert_eq!(unloop(fast, 1.0), fast);
+}

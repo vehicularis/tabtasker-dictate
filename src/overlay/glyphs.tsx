@@ -11,6 +11,7 @@ const PAPER = 'var(--card)';
 const ENAMEL = 'var(--wb-glyph-enamel)';
 const AMBER = '#E0A33A';
 /// The accent the glyphs pick out a detail in: ink, as the app's is (black by day, white by night), never blue.
+/// Anything drawn on it to be read takes --on-accent, never a fixed white, or it vanishes by night.
 const ACCENT = 'var(--accent)';
 
 function Glyph({ children, size = 22 }: { children: ReactNode; size?: number }) {
@@ -215,10 +216,10 @@ export const DownloadGlyph = ({ size }: { size?: number }) => <Glyph size={size}
   <path d="M7.5 18h4" stroke="white" strokeOpacity="0.6" strokeWidth="0.8" />
 </Glyph>;
 
-/// A check on a blue disc: done.
+/// A check on an accent disc: done.
 const DoneGlyph = ({ size }: { size?: number }) => <Glyph size={size}>
   <circle cx="14" cy="14" r="10" fill={ACCENT} stroke={INK} strokeOpacity="0.35" strokeWidth="1" />
-  <path d="M9.4 14.3l3.1 3.1 6.2-6.6" stroke="white" strokeWidth="1.9" />
+  <path d="M9.4 14.3l3.1 3.1 6.2-6.6" stroke="var(--on-accent)" strokeWidth="1.9" />
   <path d="M8.5 8.8a7.6 7.6 0 0 1 3.6-2.6" stroke="white" strokeOpacity="0.55" strokeWidth="0.9" />
 </Glyph>;
 

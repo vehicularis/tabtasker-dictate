@@ -515,6 +515,46 @@ extern "C" fn dictate_learn_typing(before: *const c_char, after: *const c_char, 
   typing(&before, &after, chars_at(&after, caret, 0).start)
 }
 
+/// Live typing types a word once two passes in a row have heard it in the same place, so the field only grows
+/// while the key is held: what the passes still disagree on (the last word or two, as a rule) waits in the orb,
+/// and release puts the finished words in at once. A typed word one pass hears differently stays as it is; once
+/// two in a row agree on the new hearing (after a pause Whisper often hears "it is" as "it's", or drops a
+/// repeat), the field is put right from that word and carries on, rather than stopping there. Given what is
+/// typed, the last pass's words and this one's: the field's new words, or None to leave it. The last typed
+/// word takes the punctuation it has gained once a word follows it; the last word of all goes in without the
+/// stop or comma that may yet move.
+pub fn live_next(typed: &str, previous: &str, now: &str) -> Option<String> {
+  let key = |word: &str| word.chars().filter(|c| c.is_alphanumeric()).flat_map(char::to_lowercase).collect::<String>();
+  let common = |one: &[&str], other: &[&str]| one.iter().zip(other).take_while(|(a, b)| key(a) == key(b)).count();
+  let typed: Vec<&str> = typed.split_whitespace().collect();
+  let before: Vec<&str> = previous.split_whitespace().collect();
+  let heard: Vec<&str> = now.split_whitespace().collect();
+  let agreed = common(&before, &heard);
+  let kept = common(&typed, &heard);
+  if agreed <= kept { return None; } // nothing agreed past what is typed and still heard there
+  let mut words: Vec<String> = typed[..kept].iter().map(|word| word.to_string()).collect();
+  if let Some(last) = words.last_mut() {
+    let gained = heard[kept - 1].strip_prefix(last.as_str()).unwrap_or("");
+    if gained.chars().all(|c| !c.is_alphanumeric()) { last.push_str(gained); }
+  }
+  words.extend(heard[kept..agreed].iter().map(|word| word.to_string()));
+  let mut text = words.join(" ");
+  text.truncate(text.trim_end_matches(['.', ',', '!', '?', ';', ':', '…']).len());
+  (text != typed.join(" ")).then_some(text)
+}
+
+/// live_next for dictate.m: the field's new words in the caller's `capacity` bytes and their length, or 0 to
+/// leave the field as it is (or when they wouldn't fit).
+#[no_mangle]
+extern "C" fn dictate_live_next(typed: *const c_char, previous: *const c_char, now: *const c_char, out: *mut c_char, capacity: usize) -> usize {
+  let (Some(typed), Some(previous), Some(now)) = (read(typed), read(previous), read(now)) else { return 0 };
+  let Some(next) = live_next(&typed, &previous, &now) else { return 0 };
+  if out.is_null() || next.is_empty() || next.len() >= capacity { return 0; }
+  // The words and their NUL fit in the caller's `capacity` bytes.
+  unsafe { std::ptr::copy_nonoverlapping(next.as_ptr(), out.cast(), next.len()); *out.add(next.len()) = 0; }
+  next.len()
+}
+
 /// A word learned from a correction: it waits in Settings › Vocabulary and the overlay offers it. It is
 /// only ever added to the words on a yes.
 #[no_mangle]
@@ -557,6 +597,33 @@ pub async fn list_apps(known: Vec<String>) -> Result<serde_json::Value, String> 
 
 #[cfg(test)]
 mod tests {
+  #[test]
+  fn live_typing_types_what_two_passes_agree_on_and_recovers_from_a_pause() {
+    use super::live_next;
+    let next = |typed, previous, now| live_next(typed, previous, now).unwrap_or_else(|| "(as it is)".into());
+    // The first pass alone agrees with nothing.
+    assert_eq!(next("", "", "Call the"), "(as it is)");
+    // Two passes agree on "Call": typed; the word still moving waits.
+    assert_eq!(next("", "Call the", "Call Maria"), "Call");
+    assert_eq!(next("Call", "Call Maria at", "Call Maria at three"), "Call Maria at");
+    // The last word goes in without its comma or stop, which it gains once the next word is agreed.
+    assert_eq!(next("", "Hello, how", "Hello, how are"), "Hello, how");
+    assert_eq!(next("Hello, how", "Hello, how are you.", "Hello, how are you. I"), "Hello, how are you");
+    assert_eq!(next("Hello, how are you", "Hello, how are you. I'm", "Hello, how are you. I'm fine"), "Hello, how are you. I'm");
+    // Case and punctuation don't stop words agreeing.
+    assert_eq!(next("", "hello there friend", "Hello, there friend"), "Hello, there friend");
+    // One pass hearing a typed word differently erases nothing.
+    assert_eq!(next("Call Maria at", "Call Maria at three", "Call Maria about three"), "(as it is)");
+    // Two in a row: the field is put right from that word, and carries on.
+    assert_eq!(next("Call Maria at", "Call Maria about three", "Call Maria about three tomorrow"), "Call Maria about three");
+    // After a pause, "it is" heard as "it's" by two passes: put right, not stuck there for the rest of the hold.
+    assert_eq!(next("It is good but", "It's good, but I", "It's good, but I think"), "It's good, but I");
+    // A repeat one pass drops and the next keeps: nothing moves until two agree.
+    assert_eq!(next("it is good", "it is it is good", "it is good and"), "(as it is)");
+    // Words in another script agree by their own letters, and go in as the newer pass has them.
+    assert_eq!(next("", "Öğle yemeği", "öğle yemeği yiyelim"), "öğle yemeği");
+  }
+
   use super::*;
 
   #[test]
