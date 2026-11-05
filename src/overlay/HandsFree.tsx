@@ -3,7 +3,6 @@ import { listen } from '../bridge';
 import { KEY_NAMES } from '../lib/keyNames';
 import { ask } from '../lib/request';
 import { useSettings, type Events } from '../store';
-import { X } from './icons';
 import { leave } from '../ui/motion';
 import { PREVIEW } from './preview';
 import './hands-free.css';
@@ -11,8 +10,9 @@ import './hands-free.css';
 // A locked session listens for up to ten minutes, and the app sends it as it reaches that.
 const LIMIT = 10 * 60;
 
-// Locked listening after a double tap of the dictate key: it listens for dictate-hands-free itself. The
-// keys are the quick way out (a tap sends, Escape cancels); the buttons are for the pointer.
+// Locked listening after a double tap of the dictate key: it listens for dictate-hands-free itself. One line,
+// as the meeting pill: the time, then Cancel and Finish, each with its key on it (Escape cancels, a tap of
+// the dictate key sends). The limit shows only in the last minute, as the time left.
 export function HandsFree() {
   const settings = useSettings();
   const [since, setSince] = useState<number | null>(PREVIEW === 'hands-free' ? Date.now() - 42_000 : null);
@@ -26,13 +26,12 @@ export function HandsFree() {
   if (since == null || !settings) return null;
   const seconds = Math.min(LIMIT, Math.max(0, Math.floor((Date.now() - since) / 1000)));
   const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+  const left = LIMIT - seconds, ending = left <= 60;
+  const key = KEY_NAMES[settings.shortcuts.dictate];
   return <div ref={leave} className="glass hands-free" data-glass data-hit role="group" aria-label="Hands-free">
     <i className="live" aria-hidden="true" />
-    <span className="dots-what">
-      <b>Hands-free <time>{clock(seconds)} of {clock(LIMIT)}</time></b>
-      <small>Tap <kbd>{KEY_NAMES[settings.shortcuts.dictate]}</kbd> to finish, <kbd>esc</kbd> to cancel</small>
-    </span>
-    <button type="button" className="tool" aria-label="Cancel" title="Cancel" onClick={() => ask('cancel')}><X /></button>
-    <button type="button" className="btn primary" onClick={() => ask('send')}>Finish</button>
+    <span className="hands-free-line"><b>Hands-free</b><time data-ending={ending || undefined}>{ending ? `${clock(left)} left` : clock(seconds)}</time></span>
+    <button type="button" className="btn quiet" title="Cancel (esc)" aria-keyshortcuts="Escape" onClick={() => ask('cancel')}>Cancel<kbd aria-hidden="true">esc</kbd></button>
+    <button type="button" className="btn primary" title={`Finish (${key})`} onClick={() => ask('send')}>Finish<kbd aria-hidden="true">{key}</kbd></button>
   </div>;
 }

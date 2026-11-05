@@ -1,9 +1,13 @@
-/* Locked listening: a pill above the orb with the time, the way out, Cancel and Send. */
-.hands-free { display: flex; align-items: center; gap: 6px; box-sizing: border-box; max-width: 380px; padding: 6px 6px 6px 14px; border-radius: var(--radius-pill); }
+/* Locked listening: one line above the orb, as the meeting pill: the live dot, the time, Cancel and Finish,
+   each button with its key on it. */
+.hands-free { display: flex; align-items: center; gap: 6px; box-sizing: border-box; max-width: 380px; min-height: 40px; padding: 5px 5px 5px 14px; border-radius: var(--radius-pill); font-size: 13px; }
 .hands-free .live { flex: none; width: 8px; height: 8px; margin-right: 4px; border-radius: 50%; background: var(--danger); animation: hands-free-live 1.4s ease-in-out infinite alternate; }
 @keyframes hands-free-live { to { opacity: .35; } }
-.hands-free .dots-what { margin-right: 6px; white-space: nowrap; }
-.hands-free b { font-weight: 600; }
-.hands-free time { margin-left: 4px; font-weight: 400; color: var(--ink-2); font-variant-numeric: tabular-nums; }
-.hands-free kbd { padding: 0 5px; border-radius: 5px; font: inherit; font-weight: 600; color: var(--ink-2); background: var(--accent-fill); }
-.hands-free .tool { width: 28px; height: 28px; border-radius: 50%; }
+.hands-free-line { display: flex; align-items: baseline; gap: 6px; margin-right: 8px; white-space: nowrap; }
+.hands-free-line b { font-weight: 600; }
+.hands-free-line time { font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.hands-free-line time[data-ending] { color: var(--danger); }
+.hands-free .btn { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; }
+.hands-free .btn.quiet { color: var(--ink-2); background: none; box-shadow: none; }
+.hands-free .btn.quiet:hover { color: var(--ink); background: var(--surface); }
+.hands-free kbd { padding: 1px 5px; border-radius: 5px; font: 600 11px/1.3 var(--font); color: inherit; opacity: .75; background: color-mix(in srgb, currentColor 14%, transparent); }
