@@ -17,6 +17,7 @@
 <p align="center">
   <a href="https://github.com/vehicularis/tabtasker-dictate/actions/workflows/ci.yml"><img src="https://github.com/vehicularis/tabtasker-dictate/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/vehicularis/tabtasker-dictate/releases/latest"><img src="https://img.shields.io/github/v/release/vehicularis/tabtasker-dictate?label=release" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/macOS-13%2B%20%C2%B7%20Apple%20silicon-111111?logo=apple" alt="macOS 13 or later, Apple silicon">
   <a href="LICENSE"><img src="https://img.shields.io/github/license/vehicularis/tabtasker-dictate" alt="Apache-2.0 licence"></a>
 </p>
 
@@ -62,14 +63,62 @@ windows, or a meeting recording.
 Speech recognition runs on your Mac, so your voice never leaves it and you don’t need an account. If you
 connect an AI model, it only ever gets text, and Settings shows you exactly what it sees.
 
-## Get started
+## Install
 
-Download the DMG from the [latest release](https://github.com/vehicularis/tabtasker-dictate/releases/latest), open it and
-drag TabTasker Dictate into Applications. You’ll need a Mac with Apple silicon on macOS 13 or later. It’s
-signed and notarized, so it opens without a warning. The first time it opens, Dictate downloads its
-speech model (about 875 MB) and walks you through the two permissions it needs.
+Download the DMG from the [latest release](https://github.com/vehicularis/tabtasker-dictate/releases/latest), open it
+and drag TabTasker Dictate into Applications. You’ll need a Mac with Apple silicon on macOS 13 or later, and
+macOS 14.2 or later to record the other side of a call. The first time it opens, Dictate downloads its speech
+model (about 875 MB) and walks you through the two permissions it needs.
 
-To build it yourself, install Rust, Node 24 and Xcode’s command line tools, then:
+It’s signed by Vehicularis Limited and notarized by Apple, so it opens without a warning. To check a download
+yourself, compare its SHA-256 with the one GitHub shows beside the file on the release page, and ask Gatekeeper:
+
+```sh
+shasum -a 256 ~/Downloads/TabTasker-Dictate-*-arm64.dmg
+spctl -a -vv -t install ~/Downloads/TabTasker-Dictate-*-arm64.dmg    # accepted, source=Notarized Developer ID
+```
+
+To update, download the newest release and replace the app. Your settings, notes and speech model stay where
+they are. What changed in each release is in [CHANGELOG.md](CHANGELOG.md).
+
+## Questions
+
+### Pressing fn opens the emoji picker
+
+While fn is your dictate key, Dictate sets the 🌐 key to do nothing, and puts your own setting back when it
+quits. To keep the 🌐 key’s action, choose another dictate key in Settings › Shortcuts.
+
+### It hears me, but nothing is typed
+
+Dictate types through Accessibility. In System Settings › Privacy & Security › Accessibility, check that
+TabTasker Dictate is switched on. If it is and nothing is typed, remove it with the minus button, add it again
+and open Dictate again.
+
+### Does it work without the internet?
+
+Yes. Once the speech model has downloaded, dictation, notes, stickies and meetings all work offline. Only an
+AI service you connect needs the internet, and a model running on your Mac doesn’t.
+
+### Does it run on an Intel Mac?
+
+No. Dictate is built for Apple silicon, where Whisper runs on the Mac’s GPU.
+
+### Where are my notes?
+
+In Documents › TabTasker Dictate, as plain Markdown files. You can choose another folder, an Obsidian vault
+for example, in Settings › Notes.
+
+## Uninstall
+
+Quit Dictate (Quit TabTasker | Dictate is at the bottom of the pill’s menu) and move it from Applications to
+the Trash. Its settings, history, stickies and speech model are in
+`~/Library/Application Support/com.tabtasker.dictate`, and its log is in `~/Library/Logs/TabTasker Dictate`.
+Delete those folders to remove them too. Your notes stay in your Documents folder. If you connected an AI
+service, its key is in Keychain Access under `com.tabtasker.dictate`.
+
+## Build from source
+
+Install Rust, Node 24 and Xcode’s command line tools, then:
 
 ```sh
 npm install
@@ -87,5 +136,5 @@ and what a pull request needs. Report a security problem privately, as [SECURITY
 
 ## License
 
-Apache-2.0, see [LICENSE](LICENSE) and [NOTICE](NOTICE). The speech models and libraries it uses are listed with their licenses
-in [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt).
+Apache-2.0, see [LICENSE](LICENSE) and [NOTICE](NOTICE). The speech models and libraries it uses are listed
+with their licenses in [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt).
