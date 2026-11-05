@@ -15,8 +15,8 @@ import '../overlay/command-card.css';
 import '../overlay/meeting-pill.css';
 import './onboarding.css';
 
-// The first run, a step at a time, in the whole window. The steps down the left as a list of contents; the
-// step beside it (what it's for, the one thing to do, Back and Continue); and on the right the stage, a
+// The first run, a step at a time, in the whole window. The steps down the left, numbered; the step beside
+// them (what it's for, the one thing to do, then Continue and Back under it); and on the right the stage, a
 // picture of your screen drawn with the app's real parts (demo/), showing what the step is about. Each
 // permission step shows what macOS says right now (polled while it is open) and never dead-ends: it says
 // what to click in System Settings and opens it, and every step can be skipped and finished later.
@@ -63,9 +63,9 @@ function useDictateKey(chosen: DictateKey | undefined): Key {
 type Sheet = 'claude' | 'meetings' | 'notes';
 const SHEETS: Record<Sheet, [string, ComponentType<PageProps>]> = { claude: ['AI', Claude], meetings: ['Meetings', Meetings], notes: ['Notes', Notes] };
 
-/// The frame Onboarding puts round every step: its count, Back and Continue, and the part that scrolls (for
-/// the fade at the edge it scrolls on toward).
-type Frame = { count: string; nav: ReactNode; scroll: RefObject<HTMLDivElement | null> };
+/// The frame Onboarding puts round every step: Continue and Back, and the part that scrolls (for the fade at
+/// the edge it scrolls on toward).
+type Frame = { nav: ReactNode; scroll: RefObject<HTMLDivElement | null> };
 type Step = {
   status: Status; settings: Settings; update: (patch: Patch) => Promise<Settings | undefined>; dictateKey: Key;
   practiced: boolean; onPracticed: () => void; go: (id: StepId) => void; open: (sheet: Sheet) => void; frame: Frame;
@@ -125,19 +125,18 @@ export function Onboarding() {
   const done = (id: StepId, i: number) => ready(id) && (i < at || !['welcome', 'dots', 'extras', 'done'].includes(id));
   const last = at === STEPS.length - 1;
   const finished = setupDone(status);
+  // The way on first, under the step's own words where the eye already is, so it stays put from step to step.
   const nav = <footer className="setup-nav">
-    {at > 0 ? <Button variant="quiet" onClick={() => setAt(at - 1)}>Back</Button> : <span />}
-    <span className="end">
-      {last ? <>
-        <Button onClick={() => { location.hash = 'settings'; }}>Open Settings</Button>
-        <Button variant="primary" onClick={closeWindow}>{finished ? 'Start dictating' : 'Close'}</Button>
-      </> : ready(step.id)
-        ? <Button variant="primary" onClick={() => setAt(at + 1)}>{at === 0 ? 'Start' : 'Continue'}</Button>
-        : <Button onClick={() => setAt(at + 1)}>Skip for now</Button>}
-    </span>
+    {last ? <>
+      <Button variant="primary" onClick={closeWindow}>{finished ? 'Start dictating' : 'Close'}</Button>
+      <Button onClick={() => { location.hash = 'settings'; }}>Open Settings</Button>
+    </> : ready(step.id)
+      ? <Button variant="primary" onClick={() => setAt(at + 1)}>{at === 0 ? 'Get started' : 'Continue'}</Button>
+      : <Button onClick={() => setAt(at + 1)}>Skip for now</Button>}
+    {at > 0 && <Button variant="quiet" onClick={() => setAt(at - 1)}>Back</Button>}
   </footer>;
   const props: Step = { status, settings, update, dictateKey, practiced: practiced === chosen, onPracticed: () => setPracticed(chosen), go, open: setSheet,
-    frame: { count: `${at + 1} of ${STEPS.length}`, nav, scroll } };
+    frame: { nav, scroll } };
   const Body = BODIES[step.id];
 
   return <div className="onboarding">
@@ -147,9 +146,9 @@ export function Onboarding() {
       <ol>
         {STEPS.map((candidate, i) => {
           const tick = done(candidate.id, i);
-          return <li key={candidate.id}>
-            <button type="button" aria-label={`${candidate.name}${tick ? ', done' : ''}`} aria-current={i === at ? 'step' : undefined} data-done={tick || undefined} onClick={() => setAt(i)}>
-              <span className="setup-tick">{tick && <Icon name="check" size={14} />}</span>{candidate.name}
+          return <li key={candidate.id} data-done={tick || undefined}>
+            <button type="button" aria-label={`${candidate.name}${tick ? ', done' : ''}`} aria-current={i === at ? 'step' : undefined} onClick={() => setAt(i)}>
+              <span className="setup-num" aria-hidden>{tick ? <Icon name="check" size={12} /> : i + 1}</span>{candidate.name}
             </button>
           </li>;
         })}
@@ -163,7 +162,7 @@ export function Onboarding() {
 
 // ---------- the step and its stage ----------
 
-/// One step: on the left its count, title, why and the one thing to do (`children`), then Back and Continue;
+/// One step: on the left its title, why and the one thing to do (`children`), then Continue and Back;
 /// on the right the stage and a line naming what's on it. The stage is a picture, kept from the keyboard and
 /// VoiceOver, unless it's `live` (the practice box, the keys you'll press).
 function Split({ frame, title, why, children, stage, caption, live = false }: {
@@ -173,7 +172,6 @@ function Split({ frame, title, why, children, stage, caption, live = false }: {
     <main className="setup-step" aria-labelledby="setup-title">
       <div ref={frame.scroll} className="setup-scroll">
         <div className="setup-body">
-          <p className="setup-count">{frame.count}</p>
           <h1 id="setup-title" tabIndex={-1}>{title}</h1>
           {why}
           {children && <div className="setup-do">{children}</div>}
@@ -239,10 +237,10 @@ function Welcome({ settings, frame }: Step) {
   const t = useLoop(8400, 5200);
   const mode = t >= 900 && t < 3700 ? 'listening' : t >= 3700 && t < 4200 ? 'thinking' : 'idle';
   const said = mode === 'listening' && t >= 1100 ? WORDS.slice(0, Math.floor((t - 1100) / 260) + 1).join(' ') : '';
-  return <Split frame={frame} title={<span className="setup-brand"><Logo size={44} /><span>Welcome to TabTasker | Dictate</span></span>}
+  return <Split frame={frame} title={<><Logo size={52} /><span>Welcome to TabTasker | Dictate</span></>}
     why={<>
-      <Why>Hold {KEY_NAMES[settings.shortcuts.dictate]} and talk. When you let go, what you said is typed wherever your cursor is.</Why>
-      <Why>Everything happens on your Mac, so your voice never leaves it, and there’s no account to make.</Why>
+      <Why>Hold {KEY_NAMES[settings.shortcuts.dictate]} and talk. Let go, and it’s typed where your cursor is.</Why>
+      <Why>It all runs on your Mac. Your voice never leaves it, and there’s no account.</Why>
     </>}
     stage={<Desk>
       <Field label="Message to Maria" style={FIELD}><p className="demo-typed">{t >= 4200 && t < 7800 && <span className="setup-landed">{SAID}</span>}<Caret /></p></Field>
@@ -313,7 +311,7 @@ function ChooseKey({ status, settings, update, dictateKey, go, frame }: Step) {
   const chosen = settings.shortcuts.dictate;
   const name = KEY_NAMES[chosen];
   const globe = chosen === 'fn' && status.globeKey ? GLOBE[status.globeKey] : null;
-  return <Split frame={frame} title="Choose your key" why={<Why>Hold it while you talk and let go when you’re done. Pick the one that’s easiest for you to reach.</Why>}
+  return <Split frame={frame} title="Choose your key" why={<Why>Hold it while you talk. Pick the one that’s easiest to reach.</Why>}
     stage={<Zoom min={.72} max={1.25} lean={chosen === 'fn' ? 'start' : 'end'}><Keyboard chosen={chosen} down={dictateKey.down} /></Zoom>}
     caption={dictateKey.down ? 'It lights up for as long as you hold it.' : `Your key is ringed. Hold ${name} and it lights up.`}>
     <Segmented label="Key to hold" value={chosen} options={KEY_OPTIONS} onChange={dictate => void update({ shortcuts: { dictate } })} />
@@ -351,7 +349,7 @@ function Model({ status, settings, update, frame }: Step) {
   const loading = status.enabled && preparing && !ready;
   const t = useLoop(5200, 2600);
   const mode = !ready ? 'idle' : t >= 800 && t < 2200 ? 'listening' : t >= 2200 && t < 4000 ? 'thinking' : 'idle';
-  return <Split frame={frame} title="Speech model" why={<Why>This is what turns your voice into text, right on your Mac. It downloads once and works offline after that.</Why>}
+  return <Split frame={frame} title="Speech model" why={<Why>It turns your voice into text, right on your Mac. It downloads once, then works offline.</Why>}
     stage={<Zoom width={200} height={84} max={1.6}><Dots mode={mode} loading={loading} still={reduced()} at={{ inset: 0 }} /></Zoom>}
     caption={loading ? 'While it gets ready, the pill on your screen pulses.' : ready ? 'When you let go, the orb’s wave is your Mac turning what you said into text.' : 'Once it’s downloaded, the pill is all you’ll see until you hold your key.'}>
     <div className="setup-row">
@@ -442,7 +440,7 @@ function Extras({ status, settings, update, open, frame }: Step) {
   const [shown, setShown] = useState<Sheet>('claude');
   const connected = settings.claude.enabled;
   const row = (id: Sheet) => ({ onPointerEnter: () => setShown(id), onFocus: () => setShown(id), 'data-shown': shown === id || undefined });
-  return <Split frame={frame} title="Extras" why={<Why>These are all optional, and you’ll find them in Settings later too.</Why>}
+  return <Split frame={frame} title="Extras" why={<Why>These are optional, and they’re in Settings too.</Why>}
     stage={<Zoom width={420} height={shown === 'claude' ? 270 : 110} max={1.3}><Dots mode="idle" at={{ inset: 0 }}><Extra shown={shown} /></Dots></Zoom>}
     caption={EXTRA_CAPTIONS[shown]}>
     <ul className="setup-rows">
