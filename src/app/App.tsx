@@ -76,7 +76,7 @@ const titleOf = (route: string) => {
   const place = placeOf(route);
   const [kind, arg] = split(route);
   if (!arg || (kind !== 'notes' && kind !== 'meetings')) return place.title;
-  const file = decodeURIComponent(arg).split('/').pop() ?? '';
+  const file = arg.split('/').pop() ?? '';
   return file.replace(/\.md$/, '').replace(/^\d{4}-\d\d-\d\d( \d\d\.\d\d)? ?/, '') || place.title;
 };
 const loadTabs = (): Tabs => {
@@ -112,7 +112,7 @@ export function App() {
   // The hash follows the open tab; a hash set from outside (a note opened from the dots) moves the tab.
   useEffect(() => {
     try { localStorage.setItem(TABS, JSON.stringify(state)); } catch { /* a convenience */ }
-    if (routeOf() !== route) location.hash = route;
+    if (routeOf() !== route) location.hash = encodeURIComponent(route); // a route holds the path as it is; the hash, encoded
   }, [state, route]);
   useEffect(() => {
     const changed = () => setState(s => visit(s, routeOf()));

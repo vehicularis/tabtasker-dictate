@@ -191,7 +191,7 @@
 .ed-body:not(.compact) ul[data-type='taskList'] li[data-checked='true'] > div > p { color: var(--ink-2); }
 /* The round checkbox Business's pages draw (its checkbox recipe): a raised well, the accent with a tick when done. */
 .ed-body:not(.compact) ul[data-type='taskList'] li > label input { position: relative; display: inline-grid; place-items: center; flex: none; width: 16px; height: 16px; margin: 0; border-radius: 50%;
-  appearance: none; -webkit-appearance: none; color: #fff; background: var(--ed-box); box-shadow: var(--elev-raised); cursor: pointer; transition: box-shadow var(--quick) var(--ease), background-color var(--quick) var(--ease); }
+  appearance: none; -webkit-appearance: none; color: var(--on-accent); background: var(--ed-box); box-shadow: var(--elev-raised); cursor: pointer; transition: box-shadow var(--quick) var(--ease), background-color var(--quick) var(--ease); }
 .ed-body:not(.compact) ul[data-type='taskList'] li > label input:checked { background: var(--accent); box-shadow: var(--elev-control); }
 .ed-body:not(.compact) ul[data-type='taskList'] li > label input:checked::after { content: ''; width: 12px; height: 12px; background: currentColor;
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='24' d='m40 128 56 56L216 64'/%3E%3C/svg%3E") center / contain no-repeat;
