@@ -1,38 +1,45 @@
-/* Setup: the whole window, a step at a time. The steps down the left as contents, the step beside them (its
-   count, title, why and the one thing to do, Back and Continue at its foot), and the stage on the right: a
-   picture of your screen, on the overlay's wallpaper, drawn with the app's real parts. The step keeps its
-   width and the stage takes the rest; under 760 px the stage goes under the step. */
-.onboarding { display: grid; grid-template-columns: 100px 316px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); column-gap: 24px; box-sizing: border-box; height: 100%; padding: 54px 16px 16px 28px; background: var(--window); }
+/* Setup: the whole window, a step at a time. The steps down the left, numbered; the step beside them (title,
+   why and the one thing to do, then Continue and Back right under it); and the stage on the right: a picture
+   of your screen, on the overlay's wallpaper, drawn with the app's real parts. The steps and the step share a
+   top edge and sit a little above the middle, beside the stage (the middle row grows to the taller of the two;
+   the rows round it share what's left). The step keeps its width and the stage takes the rest; under 760 px
+   the stage goes under the step. */
+.onboarding { display: grid; grid-template-columns: 132px 316px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto minmax(0, 1.3fr); column-gap: 28px; box-sizing: border-box; height: 100%; padding: 54px 16px 16px 28px; background: var(--window); }
 .setup-leave { position: fixed; top: 7px; right: 12px; z-index: 2; }
 
-/* ---------- the contents: every step's name, the current one in ink, the finished ones ticked ---------- */
-.setup-toc { position: relative; z-index: 1; margin-top: -5px; }
-.setup-toc ol { display: flex; flex-direction: column; gap: 1px; margin: 0; padding: 0; list-style: none; }
-.setup-toc button { display: flex; align-items: center; gap: 5px; width: calc(100% + 8px); height: 26px; margin-left: -8px; padding: 0 8px 0 6px; border: 0; border-radius: 7px; font: 13px/1 var(--font); color: var(--ink-3); background: none; text-align: left; white-space: nowrap; cursor: pointer;
+/* ---------- the steps: a number in a ring each, a tick once done, the current one filled like Continue,
+   joined by a line down the rings ---------- */
+.setup-toc { position: relative; z-index: 1; grid-row: 2; align-self: start; margin-top: -4px; }
+.setup-toc ol { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.setup-toc li { position: relative; }
+/* 20 px rings in 34 px rows: the line runs in the 14 px between one ring and the next, 3 px clear of each. */
+.setup-toc li:not(:last-child)::after { content: ''; position: absolute; left: 9.5px; top: 30px; width: 1px; height: 8px; border-radius: 1px; background: var(--surface-3); }
+.setup-toc button { display: flex; align-items: center; gap: 10px; width: calc(100% + 12px); height: 34px; margin-left: -6px; padding: 0 8px 0 6px; border: 0; border-radius: var(--radius-row); font: 13px/1 var(--font); color: var(--ink-3); background: none; text-align: left; white-space: nowrap; cursor: pointer;
   transition: color var(--quick) var(--ease), background var(--quick) var(--ease); }
 .setup-toc button:hover { color: var(--ink); background: var(--surface-2); }
-.setup-toc button[data-done] { color: var(--ink-2); }
+.setup-toc li[data-done] button { color: var(--ink-2); }
 .setup-toc button[aria-current] { color: var(--ink); font-weight: 600; }
-.setup-tick { display: grid; flex: none; place-items: center; width: 14px; color: var(--success); }
+.setup-num { display: grid; flex: none; place-items: center; width: 20px; height: 20px; box-sizing: border-box; border-radius: 50%; font: 600 10.5px/1 var(--font); font-variant-numeric: tabular-nums; color: var(--ink-3); box-shadow: inset 0 0 0 1px var(--surface-3);
+  transition: color var(--quick) var(--ease), background var(--quick) var(--ease), box-shadow var(--quick) var(--ease); }
+.setup-toc li[data-done] .setup-num { color: var(--success); background: var(--success-fill); box-shadow: none; }
+.setup-toc button[aria-current] .setup-num { color: var(--on-accent); background: var(--accent-button); box-shadow: var(--elev-control); }
 
 /* ---------- the step ---------- */
-.setup-step { position: relative; z-index: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; animation: fade-in var(--quick) var(--ease) backwards, setup-in var(--slow) var(--ease) backwards; }
+.setup-step { position: relative; z-index: 1; grid-row: 2; align-self: start; display: flex; flex-direction: column; min-width: 0; min-height: 0; max-height: calc(100vh - 70px); animation: fade-in var(--quick) var(--ease) backwards, setup-in var(--slow) var(--ease) backwards; }
 @keyframes setup-in { from { translate: 0 calc(6px * var(--motion)); } }
 /* Room either side for the focus rings; a step taller than the window fades out at the edge it scrolls on toward. */
-.setup-scroll { flex: 1; min-height: 0; margin: 0 -8px; padding: 0 8px; overflow-y: auto; }
+.setup-scroll { flex: 0 1 auto; min-height: 0; margin: 0 -8px; padding: 0 8px; overflow-y: auto; }
 .setup-scroll[data-more='down'] { -webkit-mask: linear-gradient(#000 calc(100% - 32px), transparent); mask: linear-gradient(#000 calc(100% - 32px), transparent); }
 .setup-scroll[data-more='up'] { -webkit-mask: linear-gradient(transparent, #000 32px); mask: linear-gradient(transparent, #000 32px); }
 .setup-scroll[data-more='up down'] { -webkit-mask: linear-gradient(transparent, #000 32px, #000 calc(100% - 32px), transparent); mask: linear-gradient(transparent, #000 32px, #000 calc(100% - 32px), transparent); }
-.setup-body { display: flex; flex-direction: column; align-items: flex-start; padding-bottom: 16px; }
-.setup-count { margin: 0 0 12px; font-size: 13px; line-height: 16px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
-.setup-body h1 { margin: 0 0 12px; font: 500 26px/1.2 var(--font-display); letter-spacing: -.015em; text-wrap: balance; }
+.setup-body { display: flex; flex-direction: column; align-items: flex-start; padding: 2px 0 4px; }
+.setup-body h1 { margin: 0 0 10px; font: 500 26px/1.2 var(--font-display); letter-spacing: -.015em; text-wrap: balance; }
 .setup-body h1:focus { outline: none; }
-/* Welcome: the app's icon beside its name, as an About window has it. */
-.setup-brand { display: flex; align-items: center; gap: 14px; }
-.setup-brand svg { flex: none; }
+/* Welcome: the app's icon over its name. */
+.setup-body h1 > svg { display: block; margin-bottom: 18px; }
 .setup-why { max-width: 46ch; margin: 0 0 8px; font-size: 15px; line-height: 1.5; color: var(--ink-2); text-wrap: pretty; }
 .setup-why .ui-kbd, .setup-status .ui-kbd { margin: 0 1px; }
-.setup-do { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; width: 100%; margin-top: 16px; }
+.setup-do { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; width: 100%; margin-top: 14px; }
 
 /* A button with a line beside it on what happens next. */
 .setup-action { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
@@ -78,12 +85,11 @@
 .setup-row-control { display: flex; align-items: center; gap: 8px; }
 .setup-more { grid-column: 1 / -1; justify-self: start; margin-top: 3px; font-size: 12.5px; }
 
-/* ---------- Back and Continue, at the foot of the step ---------- */
-.setup-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 12px; }
-.setup-nav .end { display: flex; gap: 8px; }
+/* ---------- Continue, then Back, right under the step ---------- */
+.setup-nav { display: flex; flex: none; align-items: center; gap: 8px; padding-top: 24px; }
 
 /* ---------- the stage: your screen, in a well, with a line under it ---------- */
-.setup-stage { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 0; margin: -6px 0 0 12px; animation: fade-in var(--slow) var(--ease) backwards; }
+.setup-stage { position: relative; z-index: 1; grid-row: 1 / -1; grid-column: 3; display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 0; margin: -6px 0 0 12px; animation: fade-in var(--slow) var(--ease) backwards; }
 .setup-screen { --desk: var(--wallpaper); position: relative; flex: 1; min-height: 0; overflow: hidden; border-radius: var(--radius-section); background: var(--wallpaper); box-shadow: var(--elev-well); }
 .setup-stage figcaption { min-height: 19px; margin: 0; padding: 0 4px; font-size: 13px; line-height: 1.45; color: var(--ink-2); text-wrap: pretty; }
 /* The field's cursor blinks as a Mac's does; still under reduced motion. The words that land fade in where it is. */
@@ -122,8 +128,9 @@
   .onboarding { display: flex; flex-direction: column; gap: 22px; overflow-y: auto; padding: 50px 20px 20px; }
   .setup-toc { margin: 0; }
   .setup-toc ol { flex-direction: row; flex-wrap: wrap; gap: 2px 4px; }
+  .setup-toc li::after { display: none; }
   .setup-toc button { width: auto; margin: 0; }
-  .setup-step { flex: none; }
+  .setup-step { flex: none; max-height: none; }
   .setup-scroll { overflow: visible; }
   .setup-stage { flex: none; height: 360px; margin: 0; }
 }
