@@ -53,11 +53,17 @@ jobs:
 
   web:
     name: Frontend
-    needs: security
-    if: github.event_name != 'schedule'
+    needs: [security, dependency-review]
+    if: ${{ !cancelled() && github.event_name != 'schedule' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      # Skipped checks count as passed, so a failed security check fails this one instead of skipping it.
+      - name: Stop if a security check failed
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: |
+          echo "::error::A security check failed, so nothing builds."
+          exit 1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -69,12 +75,18 @@ jobs:
 
   app:
     name: macOS app
-    needs: security
-    if: github.event_name != 'schedule'
+    needs: [security, dependency-review]
+    if: ${{ !cancelled() && github.event_name != 'schedule' }}
     # whisper.cpp with Metal and the Objective-C side only build on a Mac.
     runs-on: macos-15
     timeout-minutes: 60
     steps:
+      # Skipped checks count as passed, so a failed security check fails this one instead of skipping it.
+      - name: Stop if a security check failed
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: |
+          echo "::error::A security check failed, so nothing builds."
+          exit 1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:

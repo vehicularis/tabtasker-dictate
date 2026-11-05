@@ -4,6 +4,9 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    # A release has to be 14 days old before it's proposed, as CONTRIBUTING.md asks of every dependency.
+    cooldown:
+      default-days: 14
     groups:
       npm:
         patterns: ["*"]
@@ -11,6 +14,9 @@ updates:
     directory: /src-tauri
     schedule:
       interval: monthly
+    # A release has to be 14 days old before it's proposed, as CONTRIBUTING.md asks of every dependency.
+    cooldown:
+      default-days: 14
     groups:
       cargo:
         patterns: ["*"]
@@ -18,3 +24,6 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    # A release has to be 14 days old before it's proposed, as CONTRIBUTING.md asks of every dependency.
+    cooldown:
+      default-days: 14
