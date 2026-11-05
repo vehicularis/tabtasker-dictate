@@ -28,7 +28,7 @@ const rowText = (item: LibraryItem) => {
   return { title: item.title, glance: rest !== null && /^(?:[.!?:]|\s*$)/.test(rest) ? rest.replace(/^[\s.!?:]+/, '') : text };
 };
 type Props = { kind: 'note' | 'meeting'; path: string | null; onError: (message: string) => void; onOpen: (route: string) => void } & PageProps;
-const routeTo = (kind: 'note' | 'meeting', path: string) => `${kind === 'note' ? 'notes' : 'meetings'}/${encodeURIComponent(path)}`;
+const routeTo = (kind: 'note' | 'meeting', path: string) => `${kind === 'note' ? 'notes' : 'meetings'}/${path}`;
 /// A note by voice, as the pill's Speak a note: the orb listens until you stop, then the note is saved and listed here.
 const speakNote = (onError: Props['onError']) => void invoke('request', { kind: 'note' }).catch(error => onError(message(error, 'Couldn’t start a spoken note.')));
 const newNote = (onOpen: Props['onOpen'], onError: Props['onError']) => void invoke<string>('note_new', { title: '', text: '', stamp: stamp() }).then(made => onOpen(routeTo('note', made)), error => onError(message(error, 'Couldn’t make a new note.')));
