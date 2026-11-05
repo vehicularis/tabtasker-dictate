@@ -63,9 +63,11 @@ git tag v0.1.2 && git push origin v0.1.2
 ```
 
 It runs the security checks, then [scripts/release-mac.sh](scripts/release-mac.sh): the app and its DMG signed
-with the Developer ID, notarized, stapled and checked by Gatekeeper, and a SHA256SUMS file. It attests where the
-DMG came from and leaves both files on a draft release. Write the notes, download the DMG and check it the way
-the README asks people to, then publish:
+with the Developer ID, notarized, stapled and checked by Gatekeeper, the update (the app as a `.app.tar.gz`
+signed with the updater key, from the `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+secrets) with the `latest.json` that points to it, and a SHA256SUMS file. It attests where the DMG came from and
+leaves the files on a draft release. Write the notes, download the DMG and check it the way the README asks
+people to, then publish it as the latest release: installed copies update from the release marked Latest.
 
 ```sh
 gh attestation verify TabTasker-Dictate-0.1.2-arm64.dmg -R vehicularis/tabtasker-dictate

@@ -89,9 +89,12 @@ gh attestation verify ~/Downloads/TabTasker-Dictate-*-arm64.dmg -R vehicularis/t
 
 0.1.0 and 0.1.1 were built on a Mac before the workflow, so they have no attestation.
 
-To update, download the newest release and replace the app, or run `brew upgrade --cask tabtasker-dictate` if
-you installed it with Homebrew. Your settings, notes and speech model stay where they are. What changed in each
-release is in [CHANGELOG.md](CHANGELOG.md).
+Dictate updates itself. Every few hours it looks for a new release, downloads it in the background, checks
+it’s signed by us, and offers to restart. It never restarts while you’re dictating or recording a meeting.
+Turn that off, or check now, in Settings › General; the pill’s menu has Check for updates… too. Your settings,
+notes and speech model stay where they are. 0.1.1 and earlier can’t update themselves: download the newest
+release once and replace the app, or run `brew upgrade --cask tabtasker-dictate` if you installed it with
+Homebrew. What changed in each release is in [CHANGELOG.md](CHANGELOG.md).
 
 ## Questions
 
@@ -136,7 +139,7 @@ Install Rust, Node 24 and Xcode’s command line tools, then:
 ```sh
 npm install
 npm run tauri dev      # run from source
-npm run tauri build    # TabTasker Dictate.app and a DMG in src-tauri/target/release/bundle
+npm run tauri build -- --no-sign    # an unsigned TabTasker Dictate.app and DMG in src-tauri/target/release/bundle
 ```
 
 A release, signed with the Developer ID, notarized and stapled, comes from

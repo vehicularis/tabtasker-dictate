@@ -1,6 +1,6 @@
 // The app in a browser: real settings kept in memory, a sample status, and each feature's own commands
 // from its file here. Nothing leaves the page and nothing persists past a reload.
-import { chordProblem, PILL_BUTTONS, SOUNDS, STICKY_HUES, type Chord, type Settings, type Status, type Sticky } from '../store';
+import { chordProblem, PILL_BUTTONS, SOUNDS, STICKY_HUES, type Chord, type Settings, type Status, type Sticky, type UpdateState } from '../store';
 import { register as input } from './input';
 import { register as speech } from './speech';
 import { register as notes } from './notes';
@@ -28,7 +28,7 @@ export type Mock = {
 // The same as settings.rs's defaults.
 const DEFAULTS: Settings = {
   version: 1,
-  general: { menuBarIcon: true, showInDock: false },
+  general: { menuBarIcon: true, showInDock: false, checkForUpdates: true },
   shortcuts: { dictate: 'fn', handsFree: true, command: 'control', note: null, meeting: null, pasteLast: null, writeNote: null, sticky: null, ask: null },
   dictation: { language: 'auto', translateToEnglish: false, removeFillers: true, sounds: true, soundVolume: 0.3, startSound: 'Tink', stopSound: 'Pop', model: 'turbo' },
   vocabulary: { words: [], replacements: [], learn: true, suggestions: [] },
@@ -74,7 +74,7 @@ const listOf = (item: Check): Check => value => Array.isArray(value) && value.ev
 const folder: Check = value => value === null || (typeof value === 'string' && value.startsWith('/') && !value.includes('\0'));
 const chord: Check = value => value === null || (object(value) && chordProblem(value as Chord) === null);
 const SCHEMA: Record<string, Record<string, Check>> = {
-  general: { menuBarIcon: bool, showInDock: bool },
+  general: { menuBarIcon: bool, showInDock: bool, checkForUpdates: bool },
   shortcuts: { dictate: oneOf('fn', 'rightCommand', 'rightOption', 'rightControl', 'rightShift'), handsFree: bool, command: oneOf('control', 'option', 'command', 'shift', 'off'), note: chord, meeting: chord, pasteLast: chord, writeNote: chord, sticky: chord, ask: chord },
   dictation: { language: value => value === 'auto' || LANGUAGES.has(value as string), translateToEnglish: bool, removeFillers: bool, sounds: bool,
     soundVolume: value => typeof value === 'number' && Number.isFinite(value), startSound: oneOf(...SOUNDS), stopSound: oneOf(...SOUNDS), model: oneOf('turbo', 'small') },
@@ -211,6 +211,19 @@ mock.handle('open_site', ({ url }) => { window.open(url as string, '_blank', 'no
 mock.handle('save_note', ({ title, stamp }) => `${status.notes}/${stamp} ${title || 'Note'}.md`);
 mock.handle('show_notes', () => {});
 mock.handle('plugin:app|version', () => '0.1.0');
+// Updates (updates.rs): a check finds nothing newer, or with `?update=ready` there is one downloaded to restart into.
+const update: UpdateState = { current: '0.1.0', busy: false, version: null, ready: false, latest: false, problem: null };
+if (new URLSearchParams(location.search).get('update') === 'ready') Object.assign(update, { version: '0.1.2', ready: true });
+mock.handle('update_state', () => copy(update));
+mock.handle('update_check', async ({ tell }) => {
+  if (update.ready) return copy(update);
+  emit('dictate-update', Object.assign(update, { busy: true, latest: false }));
+  await new Promise(done => setTimeout(done, 700));
+  emit('dictate-update', Object.assign(update, { busy: false, latest: true }));
+  if (tell) emit('dictate-notice', { message: `You’re up to date. ${update.current} is the newest version.` });
+  return copy(update);
+});
+mock.handle('update_restart', () => emit('dictate-notice', { message: 'Restart to update (in the app, it would)' }));
 
 // Input goes last: its `request` adds Send and Cancel to the permission answers setup gives.
 for (const register of [speech, notes, meetings, claude, agents, stats, setup, design, input]) register(mock);

@@ -83,6 +83,8 @@ export const MeetingIcon = () => <Icon name="meeting" size={17} />;
 export const GearIcon = () => <Line><path d={GEAR} /><circle cx="10" cy="10" r="2.4" /></Line>;
 // A clock with its bells: away for a while.
 export const AlarmIcon = () => <Line><circle cx="10" cy="11" r="6" /><path d="M10 8.25v2.9l1.9 1.35M3.6 5.6l2.3-2M16.4 5.6l-2.3-2" /></Line>;
+// An update: an arrow coming down into a circle.
+export const UpdateIcon = () => <Line><circle cx="10" cy="10" r="6.75" /><path d="M10 6.5v6.5M7.25 10.5 10 13.25l2.75-2.75" /></Line>;
 // Setup: a list with its first steps ticked.
 export const SetupIcon = () => <Line><rect x="3.25" y="2.75" width="13.5" height="14.5" rx="2.5" /><path d="m6.25 7.4 1.25 1.25 2.25-2.5M6.25 12.9l1.25 1.25 2.25-2.5M12 7.6h2.25M12 13.1h2.25" /></Line>;
 export const Check = () => <svg className="icon" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" /></svg>;

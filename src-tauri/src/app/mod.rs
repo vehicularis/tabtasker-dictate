@@ -4,6 +4,7 @@ pub(crate) mod commands;
 mod events;
 pub(crate) mod logger;
 pub(crate) mod menu;
+pub(crate) mod updates;
 pub(crate) mod windows;
 
 use std::ffi::{c_char, c_void};
