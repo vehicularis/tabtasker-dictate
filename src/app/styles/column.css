@@ -80,7 +80,7 @@
 /* The record button in the column's head: a 28-point round with the mic; recording, a red stop square breathing. */
 .column-head .record, .column-head .record.only-icon { width: 28px; height: 28px; padding: 0; border-radius: 50%; }
 .record.on { color: var(--on-accent); background: var(--accent-button); box-shadow: var(--elev-control); }
-.record-stop { display: block; width: 10px; height: 10px; border-radius: 2px; background: #fff; animation: record-breathe 1.6s ease-in-out infinite; }
+.record-stop { display: block; width: 10px; height: 10px; border-radius: 2px; background: currentColor; animation: record-breathe 1.6s ease-in-out infinite; }
 @keyframes record-breathe { 50% { opacity: .55; } }
 @media (prefers-reduced-motion: reduce) { .record-stop, .meeting-live i, .look-caret { animation: none; } }
 /* While a meeting runs, or recordings are kept: the time and the recordings, under the search. */

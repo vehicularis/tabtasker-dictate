@@ -18,6 +18,7 @@
 .empty-pane.first { gap: 8px; color: var(--ink-2); }
 .empty-pane.first .empty-icon { display: grid; place-items: center; margin-bottom: 8px; color: var(--ink-2); } /* the glyph alone, no tile */
 .empty-pane.first strong { font: 500 19px/1.3 var(--font-display); color: var(--ink); }
+.empty-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 4px; }
 .empty-pane.first p { margin-bottom: 10px; }
 .empty-pane.first .meeting-strip { margin-top: 6px; }
 /* The people heard in a meeting, each a chip that renames them everywhere. */
