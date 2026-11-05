@@ -16,6 +16,8 @@
 
 <p align="center">
   <a href="https://github.com/vehicularis/tabtasker-dictate/actions/workflows/ci.yml"><img src="https://github.com/vehicularis/tabtasker-dictate/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/vehicularis/tabtasker-dictate/releases/latest"><img src="https://img.shields.io/github/v/release/vehicularis/tabtasker-dictate?label=release" alt="Latest release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/vehicularis/tabtasker-dictate" alt="Apache-2.0 licence"></a>
 </p>
 
 <p align="center">
@@ -70,7 +72,12 @@ A release, signed with the Developer ID, notarized and stapled, comes from
 
 The full design is written up in [docs/spec/v1.md](docs/spec/v1.md).
 
+## Contributing
+
+Bug reports, ideas and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) says how to build Dictate
+and what a pull request needs. Report a security problem privately, as [SECURITY.md](SECURITY.md) explains.
+
 ## License
 
-Apache-2.0, see [LICENSE](LICENSE). The speech models and libraries it uses are listed with their licenses
+Apache-2.0, see [LICENSE](LICENSE) and [NOTICE](NOTICE). The speech models and libraries it uses are listed with their licenses
 in [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt).
