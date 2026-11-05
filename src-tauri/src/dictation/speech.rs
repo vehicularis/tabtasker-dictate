@@ -69,7 +69,10 @@ struct Draft { id: String, samples: usize, cancelled: Arc<AtomicBool> }
 /// What the passes of the newest hold found out, for the passes after them. `spoken` is the language
 /// of its newest pass, sure or not, for the text pipeline.
 #[derive(Default)]
-struct Hold { id: String, language: Option<i32>, spoken: Option<i32>, heard: Option<(usize, String)> }
+struct Hold { id: String, language: Option<i32>, spoken: Option<i32>, heard: Option<(usize, String)>, live: Live }
+/// What the live passes of a hold cost, for the log: how many ran, how long they took, the slowest.
+#[derive(Default, Clone, Copy)]
+struct Live { passes: usize, total_ms: u128, slowest_ms: u128 }
 /// Speech that ends this long before a live pass's audio does is all in that pass's words.
 const SETTLED: usize = 16000 * 3 / 10;
 static APP: OnceLock<AppHandle> = OnceLock::new();
@@ -706,6 +709,13 @@ fn silent_audio(pcm: &[f32]) -> bool {
   pcm.chunks(1_600).map(|window| (window.iter().map(|s| s * s).sum::<f32>() / window.len() as f32).sqrt()).fold(0.0, f32::max) < 0.002
 }
 
+/// The loudest sample and the loudest tenth of a second (RMS) of `pcm`: what the gates below judge, for the log.
+fn levels(pcm: &[f32]) -> (f32, f32) {
+  let peak = pcm.iter().fold(0.0f32, |peak, s| peak.max(s.abs()));
+  let rms = pcm.chunks(1_600).map(|window| (window.iter().map(|s| s * s).sum::<f32>() / window.len() as f32).sqrt()).fold(0.0, f32::max);
+  (peak, rms)
+}
+
 /// Loud enough somewhere to be a voice (OpenWhispr localSpeechGate.js, its speech rule): a tenth of a second
 /// at the level of a word, RMS 0.003 with a peak of 0.02, or plainly above it at RMS 0.006.
 fn voiced(pcm: &[f32]) -> bool {
@@ -883,6 +893,7 @@ impl Engine {
     // Over near-silence a prompted Whisper can recite the vocabulary instead of what was said (OpenWhispr
     // #1454): heard again without it, when the retry could be kept.
     let Some(echo) = Echo::of(&text, &self.prompt.sent, pcm.len()).filter(|_| !self.prompt.tokens.is_empty()) else { return Ok(text) };
+    if !quick { log::info!("dictation pass: it recited the vocabulary, heard again without it"); }
     match self.decode(pcm, language, ask, cancelled.clone(), quick, false) {
       Ok(again) if echo.keeps(&again, &self.prompt.sent, pcm.len()) => Ok(again),
       _ if cancelled.load(Ordering::Relaxed) => Err("Voice command cancelled.".into()),
@@ -974,21 +985,31 @@ impl LocalSpeech {
 
   /// Where the speech in `pcm` ends, in samples. The end is found more keenly than whether there is speech
   /// at all, so a short or quiet last word still counts.
-  fn speech_end(&self, pcm: &[f32]) -> Result<usize, String> {
+  fn speech_end(&self, pcm: &[f32]) -> Result<usize, String> { self.find_speech_end(pcm, false) }
+
+  /// `speech_end`, saying in the log (`report`) what the gates made of the audio: its levels, the speech
+  /// detection's segments and where the speech was found to end. Never the words.
+  fn find_speech_end(&self, pcm: &[f32], report: bool) -> Result<usize, String> {
     validate_audio(pcm)?;
-    if silent_audio(pcm) { return Err(UNHEARD.into()); }
+    let (peak, rms) = levels(pcm);
+    let seconds = |samples: usize| samples as f32 / 16_000.0;
+    let say = |what: String| if report { log::info!("dictation gate: {:.1}s, peak {peak:.4}, loudest rms {rms:.4}: {what}", seconds(pcm.len())); };
+    if silent_audio(pcm) { say("unheard, too quiet to hold a word (loudest rms under 0.002)".into()); return Err(UNHEARD.into()); }
     let mut vad = lock(&self.vad);
     let vad = vad.as_mut().ok_or("The speech model is still loading.")?;
     vad.detect_speech(pcm).map_err(|_| "Couldn’t understand that")?;
     let speech = vad.segments_from_probabilities(WhisperVadParams::default()).map_err(|_| "Couldn’t understand that")?;
     // Speech detection wants a quarter of a second of speech, which one short word can fall short of, so
     // a level that is plainly a voice counts too.
-    if speech.num_segments() == 0 && !voiced(pcm) { return Err(UNHEARD.into()); }
+    let found = speech.num_segments();
+    if found == 0 && !voiced(pcm) { say("unheard, no speech detected and not loud enough to count as a voice".into()); return Err(UNHEARD.into()); }
     let mut keen = WhisperVadParams::default();
     keen.set_threshold(0.3); keen.set_min_speech_duration(0);
     let speech = vad.segments_from_probabilities(keen).map_err(|_| "Couldn’t understand that")?;
     // In hundredths of a second; all of it when even the keen pass found no speech.
-    Ok(speech.get_segment_end_timestamp(speech.num_segments() - 1).map_or(pcm.len(), |end| (end * 160.0) as usize))
+    let end = speech.get_segment_end_timestamp(speech.num_segments() - 1).map_or(pcm.len(), |end| (end * 160.0) as usize);
+    say(format!("{found} speech segment(s), {} keen, speech ends at {:.2}s{}", speech.num_segments(), seconds(end.min(pcm.len())), if found == 0 { " (let through by its level)" } else { "" }));
+    Ok(end)
   }
 
   /// A pass in the language Settings pins, or else the hold's: detected by its first pass that is sure
@@ -996,16 +1017,27 @@ impl LocalSpeech {
   fn pass(&self, engine: &mut Engine, id: &str, pcm: &[f32], cancelled: Arc<AtomicBool>, quick: bool) -> Result<String, String> {
     if cancelled.load(Ordering::Relaxed) { return Err("Voice command cancelled.".into()); }
     let ask = Ask::now();
-    let language = match ask.language.or_else(|| self.hold(id, |hold| hold.language)) {
-      Some(language) => language,
+    let started = Instant::now();
+    let held = self.hold(id, |hold| hold.language);
+    let (language, how) = match ask.language.map(|language| (language, "Settings".to_owned())).or_else(|| held.map(|language| (language, "this hold".to_owned()))) {
+      Some(found) => found,
       None => {
         let (language, sure) = engine.detect(pcm)?;
         if sure >= 0.9 { self.hold(id, |hold| hold.language = Some(language)); }
-        language
+        (language, format!("detected, {sure:.2} sure{}", if sure >= 0.9 { "" } else { ", not kept" }))
       }
     };
     self.hold(id, |hold| hold.spoken = Some(language));
-    engine.run(pcm, language, &ask, cancelled, quick)
+    let result = engine.run(pcm, language, &ask, cancelled, quick);
+    let ms = started.elapsed().as_millis();
+    if quick {
+      self.hold(id, |hold| { hold.live.passes += 1; hold.live.total_ms += ms; hold.live.slowest_ms = hold.live.slowest_ms.max(ms); });
+    } else {
+      let outcome = match &result { Ok(text) => format!("{} word(s)", text.split_whitespace().count()), Err(error) if error == UNHEARD => "nothing it was sure of".into(), Err(error) => format!("failed: {error}") };
+      log::info!("dictation pass: {:.1}s of audio, language {} ({how}){}, 5 beams, {ms} ms, {outcome}", pcm.len() as f32 / 16_000.0,
+        whisper_rs::get_lang_str(language).unwrap_or("?"), if ask.translate { ", translated" } else { "" });
+    }
+    result
   }
 
   /// The words once the key is let go. A live pass that already heard everything said is the answer, and
@@ -1016,9 +1048,11 @@ impl LocalSpeech {
       let mut engine = self.engine_now();
       return self.note_finish(engine.as_mut().ok_or("The speech model is still loading.")?, id, 0, pcm, cancelled);
     }
-    let end = self.speech_end(pcm)? + SETTLED;
+    let end = self.find_speech_end(pcm, true)? + SETTLED;
     let heard = || self.hold(id, |hold| hold.heard.clone()).filter(|(samples, _)| *samples >= end).map(|(_, text)| text);
-    if let Some(text) = heard() { return Ok(text); }
+    let live = self.hold(id, |hold| hold.live);
+    if live.passes > 0 { log::info!("dictation live: {} pass(es), {} ms in all, slowest {} ms", live.passes, live.total_ms, live.slowest_ms); }
+    if let Some(text) = heard() { log::info!("dictation pass: none needed, a live pass heard all of it"); return Ok(text); }
     if let Some(draft) = lock(&self.draft).as_ref() {
       if draft.id != id || draft.samples < end { draft.cancelled.store(true, Ordering::Relaxed); } // frees the engine sooner
     }
@@ -1099,14 +1133,21 @@ extern "C" fn dictate_audio(id: *const c_char, samples: *const f32, count: usize
     // On disk until the words are out, so a crash on the way leaves it for the next launch.
     claim.unsent = keep_unsent(&state.unsent, &history::Entry::new(&ctx, "", pcm.len() as f64 / 16000.0), &pcm)
       .inspect_err(|e| log::warn!("dictation: couldn’t keep the audio until its words are out: {e}")).ok();
+    let released = Instant::now();
     let result = catch_unwind(AssertUnwindSafe(|| state.finish(&id, &pcm, cancelled.clone()))).unwrap_or_else(|_| {
       log::error!("dictation: a pass panicked");
       Err(PANICKED.into())
     });
+    let heard_words = result.as_ref().map_or(0, |text| text.split_whitespace().count());
     claim.end_job();
     if cancelled.load(Ordering::Relaxed) || !state.enabled.load(Ordering::Relaxed) { return; }
     // The words as Whisper heard them, should the pipeline after it fail.
     let result = result.map(|text| catch_unwind(AssertUnwindSafe(|| settle(&id, &text, pcm.len()))).unwrap_or(text));
+    log::info!("dictation done: {:.1}s of audio, {} ms after release, {}", pcm.len() as f32 / 16_000.0, released.elapsed().as_millis(), match &result {
+      Ok(text) => format!("{heard_words} word(s) heard, {} after the text pipeline", text.split_whitespace().count()),
+      Err(error) if error == UNHEARD => "unheard".into(),
+      Err(error) => format!("error: {error}"),
+    });
     // Return follows the words when the app is one for messages, or when "send" ended what was said.
     let (result, send) = match result {
       // "Sticky: call Thomas" puts a sticky on the screen instead of typing.
