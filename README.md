@@ -70,13 +70,18 @@ and drag TabTasker Dictate into Applications. You’ll need a Mac with Apple sil
 macOS 14.2 or later to record the other side of a call. The first time it opens, Dictate downloads its speech
 model (about 875 MB) and walks you through the two permissions it needs.
 
-It’s signed by Vehicularis Limited and notarized by Apple, so it opens without a warning. To check a download
-yourself, compare its SHA-256 with the one GitHub shows beside the file on the release page, and ask Gatekeeper:
+It’s signed by Vehicularis Limited and notarized by Apple, so it opens without a warning. Each release is built
+in the open, by this repository’s [release workflow](.github/workflows/release.yml) from a tagged commit on main.
+To check a download yourself, compare its SHA-256 with the release’s SHA256SUMS file, ask Gatekeeper, and ask
+GitHub whether that workflow built it (with the [GitHub CLI](https://cli.github.com), signed in):
 
 ```sh
 shasum -a 256 ~/Downloads/TabTasker-Dictate-*-arm64.dmg
 spctl -a -vv -t install ~/Downloads/TabTasker-Dictate-*-arm64.dmg    # accepted, source=Notarized Developer ID
+gh attestation verify ~/Downloads/TabTasker-Dictate-*-arm64.dmg -R vehicularis/tabtasker-dictate
 ```
+
+0.1.0 and 0.1.1 were built on a Mac before the workflow, so they have no attestation.
 
 To update, download the newest release and replace the app. Your settings, notes and speech model stay where
 they are. What changed in each release is in [CHANGELOG.md](CHANGELOG.md).
@@ -127,7 +132,8 @@ npm run tauri build    # TabTasker Dictate.app and a DMG in src-tauri/target/rel
 ```
 
 A release, signed with the Developer ID, notarized and stapled, comes from
-[scripts/release-mac.sh](scripts/release-mac.sh); it says at its top what it needs once per Mac.
+[scripts/release-mac.sh](scripts/release-mac.sh), which the [release workflow](.github/workflows/release.yml)
+runs for a pushed tag. CONTRIBUTING.md says how to make one.
 
 ## Contributing
 

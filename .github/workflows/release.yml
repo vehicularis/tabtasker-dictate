@@ -1,0 +1,143 @@
+name: Release
+
+# A pushed vX.Y.Z tag builds the release in the open with scripts/release-mac.sh: the app and its DMG signed with
+# the Developer ID, notarized, stapled and checked by Gatekeeper, a SHA256SUMS file, and a build provenance
+# attestation for the DMG. It leaves them on a draft release, which a person checks and publishes.
+# Run by hand, or from a pull request that changes how a release is built, it's a dry run: the same build
+# signed ad hoc, with no secrets, no attestation and no release. The DMG is on the run's page.
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - scripts/release-mac.sh
+      - scripts/dmg-settings.py
+      - design/dmg-background.tiff
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  # The same checks as CI's, so an advisory published since the tagged commit's CI run stops the release.
+  security:
+    name: Security before release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - name: Known vulnerabilities in the npm packages
+        run: npm audit --audit-level=moderate
+      - name: Advisories, licences, bans and sources of the Rust crates
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          manifest-path: src-tauri/Cargo.toml
+          arguments: ''
+          command: check advisories bans licenses sources
+
+  build:
+    name: Build the DMG
+    needs: security
+    runs-on: macos-15
+    timeout-minutes: 90
+    # Only a tag push enters the release environment, so secrets kept there reach no other run.
+    environment: ${{ github.event_name == 'push' && 'release' || '' }}
+    permissions:
+      contents: read
+      id-token: write # the attestation's signing certificate, from Sigstore
+      attestations: write
+    # No caches: a release builds from nothing that another run left behind.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # to see that the tag is on main
+          persist-credentials: false
+      - name: Check that the tag is this version, on main
+        if: github.event_name == 'push'
+        run: |
+          VERSION=$(jq -r .version src-tauri/tauri.conf.json)
+          [[ "$GITHUB_REF_NAME" == "v$VERSION" ]] || { echo "::error::The tag is $GITHUB_REF_NAME, but tauri.conf.json says $VERSION."; exit 1; }
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "::error::$GITHUB_REF_NAME isn't a commit on main."; exit 1; }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - run: npm ci
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - name: Put the Developer ID certificate in a keychain of this run's own, and the notary key beside it
+        if: github.event_name == 'push'
+        env:
+          CERTIFICATE: ${{ secrets.DEVELOPER_ID_CERTIFICATE }}
+          CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+          NOTARY_API_KEY: ${{ secrets.NOTARY_API_KEY }}
+        # ponytail: no clean-up step, the runner is a fresh VM that's thrown away after the job.
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/release.keychain-db"
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 24)
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          base64 --decode <<< "$CERTIFICATE" > "$RUNNER_TEMP/certificate.p12"
+          security import "$RUNNER_TEMP/certificate.p12" -k "$KEYCHAIN" -f pkcs12 -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/certificate.p12"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          security find-identity -v -p codesigning "$KEYCHAIN" | grep -q '"Developer ID Application: VEHICULARIS LIMITED (FZJT9G5S86)"' \
+            || { echo "::error::DEVELOPER_ID_CERTIFICATE has no Developer ID Application identity for VEHICULARIS LIMITED."; exit 1; }
+          printf '%s\n' "$NOTARY_API_KEY" > "$RUNNER_TEMP/notary-key.p8"
+          echo "NOTARY_KEY=$RUNNER_TEMP/notary-key.p8" >> "$GITHUB_ENV"
+      - name: Build, sign, notarize and check it
+        env:
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
+          NOTARY_ISSUER: ${{ secrets.NOTARY_API_ISSUER_ID }}
+        run: |
+          [[ "$GITHUB_EVENT_NAME" == push ]] || export DICTATE_SIGNING_IDENTITY=-
+          scripts/release-mac.sh
+      - name: Attest where the DMG came from
+        if: github.event_name == 'push'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: release/*.dmg
+      - name: Check the attestation the way the README asks people to
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh attestation verify release/*.dmg -R "$GITHUB_REPOSITORY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release
+          path: |
+            release/*.dmg
+            release/SHA256SUMS
+          if-no-files-found: error
+
+  # Its own job, so the one that runs the build's dependencies never holds a token that can write.
+  release:
+    name: Draft the release
+    needs: build
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+          path: release
+      - name: Check the files are the ones built
+        working-directory: release
+        run: sha256sum --check SHA256SUMS
+      - name: Put them on a draft release, for a person to publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release create "$GITHUB_REF_NAME" release/* --draft --verify-tag --title "TabTasker | Dictate ${GITHUB_REF_NAME#v}" --generate-notes
