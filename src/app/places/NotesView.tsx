@@ -29,6 +29,8 @@ const rowText = (item: LibraryItem) => {
 };
 type Props = { kind: 'note' | 'meeting'; path: string | null; onError: (message: string) => void; onOpen: (route: string) => void } & PageProps;
 const routeTo = (kind: 'note' | 'meeting', path: string) => `${kind === 'note' ? 'notes' : 'meetings'}/${encodeURIComponent(path)}`;
+/// A note by voice, as the pill's Speak a note: the orb listens until you stop, then the note is saved and listed here.
+const speakNote = (onError: Props['onError']) => void invoke('request', { kind: 'note' }).catch(error => onError(message(error, 'Couldn’t start a spoken note.')));
 const newNote = (onOpen: Props['onOpen'], onError: Props['onError']) => void invoke<string>('note_new', { title: '', text: '', stamp: stamp() }).then(made => onOpen(routeTo('note', made)), error => onError(message(error, 'Couldn’t make a new note.')));
 
 // The library as last read, notes and meetings both, for every place that asks: one opened again knows at once
@@ -99,7 +101,10 @@ export function NotesColumn({ kind, path, items, onError, onOpen }: Props & { it
       <Button variant="quiet" icon="close" aria-label="Clear the selection" title="Clear the selection (Esc)" onClick={sel.clear} />
     </span>
     : viewing ? <Button variant="quiet" icon="trash" aria-label="Empty the archive" title="Empty the archive" aria-haspopup="menu" onClick={event => setAsking({ paths: archivedPaths, at: event.currentTarget })} />
-    : kind === 'note' ? <Button variant="quiet" icon="compose" aria-label="New note" title="New note" onClick={() => newNote(onOpen, onError)} />
+    : kind === 'note' ? <span className="column-bulk">
+      <Button variant="quiet" icon="mic" aria-label="Speak a note" title="Speak a note" onClick={() => speakNote(onError)} />
+      <Button variant="quiet" icon="compose" aria-label="New note" title="New note" onClick={() => newNote(onOpen, onError)} />
+    </span>
     : <MeetingAction onError={onError} />;
   return <>
     <ColumnHead title={picked.length ? `${picked.length} selected` : kind === 'note' ? 'Notes' : 'Meetings'} action={action} />
@@ -146,7 +151,7 @@ export function NotePage({ kind, path, items, settings, onError, onOpen }: Props
     <strong>{kind === 'note' ? 'No notes yet' : 'No meetings yet'}</strong>
     <p>{kind === 'note' ? `Write one here, or click the note on the pill and talk.${settings.notes.folder ? '' : ' They’re saved in Documents › TabTasker | Dictate.'}`
       : 'Start one here or from the pill, and you’ll get a transcript of everyone in the room or on the call.'}</p>
-    {kind === 'note' ? <Button variant="primary" icon="compose" onClick={() => newNote(onOpen, onError)}>New note</Button> : <><MeetingAction onError={onError} labelled /><MeetingStrip onError={onError} /></>}
+    {kind === 'note' ? <span className="empty-actions"><Button variant="primary" icon="mic" onClick={() => speakNote(onError)}>Speak a note</Button><Button icon="compose" onClick={() => newNote(onOpen, onError)}>New note</Button></span> : <><MeetingAction onError={onError} labelled /><MeetingStrip onError={onError} /></>}
   </div></div>;
   if (!items) return <div className="editor-pane" />;
   const Glyph = PLACE_GLYPHS[kind === 'note' ? 'notes' : 'meetings'];

@@ -217,10 +217,22 @@ function Figure({ title, width: W, height: H, callouts, children }: { title: str
         return { x, y, w: Math.min(right, Math.max(...rects.map(r => r.right)) - origin.left) - x, h: Math.min(bottom, Math.max(...rects.map(r => r.bottom)) - origin.top) - y };
       }));
     };
+    // Anything that moves a part after the first look (its entrance, a font, the pill's size setting) measures
+    // again: a part that changes size, any transition or animation in the figure that ends, a window resize.
+    let frame = 0;
+    const soon = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(measure); };
     measure();
-    void document.fonts.ready.then(measure);
-    const later = [setTimeout(measure, 400), setTimeout(measure, 1200)];
-    return () => later.forEach(clearTimeout);
+    void document.fonts.ready.then(soon);
+    const later = [setTimeout(soon, 400), setTimeout(soon, 1200)];
+    const parts = new ResizeObserver(soon);
+    for (const c of callouts) el.querySelectorAll(`.help-stage ${c.target}`).forEach(part => parts.observe(part));
+    el.addEventListener('transitionend', soon);
+    el.addEventListener('animationend', soon);
+    window.addEventListener('resize', soon);
+    return () => {
+      later.forEach(clearTimeout); cancelAnimationFrame(frame); parts.disconnect();
+      el.removeEventListener('transitionend', soon); el.removeEventListener('animationend', soon); window.removeEventListener('resize', soon);
+    };
   }, [scale]); // eslint-disable-line react-hooks/exhaustive-deps
   const placed = scale ? place(boxes.map(b => b && { ...b }), callouts, { width, screen, gutter, top, size }) : [];
   const dim = (i: number) => active !== null && active !== i || undefined;
