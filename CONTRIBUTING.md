@@ -43,6 +43,7 @@ adds, and runs the security checks every Monday so a new advisory shows up witho
 
 - One change per pull request, with a title that says what it changes for the person using Dictate.
 - Pull requests are squash-merged, so `main` stays one straight line.
+- Anything a person using Dictate would notice gets a line under Unreleased in [CHANGELOG.md](CHANGELOG.md).
 - For UI changes, check light and dark, and that every control works from the keyboard.
 - UI copy is sentence case, short and plain. No em or en dashes.
 - Code comments say only what the code can't: the why, an invariant, a gotcha.
