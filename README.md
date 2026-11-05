@@ -70,8 +70,6 @@ npm run tauri build    # TabTasker Dictate.app and a DMG in src-tauri/target/rel
 A release, signed with the Developer ID, notarized and stapled, comes from
 [scripts/release-mac.sh](scripts/release-mac.sh); it says at its top what it needs once per Mac.
 
-The full design is written up in [docs/spec/v1.md](docs/spec/v1.md).
-
 ## Contributing
 
 Bug reports, ideas and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) says how to build Dictate
