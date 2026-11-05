@@ -160,6 +160,68 @@ void TTInsertReturn(pid_t pid) {
   }
 }
 
+/// Types `text` into the app `pid` as key presses, in pieces of whole characters, 20 units at most, posted to that
+/// app alone; no modifier rides along (not the fn, control or command still held). Off the main thread: it waits
+/// between pieces.
+static void TTInsertKeys(NSString *text, pid_t pid) {
+  NSData *lengths = TTInsertCharacters(text);
+  size_t characters = lengths.length / sizeof(size_t);
+  if (!characters) return;
+  NSMutableData *ends = [NSMutableData dataWithLength:characters * sizeof(size_t)];
+  size_t chunks = tt_type_chunks(lengths.bytes, characters, ends.mutableBytes);
+  const size_t *length = lengths.bytes, *end = ends.bytes;
+  for (size_t c = 0, character = 0, unit = 0; c < chunks; c++) {
+    size_t from = unit;
+    for (; character < end[c]; character++) unit += length[character];
+    NSRange piece = NSMakeRange(from, unit - from);
+    NSMutableData *units = [NSMutableData dataWithLength:piece.length * sizeof(UniChar)];
+    [text getCharacters:units.mutableBytes range:piece];
+    for (int down = 1; down >= 0; down--) {
+      CGEventRef key = CGEventCreateKeyboardEvent(NULL, 0, down);
+      CGEventSetFlags(key, 0);
+      CGEventKeyboardSetUnicodeString(key, piece.length, units.bytes);
+      TTInsertPost(key, pid);
+    }
+    usleep(2000);
+  }
+}
+
+// ---------- live: the field shows what has been heard so far, and is put right as it's heard again ----------
+/// Whether `text` holds a line break, which typed would press Return (send a message, run a command).
+BOOL TTInsertHasBreak(NSString *text) { return [text rangeOfCharacterFromSet:TTInsertBreaks()].location != NSNotFound; }
+static NSArray<NSString *> *TTInsertGraphemes(NSString *text) {
+  NSMutableArray<NSString *> *all = [NSMutableArray new];
+  [text enumerateSubstringsInRange:NSMakeRange(0, text.length) options:NSStringEnumerationByComposedCharacterSequences usingBlock:^(NSString *one, NSRange a, NSRange b, BOOL *stop) {
+    (void)a; (void)b; (void)stop; [all addObject:one];
+  }];
+  return all;
+}
+/// From what the field was given last (`from`) to what it gets now (`to`): Delete back over what comes after
+/// their common start, a character at a time, then the rest of `to` typed. One queue keeps the edits in order,
+/// so one never overtakes the last; `done` runs on the main thread once this one is in.
+void TTInsertEdit(NSString *from, NSString *to, pid_t pid, void (^done)(void)) {
+  static dispatch_queue_t queue;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{ queue = dispatch_queue_create("com.tabtasker.dictate.live", DISPATCH_QUEUE_SERIAL); });
+  NSArray<NSString *> *was = TTInsertGraphemes(from ?: @""), *now = TTInsertGraphemes(to ?: @"");
+  NSUInteger same = 0;
+  while (same < was.count && same < now.count && [was[same] isEqualToString:now[same]]) same++;
+  NSUInteger erase = was.count - same;
+  NSString *type = [[now subarrayWithRange:NSMakeRange(same, now.count - same)] componentsJoinedByString:@""];
+  dispatch_async(queue, ^{
+    for (NSUInteger i = 0; i < erase; i++) {
+      for (int down = 1; down >= 0; down--) {
+        CGEventRef key = CGEventCreateKeyboardEvent(NULL, kVK_Delete, down);
+        CGEventSetFlags(key, 0); // with fn still held it would delete forward
+        TTInsertPost(key, pid);
+      }
+      usleep(1500);
+    }
+    TTInsertKeys(type, pid);
+    if (done) dispatch_async(dispatch_get_main_queue(), done);
+  });
+}
+
 /// On the main thread. Puts `text` at the cursor of the app `pid` (with `bundle`), and calls `done` on the main
 /// thread once it is in, or once it's clear it won't be: TTInsertUnread when the app never read the paste, the
 /// words then left on the clipboard for the person to paste, and a notice saying so.
@@ -169,30 +231,10 @@ void TTInsertText(NSString *text, pid_t pid, NSString *bundle, void (^done)(TTIn
   NSData *lengths = TTInsertCharacters(text);
   size_t characters = lengths.length / sizeof(size_t);
   if (tt_types_instead(tt_typed_browser(bundle.UTF8String), TTInsertPlainLayout(), characters, text.length, oneLine)) {
-    NSMutableData *ends = [NSMutableData dataWithLength:characters * sizeof(size_t)];
-    size_t chunks = tt_type_chunks(lengths.bytes, characters, ends.mutableBytes);
-    const size_t *length = lengths.bytes, *end = ends.bytes;
-    NSMutableArray<NSValue *> *pieces = [NSMutableArray new];
-    for (size_t c = 0, character = 0, unit = 0; c < chunks; c++) {
-      size_t from = unit;
-      for (; character < end[c]; character++) unit += length[character];
-      [pieces addObject:[NSValue valueWithRange:NSMakeRange(from, unit - from)]];
-    }
-    NSString *words = [text copy];
     TTInsertEarly = nil; // the clipboard isn't touched
+    NSString *words = [text copy];
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^{
-      for (NSValue *value in pieces) {
-        NSRange piece = value.rangeValue;
-        NSMutableData *units = [NSMutableData dataWithLength:piece.length * sizeof(UniChar)];
-        [words getCharacters:units.mutableBytes range:piece];
-        for (int down = 1; down >= 0; down--) {
-          CGEventRef key = CGEventCreateKeyboardEvent(NULL, 0, down);
-          CGEventSetFlags(key, 0);
-          CGEventKeyboardSetUnicodeString(key, piece.length, units.bytes);
-          TTInsertPost(key, pid);
-        }
-        usleep(2000);
-      }
+      TTInsertKeys(words, pid);
       dispatch_async(dispatch_get_main_queue(), ^{ done(TTInsertTyped); });
     });
     return;

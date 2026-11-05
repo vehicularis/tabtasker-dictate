@@ -780,6 +780,32 @@ fn quiet(params: &mut FullParams) {
 /// clear words after a pause score high on it too, and dropping them is "Didn't catch that" for nothing.
 fn silent(no_speech: f32, avg_logprob: f32) -> bool { no_speech > 0.6 && avg_logprob < -1.0 }
 
+/// Over a phrase said again and again, Whisper can carry on saying it long after the voice stopped: hundreds of
+/// "hello"s for fifteen seconds of them. Nobody says more than about five words a second, so past that the
+/// extra repeats are the decoder's: the longest run of one phrase over and over gives back repeats until the
+/// words fit the time. A ceiling, not a cure: what's left is as many as could have been said.
+fn unloop(text: &str, seconds: f32) -> String {
+  let mut words: Vec<&str> = text.split_whitespace().collect();
+  let budget = (seconds.max(0.0) * 5.0).ceil() as usize + 3;
+  let key = |word: &str| word.trim_matches(|c: char| !c.is_alphanumeric()).to_lowercase();
+  while words.len() > budget {
+    let keys: Vec<String> = words.iter().map(|word| key(word)).collect();
+    // The longest run: a phrase of one to four words, three times or more in a row.
+    let mut best: Option<(usize, usize, usize)> = None; // (start, phrase length, repeats)
+    for start in 0..keys.len() {
+      for n in 1..=4.min(keys.len() - start) {
+        let mut repeats = 1;
+        while start + (repeats + 1) * n <= keys.len() && keys[start + repeats * n..start + (repeats + 1) * n] == keys[start..start + n] { repeats += 1; }
+        if repeats >= 3 && best.is_none_or(|(_, m, r)| n * repeats > m * r) { best = Some((start, n, repeats)); }
+      }
+    }
+    let Some((start, n, repeats)) = best else { break }; // no run to blame: leave it be
+    let keep = repeats.saturating_sub((words.len() - budget).div_ceil(n)).max(1);
+    words.drain(start + keep * n..start + repeats * n);
+  }
+  words.join(" ")
+}
+
 /// The mean log probability of a segment's words, special tokens left out (they sort from end-of-text up).
 fn avg_logprob(segment: &whisper_rs::WhisperSegment<'_>, eot: i32) -> f32 {
   let logs: Vec<f32> = (0..segment.n_tokens()).filter_map(|i| segment.get_token(i)).filter(|token| token.token_id() < eot).map(|token| token.token_data().plog).collect();
@@ -895,6 +921,7 @@ impl Engine {
       text.push_str(&segment.to_string());
     }
     let text = if prompted { without_recital(&text, &self.prompt.sent) } else { &text }.trim().to_owned();
+    let text = unloop(&text, pcm.len() as f32 / 16_000.0);
     if text.is_empty() { return Err(UNHEARD.into()); }
     if text.chars().count() > 8000 { return Err("That was too long to type. Try a shorter one.".into()); }
     Ok(text)
