@@ -86,4 +86,6 @@ else
 fi
 hdiutil detach "$MOUNT" >/dev/null
 (cd release && shasum -a 256 "${DMG:t}" | tee SHA256SUMS)
+[[ "$IDENTITY" == - ]] || printf 'For Casks/tabtasker-dictate.rb in vehicularis/homebrew-tap, once it is published:\n  version "%s"\n  sha256 "%s"\n' \
+  "$VERSION" "$(cut -d" " -f1 release/SHA256SUMS)"
 echo "Ready: $DMG, from $(git rev-parse --short HEAD)."
