@@ -12,10 +12,12 @@
 # inherit them too. Fine for a development Mac you trust; make the certificate for anything more.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-export PATH="/opt/homebrew/bin:$HOME/.nvm/versions/node/v22.16.0/bin:$HOME/.cargo/bin:$PATH"
-NPM="$HOME/.nvm/versions/node/v22.16.0/bin/npm"
+# Node 24 or later: nvm's newest v24 when there is one, else whatever is on the PATH.
+NODE24=( $HOME/.nvm/versions/node/v24.*/bin(N/n) )
+export PATH="${NODE24:+$NODE24[-1]:}/opt/homebrew/bin:$HOME/.cargo/bin:$PATH"
+node -e 'process.exit(+process.versions.node.split(".")[0] >= 24 ? 0 : 1)' 2>/dev/null || { echo "Dictate builds with Node 24 or later: nvm install 24"; exit 1; }
 APP="src-tauri/target/release/bundle/macos/TabTasker Dictate.app"
-"$NPM" run tauri build -- --bundles app
+npm run tauri build -- --bundles app
 IDENTITY="TabTasker Dictate Dev"
 if security find-identity -v -p codesigning 2>/dev/null | grep -q "\"$IDENTITY\""; then
   LEAF=$(security find-certificate -c "$IDENTITY" -Z 2>/dev/null | awk '/SHA-1 hash/ { print $3; exit }')

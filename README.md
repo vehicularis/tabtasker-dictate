@@ -69,7 +69,7 @@ drag TabTasker Dictate into Applications. You’ll need a Mac with Apple silicon
 signed and notarized, so it opens without a warning. The first time it opens, Dictate downloads its
 speech model (about 875 MB) and walks you through the two permissions it needs.
 
-To build it yourself, install Rust, Node 22 and Xcode’s command line tools, then:
+To build it yourself, install Rust, Node 24 and Xcode’s command line tools, then:
 
 ```sh
 npm install

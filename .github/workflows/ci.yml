@@ -4,23 +4,64 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Mondays: an advisory published since the last push still turns the check red.
+  schedule:
+    - cron: '23 6 * * 1'
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  web:
-    name: Frontend
+  # Runs first: nothing builds until the dependencies are clear of known vulnerabilities and disallowed licences.
+  security:
+    name: Security
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version-file: .nvmrc
+      - name: Known vulnerabilities in the npm packages
+        run: npm audit --audit-level=moderate
+      - name: Advisories, licences, bans and sources of the Rust crates
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          manifest-path: src-tauri/Cargo.toml
+          arguments: ''
+          command: check advisories bans licenses sources
+
+  # A pull request that adds or bumps a dependency: its known vulnerabilities and licence, before review.
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: moderate
+          # The licences src-tauri/deny.toml allows, and the ones already among the npm packages.
+          allow-licenses: >-
+            MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, Zlib, 0BSD, CC0-1.0, MIT-0, Unlicense,
+            Unicode-3.0, MPL-2.0, CDLA-Permissive-2.0, bzip2-1.0.6
+
+  web:
+    name: Frontend
+    needs: security
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
       - name: Typecheck and build
@@ -28,13 +69,16 @@ jobs:
 
   app:
     name: macOS app
+    needs: security
+    if: github.event_name != 'schedule'
     # whisper.cpp with Metal and the Objective-C side only build on a Mac.
     runs-on: macos-15
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
       - name: Build the frontend the app embeds
         run: npm ci && npm run build

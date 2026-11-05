@@ -438,7 +438,7 @@ MIT License
 adler2 2.0.1: 0BSD OR MIT OR Apache-2.0, https://github.com/oyvindln/adler2
 anyhow 1.0.104: MIT OR Apache-2.0, https://github.com/dtolnay/anyhow
 atomic-waker 1.1.2: Apache-2.0 OR MIT, https://github.com/smol-rs/atomic-waker
-camino 1.2.5: MIT OR Apache-2.0, https://github.com/camino-rs/camino
+camino 1.2.6: MIT OR Apache-2.0, https://github.com/camino-rs/camino
 cargo-platform 0.1.9: MIT OR Apache-2.0, https://github.com/rust-lang/cargo
 cargo_metadata 0.19.2: MIT, https://github.com/oli-obk/cargo_metadata
 displaydoc 0.2.7: MIT OR Apache-2.0, https://github.com/yaahc/displaydoc
@@ -460,15 +460,15 @@ serde-untagged 0.1.9: MIT OR Apache-2.0, https://github.com/dtolnay/serde-untagg
 serde_core 1.0.229: MIT OR Apache-2.0, https://github.com/serde-rs/serde
 serde_derive 1.0.229: MIT OR Apache-2.0, https://github.com/serde-rs/serde
 serde_derive_internals 0.29.1: MIT OR Apache-2.0, https://github.com/serde-rs/serde
-serde_json 1.0.151: MIT OR Apache-2.0, https://github.com/serde-rs/json
+serde_json 1.0.154: MIT OR Apache-2.0, https://github.com/serde-rs/json
 serde_repr 0.1.21: MIT OR Apache-2.0, https://github.com/dtolnay/serde-repr
 servo_arc 0.4.3: MIT OR Apache-2.0, https://github.com/servo/stylo
 syn 2.0.119: MIT OR Apache-2.0, https://github.com/dtolnay/syn
-syn 3.0.5: MIT OR Apache-2.0, https://github.com/dtolnay/syn
-thiserror 2.0.20: MIT OR Apache-2.0, https://github.com/dtolnay/thiserror
-thiserror-impl 2.0.20: MIT OR Apache-2.0, https://github.com/dtolnay/thiserror
+syn 3.0.9: MIT OR Apache-2.0, https://github.com/dtolnay/syn
+thiserror 2.0.21: MIT OR Apache-2.0, https://github.com/dtolnay/thiserror
+thiserror-impl 2.0.21: MIT OR Apache-2.0, https://github.com/dtolnay/thiserror
 typeid 1.0.3: MIT OR Apache-2.0, https://github.com/dtolnay/typeid
-unicode-ident 1.0.24: (MIT OR Apache-2.0) AND Unicode-3.0, https://github.com/dtolnay/unicode-ident
+unicode-ident 1.0.27: (MIT OR Apache-2.0) AND Unicode-3.0, https://github.com/dtolnay/unicode-ident
 zmij 1.0.23: MIT, https://github.com/dtolnay/zmij
 
 Permission is hereby granted, free of charge, to any
@@ -500,8 +500,8 @@ DEALINGS IN THE SOFTWARE.
 aho-corasick 1.1.5: Unlicense OR MIT, https://github.com/BurntSushi/aho-corasick
 byteorder 1.5.0: Unlicense OR MIT, https://github.com/BurntSushi/byteorder
 byteorder-lite 0.1.0: Unlicense OR MIT, https://github.com/image-rs/byteorder-lite
-jiff 0.2.35: Unlicense OR MIT, https://github.com/BurntSushi/jiff
-jiff-core 0.1.0: Unlicense OR MIT, https://github.com/BurntSushi/jiff
+jiff 0.2.38: Unlicense OR MIT, https://github.com/BurntSushi/jiff
+jiff-core 0.1.1: Unlicense OR MIT, https://github.com/BurntSushi/jiff
 memchr 2.8.3: Unlicense OR MIT, https://github.com/BurntSushi/memchr
 walkdir 2.5.0: Unlicense/MIT, https://github.com/BurntSushi/walkdir
 
@@ -554,7 +554,6 @@ Licensed under BSD-3-Clause. No licence file ships with this package; see https:
 ----
 
 base64 0.21.7: MIT OR Apache-2.0, https://github.com/marshallpierce/rust-base64
-base64 0.22.1: MIT OR Apache-2.0, https://github.com/marshallpierce/rust-base64
 
 The MIT License (MIT)
 
@@ -640,7 +639,7 @@ DEALINGS IN THE SOFTWARE.
 bitflags 1.3.2: MIT/Apache-2.0, https://github.com/bitflags/bitflags
 bitflags 2.13.2: MIT OR Apache-2.0, https://github.com/bitflags/bitflags
 glob 0.3.4: MIT OR Apache-2.0, https://github.com/rust-lang/glob
-log 0.4.34: MIT OR Apache-2.0, https://github.com/rust-lang/log
+log 0.4.35: MIT OR Apache-2.0, https://github.com/rust-lang/log
 num-traits 0.2.19: MIT OR Apache-2.0, https://github.com/rust-num/num-traits
 regex 1.13.1: MIT OR Apache-2.0, https://github.com/rust-lang/regex
 regex-automata 0.4.18: MIT OR Apache-2.0, https://github.com/rust-lang/regex
@@ -705,7 +704,7 @@ DEALINGS IN THE SOFTWARE.
 ----
 
 block2 0.6.2: MIT, https://github.com/madsmtm/objc2
-objc2 0.6.4: MIT, https://github.com/madsmtm/objc2
+objc2 0.6.5: MIT, https://github.com/madsmtm/objc2
 objc2-encode 4.1.0: MIT, https://github.com/madsmtm/objc2
 objc2-foundation 0.3.2: MIT, https://github.com/madsmtm/objc2
 
@@ -832,7 +831,7 @@ SOFTWARE.
 
 ----
 
-cfg-if 1.0.4: MIT OR Apache-2.0, https://github.com/rust-lang/cfg-if
+cfg-if 1.0.5: MIT OR Apache-2.0, https://github.com/rust-lang/cfg-if
 socket2 0.6.5: MIT OR Apache-2.0, https://github.com/rust-lang/socket2
 
 Copyright (c) 2014 Alex Crichton
@@ -1695,7 +1694,7 @@ SOFTWARE.
 ----
 
 ctor 1.0.13: Apache-2.0 OR MIT, https://github.com/mmastrac/linktime
-tinyvec 1.13.2: Zlib OR Apache-2.0 OR MIT, https://github.com/Lokathor/tinyvec
+tinyvec 1.13.3: Zlib OR Apache-2.0 OR MIT, https://github.com/Lokathor/tinyvec
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -1733,8 +1732,9 @@ SOFTWARE.
 
 ----
 
-defmt 1.1.1: MIT OR Apache-2.0, https://github.com/knurling-rs/defmt
-defmt-macros 1.1.1: MIT OR Apache-2.0, https://github.com/knurling-rs/defmt
+defmt 1.2.0: MIT OR Apache-2.0, https://github.com/knurling-rs/defmt
+defmt-macros 1.2.0: MIT OR Apache-2.0, https://github.com/knurling-rs/defmt
+defmt-parser 1.1.0: MIT OR Apache-2.0, https://github.com/knurling-rs/defmt
 
 Copyright (c) Ferrous Systems
 
@@ -1764,12 +1764,6 @@ DEALINGS IN THE SOFTWARE.
 
 ----
 
-defmt-parser 1.0.0: MIT OR Apache-2.0, https://github.com/knurling-rs/defmt
-
-Licensed under MIT OR Apache-2.0. No licence file ships with this package; see https://github.com/knurling-rs/defmt.
-
-----
-
 dequal 2.0.3 (npm): MIT, lukeed/dequal
 
 The MIT License (MIT)
@@ -1796,7 +1790,7 @@ THE SOFTWARE.
 
 ----
 
-deranged 0.5.8: MIT OR Apache-2.0, https://github.com/jhpratt/deranged
+deranged 0.5.9: MIT OR Apache-2.0, https://github.com/jhpratt/deranged
 
 Copyright (c) 2024 Jacob Pratt et al.
 
@@ -2560,7 +2554,7 @@ SOFTWARE.
 
 ----
 
-equivalent 1.0.2: Apache-2.0 OR MIT, https://github.com/indexmap-rs/equivalent
+equivalent 1.0.3: Apache-2.0 OR MIT, https://github.com/indexmap-rs/equivalent
 
 Copyright (c) 2016--2023
 
@@ -3207,7 +3201,7 @@ THE SOFTWARE.
 
 ----
 
-hyper 1.11.1: MIT, https://github.com/hyperium/hyper
+hyper 1.12.0: MIT, https://github.com/hyperium/hyper
 
 Copyright (c) 2014-2026 Sean McArthur
 
@@ -3231,7 +3225,7 @@ THE SOFTWARE.
 
 ----
 
-hyper-rustls 0.27.9: Apache-2.0 OR ISC OR MIT, https://github.com/rustls/hyper-rustls
+hyper-rustls 0.27.10: Apache-2.0 OR ISC OR MIT, https://github.com/rustls/hyper-rustls
 rustls 0.23.46: Apache-2.0 OR ISC OR MIT, https://github.com/rustls/rustls
 
 Copyright (c) 2016 Joseph Birr-Pixton <jpixton@gmail.com>
@@ -3262,7 +3256,7 @@ DEALINGS IN THE SOFTWARE.
 
 ----
 
-hyper-util 0.1.20: MIT, https://github.com/hyperium/hyper-util
+hyper-util 0.1.21: MIT, https://github.com/hyperium/hyper-util
 
 Copyright (c) 2023-2025 Sean McArthur
 
@@ -3316,7 +3310,7 @@ DEALINGS IN THE SOFTWARE.
 
 ----
 
-ico 0.5.0: MIT, https://github.com/mdsteele/rust-ico
+ico 0.6.0: MIT, https://github.com/mdsteele/rust-ico
 
 MIT License
 
@@ -3342,24 +3336,24 @@ SOFTWARE.
 
 ----
 
-icu_collections 2.3.0: Unicode-3.0, https://github.com/unicode-org/icu4x
-icu_locale_core 2.3.0: Unicode-3.0, https://github.com/unicode-org/icu4x
-icu_normalizer 2.3.0: Unicode-3.0, https://github.com/unicode-org/icu4x
-icu_normalizer_data 2.3.0: Unicode-3.0, https://github.com/unicode-org/icu4x
-icu_properties 2.3.0: Unicode-3.0, https://github.com/unicode-org/icu4x
-icu_properties_data 2.3.0: Unicode-3.0, https://github.com/unicode-org/icu4x
-icu_provider 2.3.1: Unicode-3.0, https://github.com/unicode-org/icu4x
+icu_collections 2.4.0: Unicode-3.0, https://github.com/unicode-org/icu4x
+icu_locale_core 2.4.0: Unicode-3.0, https://github.com/unicode-org/icu4x
+icu_normalizer 2.4.0: Unicode-3.0, https://github.com/unicode-org/icu4x
+icu_normalizer_data 2.4.0: Unicode-3.0, https://github.com/unicode-org/icu4x
+icu_properties 2.4.0: Unicode-3.0, https://github.com/unicode-org/icu4x
+icu_properties_data 2.4.0: Unicode-3.0, https://github.com/unicode-org/icu4x
+icu_provider 2.4.0: Unicode-3.0, https://github.com/unicode-org/icu4x
 litemap 0.8.3: Unicode-3.0, https://github.com/unicode-org/icu4x
 potential_utf 0.1.6: Unicode-3.0, https://github.com/unicode-org/icu4x
-tinystr 0.8.4: Unicode-3.0, https://github.com/unicode-org/icu4x
+tinystr 0.8.5: Unicode-3.0, https://github.com/unicode-org/icu4x
 writeable 0.6.4: Unicode-3.0, https://github.com/unicode-org/icu4x
-yoke 0.8.3: Unicode-3.0, https://github.com/unicode-org/icu4x
-yoke-derive 0.8.2: Unicode-3.0, https://github.com/unicode-org/icu4x
+yoke 0.8.4: Unicode-3.0, https://github.com/unicode-org/icu4x
+yoke-derive 0.8.4: Unicode-3.0, https://github.com/unicode-org/icu4x
 zerofrom 0.1.8: Unicode-3.0, https://github.com/unicode-org/icu4x
-zerofrom-derive 0.1.7: Unicode-3.0, https://github.com/unicode-org/icu4x
+zerofrom-derive 0.1.8: Unicode-3.0, https://github.com/unicode-org/icu4x
 zerotrie 0.2.5: Unicode-3.0, https://github.com/unicode-org/icu4x
-zerovec 0.11.8: Unicode-3.0, https://github.com/unicode-org/icu4x
-zerovec-derive 0.11.6: Unicode-3.0, https://github.com/unicode-org/icu4x
+zerovec 0.11.9: Unicode-3.0, https://github.com/unicode-org/icu4x
+zerovec-derive 0.11.7: Unicode-3.0, https://github.com/unicode-org/icu4x
 
 UNICODE LICENSE V3
 
@@ -3694,7 +3688,7 @@ SOFTWARE.
 
 ----
 
-libc 0.2.189: MIT OR Apache-2.0, https://github.com/rust-lang/libc
+libc 0.2.191: MIT OR Apache-2.0, https://github.com/rust-lang/libc
 
 Copyright (c) The Rust Project Developers
 
@@ -3910,7 +3904,7 @@ SOFTWARE.
 
 ----
 
-mio 1.2.3: MIT, https://github.com/tokio-rs/mio
+mio 1.2.4: MIT, https://github.com/tokio-rs/mio
 
 Copyright (c) 2014 Carl Lerche and other MIO contributors
 
@@ -4680,7 +4674,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-plist 1.10.1: MIT, https://github.com/ebarnard/rust-plist/
+plist 1.10.3: MIT, https://github.com/ebarnard/rust-plist/
 
 Copyright (c) 2015 Edward Barnard
 
@@ -4704,7 +4698,6 @@ SOFTWARE.
 
 ----
 
-png 0.17.16: MIT OR Apache-2.0, https://github.com/image-rs/image-png
 png 0.18.1: MIT OR Apache-2.0, https://github.com/image-rs/image-png
 
 Copyright (c) 2015 nwin
@@ -4735,7 +4728,7 @@ DEALINGS IN THE SOFTWARE.
 
 ----
 
-powerfmt 0.2.0: MIT OR Apache-2.0, https://github.com/jhpratt/powerfmt
+powerfmt 0.2.1: MIT OR Apache-2.0, https://github.com/jhpratt/powerfmt
 
 Copyright (c) 2023 Jacob Pratt et al.
 
@@ -5328,7 +5321,7 @@ DEALINGS IN THE SOFTWARE.
 
 ----
 
-rustls-platform-verifier 0.7.0: MIT OR Apache-2.0, https://github.com/rustls/rustls-platform-verifier
+rustls-platform-verifier 0.7.1: MIT OR Apache-2.0, https://github.com/rustls/rustls-platform-verifier
 
 MIT License
 
@@ -5406,7 +5399,7 @@ THE SOFTWARE.
 
 schemars 0.8.22: MIT, https://github.com/GREsau/schemars
 schemars 0.9.0: MIT, https://github.com/GREsau/schemars
-schemars 1.2.2: MIT, https://github.com/GREsau/schemars
+schemars 1.2.3: MIT, https://github.com/GREsau/schemars
 schemars_derive 0.8.22: MIT, https://github.com/GREsau/schemars
 
 MIT License
@@ -5495,11 +5488,11 @@ Licensed under MPL-2.0. No licence file ships with this package; see https://git
 
 ----
 
-serde_spanned 1.1.1: MIT OR Apache-2.0, https://github.com/toml-rs/toml
-toml 1.1.6+spec-1.1.0: MIT OR Apache-2.0, https://github.com/toml-rs/toml
-toml_datetime 1.1.1+spec-1.1.0: MIT OR Apache-2.0, https://github.com/toml-rs/toml
-toml_parser 1.1.3+spec-1.1.0: MIT OR Apache-2.0, https://github.com/toml-rs/toml
-toml_writer 1.1.2+spec-1.1.0: MIT OR Apache-2.0, https://github.com/toml-rs/toml
+serde_spanned 1.1.2: MIT OR Apache-2.0, https://github.com/toml-rs/toml
+toml 1.1.8+spec-1.1.0: MIT OR Apache-2.0, https://github.com/toml-rs/toml
+toml_datetime 1.1.2+spec-1.1.0: MIT OR Apache-2.0, https://github.com/toml-rs/toml
+toml_parser 1.1.5+spec-1.1.0: MIT OR Apache-2.0, https://github.com/toml-rs/toml
+toml_writer 1.1.3+spec-1.1.0: MIT OR Apache-2.0, https://github.com/toml-rs/toml
 
 Copyright (c) Individual contributors
 
@@ -5523,8 +5516,8 @@ SOFTWARE.
 
 ----
 
-serde_with 3.23.0: MIT OR Apache-2.0, https://github.com/jonasbb/serde_with/
-serde_with_macros 3.23.0: MIT OR Apache-2.0, https://github.com/jonasbb/serde_with/
+serde_with 3.24.0: MIT OR Apache-2.0, https://github.com/jonasbb/serde_with/
+serde_with_macros 3.24.0: MIT OR Apache-2.0, https://github.com/jonasbb/serde_with/
 
 Copyright (c) 2015
 
@@ -5846,15 +5839,25 @@ SOFTWARE.
 
 ----
 
-siphasher 1.0.3: MIT/Apache-2.0, https://github.com/jedisct1/rust-siphash
+siphasher 1.0.4: MIT OR Apache-2.0, https://github.com/jedisct1/rust-siphash
 
-Copyright 2012-2016 The Rust Project Developers.
-Copyright 2016-2026 Frank Denis.
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
-http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
-<LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
-option.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 ----
 
@@ -5888,7 +5891,7 @@ DEALINGS IN THE SOFTWARE.
 
 ----
 
-smallvec 1.16.0: MIT OR Apache-2.0, https://github.com/servo/rust-smallvec
+smallvec 1.16.3: MIT OR Apache-2.0, https://github.com/servo/rust-smallvec
 
 Copyright (c) 2018 The Servo Project Developers
 
@@ -6411,7 +6414,7 @@ Apache License
 
 ----
 
-synstructure 0.13.2: MIT, https://github.com/mystor/synstructure
+synstructure 0.14.0: MIT, https://github.com/mystor/synstructure
 
 Copyright 2016 Nika Layzell
 
@@ -6648,11 +6651,11 @@ Creator: Person: Daniel Thompson-Yvetot
 
 ----
 
-tauri 2.12.4: Apache-2.0 OR MIT, https://github.com/tauri-apps/tauri
-tauri-codegen 2.7.3: Apache-2.0 OR MIT, https://github.com/tauri-apps/tauri
-tauri-macros 2.7.3: Apache-2.0 OR MIT, https://github.com/tauri-apps/tauri
+tauri 2.12.5: Apache-2.0 OR MIT, https://github.com/tauri-apps/tauri
+tauri-codegen 2.7.4: Apache-2.0 OR MIT, https://github.com/tauri-apps/tauri
+tauri-macros 2.7.4: Apache-2.0 OR MIT, https://github.com/tauri-apps/tauri
 tauri-runtime 2.12.2: Apache-2.0 OR MIT, https://github.com/tauri-apps/tauri
-tauri-runtime-wry 2.12.2: Apache-2.0 OR MIT, https://github.com/tauri-apps/tauri
+tauri-runtime-wry 2.12.3: Apache-2.0 OR MIT, https://github.com/tauri-apps/tauri
 tauri-utils 2.10.2: Apache-2.0 OR MIT, https://github.com/tauri-apps/tauri
 
 MIT License
@@ -6735,34 +6738,8 @@ SOFTWARE.
 
 ----
 
-tinyvec_macros 0.1.1: MIT OR Apache-2.0 OR Zlib, https://github.com/Soveu/tinyvec_macros
-
-MIT License
-
-Copyright (c) 2020 Soveu
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-----
-
-tokio 1.53.1: MIT, https://github.com/tokio-rs/tokio
-tokio-util 0.7.19: MIT, https://github.com/tokio-rs/tokio
+tokio 1.54.1: MIT, https://github.com/tokio-rs/tokio
+tokio-util 0.7.20: MIT, https://github.com/tokio-rs/tokio
 
 MIT License
 
@@ -6815,7 +6792,7 @@ SOFTWARE.
 
 ----
 
-tokio-rustls 0.26.5: MIT OR Apache-2.0, https://github.com/rustls/tokio-rustls
+tokio-rustls 0.26.6: MIT OR Apache-2.0, https://github.com/rustls/tokio-rustls
 
 Copyright (c) 2017 quininer kel
 
@@ -7063,7 +7040,7 @@ DEALINGS IN THE SOFTWARE.
 
 ----
 
-uuid 1.26.1: Apache-2.0 OR MIT, https://github.com/uuid-rs/uuid
+uuid 1.28.0: Apache-2.0 OR MIT, https://github.com/uuid-rs/uuid
 
 Copyright (c) 2014 The Rust Project Developers
 Copyright (c) 2018 Ashley Mannix, Christopher Armstrong, Dylan DPC, Hunar Roop Kahlon
@@ -7094,7 +7071,7 @@ DEALINGS IN THE SOFTWARE.
 
 ----
 
-want 0.3.1: MIT, https://github.com/seanmonstar/want
+want 0.3.2: MIT, https://github.com/seanmonstar/want
 
 Copyright (c) 2018-2019 Sean McArthur
 
@@ -7282,7 +7259,7 @@ SOFTWARE.
 
 ----
 
-zeroize 1.9.0: Apache-2.0 OR MIT, https://github.com/RustCrypto/utils
+zeroize 1.9.1: Apache-2.0 OR MIT, https://github.com/RustCrypto/utils
 
 Copyright (c) 2018-2026 The RustCrypto Project Developers
 
@@ -7312,7 +7289,7 @@ DEALINGS IN THE SOFTWARE.
 
 ----
 
-zlib-rs 0.6.7: Zlib, https://github.com/trifectatechfoundation/zlib-rs
+zlib-rs 0.6.8: Zlib, https://github.com/trifectatechfoundation/zlib-rs
 
 (C) 2024 Trifecta Tech Foundation 
 

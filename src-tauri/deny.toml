@@ -1,0 +1,42 @@
+# What CI checks in the Mac app's dependency tree before anything builds: known vulnerabilities, licences,
+# and where crates come from. Run it yourself with `cargo deny check` in src-tauri.
+
+[graph]
+targets = ["aarch64-apple-darwin"]
+
+[advisories]
+# Any RustSec advisory fails the check unless it is listed here with the reason it doesn't apply.
+ignore = []
+yanked = "deny"
+# A crate going unmaintained fails the check for our own dependencies; deeper in the tree it's upstream's call.
+unmaintained = "workspace"
+
+[licenses]
+confidence-threshold = 0.9
+# The first group is the policy, not an inventory: an allowed licence nothing uses yet is fine.
+unused-allowed-license = "allow"
+allow = [
+  # What CONTRIBUTING.md allows for a new dependency.
+  "MIT",
+  "Apache-2.0",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "Zlib",
+  # Already in the tree through other crates. Each is permissive, or copyleft only for that crate's own files.
+  "Unicode-3.0",         # ICU and unicode-ident: Unicode's data licence
+  "MPL-2.0",             # cssparser and selectors, through Tauri: copyleft for their own files only
+  "CDLA-Permissive-2.0", # webpki-roots: Mozilla's root certificates, as data
+  "Unlicense",           # whisper-rs: public domain
+  "MIT-0",               # ppmd-rust: MIT without the attribution clause
+  "bzip2-1.0.6",         # libbz2-rs-sys: bzip2's own BSD-style licence
+]
+
+[bans]
+# Several versions of one crate come from upstream crates and only cost build time.
+multiple-versions = "allow"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
