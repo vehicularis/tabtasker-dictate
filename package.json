@@ -11,6 +11,7 @@
     "dev": "vite --port 1420 --strictPort",
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
+    "check": "zsh scripts/check.sh",
     "tauri": "npx --yes @tauri-apps/cli@2.12.4"
   },
   "dependencies": {
