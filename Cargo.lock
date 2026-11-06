@@ -763,6 +763,9 @@ dependencies = [
 [[package]]
 name = "dictate-engine"
 version = "0.1.1"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "digest"

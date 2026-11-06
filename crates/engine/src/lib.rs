@@ -5,5 +5,6 @@ pub mod audio;
 pub mod cleanup;
 pub mod pieces;
 pub mod prompt;
+pub mod text;
 
 pub use audio::SAMPLE_RATE;

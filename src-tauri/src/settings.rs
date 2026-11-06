@@ -118,9 +118,7 @@ impl Default for Dictation {
   }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Replacement { pub from: String, pub to: String }
+pub use dictate_engine::text::{Replacement, Style};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -133,10 +131,6 @@ pub struct Vocabulary {
 impl Default for Vocabulary {
   fn default() -> Self { Self { words: Vec::new(), replacements: Vec::new(), learn: true, suggestions: Vec::new() } }
 }
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum Style { #[default] Default, Casual, Formal, Code, Raw }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -652,6 +646,20 @@ mod tests {
     assert!(!secure_endpoint("ftp://localhost"));
     assert!(!secure_endpoint("https://"));
     assert!(!secure_endpoint("https://a b"));
+  }
+
+  #[test]
+  fn settings_json_round_trips_unchanged() {
+    let mut value = serde_json::to_value(Settings::default()).unwrap();
+    let app = |id: &str, style: &str| json!({ "bundleId": id, "name": id, "style": style, "polish": false, "send": null });
+    value["apps"] = json!({
+      "styles": [app("com.a", "default"), app("com.b", "casual"), app("com.c", "formal"), app("com.d", "code"), app("com.e", "raw")],
+      "defaultStyle": "casual",
+    });
+    value["vocabulary"]["replacements"] = json!([{ "from": "my email", "to": "can@example.com" }, { "from": "tabtasker", "to": "TabTasker" }]);
+    let settings: Settings = serde_json::from_value(value.clone()).unwrap();
+    assert_eq!(settings.apps.styles.iter().map(|app| app.style).collect::<Vec<_>>(), [Style::Default, Style::Casual, Style::Formal, Style::Code, Style::Raw]);
+    assert_eq!(serde_json::to_value(&settings).unwrap(), value);
   }
 
   #[test]

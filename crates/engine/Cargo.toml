@@ -8,3 +8,6 @@ publish = false
 
 [lib]
 name = "dictate_engine"
+
+[dependencies]
+serde = { workspace = true }
