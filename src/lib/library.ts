@@ -1,6 +1,7 @@
 // The notes and meetings folders, as the window's lists know them.
 import type { LibraryItem } from '../api/types';
 import { listGroup, localDay } from './dates';
+import { searchWords } from './text';
 
 /// The lists open now: each one reads the folder again when asked (useLibrary adds itself).
 export const readers = new Set<() => void>();
@@ -30,7 +31,7 @@ export const rowText = (item: LibraryItem) => {
 /// The list, or the archive, for a search: every word of the query in the title or the excerpt (lower-cased by the
 /// Mac's language), grouped by the day each was last changed, in the order given.
 export const visibleGroups = (items: LibraryItem[], query: string, archived: boolean, now: number) => {
-  const words = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+  const words = searchWords(query);
   const today = localDay(now);
   return items.filter(item => item.archived === archived && words.every(word => `${item.title} ${item.excerpt}`.toLocaleLowerCase().includes(word)))
     .reduce<{ title: string; items: LibraryItem[] }[]>((acc, item) => {

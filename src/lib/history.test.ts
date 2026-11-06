@@ -1,19 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { barHeight, byDay, figures, FLOOR, HEIGHT, removedBy, searchHistory, searchWords, share, sharePercent } from './history';
+import { barHeight, byDay, figures, FLOOR, HEIGHT, removedBy, searchHistory, share, sharePercent } from './history';
 import { DAY } from './dates';
 import type { HistoryEntry, HistoryStats } from '../api/types';
 
 const at = (y: number, m: number, d: number, h = 0, min = 0) => new Date(y, m - 1, d, h, min).getTime();
 const entry = (over: Partial<HistoryEntry> = {}): HistoryEntry => ({ atMs: 1, mode: 'dictate', bundleId: 'com.apple.Notes', appName: 'Notes', words: 3, seconds: 2, text: 'hello there', ...over });
-
-describe('searchWords', () => {
-  it('lower-cases and splits on any whitespace, dropping empties', () => {
-    expect(searchWords('  Hello \t WORLD\n')).toEqual(['hello', 'world']);
-    expect(searchWords('   ')).toEqual([]);
-    expect(searchWords('')).toEqual([]);
-  });
-  it('folds case as the locale does', () => expect(searchWords('ÉCOLE')).toEqual(['école']));
-});
 
 describe('searchHistory', () => {
   const note = entry({ atMs: 1, mode: 'note', appName: 'Notes', text: 'Buy oat milk' });

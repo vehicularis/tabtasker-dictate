@@ -43,6 +43,9 @@ describe('the browser mock', () => {
     await mod.invoke('sticky_pin', { id: 'demo', pinned: false });
     await mod.invoke('sticky_fold', { id: 'demo', folded: true });
     expect(heard).toBe(4);
+    const made = await mod.invoke('sticky_new');
+    await mod.invoke('sticky_to_note', { id: made.id, stamp: '2026-01-01 09.00' });
+    expect(heard).toBe(6); // sticky_new, then the one that turned into a note
   });
 
   it('rejects a meeting that cannot start, as the Mac does', async () => {

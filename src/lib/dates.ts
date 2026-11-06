@@ -41,7 +41,7 @@ export const stamp = (now = new Date()) => {
 export function meetingWhen(ms: number, now: number) {
   const at = new Date(ms), today = new Date(now);
   const time = at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-  const days = Math.round((new Date(today.toDateString()).getTime() - new Date(at.toDateString()).getTime()) / 86_400_000);
+  const days = Math.round((new Date(today.toDateString()).getTime() - new Date(at.toDateString()).getTime()) / DAY);
   const day = days === 0 ? 'Today' : days === 1 ? 'Yesterday' : at.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
   return `${day} at ${time}`;
 }

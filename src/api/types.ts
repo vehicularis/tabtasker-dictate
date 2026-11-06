@@ -14,7 +14,12 @@ export type Theme = 'system' | 'light' | 'dark';
 export type Edge = 'bottom' | 'left' | 'right';
 export type Size = 'small' | 'medium' | 'large';
 /// The buttons the dots' pill can hold, in the pill's order (settings.rs PillButton).
-export type PillButton = 'note' | 'write' | 'sticky' | 'meeting' | 'library' | 'settings';
+export const PILL_BUTTONS = ['note', 'write', 'sticky', 'meeting', 'library', 'settings'] as const;
+export type PillButton = typeof PILL_BUTTONS[number];
+/// What `agents_add` connects to.
+export type AgentTarget = 'claudeCode' | 'claudeDesktop';
+/// What `meeting` does.
+export type MeetingAction = 'start' | 'stop';
 export type AppStyle = { bundleId: string; name: string; style: Style; polish: boolean; send?: boolean | null };
 /// The speech models (speech.rs Model).
 export type Model = 'turbo' | 'small';

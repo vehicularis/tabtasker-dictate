@@ -78,7 +78,10 @@ export function loadTabs(saved: string | null, hash: string): Tabs {
     const parsed = JSON.parse(saved ?? 'null') as Tabs | null;
     if (!parsed?.tabs?.length) return fallback;
     const active = Math.min(Math.max(0, parsed.active | 0), parsed.tabs.length - 1);
-    const tabs = parsed.tabs.map(tab => ({ id: tab.id, route: tab.route || 'notes', back: tab.back ?? [], forward: tab.forward ?? [] }));
+    const places = (list: unknown) => Array.isArray(list) ? list.filter((place): place is string => typeof place === 'string') : [];
+    // A tab with no usable id takes one above every saved id, so no two tabs share one.
+    let next = Math.max(0, ...parsed.tabs.map(tab => tab.id).filter(Number.isFinite)) + 1;
+    const tabs = parsed.tabs.map(tab => ({ id: Number.isFinite(tab.id) ? tab.id : next++, route: typeof tab.route === 'string' && tab.route ? tab.route : 'notes', back: places(tab.back), forward: places(tab.forward) }));
     if (hash.length > 1) tabs[active] = { ...tabs[active], route: routeOf(hash), forward: [] };
     return { tabs, active };
   } catch { return fallback; }

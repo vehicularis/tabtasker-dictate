@@ -5,7 +5,7 @@ import { message } from '../../lib/errors';
 import { KEY_NAMES } from '../../lib/keyNames';
 import { isArchived, isUnnamed, refreshLibrary } from '../../lib/library';
 import { useSettings } from '../../store';
-import type { NoteDoc } from '../../api/types';
+import type { LibraryItem, NoteDoc } from '../../api/types';
 import { Button, Icon } from '../../ui';
 
 type State = 'reading' | 'clean' | 'dirty' | 'saving' | 'saved' | 'error';
@@ -16,7 +16,7 @@ const peopleIn = (body: string) => [...new Set([...body.matchAll(/^\*\*([^*\n]+)
 // One note or meeting, edited in place: its title above its words, saved back into the same Markdown file
 // as you type (front matter kept), ⌘S for the impatient. A meeting shows the people heard in it, each
 // renamable in one go. Hold the dictate key with the words focused to talk into it.
-export function NoteEditor({ path, kind, onChanged, onDeleted, onMoved, onError }: { path: string; kind: 'note' | 'meeting'; onChanged: () => void; onDeleted: () => void; onMoved: (path: string, archived: boolean) => void; onError: (message: string) => void }) {
+export function NoteEditor({ path, kind, onChanged, onDeleted, onMoved, onError }: { path: string; kind: LibraryItem['kind']; onChanged: () => void; onDeleted: () => void; onMoved: (path: string, archived: boolean) => void; onError: (message: string) => void }) {
   const [doc, setDoc] = useState<NoteDoc | null>(null);
   const dictateKey = KEY_NAMES[useSettings()?.shortcuts.dictate ?? 'fn'];
   const [title, setTitle] = useState('');

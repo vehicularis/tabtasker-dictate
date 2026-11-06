@@ -2,14 +2,13 @@
 import type { HistoryEntry, HistoryStats, Keep } from '../api/types';
 import { DAY, localDay } from './dates';
 import { duration } from './format';
+import { searchWords } from './text';
 
 /// How long each Keep holds on to the words, as history.rs prunes them; null is for good.
 const AGE: Record<Keep, number | null> = { off: 0, day: DAY, week: 7 * DAY, month: 30 * DAY, forever: null };
 /// What search looks through: a note shows no app, since it goes to a file.
 const searchable = (entry: HistoryEntry) => entry.mode === 'note' ? entry.text : `${entry.text} ${entry.appName}`;
 
-/// The words a search is made of, lower-cased; they are also the words the list marks.
-export const searchWords = (query: string) => query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
 /// The entries that hold every word of the query, whatever its case.
 export const searchHistory = (entries: HistoryEntry[], query: string) => {
   const words = searchWords(query);

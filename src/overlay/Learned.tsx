@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { listen } from '../bridge';
+import { same } from '../lib/text';
 import { updateSettings, useSettings } from '../store';
 import { PREVIEW } from './preview';
 import { leave } from '../ui/motion';
@@ -15,8 +16,7 @@ export function Learned() {
   if (!word || !settings) return null;
   const add = () => {
     const { words, suggestions } = settings.vocabulary;
-    const same = (other: string) => other.toLowerCase() === word.toLowerCase();
-    void updateSettings({ vocabulary: { words: [word, ...words.filter(other => !same(other))], suggestions: suggestions.filter(other => !same(other)) } })
+    void updateSettings({ vocabulary: { words: [word, ...words.filter(other => !same(other, word))], suggestions: suggestions.filter(other => !same(other, word)) } })
       .then(() => setWord(null), () => setFailed(true));
   };
   return <div ref={leave} className="glass learned" data-glass data-hit role="status">

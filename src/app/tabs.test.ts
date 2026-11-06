@@ -186,6 +186,17 @@ describe('loadTabs', () => {
   it('fills a missing back, forward and route', () => {
     expect(loadTabs('{"tabs":[{"id":4}],"active":0}', '').tabs).toEqual([{ id: 4, route: 'notes', back: [], forward: [] }]);
   });
+  it('guards each field: a route that is not a string, back that is not a list, non-strings in a list', () => {
+    const state = loadTabs('{"tabs":[{"id":1,"route":5,"back":"x","forward":["a",3,null]}],"active":0}', '');
+    expect(state.tabs).toEqual([{ id: 1, route: 'notes', back: [], forward: ['a'] }]);
+  });
+  it('gives a tab without a usable id a fresh one, distinct from every other, and closing one closes only it', () => {
+    const state = loadTabs('{"tabs":[{"route":"a"},{"id":"7","route":"b"},{"id":3,"route":"c"},{"id":null,"route":"d"}],"active":0}', '');
+    expect(ids(state)).toEqual([4, 5, 3, 6]);
+    expect(new Set(ids(state)).size).toBe(4);
+    const closed = closeTabs(state, new Set([state.tabs[0].id]))!;
+    expect(closed.state.tabs.map(t => t.route)).toEqual(['b', 'c', 'd']);
+  });
   it('clamps active', () => {
     const saved = (active: number) => JSON.stringify({ tabs: [tab(1), tab(2)], active });
     expect(loadTabs(saved(-1), '').active).toBe(0);

@@ -4,10 +4,9 @@ import { stamp } from '../../lib/dates';
 import { message } from '../../lib/errors';
 import { nameProblem, previewLines, tagOf } from '../../lib/notes';
 import { tilde, useStatus, type PageProps } from '../../store';
-import type { Settings } from '../../api/types';
+import type { Folder, Preview, Settings } from '../../api/types';
 import { Button, ChipList, Icon, PageHeader, Section, Tile, TileGroup, Toggle } from '../../ui';
 import './notes.css';
-import type { Folder, Preview } from '../../api/types';
 
 const DEFAULT_NAME = '{date} {title}';
 // The note the preview saves.

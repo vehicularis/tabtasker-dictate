@@ -10,7 +10,6 @@ import { leave } from '../ui/motion';
 import { PREVIEW } from './preview';
 import './command-card.css';
 
-
 // `?preview=command`, `command-thinking` or `command-error`.
 const SAMPLES: Record<string, Command> = {
   command: { request: 'preview', phase: 'answer', instruction: 'What time is it in Tokyo right now?', text: 'It’s 6:40 in the morning in Tokyo, Tuesday. Tokyo is 8 hours ahead of you.' },

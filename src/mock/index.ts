@@ -200,7 +200,7 @@ mock.handle('sticky_hold', () => {});
 mock.handle('sticky_pin', ({ id, pinned }) => { const found = sticky(id); found.pinned = pinned; saved(); return copy(found); });
 mock.handle('sticky_fold', ({ id, folded }) => { const found = sticky(id); found.folded = folded; saved(); return copy(found); });
 mock.handle('sticky_remove', ({ id }) => { const at = stickies.findIndex(one => one.id === id); if (at >= 0) stickies.splice(at, 1); saved(); });
-mock.handle('sticky_to_note', ({ id }) => { const at = stickies.findIndex(one => one.id === id); if (at < 0) throw 'That sticky is gone.'; const [gone] = stickies.splice(at, 1); return `${folderOf()}/${gone.text.split('\n')[0].slice(0, 40)}.md`; });
+mock.handle('sticky_to_note', ({ id }) => { const at = stickies.findIndex(one => one.id === id); if (at < 0) throw 'That sticky is gone.'; const [gone] = stickies.splice(at, 1); saved(); return `${folderOf()}/${gone.text.split('\n')[0].slice(0, 40)}.md`; });
 mock.handle('set_enabled', ({ enabled }) => {
   status.enabled = enabled;
   if (!enabled) { Object.assign(status, { modelReady: false, modelPreparing: false, modelMessage: 'Dictation is paused. The speech model stays on this Mac.' }); return; }

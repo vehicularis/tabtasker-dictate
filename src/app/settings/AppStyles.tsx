@@ -2,10 +2,9 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { invoke } from '../../bridge';
 import { same } from '../../lib/text';
 import { sendsByDefault, type PageProps } from '../../store';
-import type { AppStyle, Style } from '../../api/types';
+import type { AppInfo, AppStyle, Style } from '../../api/types';
 import { Button, Icon, PageHeader, Section, Select, Tile, TileGroup, Toggle } from '../../ui';
 import './speech.css';
-import type { AppInfo } from '../../api/types';
 
 const STYLES: { value: Style; label: string; detail: string; said?: string; typed?: string }[] = [
   { value: 'default', label: 'Default', detail: 'Types what you said, using your vocabulary and filler settings.' },

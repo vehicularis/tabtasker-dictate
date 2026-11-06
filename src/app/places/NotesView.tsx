@@ -15,7 +15,7 @@ import { Button, Icon, Segmented, useFlip } from '../../ui';
 import { ColumnGroup, ColumnHead } from '../Column';
 import { NoteEditor } from './NoteEditor';
 
-type Props = { kind: 'note' | 'meeting'; path: string | null; onError: (message: string) => void; onOpen: (route: string) => void } & PageProps;
+type Props = { kind: LibraryItem['kind']; path: string | null; onError: (message: string) => void; onOpen: (route: string) => void } & PageProps;
 /// A note by voice, as the pill's Speak a note: the orb listens until you stop, then the note is saved and listed here.
 const speakNote = (onError: Props['onError']) => void invoke('request', { kind: 'note' }).catch(error => onError(message(error, 'Couldn’t start a spoken note.')));
 const newNote = (onOpen: Props['onOpen'], onError: Props['onError']) => void invoke('note_new', { title: '', text: '', stamp: stamp() }).then(made => onOpen(routeTo('note', made)), error => onError(message(error, 'Couldn’t make a new note.')));
@@ -26,7 +26,7 @@ let known: LibraryItem[] | null = null;
 
 /// The notes, or the meetings (none for `null`), kept fresh as another one opens, a meeting ends or the
 /// window comes forward. Null only before the very first read: the window shows no column until it knows.
-export function useLibrary(kind: 'note' | 'meeting' | null, path: string | null, onError: (message: string) => void) {
+export function useLibrary(kind: LibraryItem['kind'] | null, path: string | null, onError: (message: string) => void) {
   const [all, setAll] = useState(known);
   const refresh = useCallback(() => { if (kind) void invoke('library_list').then(items => { known = items; setAll(items); }, error => onError(message(error, 'Couldn’t read your notes.'))); }, [kind, onError]);
   useEffect(refresh, [refresh, path]);

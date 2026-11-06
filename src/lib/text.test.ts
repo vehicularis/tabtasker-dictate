@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { countMessage, same } from './text';
+import { countMessage, same, searchWords } from './text';
+
+describe('searchWords', () => {
+  it('lower-cases and splits on any whitespace, dropping empties', () => {
+    expect(searchWords('  Hello \t WORLD\n')).toEqual(['hello', 'world']);
+    expect(searchWords('   ')).toEqual([]);
+    expect(searchWords('')).toEqual([]);
+  });
+  it('folds case as the locale does', () => expect(searchWords('ÉCOLE')).toEqual(['école']));
+});
 
 describe('same', () => {
   it('is true for the same word in any case', () => {

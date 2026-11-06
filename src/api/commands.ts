@@ -1,4 +1,4 @@
-import type { AgentsStatus, AppInfo, Folder, HistoryEntry, HistoryStats, LibraryItem, MeetingState, Models, NoteDoc, Patch, Preview, Settings, Status, Sticky, StickyHue, StickyTilt, StickyWeight, UpdateState } from './types';
+import type { AgentsStatus, AgentTarget, AppInfo, Folder, HistoryEntry, HistoryStats, LibraryItem, MeetingAction, MeetingState, Models, NoteDoc, Patch, Preview, Settings, Status, Sticky, StickyHue, StickyTilt, StickyWeight, UpdateState } from './types';
 
 /// What `request` accepts (commands.rs); anything else is refused with "Unknown request".
 export type RequestKind = 'microphone' | 'accessibility' | 'keyboard' | 'note' | 'send' | 'cancel';
@@ -18,7 +18,7 @@ export interface Commands {
   /// Where the overlay draws glass (x, y, width, height, radius, opacity) and which parts take clicks (x, y, width, height); at most 16 of each.
   layout: { args: { glass: [number, number, number, number, number, number][]; hit: [number, number, number, number][]; dark?: boolean | null }; result: void };
   /// Starts or stops a meeting; false when nothing changed.
-  meeting: { args: { action: 'start' | 'stop' }; result: boolean };
+  meeting: { args: { action: MeetingAction }; result: boolean };
   open_app: { args: { route?: string | null }; result: void };
   paste_last: { args: void; result: void };
   play_sound: { args: { name: string; volume: number }; result: void };
@@ -89,7 +89,7 @@ export interface Commands {
   /// Registered, though no page asks yet; answers the request id its dictate-command events carry.
   claude_ask: { args: { question: string }; result: string };
   agents_status: { args: void; result: AgentsStatus };
-  agents_add: { args: { target: 'claudeCode' | 'claudeDesktop' }; result: AgentsStatus };
+  agents_add: { args: { target: AgentTarget }; result: AgentsStatus };
   // Meetings and updates
   meeting_state: { args: void; result: MeetingState };
   meeting_recover: { args: { id: string; save: boolean }; result: void };

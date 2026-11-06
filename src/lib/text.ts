@@ -1,3 +1,5 @@
+/// The words a search is made of, lower-cased by the Mac's language; they are also the words a list marks.
+export const searchWords = (query: string) => query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
 /// The same word, whatever its case.
 export const same = (one: string, other: string) => one.toLowerCase() === other.toLowerCase();
 /// What a batch tells the person once it's done: `said` writes the verb around the count ("Archived 3 notes"), `many`

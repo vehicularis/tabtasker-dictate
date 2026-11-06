@@ -7,7 +7,6 @@ import { folderPath, tilde, useStatus, type PageProps } from '../../store';
 import type { MeetingEvent } from '../../api/types';
 import { Button, PageHeader, Section, TextField, Tile, TileGroup, Toggle } from '../../ui';
 
-
 export function Meetings({ settings, update }: PageProps) {
   const meetings = settings.meetings;
   const [status] = useStatus();

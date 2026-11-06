@@ -3,8 +3,8 @@ import { invoke, listen } from '../../bridge';
 import { megabytes, percent } from '../../lib/format';
 import { SOUNDS, type PageProps } from '../../store';
 import { Button, PageHeader, ProgressBar, Section, Select, Slider, Tile, TileGroup, Toggle } from '../../ui';
-import './speech.css';
 import type { Model, Models } from '../../api/types';
+import './speech.css';
 
 // The languages Whisper knows best, by name; any of its codes works in settings.json.
 const LANGUAGES: [string, string][] = [

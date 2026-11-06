@@ -1,5 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import type { ClaudeVia, Patch, PillButton, Settings, Size, Status, StickyHue, UpdateState } from './api/types';
+import type { ClaudeVia, Patch, Settings, Size, Status, StickyHue, UpdateState } from './api/types';
 import { invoke, listen } from './bridge';
 
 /// What the connected AI is called on its answer card, and the glyph beside it: Claude by name when it is Claude,
@@ -12,8 +12,7 @@ export const SIZES: { value: Size; label: string }[] = [{ value: 'small', label:
 /// Apps where Return follows the words unless the app's style says otherwise (settings.rs CHAT_APPS).
 const CHAT_APPS = ['com.tinyspeck.slackmacgap', 'com.apple.MobileSMS', 'net.whatsapp.WhatsApp', 'com.microsoft.teams2', 'com.microsoft.teams', 'ru.keepcoder.Telegram', 'com.tdesktop.Telegram', 'com.hnc.Discord', 'com.facebook.archon', 'com.signal.desktop'];
 export const sendsByDefault = (bundleId: string) => CHAT_APPS.some(chat => chat.toLowerCase() === bundleId.toLowerCase());
-/// The buttons the dots' pill can hold, in the pill's order (settings.rs PillButton).
-export const PILL_BUTTONS = ['note', 'write', 'sticky', 'meeting', 'library', 'settings'] as const satisfies readonly PillButton[];
+export { PILL_BUTTONS } from './api/types';
 
 /// The whiteboard's hues (boardColor.ts in TabTasker Business), which a sticky is one of.
 export const STICKY_HUES = { amber: '#E0A23C', coral: '#DE7468', sage: '#5AA57A', sky: '#4A8CD2', violet: '#8878DC', slate: '#79838F', teal: '#3FA4A0', plum: '#B4629C' } as const satisfies Record<StickyHue, string>;

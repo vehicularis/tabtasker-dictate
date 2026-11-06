@@ -1,16 +1,15 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { invoke } from '../../bridge';
+import { copyText } from '../../lib/clipboard';
 import { configEntry, lastCall } from '../../lib/agents';
 import { message } from '../../lib/errors';
 import type { PageProps } from '../../store';
 import { Button, Icon, GroupHeader, Section, Tile, TileGroup, Toggle } from '../../ui';
-import type { AgentsStatus } from '../../api/types';
-
-type Target = 'claudeCode' | 'claudeDesktop';
+import type { AgentsStatus, AgentTarget } from '../../api/types';
 
 const Failed = ({ children }: { children: string }) => <span role="alert" style={{ color: 'var(--danger)' }}>{children}</span>;
 
-const COPY: Record<Target, { name: string; about: string; added: string; missing: string; confirm: string }> = {
+const COPY: Record<AgentTarget, { name: string; about: string; added: string; missing: string; confirm: string }> = {
   claudeCode: {
     name: 'Claude Code',
     about: 'Lets Claude Code use your notes in every project.',
@@ -28,7 +27,7 @@ const COPY: Record<Target, { name: string; about: string; added: string; missing
 };
 
 function Connect({ target, status, adding, confirming, failed, onConfirm, onCancel, onAdd }: {
-  target: Target; status: AgentsStatus | null; adding: Target | null; confirming: boolean; failed: string | null; onConfirm: () => void; onCancel: () => void; onAdd: () => void;
+  target: AgentTarget; status: AgentsStatus | null; adding: AgentTarget | null; confirming: boolean; failed: string | null; onConfirm: () => void; onCancel: () => void; onAdd: () => void;
 }) {
   const copy = COPY[target];
   const install = status?.[target];
@@ -65,9 +64,9 @@ export function Agents({ settings, update }: PageProps) {
   const agents = settings.agents;
   const off = !agents.mcp;
   const [status, setStatus] = useState<AgentsStatus | null>(null);
-  const [confirming, setConfirming] = useState<Target | null>(null);
-  const [adding, setAdding] = useState<Target | null>(null);
-  const [failed, setFailed] = useState<{ target: Target; message: string } | null>(null);
+  const [confirming, setConfirming] = useState<AgentTarget | null>(null);
+  const [adding, setAdding] = useState<AgentTarget | null>(null);
+  const [failed, setFailed] = useState<{ target: AgentTarget; message: string } | null>(null);
   const [said, setSaid] = useState('');
   const [copied, setCopied] = useState<boolean | null>(null);
   // A status asked for before an add finishes may predate it, so only the newest answer is kept.
@@ -88,7 +87,7 @@ export function Agents({ settings, update }: PageProps) {
   }, [refresh]);
   useEffect(() => { if (copied === null) return; const timer = setTimeout(() => setCopied(null), copied ? 1600 : 4000); return () => clearTimeout(timer); }, [copied]);
 
-  const add = async (target: Target) => {
+  const add = async (target: AgentTarget) => {
     const name = COPY[target].name;
     inFlight.current = true;
     const mine = ++asked.current;
@@ -107,7 +106,7 @@ export function Agents({ settings, update }: PageProps) {
     setConfirming(now => (now === target ? null : now));
   };
   const usable = status && !status.problem ? configEntry(status.command) : '';
-  const copy = () => void navigator.clipboard.writeText(usable).then(() => setCopied(true), () => setCopied(false));
+  const copy = () => void copyText(usable).then(() => setCopied(true), () => setCopied(false));
 
   return <>
     <GroupHeader title="Reading your notes">Let agents read your notes and meetings: Claude Code, Claude Desktop and any app that speaks MCP. If you connected Claude Code above, it’s already set up.</GroupHeader>
