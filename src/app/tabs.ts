@@ -1,4 +1,6 @@
 import { useLayoutEffect, useRef, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import type { TabAction } from '../api/types';
+import { routeOf } from '../lib/routes';
 import { reduced } from '../ui/motion';
 
 // The window's tabs, as TabTasker Business's desktop app keeps them (desktopTabs.ts): a tab is a remembered
@@ -65,6 +67,68 @@ export function duplicateTab(state: Tabs, index: number): Tabs {
   const tabs = [...state.tabs], copy = { ...source, id: freshId(state), back: [...source.back], forward: [...source.forward] };
   tabs.splice(index + 1, 0, copy);
   return { tabs, active: index + 1 };
+}
+
+/// The window's tabs from what was saved (the raw `localStorage` string, or null) and the `location.hash`. Saved
+/// tabs from an older build or a broken write fall back to one tab on the hash (or notes). The hash is what was
+/// asked for (a note from the dots, a settings page from the menu): it goes to the open tab.
+export function loadTabs(saved: string | null, hash: string): Tabs {
+  const fallback: Tabs = { tabs: [{ id: 1, route: routeOf(hash), back: [], forward: [] }], active: 0 };
+  try {
+    const parsed = JSON.parse(saved ?? 'null') as Tabs | null;
+    if (!parsed?.tabs?.length) return fallback;
+    const active = Math.min(Math.max(0, parsed.active | 0), parsed.tabs.length - 1);
+    const tabs = parsed.tabs.map(tab => ({ id: tab.id, route: tab.route || 'notes', back: tab.back ?? [], forward: tab.forward ?? [] }));
+    if (hash.length > 1) tabs[active] = { ...tabs[active], route: routeOf(hash), forward: [] };
+    return { tabs, active };
+  } catch { return fallback; }
+}
+
+/// The open tab routed to `to`, remembering where it was (the last 50 places).
+export function visit(state: Tabs, to: string): Tabs {
+  const open = state.tabs[state.active];
+  if (open.route === to) return state;
+  return { ...state, tabs: state.tabs.map((tab, i) => i === state.active ? { ...tab, route: to, back: [...tab.back, tab.route].slice(-50), forward: [] } : tab) };
+}
+
+/// The open tab one place back; the same state when there is none.
+export function goBack(state: Tabs): Tabs {
+  const to = state.tabs[state.active].back.at(-1);
+  if (!to) return state;
+  return { ...state, tabs: state.tabs.map((x, i) => i === state.active ? { ...x, route: to, back: x.back.slice(0, -1), forward: [x.route, ...x.forward] } : x) };
+}
+
+/// The open tab one place forward; the same state when there is none.
+export function goForward(state: Tabs): Tabs {
+  const to = state.tabs[state.active].forward[0];
+  if (!to) return state;
+  return { ...state, tabs: state.tabs.map((x, i) => i === state.active ? { ...x, route: to, back: [...x.back, x.route], forward: x.forward.slice(1) } : x) };
+}
+
+/// Every tab action, from the keys, the menu bar, the strip and a tab's menu: the tabs after it, the closed list
+/// (newest last, the last 20) and whether the window closes. `index` is the tab it is about (the active one for
+/// keys); closing every tab, or `'window'`, closes the window and leaves the tabs as they are.
+export function applyTabAction(state: Tabs, closed: Closed[], action: TabAction, index: number): { state: Tabs; closed: Closed[]; closeWindow: boolean } {
+  const tab = state.tabs[index];
+  const keep = { state, closed, closeWindow: false };
+  const shut = (ids: number[]) => {
+    if (!ids.length) return keep;
+    const result = closeTabs(state, new Set(ids));
+    if (!result) return { state, closed: [...closed, ...state.tabs.map((t, at) => ({ tab: t, at }))].slice(-20), closeWindow: true };
+    return { state: result.state, closed: [...closed, ...result.closed].slice(-20), closeWindow: false };
+  };
+  switch (action) {
+    case 'new': return { ...keep, state: openTab(state) };
+    case 'close': return tab ? shut([tab.id]) : keep;
+    case 'close-others': return tab ? shut(state.tabs.filter(other => other.id !== tab.id).map(other => other.id)) : keep;
+    case 'close-right': return shut(state.tabs.slice(index + 1).map(other => other.id));
+    case 'reopen': { const last = closed.at(-1); return last ? { ...keep, state: reopenTab(state, last), closed: closed.slice(0, -1) } : keep; }
+    case 'duplicate': return { ...keep, state: duplicateTab(state, index) };
+    case 'next': case 'prev': return state.tabs.length > 1 ? { ...keep, state: cycleTabs(state, action === 'next' ? 1 : -1) } : keep;
+    case 'left': case 'right': return { ...keep, state: moveTab(state, state.active, state.active + (action === 'right' ? 1 : -1)) };
+    case 'window': return { ...keep, closeWindow: true };
+    default: return { ...keep, state: selectTab(state, Number(action.slice(7))) };
+  }
 }
 
 // ---------- dragging a tab along the strip ----------

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { closeTabs, cycleTabs, duplicateTab, moveTab, openTab, reopenTab, selectTab, type Tabs } from './tabs';
+import type { TabAction } from '../api/types';
+import { applyTabAction, closeTabs, cycleTabs, duplicateTab, goBack, goForward, loadTabs, moveTab, openTab, reopenTab, selectTab, visit, type Closed, type Tabs } from './tabs';
 
 const tab = (id: number, route = `r${id}`) => ({ id, route, back: [] as string[], forward: [] as string[] });
 /// Tabs with the given ids, `active` being an index.
@@ -172,5 +173,160 @@ describe('duplicateTab', () => {
     const state = strip([1, 2], 0);
     expect(duplicateTab(state, 5)).toBe(state);
     expect(duplicateTab(state, -1)).toBe(state);
+  });
+});
+
+describe('loadTabs', () => {
+  const one = (route: string): Tabs => ({ tabs: [{ id: 1, route, back: [], forward: [] }], active: 0 });
+  it.each([[null], ['{}'], ['not json'], ['{"tabs":"x"}'], ['{"tabs":[]}'], ['{"tabs":[null]}']])('falls back to one tab on notes for %s', saved => {
+    expect(loadTabs(saved, '')).toEqual(one('notes'));
+  });
+  it('falls back to the hash', () => expect(loadTabs('not json', '#help')).toEqual(one('help')));
+  it('fills a missing back, forward and route', () => {
+    expect(loadTabs('{"tabs":[{"id":4}],"active":0}', '').tabs).toEqual([{ id: 4, route: 'notes', back: [], forward: [] }]);
+  });
+  it('clamps active', () => {
+    const saved = (active: number) => JSON.stringify({ tabs: [tab(1), tab(2)], active });
+    expect(loadTabs(saved(-1), '').active).toBe(0);
+    expect(loadTabs(saved(99), '').active).toBe(1);
+  });
+  it('sends the hash to the open tab and clears its forward list', () => {
+    const saved = JSON.stringify({ tabs: [tab(1), { ...tab(2), back: ['a'], forward: ['b'] }], active: 1 });
+    const state = loadTabs(saved, '#about');
+    expect(state.tabs[1]).toEqual({ id: 2, route: 'about', back: ['a'], forward: [] });
+    expect(state.tabs[0]).toEqual(tab(1));
+  });
+  it('keeps the saved routes when there is no hash', () => {
+    expect(loadTabs(JSON.stringify(strip([1, 2], 1)), '#').tabs[1].route).toBe('r2');
+  });
+});
+
+describe('visit', () => {
+  it('is the same object for the same route', () => {
+    const state = strip([1], 0);
+    expect(visit(state, 'r1')).toBe(state);
+  });
+  it('remembers where it was and clears forward', () => {
+    const state: Tabs = { tabs: [{ ...tab(1), forward: ['x'] }], active: 0 };
+    expect(visit(state, 'b').tabs[0]).toEqual({ id: 1, route: 'b', back: ['r1'], forward: [] });
+  });
+  it('drops the oldest past 50', () => {
+    let state = strip([1], 0);
+    for (let i = 0; i < 51; i++) state = visit(state, `v${i}`);
+    expect(state.tabs[0].back).toHaveLength(50);
+    expect(state.tabs[0].back[0]).toBe('v0');
+    expect(state.tabs[0].back.at(-1)).toBe('v49');
+  });
+  it('only moves the open tab', () => expect(visit(strip([1, 2], 1), 'b').tabs[0].route).toBe('r1'));
+});
+
+describe('goBack and goForward', () => {
+  it('do nothing with empty stacks', () => {
+    const state = strip([1], 0);
+    expect(goBack(state)).toBe(state);
+    expect(goForward(state)).toBe(state);
+  });
+  it('round trip', () => {
+    const state = visit(visit(strip([1], 0), 'b'), 'c');
+    const back = goBack(state);
+    expect(back.tabs[0]).toEqual({ id: 1, route: 'b', back: ['r1'], forward: ['c'] });
+    expect(goForward(back).tabs[0]).toEqual(state.tabs[0]);
+  });
+});
+
+describe('applyTabAction', () => {
+  const run = (state: Tabs, action: TabAction, index = state.active, closed: Closed[] = []) => applyTabAction(state, closed, action, index);
+  const four = () => strip([1, 2, 3, 4], 1);
+  it('new opens at the end', () => {
+    const r = run(four(), 'new');
+    expect(ids(r.state)).toEqual([1, 2, 3, 4, 5]);
+    expect(r.state.active).toBe(4);
+    expect(r.closeWindow).toBe(false);
+  });
+  it('close closes the tab at index and remembers it', () => {
+    const r = run(four(), 'close', 2);
+    expect(ids(r.state)).toEqual([1, 2, 4]);
+    expect(shown(r.state)).toBe(2);
+    expect(r.closed.map(c => c.tab.id)).toEqual([3]);
+  });
+  it('close with no tab at index does nothing', () => {
+    const state = four();
+    expect(run(state, 'close', 9)).toEqual({ state, closed: [], closeWindow: false });
+  });
+  it('closing the last tab closes the window and remembers all', () => {
+    const state = strip([1], 0);
+    const r = run(state, 'close');
+    expect(r.closeWindow).toBe(true);
+    expect(r.state).toBe(state);
+    expect(r.closed.map(c => c.tab.id)).toEqual([1]);
+  });
+  it('close-others keeps the tab at index, not the active one', () => {
+    const r = run(four(), 'close-others', 3);
+    expect(ids(r.state)).toEqual([4]);
+    expect(r.closed.map(c => c.tab.id)).toEqual([3, 2, 1]);
+    expect(r.closeWindow).toBe(false);
+  });
+  it('close-others with one tab closes nothing and not the window', () => {
+    const state = strip([1], 0);
+    const r = run(state, 'close-others');
+    expect(r.state).toBe(state);
+    expect(r.closeWindow).toBe(false);
+  });
+  it('close-right closes those right of index', () => {
+    const r = run(four(), 'close-right', 1);
+    expect(ids(r.state)).toEqual([1, 2]);
+    expect(r.closed.map(c => c.tab.id)).toEqual([4, 3]);
+  });
+  it('close-right on the last tab changes nothing', () => {
+    const state = four();
+    const r = run(state, 'close-right', 3);
+    expect(r.state).toBe(state);
+    expect(r.closed).toEqual([]);
+  });
+  it('reopen brings back the last closed, newest first', () => {
+    let r = run(four(), 'close', 0);
+    r = run(r.state, 'close', 0, r.closed);
+    expect(ids(r.state)).toEqual([3, 4]);
+    r = run(r.state, 'reopen', 0, r.closed);
+    expect(ids(r.state)).toEqual([2, 3, 4]);
+    expect(r.closed.map(c => c.tab.id)).toEqual([1]);
+    r = run(r.state, 'reopen', 0, r.closed);
+    expect(ids(r.state)).toEqual([1, 2, 3, 4]);
+    expect(r.closed).toEqual([]);
+  });
+  it('reopen with nothing closed changes nothing', () => {
+    const state = four();
+    expect(run(state, 'reopen')).toEqual({ state, closed: [], closeWindow: false });
+  });
+  it('duplicate copies the tab at index', () => {
+    const r = run(four(), 'duplicate', 2);
+    expect(ids(r.state)).toEqual([1, 2, 3, 5, 4]);
+    expect(r.state.active).toBe(3);
+  });
+  it('next and prev cycle, and do nothing with one tab', () => {
+    expect(run(four(), 'next').state.active).toBe(2);
+    expect(run(four(), 'prev').state.active).toBe(0);
+    const one = strip([1], 0);
+    expect(run(one, 'next').state).toBe(one);
+    expect(run(one, 'prev').state).toBe(one);
+  });
+  it('left and right move the active tab', () => {
+    expect(ids(run(four(), 'right').state)).toEqual([1, 3, 2, 4]);
+    expect(ids(run(four(), 'left').state)).toEqual([2, 1, 3, 4]);
+    expect(shown(run(four(), 'left').state)).toBe(2);
+  });
+  it('window closes the window and leaves the tabs', () => {
+    const state = four();
+    expect(run(state, 'window')).toEqual({ state, closed: [], closeWindow: true });
+  });
+  it.each([1, 2, 3, 4, 5, 6, 7, 8, 9] as const)('select:%i', n => {
+    expect(run(four(), `select:${n}`).state.active).toBe(n === 9 ? 3 : Math.min(n - 1, 3));
+  });
+  it('keeps only the newest 20 closed', () => {
+    const old: Closed[] = Array.from({ length: 20 }, (_, i) => ({ tab: tab(100 + i), at: 0 }));
+    const r = run(four(), 'close', 0, old);
+    expect(r.closed).toHaveLength(20);
+    expect(r.closed.at(-1)?.tab.id).toBe(1);
+    expect(r.closed[0].tab.id).toBe(101);
   });
 });
