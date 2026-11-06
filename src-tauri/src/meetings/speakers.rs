@@ -15,7 +15,7 @@ static PREPARING: AtomicBool = AtomicBool::new(false);
 /// Downloads what is missing and unpacks the segmentation model. Errors are the downloader's words.
 pub async fn prepare(root: PathBuf) -> Result<(), String> {
   let never = AtomicBool::new(false);
-  models::fetch(&root, MODELS, &never, &speech::free_space, &|line, _| log::info!("speakers: {line}")).await?;
+  models::fetch(&root, MODELS, &never, &speech::free_space, &|line, _| log::info!("speakers: {line}")).await.map_err(String::from)?;
   if root.join(SEGMENTATION_ONNX).is_file() { return Ok(()); }
   let dir = root.join("speakers");
   let (archive, into) = (root.join(SEGMENTATION.name).display().to_string(), dir.display().to_string());

@@ -179,7 +179,7 @@ fn prepare(app: &AppHandle) {
       if !swapping { status(&app, message, 0); }
     };
     report(&format!("Getting {label} ready…"), None);
-    let result = cancellable(&cancel, models::fetch(&root, want.files(), &cancel, &free_space, &report)).await;
+    let result = cancellable(&cancel, models::fetch(&root, want.files(), &cancel, &free_space, &report)).await.map_err(String::from);
     let cancelled = || cancel.load(Ordering::Relaxed);
     if cancelled() {
       for model in want.files() { let _ = std::fs::remove_file(root.join(model.name).with_extension("part")); }
