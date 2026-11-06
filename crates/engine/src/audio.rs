@@ -82,6 +82,16 @@ mod tests {
   }
 
   #[test]
+  fn invalid_and_silent_audio_never_reaches_the_model() {
+    assert!(!worth_a_pass(&[]));
+    assert!(!worth_a_pass(&vec![0.0; 16000]));
+    assert!(!worth_a_pass(&vec![f32::NAN; 16000]));
+    assert!(!worth_a_pass(&vec![0.5; HANDS_FREE_SAMPLES + 1]));
+    assert!(worth_a_pass(&vec![0.25; HANDS_FREE_SAMPLES])); // a hands-free session reaches ten minutes
+    assert!(worth_a_pass(&vec![0.25; 16000]));
+  }
+
+  #[test]
   fn audio_quieter_than_a_breath_is_silence() {
     assert!(is_silent(&vec![0.0005; 16_000]));
     let mut said = vec![0.0005; 16_000];

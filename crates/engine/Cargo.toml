@@ -11,6 +11,7 @@ name = "dictate_engine"
 
 [dependencies]
 serde = { workspace = true }
+whisper-rs = { workspace = true }
 log = { workspace = true }
 ring = { workspace = true }
 reqwest = { workspace = true }

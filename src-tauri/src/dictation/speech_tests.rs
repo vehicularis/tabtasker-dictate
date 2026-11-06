@@ -1,56 +1,25 @@
 use super::*;
+use std::time::Duration;
 
 /// The engine on the models in `root`, as a launch with Turbo chosen leaves it.
 fn loaded(root: &Path) -> LocalSpeech {
   let speech = LocalSpeech::new(root.to_owned());
   speech.enabled.store(true, Ordering::Relaxed);
-  *speech.engine.lock().unwrap() = Some(Engine::load(root, Model::Turbo).unwrap());
-  *speech.vad.lock().unwrap() = Some(load_vad(root).unwrap());
+  *speech.engine.lock().unwrap() = Some(Whisper::load(&root.join(Model::Turbo.files()[0].name), Model::Turbo).unwrap());
+  *speech.vad.lock().unwrap() = Some(SpeechDetector::load(&root.join(SILERO.name)).unwrap());
   speech
 }
 
 #[test]
-fn invalid_and_silent_audio_never_reaches_the_model() {
-  assert!(validate_audio(&[]).is_err());
-  assert!(validate_audio(&vec![0.0; 16000]).is_err());
-  assert!(validate_audio(&vec![f32::NAN; 16000]).is_err());
-  assert!(validate_audio(&vec![0.5; HANDS_FREE_SAMPLES + 1]).is_err());
-  assert!(validate_audio(&vec![0.25; HANDS_FREE_SAMPLES]).is_ok()); // a hands-free session reaches ten minutes
-  assert!(validate_audio(&vec![0.25; 16000]).is_ok());
-}
-
-#[test]
-fn the_encoder_sees_the_speech_plus_room_never_more_than_whisper_window() {
-  assert_eq!(audio_ctx(16000), 50 + 128);
-  assert_eq!(audio_ctx(16001), 51 + 128);
-  assert_eq!(audio_ctx(MAX_SAMPLES), 1500);
-}
-
-#[test]
-fn cancellation_and_deadline_abort_local_inference() {
-  let flag = Arc::new(AtomicBool::new(false));
-  let mut abort = Abort { cancelled: flag.clone(), started: Instant::now(), piece: None };
-  assert!(!unsafe { should_abort((&mut abort as *mut Abort).cast()) });
-  flag.store(true, Ordering::Relaxed);
-  assert!(unsafe { should_abort((&mut abort as *mut Abort).cast()) });
-  flag.store(false, Ordering::Relaxed); abort.started = Instant::now() - Duration::from_secs(121);
-  assert!(unsafe { should_abort((&mut abort as *mut Abort).cast()) });
-}
-
-#[test]
 fn a_meeting_piece_gives_the_engine_up_to_a_release_pause_and_quit() {
-  let speech: &'static LocalSpeech = Box::leak(Box::new(LocalSpeech::new(PathBuf::new())));
+  let speech = LocalSpeech::new(PathBuf::new());
   speech.enabled.store(true, Ordering::Relaxed);
-  let mut abort = Abort { cancelled: Arc::default(), started: Instant::now(), piece: Some(speech) };
-  let stops = |abort: &mut Abort| unsafe { should_abort((abort as *mut Abort).cast()) };
-  assert!(!stops(&mut abort));
+  assert!(!speech.piece_yields());
   speech.releases.fetch_add(1, Ordering::SeqCst);
-  assert!(stops(&mut abort));
+  assert!(speech.piece_yields());
   speech.releases.fetch_sub(1, Ordering::SeqCst);
   speech.enabled.store(false, Ordering::Relaxed);
-  assert!(stops(&mut abort));
-  // A hold's own pass never yields to these.
-  assert!(!stops(&mut Abort { cancelled: Arc::default(), started: Instant::now(), piece: None }));
+  assert!(speech.piece_yields());
 }
 
 #[test]
@@ -139,20 +108,8 @@ fn a_long_note_is_transcribed_while_it_is_said_and_finishes_at_once() {
 }
 
 #[test]
-fn a_pinned_language_skips_detection_and_auto_keeps_it() {
-  assert_eq!(pinned("auto"), None);
-  assert_eq!(pinned("tr"), whisper_rs::get_lang_id("tr"));
-  assert!(pinned("tr").is_some());
-  assert_eq!(pinned("xx"), None);
-  // With no hold and the default settings, the language is whatever the passes hear.
+fn with_no_hold_and_the_default_settings_the_language_is_what_the_passes_hear() {
   assert_eq!(language("nobody"), None);
-}
-
-#[test]
-fn small_sees_the_whole_window_and_turbo_only_the_speech() {
-  assert_eq!(encoder_ctx(Model::Turbo, 16000), 178);
-  assert_eq!(encoder_ctx(Model::Small, 16000), 0);
-  assert_eq!(encoder_ctx(Model::Small, MAX_SAMPLES), 0);
 }
 
 #[test]

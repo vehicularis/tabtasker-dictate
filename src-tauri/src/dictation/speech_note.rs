@@ -11,22 +11,12 @@ pub(super) struct Note { id: String, text: String, pub(super) committed: usize, 
 
 impl LocalSpeech {
   /// The speech in `pcm` as sample ranges, found keenly like a hold's end; none for silence.
-  fn speech_in(&self, pcm: &[f32]) -> Result<Vec<(usize, usize)>, String> {
-    if pcm.len() < 4000 || audio::energy(pcm) < 1e-7 { return Ok(Vec::new()); }
-    let mut vad = lock(&self.vad);
-    let vad = vad.as_mut().ok_or("The speech model is still loading.")?;
-    vad.detect_speech(pcm).map_err(|_| "Couldn’t understand that")?;
-    let mut keen = WhisperVadParams::default();
-    keen.set_threshold(0.3); keen.set_min_speech_duration(0);
-    let speech = vad.segments_from_probabilities(keen).map_err(|_| "Couldn’t understand that")?;
-    // In hundredths of a second.
-    Ok((0..speech.num_segments()).filter_map(|i| Some(((speech.get_segment_start_timestamp(i)? * 160.0) as usize, (speech.get_segment_end_timestamp(i)? * 160.0) as usize))).collect())
-  }
+  fn speech_in(&self, pcm: &[f32]) -> Result<Vec<(usize, usize)>, Error> { lock(&self.vad).as_mut().ok_or(Error::NotLoaded)?.speech_ranges(pcm) }
 
   /// The words of one piece; nothing for a piece that turns out to be silence.
-  fn piece(&self, engine: &mut Engine, id: &str, pcm: &[f32], cancelled: Arc<AtomicBool>) -> Result<String, String> {
+  fn piece(&self, engine: &mut Whisper, id: &str, pcm: &[f32], cancelled: Arc<AtomicBool>) -> Result<String, Error> {
     match self.pass(engine, id, pcm, cancelled, false) {
-      Err(error) if error == UNHEARD => Ok(String::new()),
+      Err(Error::Unheard) => Ok(String::new()),
       other => other,
     }
   }
@@ -46,21 +36,21 @@ impl LocalSpeech {
 
   /// The note `id` only while it is still the one being taken: a step of a cancelled note never
   /// touches the next.
-  pub(super) fn same_note<T>(&self, id: &str, use_it: impl FnOnce(&mut Note) -> T) -> Result<T, String> {
+  pub(super) fn same_note<T>(&self, id: &str, use_it: impl FnOnce(&mut Note) -> T) -> Result<T, Error> {
     let mut note = lock(&self.note);
-    if note.id == id { Ok(use_it(&mut note)) } else { Err("Voice command cancelled.".into()) }
+    if note.id == id { Ok(use_it(&mut note)) } else { Err(Error::Cancelled) }
   }
 
   /// One step while the note is being taken: `pcm` is what the Mac still holds, starting `base` samples
   /// into the note. A piece that has ended is transcribed for good; otherwise the piece still being said
   /// gets a quick pass for the preview. Answers how much of the note is now transcribed, and the preview.
-  pub(super) fn note_step(&self, engine: &mut Engine, id: &str, base: usize, pcm: &[f32], cancelled: Arc<AtomicBool>) -> Result<(usize, Option<String>), String> {
+  pub(super) fn note_step(&self, engine: &mut Whisper, id: &str, base: usize, pcm: &[f32], cancelled: Arc<AtomicBool>) -> Result<(usize, Option<String>), Error> {
     let skip = self.same_note(id, |note| note.committed.saturating_sub(base))?.min(pcm.len());
     let tail = &pcm[skip..];
     let speech = self.speech_in(tail)?;
     if let Some(at) = pieces::cut(&speech, tail.len()) {
       let words = if speech.iter().any(|&(start, _)| start < at) { self.piece(engine, id, &tail[..at], cancelled.clone())? } else { String::new() };
-      if cancelled.load(Ordering::Relaxed) { return Err("Voice command cancelled.".into()); }
+      if cancelled.load(Ordering::Relaxed) { return Err(Error::Cancelled); }
       return self.same_note(id, |note| { note.text = pieces::join(&note.text, &words); note.committed = base + skip + at; (note.committed, None) });
     }
     let preview = if speech.is_empty() { None } else { self.pass(engine, id, tail, cancelled, true).ok() };
@@ -70,7 +60,7 @@ impl LocalSpeech {
   /// A live pass of a hands-free session or a long hold, `pcm` starting `base` samples in: the pieces that have ended
   /// go into its words for good, and the draft is those words and the piece still being said. Until a
   /// piece is in, it is an ordinary live pass, which a release can take as the answer.
-  pub(super) fn long_draft(&self, engine: &mut Engine, id: &str, base: usize, pcm: &[f32], cancelled: Arc<AtomicBool>) -> Option<String> {
+  pub(super) fn long_draft(&self, engine: &mut Whisper, id: &str, base: usize, pcm: &[f32], cancelled: Arc<AtomicBool>) -> Option<String> {
     let (committed, preview) = self.note_step(engine, id, base, pcm, cancelled.clone()).ok()?;
     if cancelled.load(Ordering::Relaxed) { return None; }
     let said = self.same_note(id, |note| note.text.clone()).ok()?;
@@ -81,7 +71,7 @@ impl LocalSpeech {
 
   /// The whole note once the key is let go: what is left of `pcm` (starting `base` samples in) is
   /// transcribed piece by piece and added to the words already in.
-  pub(super) fn note_finish(&self, engine: &mut Engine, id: &str, base: usize, pcm: &[f32], cancelled: Arc<AtomicBool>) -> Result<String, String> {
+  pub(super) fn note_finish(&self, engine: &mut Whisper, id: &str, base: usize, pcm: &[f32], cancelled: Arc<AtomicBool>) -> Result<String, Error> {
     let at = self.note(id, |note| note.committed.saturating_sub(base)).min(pcm.len());
     let text = self.note(id, |note| std::mem::take(&mut note.text));
     let result = self.pieces(engine, id, text, &pcm[at..], cancelled);
@@ -90,7 +80,7 @@ impl LocalSpeech {
   }
 
   /// `pcm` transcribed piece by piece, cut where it pauses, after the words in `text` already.
-  pub(super) fn pieces(&self, engine: &mut Engine, id: &str, mut text: String, pcm: &[f32], cancelled: Arc<AtomicBool>) -> Result<String, String> {
+  pub(super) fn pieces(&self, engine: &mut Whisper, id: &str, mut text: String, pcm: &[f32], cancelled: Arc<AtomicBool>) -> Result<String, Error> {
     let mut at = 0;
     while at < pcm.len() {
       let rest = &pcm[at..];
@@ -105,7 +95,7 @@ impl LocalSpeech {
       }
       at += end;
     }
-    if text.is_empty() { Err(UNHEARD.into()) } else { Ok(text) }
+    if text.is_empty() { Err(Error::Unheard) } else { Ok(text) }
   }
 }
 
@@ -160,10 +150,10 @@ extern "C" fn dictate_note_finish(id: *const c_char, base: usize, samples: *cons
     // Waits for a step still running, so its piece is in before the rest is read.
     let result = catch_unwind(AssertUnwindSafe(|| match lock(&state.engine).as_mut() {
       Some(engine) => state.note_finish(engine, &id, base, &pcm, cancelled.clone()),
-      None => Err("The speech model is still loading.".into()),
+      None => Err(Error::NotLoaded),
     })).unwrap_or_else(|_| {
       log::error!("voice note: its last pass panicked");
-      Err(PANICKED.into())
+      Err(Error::Other(PANICKED.into()))
     });
     claim.end_job();
     if cancelled.load(Ordering::Relaxed) || !state.enabled.load(Ordering::Relaxed) { return; }
@@ -171,7 +161,7 @@ extern "C" fn dictate_note_finish(id: *const c_char, base: usize, samples: *cons
     let id = CString::new(id).unwrap_or_default();
     let (text, error) = match result {
       Ok(text) => (Some(CString::new(text.replace('\0', "")).unwrap_or_default()), None),
-      Err(error) => (None, Some(CString::new(error).unwrap_or_default())),
+      Err(error) => (None, Some(CString::new(error.to_string()).unwrap_or_default())),
     };
     let _ = app.run_on_main_thread(move || unsafe {
       dictate_result(id.as_ptr(), text.as_ref().map_or(std::ptr::null(), |text| text.as_ptr()), error.as_ref().map_or(std::ptr::null(), |error| error.as_ptr()));

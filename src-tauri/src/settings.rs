@@ -5,6 +5,7 @@ use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::sync::{atomic::{AtomicBool, Ordering}, Mutex, OnceLock, RwLock};
 use tauri::{AppHandle, Emitter, Manager};
+use dictate_engine::whisper;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -363,7 +364,7 @@ impl Settings {
       && chords.iter().all(|chord| chord.valid()) && distinct
       && !file_name.contains(['/', ':', '\0']) && !file_name.trim_start().starts_with('.')
       && SOUNDS.contains(&self.dictation.start_sound.as_str()) && SOUNDS.contains(&self.dictation.stop_sound.as_str())
-      && (language == "auto" || (0..=whisper_rs::get_lang_max_id()).any(|id| whisper_rs::get_lang_str(id) == Some(language.as_str())))
+      && (language == "auto" || whisper::lang_codes().any(|code| code == language.as_str()))
   }
 
   /// Lengths and lists cut to what the app handles; empty names back to their defaults.

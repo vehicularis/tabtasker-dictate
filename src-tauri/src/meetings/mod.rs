@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tauri::{AppHandle, Emitter, Manager};
 use crate::dictation::speech;
+use dictate_engine::{error::Error, whisper::Segment};
 use crate::library::notes;
 use crate::{ai, settings};
 
@@ -578,7 +579,7 @@ extern "C" fn dictate_meeting_end(problem: *const c_char) {
 
 enum Trouble { Interrupted, Waiting(&'static str), Unreadable }
 
-fn transcribe(pcm: &[f32]) -> Result<Vec<speech::Segment>, Trouble> {
+fn transcribe(pcm: &[f32]) -> Result<Vec<Segment>, Trouble> {
   let settings = settings::get();
   // The person's own words, most recent first, so Whisper spells names right.
   let mut prompt = String::new();
@@ -591,10 +592,10 @@ fn transcribe(pcm: &[f32]) -> Result<Vec<speech::Segment>, Trouble> {
     language: Some(settings.dictation.language.clone()), prompt: (!prompt.is_empty()).then_some(prompt),
     translate: settings.dictation.translate_to_english, cancel: None,
   };
-  speech::transcribe_piece(pcm, options).map_err(|error| match error.as_str() {
-    speech::INTERRUPTED => Trouble::Interrupted,
-    "Dictation is paused." => Trouble::Waiting("Turn dictation back on to finish the transcript."),
-    "Couldn’t understand that" => Trouble::Unreadable,
+  speech::transcribe_piece(pcm, options).map_err(|error| match &error {
+    Error::Interrupted => Trouble::Interrupted,
+    Error::Other(why) if why == "Dictation is paused." => Trouble::Waiting("Turn dictation back on to finish the transcript."),
+    Error::NotUnderstood => Trouble::Unreadable,
     _ => {
       log::warn!("meeting: a piece waits: {error}");
       Trouble::Waiting("Waiting for the speech model to finish the transcript.")

@@ -3,9 +3,12 @@
 
 pub mod audio;
 pub mod cleanup;
+pub mod error;
 pub mod models;
 pub mod pieces;
 pub mod prompt;
 pub mod text;
+pub mod vad;
+pub mod whisper;
 
 pub use audio::SAMPLE_RATE;

@@ -1,11 +1,9 @@
-use std::{ffi::{c_char, c_void, CStr, CString}, fs, panic::{catch_unwind, AssertUnwindSafe}, path::{Path, PathBuf}, sync::{Arc, Mutex, MutexGuard, OnceLock, TryLockError, atomic::{AtomicBool, AtomicUsize, Ordering}}, time::{Duration, Instant}};
+use std::{ffi::{c_char, CStr, CString}, fs, panic::{catch_unwind, AssertUnwindSafe}, path::{Path, PathBuf}, sync::{Arc, Mutex, MutexGuard, OnceLock, TryLockError, atomic::{AtomicBool, AtomicUsize, Ordering}}, time::Instant};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Listener, Manager};
 use crate::dictation::{context, history, text};
 use crate::{ai, settings};
-use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters, WhisperState, WhisperSysContext, WhisperSysState, WhisperVadContext, WhisperVadContextParams, WhisperVadParams};
-
-use dictate_engine::{models::{self, cancellable, ModelKind as Model, CANCELLED, RETIRED, SILERO}, audio::{self, HANDS_FREE_SAMPLES, HOLD_SAMPLES as MAX_SAMPLES}, cleanup, pieces, prompt::{self, Echo, PROMPT_TOKENS}};
+use dictate_engine::{models::{self, cancellable, ModelKind as Model, CANCELLED, RETIRED, SILERO}, audio::{self, HANDS_FREE_SAMPLES, HOLD_SAMPLES as MAX_SAMPLES}, error::Error, pieces, prompt::{self, PROMPT_TOKENS}, vad::{Gate, SpeechDetector, Verdict}, whisper::{self, Ask, Segment, Whisper}};
 
 struct LocalSpeech {
   root: PathBuf,
@@ -21,9 +19,9 @@ struct LocalSpeech {
   /// The model, language and translation Settings last asked for, so only a change of them acts.
   seen: Mutex<Option<(Model, String, bool)>>,
   job: Mutex<Option<(String, Arc<AtomicBool>)>>,
-  engine: Mutex<Option<Engine>>,
+  engine: Mutex<Option<Whisper>>,
   /// Speech detection, apart from the engine so a release can see what was said while a live pass runs.
-  vad: Mutex<Option<WhisperVadContext>>,
+  vad: Mutex<Option<SpeechDetector>>,
   /// The live pass in flight while the key is held.
   draft: Mutex<Option<Draft>>,
   hold: Mutex<Hold>,
@@ -46,8 +44,6 @@ const SETTLED: usize = 16000 * 3 / 10;
 static APP: OnceLock<AppHandle> = OnceLock::new();
 /// Where the speech models live, once the app is up: for other models that belong beside them.
 pub(crate) fn models_root() -> Option<PathBuf> { APP.get().map(|app| app.state::<LocalSpeech>().root.clone()) }
-/// A hold with nothing to send (silence, too short, unclear): the overlay ends it quietly.
-const UNHEARD: &str = "unheard";
 /// A pass that panicked: dictation carries on, and this hold says so.
 const PANICKED: &str = "Couldn’t transcribe that. Try again.";
 /// Recovery runs once a launch, as the first model is ready.
@@ -234,8 +230,8 @@ fn load(app: &AppHandle, root: &Path, model: Model, cancel: &AtomicBool) -> Resu
   // Declared first, so the new model is dropped before it is let go.
   let _loading = state.loading.lock().unwrap_or_else(|e| e.into_inner());
   if !state.enabled.load(Ordering::Relaxed) { return Err("Dictation is paused.".into()); }
-  let whisper = Engine::load(root, model)?;
-  let vad = if lock(&state.vad).is_none() { Some(load_vad(root)?) } else { None };
+  let whisper = Whisper::load(&root.join(model.files()[0].name), model)?;
+  let vad = if lock(&state.vad).is_none() { Some(SpeechDetector::load(&root.join(SILERO.name))?) } else { None };
   // Waits for a pass in flight: the old model goes only once nothing is using it.
   let mut engine = lock(&state.engine);
   if !state.enabled.load(Ordering::Relaxed) || cancel.load(Ordering::Relaxed) { return Err(CANCELLED.into()); }
@@ -250,7 +246,7 @@ fn ready(state: &LocalSpeech) -> String {
   let dictation = settings::get().dictation;
   let model = lock(&state.loaded).map_or("Whisper", |model| model.files()[0].label);
   let language = if dictation.translate_to_english { "translating to English".to_owned() } else {
-    pinned(&dictation.language).and_then(whisper_rs::get_lang_str_full).map_or_else(|| "any language".to_owned(), |name| {
+    whisper::pinned(&dictation.language).and_then(whisper::lang_name).map_or_else(|| "any language".to_owned(), |name| {
       let mut chars = name.chars();
       chars.next().map_or_else(String::new, |first| first.to_uppercase().chain(chars).collect())
     })
@@ -344,12 +340,6 @@ pub fn cancel(app: &AppHandle, id: &str) {
   state.forget_note(id);
 }
 
-/// Audio worth a pass: long enough, finite, not silent, and no longer than the longest hold.
-fn validate_audio(pcm: &[f32]) -> Result<(), String> {
-  if !audio::worth_a_pass(pcm) { return Err(UNHEARD.into()); }
-  Ok(())
-}
-
 fn hands_free(id: &str) -> bool { context::get(id).mode == context::Mode::HandsFree }
 
 /// Whether a hold of `samples` is heard piece by piece, like a note: a hands-free session, or any hold
@@ -359,37 +349,10 @@ fn pieced(id: &str, samples: usize) -> bool { samples > pieces::PIECE || hands_f
 /// The most audio a hold may send: five minutes, or ten for a hands-free session.
 fn max_samples(id: &str) -> usize { if hands_free(id) { HANDS_FREE_SAMPLES } else { MAX_SAMPLES } }
 
-/// `piece` is set for a meeting piece, which also stops for Pause, Quit and a waiting release.
-struct Abort { cancelled: Arc<AtomicBool>, started: Instant, piece: Option<&'static LocalSpeech> }
-unsafe extern "C" fn should_abort(data: *mut c_void) -> bool {
-  let abort = &*(data as *const Abort);
-  abort.cancelled.load(Ordering::Relaxed) || abort.started.elapsed() >= Duration::from_secs(120) || abort.piece.is_some_and(LocalSpeech::piece_yields)
-}
-
-unsafe extern "C" fn stop_before_encoding(_: *mut WhisperSysContext, _: *mut WhisperSysState, _: *mut c_void) -> bool { false }
-
-fn threads() -> usize { std::thread::available_parallelism().map_or(4, |n| n.get().min(8)) }
-
-/// How much of Whisper's 30 s window the encoder looks at: the audio (20 ms a position) plus the 128
-/// positions of room the fine-tuned model was evaluated with. A short command encodes several times faster.
-fn audio_ctx(samples: usize) -> i32 { (samples.div_ceil(320) + 128).min(1500) as i32 }
-
-/// The encoder's audio context for `samples` on `model`. Only the fine-tuned Turbo keeps its accuracy on
-/// less than the whole window; Small, cheap to encode anyway, always sees all of it (0).
-fn encoder_ctx(model: Model, samples: usize) -> i32 { if model == Model::Turbo { audio_ctx(samples) } else { 0 } }
-
-/// A language Settings pins, by Whisper's id; None for `auto`.
-fn pinned(code: &str) -> Option<i32> { if code == "auto" { None } else { whisper_rs::get_lang_id(code) } }
-
-/// What Settings asks of every pass: a pinned language (None detects it), translation to English, and
-/// the words Whisper should spell right, newest first.
-#[derive(Clone, Debug, Default)]
-struct Ask { language: Option<i32>, translate: bool, words: Vec<String> }
-impl Ask {
-  fn now() -> Self {
-    let settings = settings::get();
-    Self { language: pinned(&settings.dictation.language), translate: settings.dictation.translate_to_english, words: settings.vocabulary.words }
-  }
+/// What Settings asks of every pass now.
+fn ask_now() -> Ask {
+  let settings = settings::get();
+  Ask { language: whisper::pinned(&settings.dictation.language), translate: settings.dictation.translate_to_english, words: settings.vocabulary.words }
 }
 
 /// How many of `words`, newest first, Whisper is given. Counted with Whisper's own tokens when the
@@ -399,7 +362,7 @@ pub fn vocabulary_fit(app: AppHandle, words: Vec<String>) -> usize {
   let state = app.state::<LocalSpeech>();
   let engine = try_lock(&state.engine);
   let whisper = engine.as_ref().and_then(|engine| engine.as_ref());
-  let tokens = |text: &str| whisper.map_or_else(|| text.len().div_ceil(3), |whisper| whisper.tokens(text).len());
+  let tokens = |text: &str| whisper.map_or_else(|| text.len().div_ceil(3), |whisper| whisper.token_count(text));
   prompt::prompt_text(&words, |text| tokens(text) < PROMPT_TOKENS).1
 }
 
@@ -408,179 +371,10 @@ pub fn vocabulary_fit(app: AppHandle, words: Vec<String>) -> usize {
 pub fn language(request: &str) -> Option<String> {
   let dictation = settings::get().dictation;
   if dictation.translate_to_english { return Some("en".into()); }
-  if let Some(id) = pinned(&dictation.language) { return whisper_rs::get_lang_str(id).map(Into::into); }
+  if let Some(id) = whisper::pinned(&dictation.language) { return whisper::lang_code(id).map(Into::into); }
   let state = APP.get()?.try_state::<LocalSpeech>()?;
   let hold = state.hold.lock().unwrap_or_else(|e| e.into_inner());
-  (hold.id == request).then_some(hold.spoken).flatten().and_then(whisper_rs::get_lang_str).map(Into::into)
-}
-
-fn load_vad(root: &Path) -> Result<WhisperVadContext, String> {
-  WhisperVadContext::new(root.join(SILERO.name).to_str().ok_or("Invalid speech model path.")?, WhisperVadContextParams::default())
-    .map_err(|_| "Couldn’t load speech detection. Try again.".into())
-}
-
-/// Whisper, its state and the vocabulary it was last given. Every pass reuses the one state: whisper.cpp
-/// clears its results, spectrogram and prompt at the start of each full() (no_context is on for all of
-/// ours), and the engine's mutex keeps passes from sharing it. A new state each pass cost its GPU buffers.
-struct Engine { whisper: WhisperContext, state: WhisperState, model: Model, prompt: Prompt }
-
-/// The vocabulary as Whisper was last given it: the words, those of them that fit in its prompt, and the
-/// prompt's tokens.
-#[derive(Default)]
-struct Prompt { words: Vec<String>, sent: Vec<String>, tokens: Vec<i32> }
-
-/// What none of our passes prints.
-fn quiet(params: &mut FullParams) {
-  params.set_print_special(false); params.set_print_progress(false); params.set_print_realtime(false); params.set_print_timestamps(false);
-}
-
-/// The mean log probability of a segment's words, special tokens left out (they sort from end-of-text up).
-fn avg_logprob(segment: &whisper_rs::WhisperSegment<'_>, eot: i32) -> f32 {
-  let logs: Vec<f32> = (0..segment.n_tokens()).filter_map(|i| segment.get_token(i)).filter(|token| token.token_id() < eot).map(|token| token.token_data().plog).collect();
-  if logs.is_empty() { f32::NEG_INFINITY } else { logs.iter().sum::<f32>() / logs.len() as f32 }
-}
-impl Engine {
-  fn load(root: &Path, model: Model) -> Result<Self, String> {
-    // Native debug logs can contain recognized tokens; keep speech out of app logs.
-    whisper_rs::install_logging_hooks();
-    let path = root.join(model.files()[0].name);
-    let path = path.to_str().ok_or("Voice model path is not valid Unicode.")?;
-    let mut parameters = WhisperContextParameters::default();
-    parameters.use_gpu(true).flash_attn(true);
-    let whisper = WhisperContext::new_with_params(path, parameters).or_else(|_| {
-      let mut cpu = WhisperContextParameters::default(); cpu.use_gpu(false);
-      WhisperContext::new_with_params(path, cpu)
-    }).map_err(|_| "Couldn’t load the speech model. Quit an app or two to free up memory, then try again.")?;
-    let state = whisper.create_state().map_err(|_| "There isn’t enough free memory. Quit an app or two and try again.")?;
-    let mut engine = Self { whisper, state, model, prompt: Prompt::default() };
-    engine.warm_up();
-    Ok(engine)
-  }
-
-  /// A throw-away pass over a second of silence, with the final pass's beams, so the first dictation
-  /// doesn't wait while Metal sets up what a pass needs.
-  fn warm_up(&mut self) {
-    let mut params = FullParams::new(SamplingStrategy::BeamSearch { beam_size: 5, patience: -1.0 });
-    params.set_n_threads(threads() as i32);
-    params.set_language(Some("en"));
-    params.set_audio_ctx(self.audio_ctx(16_000));
-    params.set_temperature_inc(0.0); // once, never again warmer
-    params.set_max_tokens(16); // a few steps of the decoder are enough, however it hears silence
-    quiet(&mut params);
-    let _ = self.state.full(params, &vec![0.0; 16_000]);
-  }
-
-  fn audio_ctx(&self, samples: usize) -> i32 { encoder_ctx(self.model, samples) }
-
-  fn tokens(&self, text: &str) -> Vec<i32> {
-    // A token is at least a byte, so this room is always enough; too little would be undefined.
-    self.whisper.tokenize(text, text.len() + 8).unwrap_or_default()
-  }
-
-  /// Tokenizes `words` as the prompt, once for each change of them.
-  fn use_words(&mut self, words: &[String]) {
-    if self.prompt.words == words { return; }
-    let (text, count) = prompt::prompt_text(words, |text| self.tokens(text).len() < PROMPT_TOKENS);
-    let tokens = if text.is_empty() { Vec::new() } else { self.tokens(&text) };
-    self.prompt = Prompt { words: words.to_vec(), sent: prompt::entries(words).take(count).map(Into::into).collect(), tokens };
-  }
-
-  /// The language spoken in `pcm` and how sure Whisper is of it. It runs the encoder, about half the work
-  /// of a pass.
-  fn detect(&mut self, pcm: &[f32]) -> Result<(i32, f32), String> {
-    // whisper.cpp takes a shorter audio context only from full(), and only after its own language
-    // detection. A pass stopped before its encoder leaves the spectrogram and that context in place, so
-    // detecting here encodes just the speech rather than all 30 s.
-    let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
-    params.set_n_threads(threads() as i32);
-    params.set_language(Some("en"));
-    params.set_audio_ctx(self.audio_ctx(pcm.len()));
-    quiet(&mut params);
-    unsafe { params.set_start_encoder_callback(Some(stop_before_encoding)); }
-    self.state.full(params, pcm).map_err(|_| "Couldn’t understand that")?;
-    let (language, sure) = self.state.lang_detect(0, threads()).map_err(|_| "Couldn’t understand that")?;
-    Ok((language, sure.get(language as usize).copied().unwrap_or(0.0)))
-  }
-
-  /// `quick` is the live pass's greedy decoding; the final pass searches five beams, which costs about
-  /// the same because the encoder dominates.
-  fn run(&mut self, pcm: &[f32], language: i32, ask: &Ask, cancelled: Arc<AtomicBool>, quick: bool) -> Result<String, String> {
-    if cancelled.load(Ordering::Relaxed) { return Err("Voice command cancelled.".into()); }
-    self.use_words(&ask.words);
-    let text = self.decode(pcm, language, ask, cancelled.clone(), quick, true)?;
-    // Over near-silence a prompted Whisper can recite the vocabulary instead of what was said (OpenWhispr
-    // #1454): heard again without it, when the retry could be kept.
-    let Some(echo) = Echo::of(&text, &self.prompt.sent, pcm.len()).filter(|_| !self.prompt.tokens.is_empty()) else { return Ok(text) };
-    if !quick { log::info!("dictation pass: it recited the vocabulary, heard again without it"); }
-    match self.decode(pcm, language, ask, cancelled.clone(), quick, false) {
-      Ok(again) if echo.keeps(&again, &self.prompt.sent, pcm.len()) => Ok(again),
-      _ if cancelled.load(Ordering::Relaxed) => Err("Voice command cancelled.".into()),
-      // The whole vocabulary that no retry replaces was never said.
-      _ if echo.strict => Err(UNHEARD.into()),
-      _ => Ok(text),
-    }
-  }
-
-  fn decode(&mut self, pcm: &[f32], language: i32, ask: &Ask, cancelled: Arc<AtomicBool>, quick: bool, prompted: bool) -> Result<String, String> {
-    let mut params = FullParams::new(if quick { SamplingStrategy::Greedy { best_of: 1 } } else { SamplingStrategy::BeamSearch { beam_size: 5, patience: -1.0 } });
-    params.set_n_threads(threads() as i32);
-    params.set_language(whisper_rs::get_lang_str(language));
-    params.set_audio_ctx(self.audio_ctx(pcm.len()));
-    params.set_translate(ask.translate);
-    params.set_no_context(true);
-    // Timestamps stay on, as OpenWhispr keeps them (whisperServer.js, #2150). Without them a decode that
-    // ends early, as one can at a pause, moves on a whole 30 s window, so the words after the pause are
-    // lost even in a short hold; with them whisper.cpp carries on from the last timestamp.
-    params.set_suppress_nst(true);
-    // OpenWhispr's thresholds for dictation (whisperServer.js, #1458): a decode this unsure is tried again
-    // warmer, which cut made-up endings ("Thank you for watching") from 2.25 % to 0.06 % of its dictations.
-    params.set_entropy_thold(2.8);
-    params.set_logprob_thold(-1.25);
-    if prompted && !self.prompt.tokens.is_empty() { params.set_tokens(&self.prompt.tokens); }
-    quiet(&mut params);
-    let mut abort = Abort { cancelled: cancelled.clone(), started: Instant::now(), piece: None };
-    // The callback borrows this stack value only for the synchronous full() call.
-    unsafe { params.set_abort_callback(Some(should_abort)); params.set_abort_callback_user_data((&mut abort as *mut Abort).cast()); }
-    self.state.full(params, pcm).map_err(|_| "Couldn’t understand that")?;
-    if cancelled.load(Ordering::Relaxed) { return Err("Voice command cancelled.".into()); }
-    let mut text = String::new();
-    let eot = self.whisper.token_eot();
-    for segment in self.state.as_iter() {
-      if cleanup::is_silent_segment(segment.no_speech_probability(), avg_logprob(&segment, eot)) { continue; } // that window, not the whole hold
-      text.push_str(&segment.to_string());
-    }
-    let text = if prompted { prompt::without_recital(&text, &self.prompt.sent) } else { &text }.trim().to_owned();
-    let text = cleanup::unloop(&text, pcm.len() as f32 / 16_000.0);
-    if text.is_empty() { return Err(UNHEARD.into()); }
-    if text.chars().count() > 8000 { return Err("That was too long to type. Try a shorter one.".into()); }
-    Ok(text)
-  }
-
-  /// A meeting piece with timestamps. `prompt` replaces the vocabulary when the caller has its own.
-  fn segments(&mut self, pcm: &[f32], language: i32, prompt: Option<&str>, ask: &Ask, translate: bool, mut abort: Abort) -> Result<Vec<Segment>, String> {
-    let own = prompt.map(str::trim).filter(|prompt| !prompt.is_empty()).map(|prompt| self.tokens(&format!(" {}", prompt.replace('\0', ""))));
-    if own.is_none() { self.use_words(&ask.words); }
-    let tokens = own.as_deref().unwrap_or(&self.prompt.tokens);
-    let mut params = FullParams::new(SamplingStrategy::BeamSearch { beam_size: 5, patience: -1.0 });
-    params.set_n_threads(threads() as i32);
-    params.set_language(whisper_rs::get_lang_str(language));
-    params.set_audio_ctx(self.audio_ctx(pcm.len()));
-    params.set_translate(translate);
-    params.set_no_context(true);
-    params.set_suppress_nst(true);
-    if !tokens.is_empty() { params.set_tokens(tokens); }
-    quiet(&mut params);
-    // The callback borrows this stack value only for the synchronous full() call.
-    unsafe { params.set_abort_callback(Some(should_abort)); params.set_abort_callback_user_data((&mut abort as *mut Abort).cast()); }
-    self.state.full(params, pcm).map_err(|_| "Couldn’t understand that")?;
-    // Timestamps are in hundredths of a second.
-    let samples = |at: i64| (at.max(0) as usize * 160).min(pcm.len());
-    let eot = self.whisper.token_eot();
-    Ok(self.state.as_iter().filter(|segment| !cleanup::is_silent_segment(segment.no_speech_probability(), avg_logprob(segment, eot))).filter_map(|segment| {
-      let text = segment.to_string().trim().to_owned();
-      (!text.is_empty()).then(|| Segment { start: samples(segment.start_timestamp()), end: samples(segment.end_timestamp()), text })
-    }).collect())
-  }
+  (hold.id == request).then_some(hold.spoken).flatten().and_then(whisper::lang_code).map(Into::into)
 }
 
 impl LocalSpeech {
@@ -588,7 +382,7 @@ impl LocalSpeech {
   fn piece_yields(&self) -> bool { !self.enabled.load(Ordering::Relaxed) || self.releases.load(Ordering::SeqCst) > 0 }
 
   /// The engine for a release, which a meeting piece running meanwhile gives up.
-  fn engine_now(&self) -> MutexGuard<'_, Option<Engine>> {
+  fn engine_now(&self) -> MutexGuard<'_, Option<Whisper>> {
     self.releases.fetch_add(1, Ordering::SeqCst);
     let engine = self.engine.lock().unwrap_or_else(|e| e.into_inner());
     self.releases.fetch_sub(1, Ordering::SeqCst);
@@ -603,57 +397,59 @@ impl LocalSpeech {
 
   /// Where the speech in `pcm` ends, in samples. The end is found more keenly than whether there is speech
   /// at all, so a short or quiet last word still counts.
-  fn speech_end(&self, pcm: &[f32]) -> Result<usize, String> { self.find_speech_end(pcm, false) }
+  fn speech_end(&self, pcm: &[f32]) -> Result<usize, Error> { self.find_speech_end(pcm, false) }
 
   /// `speech_end`, saying in the log (`report`) what the gates made of the audio: its levels, the speech
   /// detection's segments and where the speech was found to end. Never the words.
-  fn find_speech_end(&self, pcm: &[f32], report: bool) -> Result<usize, String> {
-    validate_audio(pcm)?;
-    let audio::Levels { peak, rms } = audio::levels(pcm);
+  fn find_speech_end(&self, pcm: &[f32], report: bool) -> Result<usize, Error> {
+    let mut vad = lock(&self.vad);
+    let Gate { levels: audio::Levels { peak, rms }, verdict } = match vad.as_mut() {
+      Some(vad) => vad.gate(pcm)?,
+      // Audio too quiet for a word ends quietly even before speech detection is loaded.
+      None if !audio::worth_a_pass(pcm) => return Err(Error::Unheard),
+      None if audio::is_silent(pcm) => Gate { levels: audio::levels(pcm), verdict: Verdict::TooQuiet },
+      None => return Err(Error::NotLoaded),
+    };
+    drop(vad);
     let seconds = |samples: usize| samples as f32 / 16_000.0;
     let say = |what: String| if report { log::info!("dictation gate: {:.1}s, peak {peak:.4}, loudest rms {rms:.4}: {what}", seconds(pcm.len())); };
-    if audio::is_silent(pcm) { say("unheard, too quiet to hold a word (loudest rms under 0.002)".into()); return Err(UNHEARD.into()); }
-    let mut vad = lock(&self.vad);
-    let vad = vad.as_mut().ok_or("The speech model is still loading.")?;
-    vad.detect_speech(pcm).map_err(|_| "Couldn’t understand that")?;
-    let speech = vad.segments_from_probabilities(WhisperVadParams::default()).map_err(|_| "Couldn’t understand that")?;
-    // Speech detection wants a quarter of a second of speech, which one short word can fall short of, so
-    // a level that is plainly a voice counts too.
-    let found = speech.num_segments();
-    if found == 0 && !audio::is_voiced(pcm) { say("unheard, no speech detected and not loud enough to count as a voice".into()); return Err(UNHEARD.into()); }
-    let mut keen = WhisperVadParams::default();
-    keen.set_threshold(0.3); keen.set_min_speech_duration(0);
-    let speech = vad.segments_from_probabilities(keen).map_err(|_| "Couldn’t understand that")?;
-    // In hundredths of a second; all of it when even the keen pass found no speech.
-    let end = speech.get_segment_end_timestamp(speech.num_segments() - 1).map_or(pcm.len(), |end| (end * 160.0) as usize);
-    say(format!("{found} speech segment(s), {} keen, speech ends at {:.2}s{}", speech.num_segments(), seconds(end.min(pcm.len())), if found == 0 { " (let through by its level)" } else { "" }));
-    Ok(end)
+    match verdict {
+      Verdict::TooQuiet => { say("unheard, too quiet to hold a word (loudest rms under 0.002)".into()); Err(Error::Unheard) }
+      Verdict::NoVoice => { say("unheard, no speech detected and not loud enough to count as a voice".into()); Err(Error::Unheard) }
+      Verdict::Speech { end, segments, keen, by_level } => {
+        say(format!("{segments} speech segment(s), {keen} keen, speech ends at {:.2}s{}", seconds(end.min(pcm.len())), if by_level { " (let through by its level)" } else { "" }));
+        Ok(end)
+      }
+    }
   }
 
   /// A pass in the language Settings pins, or else the hold's: detected by its first pass that is sure
   /// of it, and reused by every later pass, since detecting again would double the work.
-  fn pass(&self, engine: &mut Engine, id: &str, pcm: &[f32], cancelled: Arc<AtomicBool>, quick: bool) -> Result<String, String> {
-    if cancelled.load(Ordering::Relaxed) { return Err("Voice command cancelled.".into()); }
-    let ask = Ask::now();
+  fn pass(&self, engine: &mut Whisper, id: &str, pcm: &[f32], cancelled: Arc<AtomicBool>, quick: bool) -> Result<String, Error> {
+    if cancelled.load(Ordering::Relaxed) { return Err(Error::Cancelled); }
+    let ask = ask_now();
     let started = Instant::now();
     let held = self.hold(id, |hold| hold.language);
     let (language, how) = match ask.language.map(|language| (language, "Settings".to_owned())).or_else(|| held.map(|language| (language, "this hold".to_owned()))) {
       Some(found) => found,
       None => {
-        let (language, sure) = engine.detect(pcm)?;
+        let (language, sure) = engine.detect_language(pcm)?;
         if sure >= 0.9 { self.hold(id, |hold| hold.language = Some(language)); }
         (language, format!("detected, {sure:.2} sure{}", if sure >= 0.9 { "" } else { ", not kept" }))
       }
     };
     self.hold(id, |hold| hold.spoken = Some(language));
-    let result = engine.run(pcm, language, &ask, cancelled, quick);
+    let result = engine.transcribe(pcm, language, &ask, &|| cancelled.load(Ordering::Relaxed), quick).map(|heard| {
+      if heard.retried_without_prompt && !quick { log::info!("dictation pass: it recited the vocabulary, heard again without it"); }
+      heard.text
+    });
     let ms = started.elapsed().as_millis();
     if quick {
       self.hold(id, |hold| { hold.live.passes += 1; hold.live.total_ms += ms; hold.live.slowest_ms = hold.live.slowest_ms.max(ms); });
     } else {
-      let outcome = match &result { Ok(text) => format!("{} word(s)", text.split_whitespace().count()), Err(error) if error == UNHEARD => "nothing it was sure of".into(), Err(error) => format!("failed: {error}") };
+      let outcome = match &result { Ok(text) => format!("{} word(s)", text.split_whitespace().count()), Err(Error::Unheard) => "nothing it was sure of".into(), Err(error) => format!("failed: {error}") };
       log::info!("dictation pass: {:.1}s of audio, language {} ({how}){}, 5 beams, {ms} ms, {outcome}", pcm.len() as f32 / 16_000.0,
-        whisper_rs::get_lang_str(language).unwrap_or("?"), if ask.translate { ", translated" } else { "" });
+        whisper::lang_code(language).unwrap_or("?"), if ask.translate { ", translated" } else { "" });
     }
     result
   }
@@ -661,10 +457,10 @@ impl LocalSpeech {
   /// The words once the key is let go. A live pass that already heard everything said is the answer, and
   /// one still running that will is worth waiting for; only speech past the newest live pass needs a
   /// pass of its own. A long hold or hands-free session is mostly in its words already: only its tail is left.
-  fn finish(&self, id: &str, pcm: &[f32], cancelled: Arc<AtomicBool>) -> Result<String, String> {
+  fn finish(&self, id: &str, pcm: &[f32], cancelled: Arc<AtomicBool>) -> Result<String, Error> {
     if self.long(id, pcm.len()) {
       let mut engine = self.engine_now();
-      return self.note_finish(engine.as_mut().ok_or("The speech model is still loading.")?, id, 0, pcm, cancelled);
+      return self.note_finish(engine.as_mut().ok_or(Error::NotLoaded)?, id, 0, pcm, cancelled);
     }
     let end = self.find_speech_end(pcm, true)? + SETTLED;
     let heard = || self.hold(id, |hold| hold.heard.clone()).filter(|(samples, _)| *samples >= end).map(|(_, text)| text);
@@ -676,7 +472,7 @@ impl LocalSpeech {
     }
     let mut engine = self.engine_now();
     if let Some(text) = heard() { return Ok(text); }
-    self.pass(engine.as_mut().ok_or("The speech model is still loading.")?, id, pcm, cancelled, false)
+    self.pass(engine.as_mut().ok_or(Error::NotLoaded)?, id, pcm, cancelled, false)
   }
 
   /// Whether a hold of `samples` finishes as a long session, piece by piece: one past a piece, or a
@@ -700,11 +496,11 @@ impl LocalSpeech {
       let read = read_unsent(&path);
       let _ = fs::remove_file(&path);
       let Ok((said, pcm)) = read else { continue };
-      let Some(mode) = context::Mode::parse(&said.mode).filter(|_| validate_audio(&pcm).is_ok()) else { continue };
+      let Some(mode) = context::Mode::parse(&said.mode).filter(|_| audio::worth_a_pass(&pcm)) else { continue };
       let ctx = context::HoldContext::new(&format!("recovered-{}", said.at_ms), mode, &said.bundle_id, &said.app_name);
       let heard = catch_unwind(AssertUnwindSafe(|| match self.engine_now().as_mut() {
         Some(engine) => self.pieces(engine, &ctx.request, String::new(), &pcm, Arc::default()),
-        None => Err("The speech model is still loading.".into()),
+        None => Err(Error::NotLoaded),
       }));
       match heard {
         Ok(Ok(text)) => {
@@ -719,7 +515,7 @@ impl LocalSpeech {
   }
 
   /// One live pass. Its words are kept while it still holds the engine, so a release waiting on it finds them.
-  fn draft(&self, engine: &mut Engine, id: &str, pcm: &[f32], cancelled: Arc<AtomicBool>) -> Option<String> {
+  fn draft(&self, engine: &mut Whisper, id: &str, pcm: &[f32], cancelled: Arc<AtomicBool>) -> Option<String> {
     self.speech_end(pcm).ok()?;
     let text = self.pass(engine, id, pcm, cancelled.clone(), true).ok()?;
     if cancelled.load(Ordering::Relaxed) { return None; }
@@ -754,7 +550,7 @@ extern "C" fn dictate_audio(id: *const c_char, samples: *const f32, count: usize
     let released = Instant::now();
     let result = catch_unwind(AssertUnwindSafe(|| state.finish(&id, &pcm, cancelled.clone()))).unwrap_or_else(|_| {
       log::error!("dictation: a pass panicked");
-      Err(PANICKED.into())
+      Err(Error::Other(PANICKED.into()))
     });
     let heard_words = result.as_ref().map_or(0, |text| text.split_whitespace().count());
     claim.end_job();
@@ -763,7 +559,7 @@ extern "C" fn dictate_audio(id: *const c_char, samples: *const f32, count: usize
     let result = result.map(|text| catch_unwind(AssertUnwindSafe(|| settle(&id, &text, pcm.len()))).unwrap_or(text));
     log::info!("dictation done: {:.1}s of audio, {} ms after release, {}", pcm.len() as f32 / 16_000.0, released.elapsed().as_millis(), match &result {
       Ok(text) => format!("{heard_words} word(s) heard, {} after the text pipeline", text.split_whitespace().count()),
-      Err(error) if error == UNHEARD => "unheard".into(),
+      Err(Error::Unheard) => "unheard".into(),
       Err(error) => format!("error: {error}"),
     });
     // Return follows the words when the app is one for messages, or when "send" ended what was said.
@@ -781,7 +577,7 @@ extern "C" fn dictate_audio(id: *const c_char, samples: *const f32, count: usize
     let id = CString::new(id).unwrap_or_default();
     let (text, error) = match result {
       Ok(text) => (Some(CString::new(text.replace('\0', "")).unwrap_or_default()), None),
-      Err(error) => (None, Some(CString::new(error).unwrap_or_default())),
+      Err(error) => (None, Some(CString::new(error.to_string()).unwrap_or_default())),
     };
     let _ = app.run_on_main_thread(move || unsafe {
       dictate_result_sends(id.as_ptr(), send);
@@ -872,38 +668,29 @@ fn read_unsent(path: &Path) -> std::io::Result<(history::Entry, Vec<f32>)> {
 #[derive(Clone, Debug, Default)]
 pub struct PieceOptions { pub language: Option<String>, pub prompt: Option<String>, pub translate: bool, pub cancel: Option<Arc<AtomicBool>> }
 
-/// `transcribe_piece`'s error when it gave the engine up before finishing: the piece is untouched and
-/// can be tried again.
-pub const INTERRUPTED: &str = "interrupted";
-
-/// Words Whisper heard in a piece, `start` and `end` in samples from the piece's start.
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub struct Segment { pub start: usize, pub end: usize, pub text: String }
-
 /// One piece of audio of up to 30 s, 16 kHz mono, with timestamps. Blocking: it waits for the engine.
 /// Dictation comes first: a release waiting for the engine, Pause, Quit or `opts.cancel` stops the
-/// piece with `INTERRUPTED`. Silence answers no segments.
-pub fn transcribe_piece(pcm: &[f32], opts: PieceOptions) -> Result<Vec<Segment>, String> {
-  let app = APP.get().ok_or("The speech model is still loading.")?;
-  if pcm.len() > 30 * 16000 || pcm.iter().any(|sample| !sample.is_finite()) { return Err("Invalid audio".into()); }
-  if validate_audio(pcm).is_err() { return Ok(Vec::new()); }
-  let state: &'static LocalSpeech = app.state::<LocalSpeech>().inner();
-  if !state.enabled.load(Ordering::Relaxed) { return Err("Dictation is paused.".into()); }
-  let ask = Ask::now();
+/// piece with `Error::Interrupted`, leaving it untouched to be tried again. Silence answers no segments.
+pub fn transcribe_piece(pcm: &[f32], opts: PieceOptions) -> Result<Vec<Segment>, Error> {
+  let app = APP.get().ok_or(Error::NotLoaded)?;
+  if pcm.len() > 30 * 16000 || pcm.iter().any(|sample| !sample.is_finite()) { return Err(Error::InvalidAudio); }
+  if !audio::worth_a_pass(pcm) { return Ok(Vec::new()); }
+  let state = app.state::<LocalSpeech>();
+  if !state.enabled.load(Ordering::Relaxed) { return Err(Error::Other("Dictation is paused.".into())); }
+  let ask = ask_now();
   let language = match opts.language.as_deref() {
     None => ask.language,
     Some("auto") => None,
-    Some(code) => Some(whisper_rs::get_lang_id(code).ok_or("Unknown language")?),
+    Some(code) => Some(whisper::lang_id(code).ok_or(Error::UnknownLanguage)?),
   };
   let cancelled = opts.cancel.unwrap_or_default();
   let stopped = || cancelled.load(Ordering::Relaxed) || state.piece_yields();
   let mut engine = state.engine.lock().unwrap_or_else(|e| e.into_inner());
-  if stopped() { return Err(INTERRUPTED.into()); }
-  let engine = engine.as_mut().ok_or("The speech model is still loading.")?;
-  let language = match language { Some(language) => language, None => engine.detect(pcm)?.0 };
-  if stopped() { return Err(INTERRUPTED.into()); }
-  let abort = Abort { cancelled: cancelled.clone(), started: Instant::now(), piece: Some(state) };
-  engine.segments(pcm, language, opts.prompt.as_deref(), &ask, opts.translate, abort).map_err(|e| if stopped() { INTERRUPTED.into() } else { e })
+  if stopped() { return Err(Error::Interrupted); }
+  let engine = engine.as_mut().ok_or(Error::NotLoaded)?;
+  let language = match language { Some(language) => language, None => engine.detect_language(pcm)?.0 };
+  if stopped() { return Err(Error::Interrupted); }
+  engine.segments(pcm, language, opts.prompt.as_deref(), &ask, opts.translate, &stopped).map_err(|e| if stopped() { Error::Interrupted } else { e })
 }
 
 #[path = "speech_note.rs"]
