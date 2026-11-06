@@ -4,37 +4,9 @@ use super::*;
 fn loaded(root: &Path) -> LocalSpeech {
   let speech = LocalSpeech::new(root.to_owned());
   speech.enabled.store(true, Ordering::Relaxed);
-  *speech.engine.lock().unwrap() = Some(Engine::load(root, settings::Model::Turbo).unwrap());
+  *speech.engine.lock().unwrap() = Some(Engine::load(root, Model::Turbo).unwrap());
   *speech.vad.lock().unwrap() = Some(load_vad(root).unwrap());
   speech
-}
-
-#[test]
-fn download_client_initializes_tls_in_a_fresh_process() {
-  const PROBE: &str = "TABTASKER_VOICE_CLIENT_TEST";
-  if std::env::var_os(PROBE).is_some() {
-    assert!(rustls::crypto::CryptoProvider::get_default().is_none());
-    assert!(download_client().is_ok());
-    assert!(rustls::crypto::CryptoProvider::get_default().is_some());
-    return;
-  }
-  let output = std::process::Command::new(std::env::current_exe().unwrap())
-    .args(["--exact", "dictation::speech::tests::download_client_initializes_tls_in_a_fresh_process", "--nocapture"])
-    .env(PROBE, "1").output().unwrap();
-  assert!(output.status.success(), "{}\n{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
-  assert!(String::from_utf8_lossy(&output.stdout).contains("1 passed"), "the probe ran: {}", String::from_utf8_lossy(&output.stdout));
-}
-
-#[test]
-fn model_bytes_must_match_both_pinned_size_and_hash() {
-  let dir = std::env::temp_dir().join(format!("tabtasker-speech-integrity-{}", std::process::id()));
-  std::fs::create_dir_all(&dir).unwrap();
-  let path = dir.join("model.bin");
-  let model = Model { name: "model.bin", label: "test", url: "", bytes: 3, sha256: "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad" };
-  std::fs::write(&path, b"abc").unwrap(); assert!(verify_model(&path, &model).is_ok());
-  std::fs::write(&path, b"abd").unwrap(); assert!(verify_model(&path, &model).is_err());
-  std::fs::write(&path, b"ab").unwrap(); assert!(verify_model(&path, &model).is_err());
-  std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]
@@ -81,23 +53,11 @@ fn a_meeting_piece_gives_the_engine_up_to_a_release_pause_and_quit() {
   assert!(!stops(&mut Abort { cancelled: Arc::default(), started: Instant::now(), piece: None }));
 }
 
-#[tokio::test]
-async fn cancellation_interrupts_a_stalled_download() {
-  let cancel = Arc::new(AtomicBool::new(false));
-  let signal = cancel.clone();
-  let waiting = tokio::spawn(async move {
-    cancellable(&signal, std::future::pending::<Result<(), String>>()).await
-  });
-  tokio::task::yield_now().await;
-  cancel.store(true, Ordering::Relaxed);
-  assert!(tokio::time::timeout(Duration::from_millis(500), waiting).await.unwrap().unwrap().is_err());
-}
-
 #[test]
 #[ignore = "Downloads are explicit; set TABTASKER_SPEECH_FIXTURE_DIR to verified models and 16 kHz mono fixture.f32"]
 fn real_local_model_transcribes_fixture_and_rejects_silence() {
   let root = PathBuf::from(std::env::var("TABTASKER_SPEECH_FIXTURE_DIR").unwrap());
-  for model in WITH_TURBO { verify_model(&root.join(model.name), model).unwrap(); }
+  for model in Model::Turbo.files() { models::verify(&root.join(model.name), model).unwrap(); }
   let bytes = std::fs::read(root.join("fixture.f32")).unwrap();
   let pcm: Vec<f32> = bytes.as_chunks::<4>().0.iter().map(|b| f32::from_le_bytes(*b)).collect();
   let started = Instant::now();
@@ -179,22 +139,6 @@ fn a_long_note_is_transcribed_while_it_is_said_and_finishes_at_once() {
 }
 
 #[test]
-fn each_model_choice_downloads_its_whisper_and_the_speech_detection() {
-  for (choice, name) in [(settings::Model::Turbo, "ggml-acft-large-v3-turbo-q8_0.bin"), (settings::Model::Small, "ggml-small-q8_0.bin")] {
-    let names: Vec<&str> = files(choice).iter().map(|model| model.name).collect();
-    assert_eq!(names, [name, SILERO.name]);
-    for model in files(choice) {
-      assert!(model.url.starts_with("https://") && model.url.ends_with(model.name), "{}", model.url);
-      assert_eq!(model.sha256.len(), 64);
-      assert!(model.sha256.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()));
-    }
-  }
-  // whisper.cpp's own small model, as published.
-  assert_eq!((SMALL.bytes, SMALL.sha256), (264464607, "49c8fb02b65e6049d5fa6c04f81f53b867b5ec9540406812c643f177317f779f"));
-  assert!(SMALL.url.starts_with("https://huggingface.co/ggerganov/whisper.cpp/resolve/main/"));
-}
-
-#[test]
 fn a_pinned_language_skips_detection_and_auto_keeps_it() {
   assert_eq!(pinned("auto"), None);
   assert_eq!(pinned("tr"), whisper_rs::get_lang_id("tr"));
@@ -206,9 +150,9 @@ fn a_pinned_language_skips_detection_and_auto_keeps_it() {
 
 #[test]
 fn small_sees_the_whole_window_and_turbo_only_the_speech() {
-  assert_eq!(encoder_ctx(settings::Model::Turbo, 16000), 178);
-  assert_eq!(encoder_ctx(settings::Model::Small, 16000), 0);
-  assert_eq!(encoder_ctx(settings::Model::Small, MAX_SAMPLES), 0);
+  assert_eq!(encoder_ctx(Model::Turbo, 16000), 178);
+  assert_eq!(encoder_ctx(Model::Small, 16000), 0);
+  assert_eq!(encoder_ctx(Model::Small, MAX_SAMPLES), 0);
 }
 
 #[test]
@@ -256,8 +200,8 @@ fn with_no_model_loaded_one_on_this_mac_answers_while_the_chosen_one_downloads()
   let root = std::env::temp_dir().join(format!("tabtasker-speech-fallback-{}", std::process::id()));
   std::fs::create_dir_all(&root).unwrap();
   // Sparse files of the pinned sizes: what Settings counts as downloaded.
-  let put = |model: settings::Model| for file in files(model) { File::create(root.join(file.name)).unwrap().set_len(file.bytes).unwrap(); };
-  use settings::Model::{Small, Turbo};
+  let put = |model: Model| for file in model.files() { std::fs::File::create(root.join(file.name)).unwrap().set_len(file.bytes).unwrap(); };
+  use Model::{Small, Turbo};
   assert_eq!(first_load(&root, Small, false), Small); // nothing here: the chosen one downloads
   put(Turbo);
   assert_eq!(first_load(&root, Small, false), Turbo);
@@ -265,7 +209,7 @@ fn with_no_model_loaded_one_on_this_mac_answers_while_the_chosen_one_downloads()
   assert_eq!(first_load(&root, Turbo, false), Turbo);
   put(Small);
   assert_eq!(first_load(&root, Small, false), Small);
-  std::fs::remove_file(root.join(TURBO.name)).unwrap();
+  std::fs::remove_file(root.join(Model::Turbo.files()[0].name)).unwrap();
   assert_eq!(first_load(&root, Turbo, false), Small);
   std::fs::remove_dir_all(root).unwrap();
 }
@@ -275,72 +219,6 @@ fn temp_dir(name: &str) -> PathBuf {
   let _ = std::fs::remove_dir_all(&dir);
   std::fs::create_dir_all(&dir).unwrap();
   dir
-}
-
-#[test]
-fn a_dropped_download_carries_on_where_it_stopped() {
-  const TOTAL: u64 = 1000;
-  // The rest, from where the part ends: added to it.
-  assert_eq!(resume(206, Some("bytes 400-999/1000"), Some(600), 400, TOTAL), Resume::Append);
-  assert_eq!(resume(206, Some("bytes 400-999/1000"), None, 400, TOTAL), Resume::Append);
-  // The whole file, from a server that ignores ranges or a part that was empty: written over it.
-  assert_eq!(resume(200, None, Some(1000), 400, TOTAL), Resume::Overwrite);
-  assert_eq!(resume(200, None, Some(1000), 0, TOTAL), Resume::Overwrite);
-  assert_eq!(resume(200, None, Some(999), 0, TOTAL), Resume::WrongSize);
-  // Another range, the wrong length, or none the server can give: the part starts again.
-  assert_eq!(resume(206, Some("bytes 0-999/1000"), Some(1000), 400, TOTAL), Resume::Restart);
-  assert_eq!(resume(206, Some("bytes 400-999/1000"), Some(500), 400, TOTAL), Resume::Restart);
-  assert_eq!(resume(206, None, Some(600), 400, TOTAL), Resume::Restart);
-  assert_eq!(resume(416, None, None, 400, TOTAL), Resume::Restart);
-  // A server's trouble is worth another try; a refusal isn't.
-  assert_eq!(resume(503, None, None, 400, TOTAL), Resume::Retry);
-  assert_eq!(resume(500, None, None, 0, TOTAL), Resume::Retry);
-  assert_eq!(resume(404, None, None, 0, TOTAL), Resume::Refused);
-  assert_eq!(resume(403, None, None, 400, TOTAL), Resume::Refused);
-}
-
-#[test]
-fn a_download_tries_again_after_one_two_and_four_seconds_then_gives_up() {
-  assert_eq!((0..5).map(backoff).collect::<Vec<_>>(), [Some(Duration::from_secs(1)), Some(Duration::from_secs(2)), Some(Duration::from_secs(4)), None, None]);
-}
-
-#[test]
-fn a_download_needs_a_fifth_more_space_than_it_takes() {
-  let gb = 1_000_000_000;
-  assert_eq!(short_of_space(Some(2 * gb), TURBO.bytes), None);
-  assert_eq!(short_of_space(Some(TURBO.bytes + TURBO.bytes / 5), TURBO.bytes), None);
-  assert_eq!(short_of_space(Some(TURBO.bytes), TURBO.bytes), Some(TURBO.bytes / 5));
-  assert_eq!(short_of_space(Some(0), 100), Some(120));
-  assert_eq!(short_of_space(None, TURBO.bytes), None, "space that can't be told doesn't stop it");
-  // What is left of a resumed download is what counts.
-  assert_eq!(short_of_space(Some(gb / 5), TURBO.bytes / 10), None);
-}
-
-#[test]
-fn a_model_is_hashed_again_only_once_it_changes() {
-  let dir = temp_dir("stamp");
-  let path = dir.join("model.bin");
-  let model = Model { name: "model.bin", label: "test", url: "", bytes: 3, sha256: "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad" };
-  std::fs::write(&path, b"abd").unwrap();
-  assert!(verified(&path, &model).is_err());
-  assert!(!path.with_extension("verified").exists(), "a model that fails is never remembered as passing");
-  std::fs::write(&path, b"abc").unwrap();
-  assert!(verified(&path, &model).is_ok());
-  assert_eq!(std::fs::read_to_string(path.with_extension("verified")).ok(), stamp(&path, &model));
-  // Same size, time and inode: taken as passed without hashing, which these bytes wouldn't.
-  let when = std::fs::metadata(&path).unwrap().modified().unwrap();
-  std::fs::write(&path, b"abd").unwrap();
-  File::options().write(true).open(&path).unwrap().set_modified(when).unwrap();
-  assert!(verified(&path, &model).is_ok());
-  // Written since: hashed again.
-  File::options().write(true).open(&path).unwrap().set_modified(when + Duration::from_secs(1)).unwrap();
-  assert!(verified(&path, &model).is_err());
-  // A stamp for another hash of the same file is no use either.
-  std::fs::write(&path, b"abc").unwrap();
-  assert!(verified(&path, &model).is_ok());
-  let other = Model { sha256: "0000000000000000000000000000000000000000000000000000000000000000", ..model };
-  assert!(verified(&path, &other).is_err());
-  std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]

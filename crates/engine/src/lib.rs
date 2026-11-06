@@ -3,6 +3,7 @@
 
 pub mod audio;
 pub mod cleanup;
+pub mod models;
 pub mod pieces;
 pub mod prompt;
 pub mod text;

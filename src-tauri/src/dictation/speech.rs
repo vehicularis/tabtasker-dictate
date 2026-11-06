@@ -1,54 +1,25 @@
-use std::{ffi::{c_char, c_void, CStr, CString}, fs::{self, File}, io::{Read, Write}, panic::{catch_unwind, AssertUnwindSafe}, path::{Path, PathBuf}, sync::{Arc, Mutex, MutexGuard, OnceLock, TryLockError, atomic::{AtomicBool, AtomicUsize, Ordering}}, time::{Duration, Instant}};
-use ring::digest::{Context as Digest, SHA256};
+use std::{ffi::{c_char, c_void, CStr, CString}, fs, panic::{catch_unwind, AssertUnwindSafe}, path::{Path, PathBuf}, sync::{Arc, Mutex, MutexGuard, OnceLock, TryLockError, atomic::{AtomicBool, AtomicUsize, Ordering}}, time::{Duration, Instant}};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Listener, Manager};
 use crate::dictation::{context, history, text};
 use crate::{ai, settings};
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters, WhisperState, WhisperSysContext, WhisperSysState, WhisperVadContext, WhisperVadContextParams, WhisperVadParams};
 
-use dictate_engine::{audio::{self, HANDS_FREE_SAMPLES, HOLD_SAMPLES as MAX_SAMPLES}, cleanup, pieces, prompt::{self, Echo, PROMPT_TOKENS}};
-/// A file the voice features download once and keep, checked against its size and SHA-256 every time.
-pub(crate) struct Model { pub name: &'static str, pub label: &'static str, pub url: &'static str, pub bytes: u64, pub sha256: &'static str }
-// Whisper large-v3 Turbo fine-tuned to keep its accuracy when the encoder sees only the speech rather
-// than a 30 s window (FUTO's audio context fine-tuning), in whisper.cpp's 8-bit format.
-const TURBO: Model = Model {
-  name: "ggml-acft-large-v3-turbo-q8_0.bin", label: "Whisper large-v3 Turbo", bytes: 874188075,
-  url: "https://github.com/vehicularis/vehicularis-edge-models/releases/download/voice-v2/ggml-acft-large-v3-turbo-q8_0.bin",
-  sha256: "e8d17bf90d61da165773e8a4bb7de3462982eceb9a1ed696c0d6fe7c9136624a",
-};
-// whisper.cpp's own small model in its 8-bit format, as published in ggerganov/whisper.cpp on Hugging Face.
-const SMALL: Model = Model {
-  name: "ggml-small-q8_0.bin", label: "Whisper small", bytes: 264464607,
-  url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q8_0.bin",
-  sha256: "49c8fb02b65e6049d5fa6c04f81f53b867b5ec9540406812c643f177317f779f",
-};
-const SILERO: Model = Model {
-  name: "ggml-silero-v6.2.0.bin", label: "speech detection", bytes: 885098,
-  url: "https://github.com/vehicularis/vehicularis-edge-models/releases/download/voice-v1/ggml-silero-v6.2.0.bin",
-  sha256: "2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987",
-};
-const WITH_TURBO: &[Model] = &[TURBO, SILERO];
-const WITH_SMALL: &[Model] = &[SMALL, SILERO];
-/// What a speech model in Settings needs on disk: its Whisper first, then the speech detection beside it.
-fn files(model: settings::Model) -> &'static [Model] {
-  match model { settings::Model::Turbo => WITH_TURBO, settings::Model::Small => WITH_SMALL }
-}
-/// Models an earlier version downloaded, removed once their replacement is in place.
-const RETIRED: &[&str] = &["ggml-large-v3-turbo-q8_0.bin"];
+use dictate_engine::{models::{self, cancellable, ModelKind as Model, CANCELLED, RETIRED, SILERO}, audio::{self, HANDS_FREE_SAMPLES, HOLD_SAMPLES as MAX_SAMPLES}, cleanup, pieces, prompt::{self, Echo, PROMPT_TOKENS}};
 
 struct LocalSpeech {
   root: PathBuf,
   enabled: AtomicBool,
   /// The model being downloaded or loaded, and the flag that stops it.
-  preparing: Mutex<Option<(settings::Model, Arc<AtomicBool>)>>,
+  preparing: Mutex<Option<(Model, Arc<AtomicBool>)>>,
   /// The model the engine holds.
-  loaded: Mutex<Option<settings::Model>>,
+  loaded: Mutex<Option<Model>>,
   /// Held while a model loads, so quitting waits for it instead of exiting while it holds GPU buffers.
   loading: Mutex<()>,
   /// What Settings shows of the newest download or load: under way, or the error that stopped it.
   step: Mutex<Option<Step>>,
   /// The model, language and translation Settings last asked for, so only a change of them acts.
-  seen: Mutex<Option<(settings::Model, String, bool)>>,
+  seen: Mutex<Option<(Model, String, bool)>>,
   job: Mutex<Option<(String, Arc<AtomicBool>)>>,
   engine: Mutex<Option<Engine>>,
   /// Speech detection, apart from the engine so a release can see what was said while a live pass runs.
@@ -77,7 +48,6 @@ static APP: OnceLock<AppHandle> = OnceLock::new();
 pub(crate) fn models_root() -> Option<PathBuf> { APP.get().map(|app| app.state::<LocalSpeech>().root.clone()) }
 /// A hold with nothing to send (silence, too short, unclear): the overlay ends it quietly.
 const UNHEARD: &str = "unheard";
-const CANCELLED: &str = "Speech model setup was cancelled.";
 /// A pass that panicked: dictation carries on, and this hold says so.
 const PANICKED: &str = "Couldn’t transcribe that. Try again.";
 /// Recovery runs once a launch, as the first model is ready.
@@ -161,181 +131,12 @@ fn status(app: &AppHandle, message: &str, code: i32) {
   let _ = app.run_on_main_thread(move || unsafe { dictate_model_status(text.as_ptr(), code); });
 }
 
-fn verify_model(path: &Path, model: &Model) -> Result<(), String> {
-  let mut file = File::open(path).map_err(|_| "The speech model isn’t downloaded yet.")?;
-  if file.metadata().map_err(|e| e.to_string())?.len() != model.bytes { return Err("The speech model is incomplete. Download it again.".into()); }
-  let mut digest = Digest::new(&SHA256);
-  let mut buffer = [0; 64 * 1024];
-  loop { let count = file.read(&mut buffer).map_err(|e| e.to_string())?; if count == 0 { break; } digest.update(&buffer[..count]); }
-  let hash: String = digest.finish().as_ref().iter().map(|byte| format!("{byte:02x}")).collect();
-  if hash != model.sha256 { return Err("The speech model didn’t pass its check. Download it again.".into()); }
-  Ok(())
-}
 
-/// The file at `path` as its check saw it: size, modification time and inode, which a rewrite or a new
-/// download changes, and the hash it was checked against.
-fn stamp(path: &Path, model: &Model) -> Option<String> {
-  use std::os::unix::fs::MetadataExt;
-  let meta = fs::metadata(path).ok()?;
-  Some(format!("{} {}.{:09} {} {}", meta.len(), meta.mtime(), meta.mtime_nsec(), meta.ino(), model.sha256))
-}
-
-/// Remembers, beside it, that the file at `path` passed its check.
-fn passed(path: &Path, model: &Model) {
-  if let Some(stamp) = stamp(path, model) { let _ = fs::write(path.with_extension("verified"), stamp); }
-}
-
-/// verify_model, hashing only a file that changed since it last passed: the 874 MB model would otherwise
-/// cost seconds of hashing at every launch.
-fn verified(path: &Path, model: &Model) -> Result<(), String> {
-  if stamp(path, model).is_some_and(|stamp| fs::read_to_string(path.with_extension("verified")).is_ok_and(|kept| kept == stamp)) { return Ok(()); }
-  verify_model(path, model)?;
-  passed(path, model);
-  Ok(())
-}
-
-fn download_client() -> Result<reqwest::Client, String> {
-  if rustls::crypto::CryptoProvider::get_default().is_none() { let _ = rustls::crypto::ring::default_provider().install_default(); }
-  // No deadline on the whole download, which a slow connection can't meet: each read gets 30 s instead.
-  reqwest::Client::builder().https_only(true).referer(false)
-    .connect_timeout(Duration::from_secs(20)).read_timeout(Duration::from_secs(30))
-    .redirect(reqwest::redirect::Policy::limited(5)).build().map_err(|e| e.to_string())
-}
-
-fn free_space(dir: &Path) -> Option<u64> {
+pub(crate) fn free_space(dir: &Path) -> Option<u64> {
   let path = CString::new(dir.as_os_str().as_encoded_bytes()).ok()?;
   u64::try_from(unsafe { dictate_meeting_free_space(path.as_ptr()) }).ok()
 }
 
-/// How many bytes short `free` is of downloading `bytes` with a fifth again to spare, so the Mac isn't
-/// left full. Space that can't be told doesn't stop a download.
-fn short_of_space(free: Option<u64>, bytes: u64) -> Option<u64> {
-  let need = bytes + bytes / 5;
-  free.filter(|free| *free < need).map(|free| need - free)
-}
-
-/// What a response says to do with a `.part` holding `have` of `total` bytes.
-#[derive(Debug, PartialEq)]
-enum Resume { Append, Overwrite, Restart, Retry, WrongSize, Refused }
-
-/// 206 with the rest from where the part ends adds to it; 200 is the whole file, written over it. Any other
-/// range, or none the server can give, starts the part again. A server error is worth another try, any
-/// other answer isn't.
-fn resume(status: u16, range: Option<&str>, length: Option<u64>, have: u64, total: u64) -> Resume {
-  let rest = |from: u64| length.is_none_or(|length| length == total - from);
-  let start = range.and_then(|range| range.strip_prefix("bytes ")?.split('-').next()?.parse::<u64>().ok());
-  match status {
-    200 if rest(0) => Resume::Overwrite,
-    200 => Resume::WrongSize,
-    206 if start == Some(have) && rest(have) => Resume::Append,
-    206 | 416 => Resume::Restart,
-    500..=599 => Resume::Retry,
-    _ => Resume::Refused,
-  }
-}
-
-/// The wait before trying a download again: 1, 2 and 4 s, then it gives up.
-fn backoff(tries: u32) -> Option<Duration> { (tries < 3).then(|| Duration::from_secs(1 << tries)) }
-
-/// Why a download attempt stopped short: a dropped connection or a server's passing trouble is worth
-/// another try, anything else isn't.
-enum Stop { Retry(String), Fail(String) }
-
-/// One attempt at `model` into `partial`, carrying on from what it holds already.
-async fn download(client: &reqwest::Client, model: &Model, partial: &Path, cancel: &AtomicBool, report: &(impl Fn(&str, Option<u8>) + Sync)) -> Result<(), Stop> {
-  let have = match fs::metadata(partial).map_or(0, |meta| meta.len()) {
-    have if have == model.bytes => return Ok(()), // all here: its check says whether it's right
-    have if have < model.bytes => have,
-    _ => 0,
-  };
-  let interrupted = || Stop::Retry("The speech model download was interrupted. Try again.".into());
-  let mut request = client.get(model.url);
-  if have > 0 { request = request.header(reqwest::header::RANGE, format!("bytes={have}-")); }
-  let mut response = request.send().await.map_err(|_| Stop::Retry("Couldn’t download the speech model. Check your connection and try again.".into()))?;
-  let range = response.headers().get(reqwest::header::CONTENT_RANGE).and_then(|value| value.to_str().ok()).map(str::to_owned);
-  let save = |e: std::io::Error| Stop::Fail(format!("Couldn’t save the speech model: {e}"));
-  let mut file = match resume(response.status().as_u16(), range.as_deref(), response.content_length(), have, model.bytes) {
-    Resume::Append => fs::OpenOptions::new().append(true).open(partial).map_err(save)?,
-    Resume::Overwrite => File::create(partial).map_err(save)?,
-    Resume::Restart => { File::create(partial).map_err(save)?; return Err(interrupted()); }
-    Resume::Retry => return Err(Stop::Retry("The speech model can’t be downloaded right now. Try again later.".into())),
-    Resume::WrongSize => return Err(Stop::Fail("The download isn’t the size it should be. Try again.".into())),
-    Resume::Refused => return Err(Stop::Fail("The speech model can’t be downloaded right now. Try again later.".into())),
-  };
-  let mut bytes = file.metadata().map_err(save)?.len();
-  let mut last = Instant::now() - Duration::from_secs(1);
-  loop {
-    if cancel.load(Ordering::Relaxed) { return Err(Stop::Fail(CANCELLED.into())); }
-    let Some(chunk) = response.chunk().await.map_err(|_| interrupted())? else { break };
-    bytes += chunk.len() as u64;
-    if bytes > model.bytes { return Err(Stop::Fail("The download is bigger than it should be. Try again.".into())); }
-    file.write_all(&chunk).map_err(save)?;
-    if last.elapsed() >= Duration::from_millis(500) {
-      let percent = (bytes * 100 / model.bytes) as u8;
-      report(&format!("Downloading {} · {percent}%", model.label), Some(percent));
-      last = Instant::now();
-    }
-  }
-  if bytes < model.bytes { return Err(interrupted()); } // the connection closed early: the rest comes next try
-  file.sync_all().map_err(save)
-}
-
-/// Downloads whichever of `models` is missing or fails its check, reporting progress through `report`:
-/// a line for the person, and how much of the download is done while it is downloading. A download that
-/// stops carries on where it stopped, here or at the next try; its `.part` goes only when it fails its
-/// check or setup is cancelled (prepare).
-pub(crate) async fn fetch(root: &Path, models: &'static [Model], cancel: &AtomicBool, report: &(impl Fn(&str, Option<u8>) + Sync)) -> Result<(), String> {
-  for model in models {
-    if cancel.load(Ordering::Relaxed) { return Err(CANCELLED.into()); }
-    let path = root.join(model.name);
-    let dir = path.parent().unwrap_or(root);
-    fs::create_dir_all(dir).map_err(|e| format!("Couldn’t make a folder for the speech model: {e}"))?;
-    let check = path.clone();
-    if tauri::async_runtime::spawn_blocking(move || verified(&check, model)).await.map_err(|e| e.to_string())?.is_ok() { continue; }
-    let partial = path.with_extension("part");
-    let left = fs::metadata(&partial).ok().and_then(|meta| model.bytes.checked_sub(meta.len())).unwrap_or(model.bytes);
-    if let Some(short) = short_of_space(free_space(dir), left) {
-      return Err(format!("There isn’t enough space to download {}. Free up {:.1} GB and try again.", model.label, (short as f64 / 1e8).ceil() / 10.0));
-    }
-    let client = download_client()?;
-    let mut tries = 0;
-    loop {
-      let before = fs::metadata(&partial).map_or(0, |meta| meta.len());
-      match download(&client, model, &partial, cancel, report).await {
-        Ok(()) => break,
-        Err(Stop::Fail(error)) => return Err(error),
-        Err(Stop::Retry(error)) => {
-          // Three tries in a row that get nowhere; one that got further starts the count again.
-          if fs::metadata(&partial).is_ok_and(|meta| meta.len() > before) { tries = 0; }
-          let Some(wait) = backoff(tries) else { return Err(error) };
-          tries += 1;
-          tokio::time::sleep(wait).await;
-        }
-      }
-    }
-    report("Checking the download…", None);
-    let check = partial.clone();
-    if let Err(error) = tauri::async_runtime::spawn_blocking(move || verify_model(&check, model)).await.map_err(|e| e.to_string())? {
-      let _ = fs::remove_file(&partial); // what it holds is wrong somewhere, so it starts again
-      return Err(error);
-    }
-    if cancel.load(Ordering::Relaxed) { return Err(CANCELLED.into()); }
-    fs::rename(&partial, &path).map_err(|e| format!("Couldn’t install the speech model: {e}"))?;
-    passed(&path, model);
-  }
-  Ok(())
-}
-
-pub(crate) async fn wait_cancelled(cancel: &AtomicBool) {
-  while !cancel.load(Ordering::Relaxed) { tokio::time::sleep(Duration::from_millis(100)).await; }
-}
-
-pub(crate) async fn cancellable<T>(cancel: &AtomicBool, work: impl std::future::Future<Output = Result<T, String>>) -> Result<T, String> {
-  tokio::select! {
-    result = work => result,
-    _ = wait_cancelled(cancel) => Err(CANCELLED.into()),
-  }
-}
 
 #[no_mangle]
 extern "C" fn dictate_prepare_models() {
@@ -375,16 +176,16 @@ fn prepare(app: &AppHandle) {
   tauri::async_runtime::spawn(async move {
     let state = app.state::<LocalSpeech>();
     let swapping = lock(&state.loaded).is_some();
-    let label = files(want)[0].label;
+    let label = want.files()[0].label;
     let report = |message: &str, percent: Option<u8>| {
       step(&app, Some(Step { model: want, message: message.into(), percent, failed: false }));
       if !swapping { status(&app, message, 0); }
     };
     report(&format!("Getting {label} ready…"), None);
-    let result = cancellable(&cancel, fetch(&root, files(want), &cancel, &report)).await;
+    let result = cancellable(&cancel, models::fetch(&root, want.files(), &cancel, &free_space, &report)).await;
     let cancelled = || cancel.load(Ordering::Relaxed);
     if cancelled() {
-      for model in files(want) { let _ = std::fs::remove_file(root.join(model.name).with_extension("part")); }
+      for model in want.files() { let _ = std::fs::remove_file(root.join(model.name).with_extension("part")); }
     }
     let result = match result {
       Ok(()) if !cancelled() => {
@@ -421,14 +222,14 @@ fn prepare(app: &AppHandle) {
 /// What to load for `chosen`. With no model loaded yet, a chosen one still missing from this Mac (its
 /// download failed, or the app quit during it) waits behind the other one when that is here, so
 /// dictation works meanwhile.
-fn first_load(root: &Path, chosen: settings::Model, loaded: bool) -> settings::Model {
-  let here = |model| files(model).iter().all(|file| std::fs::metadata(root.join(file.name)).is_ok_and(|meta| meta.len() == file.bytes));
-  let other = match chosen { settings::Model::Turbo => settings::Model::Small, settings::Model::Small => settings::Model::Turbo };
+fn first_load(root: &Path, chosen: Model, loaded: bool) -> Model {
+  let here = |model: Model| model.files().iter().all(|file| std::fs::metadata(root.join(file.name)).is_ok_and(|meta| meta.len() == file.bytes));
+  let other = chosen.other();
   if !loaded && !here(chosen) && here(other) { other } else { chosen }
 }
 
 /// Loads `model` beside the engine in use, then swaps it in.
-fn load(app: &AppHandle, root: &Path, model: settings::Model, cancel: &AtomicBool) -> Result<(), String> {
+fn load(app: &AppHandle, root: &Path, model: Model, cancel: &AtomicBool) -> Result<(), String> {
   let state = app.state::<LocalSpeech>();
   // Declared first, so the new model is dropped before it is let go.
   let _loading = state.loading.lock().unwrap_or_else(|e| e.into_inner());
@@ -447,7 +248,7 @@ fn load(app: &AppHandle, root: &Path, model: settings::Model, cancel: &AtomicBoo
 /// What the overlay says once the model is ready.
 fn ready(state: &LocalSpeech) -> String {
   let dictation = settings::get().dictation;
-  let model = lock(&state.loaded).map_or("Whisper", |model| files(model)[0].label);
+  let model = lock(&state.loaded).map_or("Whisper", |model| model.files()[0].label);
   let language = if dictation.translate_to_english { "translating to English".to_owned() } else {
     pinned(&dictation.language).and_then(whisper_rs::get_lang_str_full).map_or_else(|| "any language".to_owned(), |name| {
       let mut chars = name.chars();
@@ -460,25 +261,25 @@ fn ready(state: &LocalSpeech) -> String {
 /// A download or load under way, or the one that failed, as Settings shows it.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct Step { model: settings::Model, message: String, percent: Option<u8>, failed: bool }
+struct Step { model: Model, message: String, percent: Option<u8>, failed: bool }
 
 /// The speech models as Settings shows them: the one in use, each one's size and whether it is on
 /// this Mac, and the newest download or load.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Models { active: Option<settings::Model>, enabled: bool, step: Option<Step>, models: Vec<Stored> }
+pub struct Models { active: Option<Model>, enabled: bool, step: Option<Step>, models: Vec<Stored> }
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct Stored { model: settings::Model, bytes: u64, downloaded: bool }
+struct Stored { model: Model, bytes: u64, downloaded: bool }
 
 fn models(state: &LocalSpeech) -> Models {
-  let stored = |model| {
-    let file = &files(model)[0];
+  let stored = |model: Model| {
+    let file = &model.files()[0];
     Stored { model, bytes: file.bytes, downloaded: std::fs::metadata(state.root.join(file.name)).is_ok_and(|meta| meta.len() == file.bytes) }
   };
   Models {
     active: *lock(&state.loaded), enabled: state.enabled.load(Ordering::Relaxed), step: lock(&state.step).clone(),
-    models: vec![stored(settings::Model::Turbo), stored(settings::Model::Small)],
+    models: vec![stored(Model::Turbo), stored(Model::Small)],
   }
 }
 
@@ -575,7 +376,7 @@ fn audio_ctx(samples: usize) -> i32 { (samples.div_ceil(320) + 128).min(1500) as
 
 /// The encoder's audio context for `samples` on `model`. Only the fine-tuned Turbo keeps its accuracy on
 /// less than the whole window; Small, cheap to encode anyway, always sees all of it (0).
-fn encoder_ctx(model: settings::Model, samples: usize) -> i32 { if model == settings::Model::Turbo { audio_ctx(samples) } else { 0 } }
+fn encoder_ctx(model: Model, samples: usize) -> i32 { if model == Model::Turbo { audio_ctx(samples) } else { 0 } }
 
 /// A language Settings pins, by Whisper's id; None for `auto`.
 fn pinned(code: &str) -> Option<i32> { if code == "auto" { None } else { whisper_rs::get_lang_id(code) } }
@@ -621,7 +422,7 @@ fn load_vad(root: &Path) -> Result<WhisperVadContext, String> {
 /// Whisper, its state and the vocabulary it was last given. Every pass reuses the one state: whisper.cpp
 /// clears its results, spectrogram and prompt at the start of each full() (no_context is on for all of
 /// ours), and the engine's mutex keeps passes from sharing it. A new state each pass cost its GPU buffers.
-struct Engine { whisper: WhisperContext, state: WhisperState, model: settings::Model, prompt: Prompt }
+struct Engine { whisper: WhisperContext, state: WhisperState, model: Model, prompt: Prompt }
 
 /// The vocabulary as Whisper was last given it: the words, those of them that fit in its prompt, and the
 /// prompt's tokens.
@@ -639,10 +440,10 @@ fn avg_logprob(segment: &whisper_rs::WhisperSegment<'_>, eot: i32) -> f32 {
   if logs.is_empty() { f32::NEG_INFINITY } else { logs.iter().sum::<f32>() / logs.len() as f32 }
 }
 impl Engine {
-  fn load(root: &Path, model: settings::Model) -> Result<Self, String> {
+  fn load(root: &Path, model: Model) -> Result<Self, String> {
     // Native debug logs can contain recognized tokens; keep speech out of app logs.
     whisper_rs::install_logging_hooks();
-    let path = root.join(files(model)[0].name);
+    let path = root.join(model.files()[0].name);
     let path = path.to_str().ok_or("Voice model path is not valid Unicode.")?;
     let mut parameters = WhisperContextParameters::default();
     parameters.use_gpu(true).flash_attn(true);

@@ -89,9 +89,7 @@ impl Shortcuts {
   pub fn chords(&self) -> [&Option<Chord>; 6] { [&self.note, &self.meeting, &self.paste_last, &self.write_note, &self.sticky, &self.ask] }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum Model { Turbo, Small }
+pub use dictate_engine::models::ModelKind as Model;
 
 /// The Mac's own alert sounds, in /System/Library/Sounds, which the cues are chosen from.
 pub const SOUNDS: [&str; 14] = ["Basso", "Blow", "Bottle", "Frog", "Funk", "Glass", "Hero", "Morse", "Ping", "Pop", "Purr", "Sosumi", "Submarine", "Tink"];

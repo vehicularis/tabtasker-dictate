@@ -2,24 +2,13 @@
 //! segmentation model finds where voices start and stop, a speaker-embedding model gives each stretch a
 //! voiceprint, and clustering groups the voiceprints into speakers). Two small models are downloaded the
 //! first time a meeting needs them, next to the voice models.
-use crate::dictation::speech::{self, Model};
 use sherpa_onnx::{FastClusteringConfig, OfflineSpeakerDiarization, OfflineSpeakerDiarizationConfig, OfflineSpeakerSegmentationModelConfig, OfflineSpeakerSegmentationPyannoteModelConfig, SpeakerEmbeddingExtractorConfig};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
-/// pyannote/segmentation-3.0 as sherpa-onnx ships it (MIT), in its archive; the model inside is kept beside it.
-const SEGMENTATION: Model = Model {
-  name: "speakers/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2", label: "speaker segmentation", bytes: 6_958_444,
-  url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2",
-  sha256: "24615ee884c897d9d2ba09bb4d30da6bb1b15e685065962db5b02e76e4996488",
-};
-/// NVIDIA NeMo's TitaNet small (CC BY 4.0), the English-trained speaker embedding sherpa-onnx recommends.
-const EMBEDDING: Model = Model {
-  name: "speakers/nemo_en_titanet_small.onnx", label: "speaker voices", bytes: 40_257_283,
-  url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/nemo_en_titanet_small.onnx",
-  sha256: "ad4a1802485d8b34c722d2a9d04249662f2ece5d28a7a039063ca22f515a789e",
-};
-const MODELS: &[Model] = &[SEGMENTATION, EMBEDDING];
+use crate::dictation::speech;
+use dictate_engine::models::{self, ModelFile, SPEAKER_EMBEDDING as EMBEDDING, SPEAKER_SEGMENTATION as SEGMENTATION};
+const MODELS: &[ModelFile] = &[SEGMENTATION, EMBEDDING];
 const SEGMENTATION_ONNX: &str = "speakers/pyannote-segmentation-3-0.onnx";
 /// The member of the archive that is the model.
 const ARCHIVE_MEMBER: &str = "sherpa-onnx-pyannote-segmentation-3-0/model.onnx";
@@ -44,7 +33,7 @@ pub fn ready(root: &Path) -> bool {
 /// Downloads what is missing and unpacks the segmentation model. Errors are the downloader's words.
 pub async fn prepare(root: PathBuf) -> Result<(), String> {
   let never = AtomicBool::new(false);
-  speech::fetch(&root, MODELS, &never, &|line, _| log::info!("speakers: {line}")).await?;
+  models::fetch(&root, MODELS, &never, &speech::free_space, &|line, _| log::info!("speakers: {line}")).await?;
   if root.join(SEGMENTATION_ONNX).is_file() { return Ok(()); }
   let dir = root.join("speakers");
   let (archive, into) = (root.join(SEGMENTATION.name).display().to_string(), dir.display().to_string());
