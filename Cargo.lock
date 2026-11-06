@@ -782,6 +782,7 @@ dependencies = [
  "dictate-engine",
  "serde",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]

@@ -2,9 +2,12 @@
 #![deny(missing_docs)]
 
 mod args;
-mod text;
-// ponytail: read and write are first used by the commands that come after text.
+mod fetch;
+mod run;
+// ponytail: eval (the next task) is its first caller.
 #[allow(dead_code)]
+mod score;
+mod text;
 mod wav;
 
 use args::Command;
@@ -18,8 +21,24 @@ fn main() {
       std::process::exit(2);
     }
   };
-  match args.command {
-    Command::Help => println!("{}", args::USAGE),
-    ref c @ Command::Text { .. } => println!("{}", text::run(c, args.json)),
+  let done = match args.command {
+    Command::Help => {
+      println!("{}", args::USAGE);
+      Ok(())
+    }
+    Command::Text(ref t) => {
+      println!("{}", text::run(t, args.json));
+      Ok(())
+    }
+    Command::Fetch { model, speakers } => fetch::run(&args.models, model, speakers, args.json),
+    Command::Run {
+      ref files,
+      model,
+      ref hearing,
+    } => run::run(&args.models, files, model, hearing, args.json),
+  };
+  if let Err(e) = done {
+    eprintln!("{e}");
+    std::process::exit(1);
   }
 }

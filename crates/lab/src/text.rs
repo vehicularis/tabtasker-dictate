@@ -1,21 +1,20 @@
 //! The `text` command: the text rules alone, no model.
 
-use crate::args::Command;
+use crate::args::Text;
 use dictate_engine::text::{finish, Rules};
 
 /// Finishes the raw string and returns what to print.
-pub fn run(command: &Command, json: bool) -> String {
-  let Command::Text {
+pub fn run(
+  Text {
     raw,
     style,
     fillers,
     language,
     replacements,
     live,
-  } = command
-  else {
-    unreachable!("text::run is only called for Command::Text");
-  };
+  }: &Text,
+  json: bool,
+) -> String {
   let finished = finish(
     raw,
     &Rules {

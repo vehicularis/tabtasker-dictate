@@ -86,6 +86,12 @@ fn parse(b: &[u8], name: &str) -> Result<Vec<f32>, String> {
           b.len() - body
         ));
       };
+      let width = usize::from(bits / 8);
+      if !size.is_multiple_of(width) {
+        return Err(format!(
+          "{name} is cut short: its data chunk holds {size} bytes, not a whole number of {width}-byte samples. {HOW}"
+        ));
+      }
       return Ok(if tag == 1 {
         data
           .as_chunks::<2>()
@@ -108,6 +114,8 @@ fn parse(b: &[u8], name: &str) -> Result<Vec<f32>, String> {
 }
 
 /// Writes 16-bit PCM, 16 kHz mono, for synthesized fixtures.
+// ponytail: fixtures (the next task) is its first caller.
+#[allow(dead_code)]
 pub fn write(path: &Path, pcm: &[f32]) -> std::io::Result<()> {
   let data_len = (pcm.len() * 2) as u32;
   let mut out = Vec::with_capacity(44 + pcm.len() * 2);
@@ -124,7 +132,8 @@ pub fn write(path: &Path, pcm: &[f32]) -> std::io::Result<()> {
   out.extend_from_slice(b"data");
   out.extend_from_slice(&data_len.to_le_bytes());
   for s in pcm {
-    out.extend_from_slice(&((s.clamp(-1.0, 1.0) * 32767.0).round() as i16).to_le_bytes());
+    // The reader's scale, so 16-bit values come back exactly.
+    out.extend_from_slice(&((s * 32768.0).round().clamp(-32768.0, 32767.0) as i16).to_le_bytes());
   }
   std::fs::write(path, out)
 }
@@ -167,32 +176,54 @@ mod tests {
     s.iter().flat_map(|x| x.to_le_bytes()).collect()
   }
 
-  fn scratch(name: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("dictate-lab-wav-{}", std::process::id()));
+  /// A folder of its own for each test, which the test removes.
+  fn scratch(test: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("dictate-lab-wav-{test}-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    dir.join(name)
+    dir
+  }
+
+  /// `bytes` read back as a WAV named `bad.wav`.
+  fn read_bytes(test: &str, bytes: &[u8]) -> Result<Vec<f32>, String> {
+    let dir = scratch(test);
+    std::fs::write(dir.join("bad.wav"), bytes).unwrap();
+    let got = read(&dir.join("bad.wav"));
+    std::fs::remove_dir_all(dir).unwrap();
+    got
   }
 
   #[test]
   fn reads_16_bit_and_float_mono_at_16_khz() {
-    let path = scratch("int.wav");
-    write(&path, &[0.0, 0.5, -0.5, 1.0]).unwrap();
-    let got = read(&path).unwrap();
-    assert_eq!(got.len(), 4);
-    assert!(
-      (got[1] - 0.5).abs() < 1e-3 && (got[2] + 0.5).abs() < 1e-3 && (got[3] - 1.0).abs() < 1e-3
+    // Every 16-bit value comes back exactly; past full scale is clamped.
+    let exact: Vec<f32> = [0, 1, -1, 16384, -16384, 32767, -32768]
+      .map(|v: i16| f32::from(v) / 32768.0)
+      .to_vec();
+    let dir = scratch("reads");
+    let path = dir.join("int.wav");
+    write(&path, &exact).unwrap();
+    assert_eq!(read(&path).unwrap(), exact);
+    write(&path, &[1.0, -1.0, 2.0, -2.0]).unwrap();
+    assert_eq!(
+      read(&path).unwrap(),
+      vec![32767.0 / 32768.0, -1.0, 32767.0 / 32768.0, -1.0]
     );
 
-    let path = scratch("float.wav");
-    std::fs::write(
-      &path,
-      riff(&[
-        fmt(3, 1, 16_000, 32),
-        chunk(b"data", &floats(&[0.25, -0.75])),
-      ]),
-    )
-    .unwrap();
-    assert_eq!(read(&path).unwrap(), vec![0.25, -0.75]);
+    let float = riff(&[
+      fmt(3, 1, 16_000, 32),
+      chunk(b"data", &floats(&[0.25, -0.75])),
+    ]);
+    std::fs::remove_dir_all(dir).unwrap();
+    assert_eq!(read_bytes("float", &float).unwrap(), vec![0.25, -0.75]);
+  }
+
+  #[test]
+  fn reads_a_fmt_chunk_longer_than_16_bytes() {
+    // WAVEFORMATEX: the 16 bytes, then cbSize = 0.
+    let mut long = fmt(1, 1, 16_000, 16);
+    long[4] = 18;
+    long.extend_from_slice(&[0, 0]);
+    let bytes = riff(&[long, chunk(b"data", &16384i16.to_le_bytes())]);
+    assert_eq!(read_bytes("long-fmt", &bytes).unwrap(), vec![0.5]);
   }
 
   #[test]
@@ -224,14 +255,24 @@ mod tests {
         "bad.wav is cut short: its data chunk claims 4 bytes but only 2 follow.",
       ),
       (
+        riff(&[fmt(1, 1, 16_000, 16), chunk(b"data", &[0, 0, 0])]),
+        "bad.wav is cut short: its data chunk holds 3 bytes, not a whole number of 2-byte samples.",
+      ),
+      (
+        riff(&[fmt(3, 1, 16_000, 32), chunk(b"data", &[0; 6])]),
+        "bad.wav is cut short: its data chunk holds 6 bytes, not a whole number of 4-byte samples.",
+      ),
+      (
+        riff(&[data.clone(), fmt(1, 1, 16_000, 16)]),
+        "bad.wav has its data before its fmt chunk.",
+      ),
+      (
         b"not a wav file at all".to_vec(),
         "bad.wav is not a WAV file;",
       ),
     ];
     for (bytes, want) in cases {
-      let path = scratch("bad.wav");
-      std::fs::write(&path, bytes).unwrap();
-      let err = read(&path).unwrap_err();
+      let err = read_bytes("refuses", &bytes).unwrap_err();
       assert!(err.starts_with(want), "{err}");
       assert!(
         err.ends_with("afconvert -f WAVE -d LEI16@16000 -c 1 in.wav out.wav"),
@@ -242,13 +283,11 @@ mod tests {
 
   #[test]
   fn skips_chunks_it_does_not_know() {
-    let path = scratch("list.wav");
     let bytes = riff(&[
       fmt(1, 1, 16_000, 16),
       chunk(b"LIST", b"odd"),
       chunk(b"data", &16384i16.to_le_bytes()),
     ]);
-    std::fs::write(&path, bytes).unwrap();
-    assert_eq!(read(&path).unwrap(), vec![0.5]);
+    assert_eq!(read_bytes("list", &bytes).unwrap(), vec![0.5]);
   }
 }
