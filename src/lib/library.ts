@@ -1,7 +1,7 @@
 // The notes and meetings folders, as the window's lists know them.
 import type { LibraryItem } from '../api/types';
 import { listGroup, localDay } from './dates';
-import { searchWords } from './text';
+import { fold, searchWords } from './text';
 
 /// The lists open now: each one reads the folder again when asked (useLibrary adds itself).
 export const readers = new Set<() => void>();
@@ -28,12 +28,12 @@ export const rowText = (item: LibraryItem) => {
   const rest = text.startsWith(item.title) ? text.slice(item.title.length) : null;
   return { title: item.title, glance: rest !== null && /^(?:[.!?:]|\s*$)/.test(rest) ? rest.replace(/^[\s.!?:]+/, '') : text };
 };
-/// The list, or the archive, for a search: every word of the query in the title or the excerpt (lower-cased by the
-/// Mac's language), grouped by the day each was last changed, in the order given.
+/// The list, or the archive, for a search: every word of the query in the title or the excerpt (folded, as text.ts
+/// says), grouped by the day each was last changed, in the order given.
 export const visibleGroups = (items: LibraryItem[], query: string, archived: boolean, now: number) => {
   const words = searchWords(query);
   const today = localDay(now);
-  return items.filter(item => item.archived === archived && words.every(word => `${item.title} ${item.excerpt}`.toLocaleLowerCase().includes(word)))
+  return items.filter(item => item.archived === archived && words.every(word => fold(`${item.title} ${item.excerpt}`).includes(word)))
     .reduce<{ title: string; items: LibraryItem[] }[]>((acc, item) => {
       const title = listGroup(localDay(item.modifiedMs), today), group = acc[acc.length - 1];
       if (group && group.title === title) group.items.push(item); else acc.push({ title, items: [item] });

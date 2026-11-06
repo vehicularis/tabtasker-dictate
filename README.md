@@ -151,7 +151,9 @@ runs for a pushed tag. CONTRIBUTING.md says how to make one.
 ## Contributing
 
 Bug reports, ideas and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) says how to build Dictate
-and what a pull request needs. Report a security problem privately, as [SECURITY.md](SECURITY.md) explains.
+and what a pull request needs, [docs/architecture.md](docs/architecture.md) how it fits together, and
+[AGENTS.md](AGENTS.md) the rules for changing it. Report a security problem privately, as
+[SECURITY.md](SECURITY.md) explains.
 
 ## License
 

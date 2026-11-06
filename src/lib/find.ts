@@ -1,5 +1,6 @@
 // The text half of Find and the slash menu's filter: plain strings and numbers, no editor. Find.tsx walks
 // the document into `text` and `segments`; what is here finds in them.
+import { fold } from './text';
 
 export interface FindMatch { from: number; to: number }
 /// A run of text in the flattened string: where it starts there, where it sits in the document, and how long it is.
@@ -20,9 +21,10 @@ export function posAt(segments: FindSegment[], offset: number): number {
 export function findMatches(text: string, query: string, matchCase: boolean, segments: FindSegment[]): FindMatch[] {
   if (!query || query.includes(BOUNDARY)) return [];
   let hay = text, needle = query;
-  // A fold that changes the length (a Turkish dotted I) would shift every position after it: then the
+  // The fold keeps every length (text.test.ts checks every character), so its offsets are the text's. Were a new case
+  // mapping ever to change one, every position after it would shift and Replace would hit the wrong text: then the
   // search is case-sensitive instead, which finds fewer, never the wrong text.
-  if (!matchCase && text.toLowerCase().length === text.length && query.toLowerCase().length === query.length) { hay = text.toLowerCase(); needle = query.toLowerCase(); }
+  if (!matchCase && fold(text).length === text.length && fold(query).length === query.length) { hay = fold(text); needle = fold(query); }
   const out: FindMatch[] = [];
   for (let i = hay.indexOf(needle); i !== -1; i = hay.indexOf(needle, i + needle.length)) out.push({ from: posAt(segments, i), to: posAt(segments, i + needle.length - 1) + 1 });
   return out;
@@ -30,8 +32,8 @@ export function findMatches(text: string, query: string, matchCase: boolean, seg
 /// `index` kept inside 0..length-1, both ways round; 0 when there is nothing to land on.
 export const wrap = (index: number, length: number) => length ? ((index % length) + length) % length : 0;
 
-/// Case-insensitive match on the title and the keywords. An empty query is everything.
+/// A match on the title or a keyword, folded on both sides. An empty query is everything.
 export const filterSlash = <T extends { title: string; keywords: string[] }>(items: T[], query: string): T[] => {
-  const q = query.trim().toLowerCase();
-  return q ? items.filter(item => item.title.toLowerCase().includes(q) || item.keywords.some(word => word.includes(q))) : items;
+  const q = fold(query.trim());
+  return q ? items.filter(item => fold(item.title).includes(q) || item.keywords.some(word => fold(word).includes(q))) : items;
 };

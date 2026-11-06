@@ -2,17 +2,17 @@
 import type { HistoryEntry, HistoryStats, Keep } from '../api/types';
 import { DAY, localDay } from './dates';
 import { duration } from './format';
-import { searchWords } from './text';
+import { fold, searchWords } from './text';
 
 /// How long each Keep holds on to the words, as history.rs prunes them; null is for good.
 const AGE: Record<Keep, number | null> = { off: 0, day: DAY, week: 7 * DAY, month: 30 * DAY, forever: null };
 /// What search looks through: a note shows no app, since it goes to a file.
 const searchable = (entry: HistoryEntry) => entry.mode === 'note' ? entry.text : `${entry.text} ${entry.appName}`;
 
-/// The entries that hold every word of the query, whatever its case.
+/// The entries that hold every word of the query, whatever its case (folded, as text.ts says).
 export const searchHistory = (entries: HistoryEntry[], query: string) => {
   const words = searchWords(query);
-  return entries.filter(entry => words.every(word => searchable(entry).toLocaleLowerCase().includes(word)));
+  return entries.filter(entry => words.every(word => fold(searchable(entry)).includes(word)));
 };
 /// How many kept dictations a shorter Keep deletes at once: those older than its cutoff.
 export const removedBy = (keep: Keep, entries: HistoryEntry[], now: number): number => {
