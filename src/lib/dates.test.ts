@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DAY, dateOf, dayTitle, listGroup, listWhen, localDay, stamp } from './dates';
+import { DAY, dateOf, dayTitle, elapsed, listGroup, listWhen, localDay, meetingLength, meetingWhen, noteClock, stamp } from './dates';
 
 // The local day number of a calendar date, written without the code under test.
 const num = (y: number, m: number, d: number) => Date.UTC(y, m - 1, d) / DAY;
@@ -159,5 +159,85 @@ describe('stamp', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 6, 4, 8, 9));
     expect(stamp()).toBe('2026-07-04 08.09');
+  });
+});
+
+// A time as the zone writes it, with its narrow no-break space made plain.
+const plain = (text: string) => text.replace(/\s/g, ' ');
+
+describe('meetingWhen', () => {
+  const now = at(2026, 11, 6, 15, 0);
+  it('says Today with the time', () => {
+    expect(plain(meetingWhen(at(2026, 11, 6, 14, 5), now))).toBe('Today at 2:05 PM');
+    expect(plain(meetingWhen(at(2026, 11, 6, 0, 30), now))).toBe('Today at 12:30 AM');
+  });
+  it('says Yesterday for the day before, even 23:30 against 00:30', () => {
+    expect(plain(meetingWhen(at(2026, 11, 5, 23, 30), at(2026, 11, 6, 0, 30)))).toBe('Yesterday at 11:30 PM');
+    expect(plain(meetingWhen(at(2026, 11, 5, 9, 30), now))).toBe('Yesterday at 9:30 AM');
+  });
+  it('writes the date for older days', () => {
+    expect(plain(meetingWhen(at(2026, 11, 2, 14, 5), now))).toBe('Nov 2 at 2:05 PM');
+  });
+  it('leaves the year off a date from last year', () => {
+    expect(plain(meetingWhen(at(2025, 11, 2, 14, 5), now))).toBe('Nov 2 at 2:05 PM'); // Today's behaviour; see the report.
+  });
+  it('counts calendar days over the November DST night', () => {
+    expect(meetingWhen(at(2026, 11, 1, 23, 0), at(2026, 11, 2, 12, 0)).startsWith('Yesterday')).toBe(true);
+    expect(meetingWhen(at(2026, 10, 31, 12, 0), at(2026, 11, 2, 12, 0)).startsWith('Oct 31')).toBe(true);
+  });
+  it('counts calendar days over the March DST night', () => {
+    expect(meetingWhen(at(2026, 3, 7, 12, 0), at(2026, 3, 8, 12, 0)).startsWith('Yesterday')).toBe(true);
+    expect(meetingWhen(at(2026, 3, 8, 1, 0), at(2026, 3, 9, 12, 0)).startsWith('Yesterday')).toBe(true);
+  });
+  it('writes a day ahead as a date', () => {
+    expect(plain(meetingWhen(at(2026, 11, 7, 9, 0), now))).toBe('Nov 7 at 9:00 AM'); // Today's behaviour; see the report.
+  });
+});
+
+describe('meetingLength', () => {
+  it('says Under a minute below 30 seconds', () => {
+    expect(meetingLength(0)).toBe('Under a minute');
+    expect(meetingLength(29)).toBe('Under a minute');
+  });
+  it('rounds to whole minutes', () => {
+    expect(meetingLength(30)).toBe('1 min');
+    expect(meetingLength(60)).toBe('1 min');
+    expect(meetingLength(23 * 60)).toBe('23 min');
+    expect(meetingLength(59 * 60)).toBe('59 min');
+  });
+  it('writes hours and the minutes left from 60', () => {
+    expect(meetingLength(60 * 60)).toBe('1 h');
+    expect(meetingLength(61 * 60)).toBe('1 h 1 min');
+    expect(meetingLength(125 * 60)).toBe('2 h 5 min');
+  });
+});
+
+describe('elapsed and noteClock', () => {
+  const now = 10_000_000;
+  const since = (s: number) => now - s * 1000;
+  it('elapsed writes m:ss, and h:mm:ss from an hour', () => {
+    expect(elapsed(since(0), now)).toBe('0:00');
+    expect(elapsed(since(9), now)).toBe('0:09');
+    expect(elapsed(since(754), now)).toBe('12:34');
+    expect(elapsed(since(3599), now)).toBe('59:59');
+    expect(elapsed(since(3600), now)).toBe('1:00:00');
+    expect(elapsed(since(3725), now)).toBe('1:02:05');
+  });
+  it('elapsed is 0:00 for a start in the future, and drops fractions of a second', () => {
+    expect(elapsed(now + 5000, now)).toBe('0:00');
+    expect(elapsed(since(1.9), now)).toBe('0:01');
+  });
+  it('noteClock agrees with elapsed under an hour', () => {
+    for (const s of [0, 1, 59, 60, 754, 3599]) expect(noteClock(since(s), now)).toBe(elapsed(since(s), now));
+  });
+  it('noteClock keeps counting minutes past an hour', () => {
+    expect(noteClock(since(3725), now)).toBe('62:05');
+  });
+  it('noteClock is 0:00 for not started (0)', () => {
+    expect(noteClock(0, now)).toBe('0:00');
+    expect(noteClock(now + 5000, now)).toBe('0:00');
+  });
+  it('elapsed from 0 is the whole epoch, so the pill checks for a start first', () => {
+    expect(elapsed(0, now)).toBe('2:46:40'); // Today's behaviour; see the report.
   });
 });

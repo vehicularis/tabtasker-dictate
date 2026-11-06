@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { invoke, listen } from '../bridge';
+import { elapsed, meetingLength, meetingWhen } from '../lib/dates';
 import { message } from '../lib/errors';
 import type { Leftover, MeetingEvent, MeetingState, SystemSound } from '../api/types';
 import { X } from './icons';
@@ -20,25 +21,6 @@ export function useMeetingState(): [MeetingState | null, () => void] {
   return [state, look];
 }
 
-/// "Today at 14:05", "Yesterday at 09:30" or "2 Nov at 14:05".
-export function meetingWhen(ms: number) {
-  const at = new Date(ms), today = new Date();
-  const time = at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-  const days = Math.round((new Date(today.toDateString()).getTime() - new Date(at.toDateString()).getTime()) / 86_400_000);
-  const day = days === 0 ? 'Today' : days === 1 ? 'Yesterday' : at.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
-  return `${day} at ${time}`;
-}
-/// "Under a minute", "23 min", "1 h 5 min", never broken across lines.
-export function meetingLength(seconds: number) {
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 1) return 'Under a minute';
-  return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h${minutes % 60 ? ` ${minutes % 60} min` : ''}`;
-}
-const elapsed = (since: number) => {
-  const seconds = Math.max(0, Math.floor((Date.now() - since) / 1000));
-  const [h, m, s] = [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, seconds % 60];
-  return `${h ? `${h}:${String(m).padStart(2, '0')}` : m}:${String(s).padStart(2, '0')}`;
-};
 const ONLY_MIC: Partial<Record<SystemSound, string>> = {
   unsupported: 'Recording the other side needs macOS 14.2 or later.',
   denied: 'Dictate isn’t allowed to record your Mac’s sound.',
@@ -124,7 +106,7 @@ export function MeetingPill() {
       return <div ref={leave} className="glass meeting-pill meeting-card" data-glass data-hit role="group" aria-label="Meeting recording">
         <span className="meeting-dot" aria-hidden="true" />
         <span className="meeting-text">
-          <span className="meeting-line"><b>Meeting</b><time>{recording.since ? elapsed(recording.since) : '0:00'}</time>
+          <span className="meeting-line"><b>Meeting</b><time>{recording.since ? elapsed(recording.since, Date.now()) : '0:00'}</time>
             {onlyMic && <span className="only" title={system && ONLY_MIC[system]}>Mic only</span>}</span>
           {explain && system && ONLY_MIC[system] && <small>{ONLY_MIC[system]}{system === 'denied' && <> <button type="button" className="dots-link" onClick={() => void invoke('meeting_privacy').catch(() => {})}>Allow it</button></>}</small>}
         </span>
@@ -135,7 +117,7 @@ export function MeetingPill() {
     const title = discarding ? 'Discard this recording?' : leftover.saved ? 'A meeting has gaps' : 'A meeting wasn’t saved';
     return <div ref={leave} className="glass meeting-pill meeting-card" data-glass data-hit role="status">
       <span className="meeting-text"><span className="meeting-line"><b>{title}</b></span>
-        <small>{discarding ? (leftover.saved ? 'The saved meeting stays as it is.' : 'You can’t undo this.') : `${meetingWhen(leftover.sinceMs)} · ${meetingLength(leftover.seconds)}`}</small></span>
+        <small>{discarding ? (leftover.saved ? 'The saved meeting stays as it is.' : 'You can’t undo this.') : `${meetingWhen(leftover.sinceMs, Date.now())} · ${meetingLength(leftover.seconds)}`}</small></span>
       {discarding
         ? <><button type="button" className="btn" onClick={() => setDiscarding(false)}>Keep</button><button type="button" className="btn dots-danger" onClick={() => recover(leftover.id, false)}>Discard</button></>
         : <><button type="button" className="btn" onClick={() => setDiscarding(true)}>Discard</button><button type="button" className="btn primary" onClick={() => recover(leftover.id, true)}>{leftover.saved ? 'Try again' : 'Save'}</button>

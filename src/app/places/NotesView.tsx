@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { invoke, listen } from '../../bridge';
-import { listWhen, localDay, stamp } from '../../lib/dates';
+import { listWhen, localDay, meetingLength, meetingWhen, noteClock, stamp } from '../../lib/dates';
 import { message } from '../../lib/errors';
 import { KEY_NAMES } from '../../lib/keyNames';
 import { isArchived, readers, refreshLibrary, routeTo, rowText, visibleGroups } from '../../lib/library';
 import { useSelection } from '../../lib/selection';
 import { countMessage } from '../../lib/text';
 import { Menu, MenuItem, MenuLine } from '../../editor/Menu';
-import { meetingLength, meetingWhen, useMeetingState } from '../../overlay/MeetingPill';
+import { useMeetingState } from '../../overlay/MeetingPill';
 import type { PageProps } from '../../store';
 import type { LibraryItem } from '../../api/types';
 import { PLACE_GLYPHS } from '../../overlay/glyphs';
@@ -171,14 +171,13 @@ function MeetingStrip({ onError }: { onError: (message: string) => void }) {
   useEffect(() => { if (!recording) return; const timer = setInterval(() => setTick(n => n + 1), 1000); return () => clearInterval(timer); }, [recording]);
   const recover = (id: string, save: boolean) => { setConfirming(null); void invoke('meeting_recover', { id, save }).then(refresh, error => onError(message(error, save ? 'Couldn’t save the recording. Try again.' : 'Couldn’t discard the recording. Try again.'))); };
   const since = recording?.since ?? 0;
-  const seconds = since ? Math.max(0, Math.floor((Date.now() - since) / 1000)) : 0;
-  const elapsed = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+  const elapsed = noteClock(since, Date.now());
   if (!recording && !state?.saving.length && !state?.leftovers.length) return null;
   return <div className="meeting-strip">
     {recording && <span className="meeting-live"><i />{elapsed} · {recording.system === 'on' ? 'you and the call' : 'your microphone'}</span>}
     {!recording && !!state?.saving.length && <span className="meeting-live">Saving the last meeting…</span>}
     {state?.leftovers.map(leftover => <div key={leftover.id} className="leftover">
-      <span>{meetingWhen(leftover.sinceMs)} · {meetingLength(leftover.seconds)} · {leftover.saved ? 'partly transcribed' : 'not saved yet'}</span>
+      <span>{meetingWhen(leftover.sinceMs, Date.now())} · {meetingLength(leftover.seconds)} · {leftover.saved ? 'partly transcribed' : 'not saved yet'}</span>
       {confirming === leftover.id
         ? <><Button small variant="quiet" onClick={() => setConfirming(null)}>Keep</Button><Button small variant="danger" onClick={() => recover(leftover.id, false)}>Discard</Button></>
         : <><Button small variant="quiet" onClick={() => setConfirming(leftover.id)}>Discard</Button><Button small variant="primary" onClick={() => recover(leftover.id, true)}>{leftover.saved ? 'Try again' : 'Save'}</Button></>}

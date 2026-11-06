@@ -37,3 +37,28 @@ export const stamp = (now = new Date()) => {
   const two = (n: number) => String(n).padStart(2, '0');
   return `${now.getFullYear()}-${two(now.getMonth() + 1)}-${two(now.getDate())} ${two(now.getHours())}.${two(now.getMinutes())}`;
 };
+/// "Today at 2:05 PM", "Yesterday at 9:30 AM", or the date and time, by calendar days from `now`.
+export function meetingWhen(ms: number, now: number) {
+  const at = new Date(ms), today = new Date(now);
+  const time = at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const days = Math.round((new Date(today.toDateString()).getTime() - new Date(at.toDateString()).getTime()) / 86_400_000);
+  const day = days === 0 ? 'Today' : days === 1 ? 'Yesterday' : at.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  return `${day} at ${time}`;
+}
+/// "Under a minute", "23 min", "1 h 5 min".
+export function meetingLength(seconds: number) {
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 1) return 'Under a minute';
+  return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h${minutes % 60 ? ` ${minutes % 60} min` : ''}`;
+}
+/// A meeting's stopwatch since `since`: m:ss, with hours as h:mm:ss.
+export const elapsed = (since: number, now: number) => {
+  const seconds = Math.max(0, Math.floor((now - since) / 1000));
+  const [h, m, s] = [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, seconds % 60];
+  return `${h ? `${h}:${String(m).padStart(2, '0')}` : m}:${String(s).padStart(2, '0')}`;
+};
+/// A note's clock since `start` (0 for not started): m:ss, minutes running past 59.
+export const noteClock = (start: number, now: number) => {
+  const seconds = start ? Math.max(0, Math.floor((now - start) / 1000)) : 0;
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+};

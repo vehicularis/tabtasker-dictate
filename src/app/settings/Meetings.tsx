@@ -1,11 +1,12 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { invoke, listen } from '../../bridge';
-import { meetingLength, meetingWhen, useMeetingState } from '../../overlay/MeetingPill';
+import { meetingLength, meetingWhen } from '../../lib/dates';
+import { sentence } from '../../lib/errors';
+import { useMeetingState } from '../../overlay/MeetingPill';
 import { folderPath, tilde, useStatus, type PageProps } from '../../store';
 import type { MeetingEvent } from '../../api/types';
 import { Button, PageHeader, Section, TextField, Tile, TileGroup, Toggle } from '../../ui';
 
-const sentence = (text: string) => /[.!?]$/.test(text) ? text : `${text}.`;
 
 export function Meetings({ settings, update }: PageProps) {
   const meetings = settings.meetings;
@@ -92,7 +93,7 @@ export function Meetings({ settings, update }: PageProps) {
           const detail = confirming
             ? (leftover.saved ? 'Discard this recording? Your saved meeting stays.' : 'Discard this recording? There’s no undo.')
             : `${meetingLength(leftover.seconds)} · ${leftover.saved ? 'Saved, but parts weren’t transcribed' : 'Not saved yet'}`;
-          return <Tile key={leftover.id} title={meetingWhen(leftover.sinceMs)} detail={detail}>
+          return <Tile key={leftover.id} title={meetingWhen(leftover.sinceMs, Date.now())} detail={detail}>
             {confirming
               ? <><Button id={`${base}-keep-${leftover.id}`} small onClick={() => keep(leftover.id)}>Keep</Button><Button small variant="danger" onClick={() => recover(leftover.id, false)}>Discard</Button></>
               : <><Button id={`${base}-discard-${leftover.id}`} small variant="quiet" onClick={() => confirm(leftover.id)}>Discard</Button>

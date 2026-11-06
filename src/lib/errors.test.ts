@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { message } from './errors';
+import { message, sentence } from './errors';
 
 describe('message', () => {
   it('gives a string error as it is, whatever the fallback', () => {
@@ -18,5 +18,19 @@ describe('message', () => {
     expect(message(undefined, '')).toBe('');
     expect(message({}, '')).toBe('');
     expect(message(new Error('boom'), '')).toBe('');
+  });
+});
+
+describe('sentence', () => {
+  it('adds a full stop', () => expect(sentence('Couldn’t save')).toBe('Couldn’t save.'));
+  it('leaves text that already ends a sentence', () => {
+    expect(sentence('Done.')).toBe('Done.');
+    expect(sentence('Really?')).toBe('Really?');
+    expect(sentence('Stop!')).toBe('Stop!');
+  });
+  it('gives a full stop for nothing', () => expect(sentence('')).toBe('.'));
+  it('does not count a trailing space or a closing quote', () => {
+    expect(sentence('Done. ')).toBe('Done. .'); // Today\'s behaviour; see the report.
+    expect(sentence('Said “no.”')).toBe('Said “no.”.'); // Today\'s behaviour; see the report.
   });
 });

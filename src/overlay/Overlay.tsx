@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
 import { invoke, listen } from '../bridge';
-import { stamp } from '../lib/dates';
+import { noteClock, stamp } from '../lib/dates';
 import { message } from '../lib/errors';
-import { needsSetup, setupDone, updateSettings, useSettings, useUpdates } from '../store';
+import { needsSetup, setupDone } from '../lib/setup';
+import { updateSettings, useSettings, useUpdates } from '../store';
 import type { Edge, Phase, Size, Status } from '../api/types';
 import { applyTheme, isDark } from '../ui/theme';
 import { leave } from '../ui/motion';
@@ -271,7 +272,7 @@ export function Overlay() {
     <div ref={dock} className="dock">
       {setup && <Setup status={status} fnDown={fnDown} fnTested={fnTested} onClose={() => setSetup(false)} />}
       {noting && phase === 'listening' && !card && <p ref={leave} className="glass said" data-glass data-live role="status">
-        <small>Note · {clockOf(since)}</small><span>{live ?? 'Listening…'}</span>
+        <small>Note · {noteClock(since, Date.now())}</small><span>{live ?? 'Listening…'}</span>
       </p>}
       {saved && !card && <button ref={leave} type="button" className="glass said saved" data-glass data-hit onClick={() => { void invoke('note_open', { path: saved }).catch(() => {}); setSaved(null); }}>
         <small>Saved · Open</small><span>{saved.split('/').pop()?.replace(/\.md$/, '')}</span>
@@ -295,8 +296,3 @@ export function Overlay() {
 }
 
 // ---------- helpers ----------
-
-const clockOf = (start: number) => {
-  const seconds = start ? Math.max(0, Math.floor((Date.now() - start) / 1000)) : 0;
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
-};
