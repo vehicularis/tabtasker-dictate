@@ -221,15 +221,18 @@ fn plural(n: usize, one: &str, many: &str) -> String {
   format!("{n} {}", if n == 1 { one } else { many })
 }
 
-/// Hears every case with `t` and holds it to its budget, writing a row each to `out` as it goes, then
-/// the mean WER and the counts; or, with `json`, the whole eval as one document. Fails when a fixture
-/// is over budget, mismatched or errors; a skipped one is neither a pass nor a failure.
+/// Hears every case with `t` and holds it to its budget, writing a row each as it goes, then the mean
+/// WER and the counts. They go to `out`; with `json`, they go to `table` instead and `out` holds the
+/// whole eval as one document. Fails when a fixture is over budget, mismatched or errors; a skipped
+/// one is neither a pass nor a failure.
 pub fn score_all(
   t: &mut dyn Transcriber,
   cases: &[Case],
   json: bool,
   out: &mut dyn Write,
+  table: &mut dyn Write,
 ) -> Result<(), String> {
+  let human: &mut dyn Write = if json { table } else { &mut *out };
   let written = |e: std::io::Error| format!("cannot write the eval: {e}");
   let mut rows = Vec::new();
   let mut counts = Counts::default();
@@ -264,9 +267,7 @@ pub fn score_all(
       Verdict::Skipped => &mut counts.skipped,
       Verdict::Error => &mut counts.error,
     } += 1;
-    if !json {
-      writeln!(out, "{row}").map_err(written)?;
-    }
+    writeln!(human, "{row}").map_err(written)?;
     rows.push(row);
   }
   // The fixtures with words, which an unheard one has none of; a failed stage's WER means nothing.
@@ -277,6 +278,26 @@ pub fn score_all(
     .collect();
   let mean_wer = (!scored.is_empty()).then(|| scored.iter().sum::<f64>() / scored.len() as f64);
   let failed = counts.over_budget + counts.mismatch + counts.error;
+  match mean_wer {
+    Some(mean) => writeln!(
+      human,
+      "mean WER {mean:.3} over {}",
+      plural(scored.len(), "fixture with words", "fixtures with words")
+    ),
+    None => writeln!(human, "mean WER: no fixture with words was scored"),
+  }
+  .map_err(written)?;
+  writeln!(
+    human,
+    "{}: {} passed, {} over budget, {} mismatched, {} skipped, {}",
+    plural(rows.len(), "fixture", "fixtures"),
+    counts.pass,
+    counts.over_budget,
+    counts.mismatch,
+    counts.skipped,
+    plural(counts.error, "error", "errors")
+  )
+  .map_err(written)?;
   if json {
     let report = Report {
       fixtures: rows,
@@ -286,27 +307,6 @@ pub fn score_all(
     };
     let document = serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?;
     writeln!(out, "{document}").map_err(written)?;
-  } else {
-    match mean_wer {
-      Some(mean) => writeln!(
-        out,
-        "mean WER {mean:.3} over {}",
-        plural(scored.len(), "fixture with words", "fixtures with words")
-      ),
-      None => writeln!(out, "mean WER: no fixture with words was scored"),
-    }
-    .map_err(written)?;
-    writeln!(
-      out,
-      "{}: {} passed, {} over budget, {} mismatched, {} skipped, {}",
-      plural(rows.len(), "fixture", "fixtures"),
-      counts.pass,
-      counts.over_budget,
-      counts.mismatch,
-      counts.skipped,
-      plural(counts.error, "error", "errors")
-    )
-    .map_err(written)?;
   }
   match failed {
     0 => Ok(()),
@@ -318,7 +318,13 @@ pub fn score_all(
 pub fn run(dir: &Path, models: &Path, kind: ModelKind, json: bool) -> Result<(), String> {
   let cases = cases(dir)?;
   let mut engine = Engine::load(models, kind)?;
-  score_all(&mut engine, &cases, json, &mut std::io::stdout())
+  score_all(
+    &mut engine,
+    &cases,
+    json,
+    &mut std::io::stdout(),
+    &mut std::io::stderr(),
+  )
 }
 
 #[cfg(test)]
@@ -404,8 +410,8 @@ mod tests {
   /// Each case heard by `says`, with what was printed and whether the eval passed. A row's
   /// milliseconds read N, since a test can't know them.
   fn eval(says: Says, cases: &[Case], json: bool) -> (String, std::result::Result<(), String>) {
-    let mut out = Vec::new();
-    let done = score_all(&mut { says }, cases, json, &mut out);
+    let (mut out, mut table) = (Vec::new(), Vec::new());
+    let done = score_all(&mut { says }, cases, json, &mut out, &mut table);
     let printed = String::from_utf8(out).unwrap();
     if json {
       return (printed, done);
@@ -661,6 +667,19 @@ mod tests {
       ),
       "{printed}"
     );
+  }
+
+  #[test]
+  fn json_puts_the_table_on_its_own_writer() {
+    let cases = [case("plain", MEETING, speech())];
+    let (mut out, mut table) = (Vec::new(), Vec::new());
+    let says = Says::new([Ok("The meeting moved to Tuesday.")]);
+    let _ = score_all(&mut { says }, &cases, true, &mut out, &mut table);
+    serde_json::from_slice::<serde_json::Value>(&out).unwrap();
+    let table = String::from_utf8(table).unwrap();
+    assert!(table.starts_with("plain: "), "{table}");
+    assert!(table.contains("mean WER"), "{table}");
+    assert!(table.lines().last().unwrap().starts_with("1 fixture: "), "{table}");
   }
 
   #[test]

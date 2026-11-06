@@ -22,7 +22,7 @@ or build it once and use `target/release/dictate-lab`. The examples below write 
 ## Commands
 
 Every command takes these flags:
-- `--json` prints one JSON document on stdout and nothing else there;
+- `--json` prints one JSON document on stdout and nothing else there (`eval` also writes its table to stderr);
 - `--models DIR` names the models folder;
 - `--help` prints the usage.
 
@@ -136,7 +136,7 @@ A row's verdict is one of:
 - `skipped`: there is no WAV beside the JSON, as when its voice isn't installed;
 - `error`: a stage failed, or a note skipped a piece.
 
-`eval` exits 1 when a fixture is over budget, mismatched or errors. A skipped fixture is neither a pass nor a failure. `--json` prints every row with its full trace, then `mean_wer`, `with_words` and `counts`.
+`eval` exits 1 when a fixture is over budget, mismatched or errors. A skipped fixture is neither a pass nor a failure. `--json` prints every row with its full trace, then `mean_wer`, `with_words` and `counts`, as one document on stdout. The table above goes to stderr then, so `dictate-lab eval --json > eval.json 2> table.txt` keeps both from one run.
 
 ## Where things go
 

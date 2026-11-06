@@ -5,12 +5,16 @@ on:
     branches: [main]
     paths:
       - 'crates/**'
+      - 'Cargo.lock'
+      - '.cargo/config.toml'
       - 'src-tauri/src/dictation/**'
       - 'src-tauri/src/meetings/**'
       - '.github/workflows/speech-eval.yml'
   pull_request:
     paths:
       - 'crates/**'
+      - 'Cargo.lock'
+      - '.cargo/config.toml'
       - 'src-tauri/src/dictation/**'
       - 'src-tauri/src/meetings/**'
       - '.github/workflows/speech-eval.yml'
@@ -40,13 +44,16 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: .
+      - name: Name the speech models
+        id: models
+        # The key is the SHA-256 lines of models.rs, so a new model downloads once and every other run,
+        # whatever else changed in that file, reuses the folder.
+        run: echo "key=$(grep -E 'sha256:' crates/engine/src/models.rs | shasum -a 256 | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
       - name: Restore the speech models
-        # The key follows models.rs, where each model's SHA-256 lives, so a new model downloads once and
-        # every other run reuses the folder.
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: target/models
-          key: speech-models-${{ hashFiles('crates/engine/src/models.rs') }}
+          key: speech-models-${{ steps.models.outputs.key }}
       - name: Build the lab
         run: cargo build -p dictate-lab --release --locked
       - name: Fetch the speech models
@@ -55,14 +62,11 @@ jobs:
         # A voice the runner lacks skips its fixture, and eval says so without failing.
         run: target/release/dictate-lab fixtures
       - name: Score the fixtures
+        # With --json the table goes to stderr, so one run gives both the scores and the summary.
         run: |
           status=0
-          target/release/dictate-lab eval --model small --json > eval.json || status=$?
-          {
-            echo '```'
-            target/release/dictate-lab eval --model small || true
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          target/release/dictate-lab eval --model small --json > eval.json 2> table.txt || status=$?
+          { echo '```'; cat table.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           exit "$status"
       - name: Keep the scores
         if: ${{ !cancelled() }}
