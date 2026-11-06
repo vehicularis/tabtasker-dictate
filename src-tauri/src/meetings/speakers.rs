@@ -1,7 +1,6 @@
-//! Who said what in a meeting: speaker diarization on this Mac, with sherpa-onnx (pyannote's
-//! segmentation model finds where voices start and stop, a speaker-embedding model gives each stretch a
-//! voiceprint, and clustering groups the voiceprints into speakers). Two small models are downloaded the
-//! first time a meeting needs them, next to the voice models.
+//! Getting the speaker models ready for meetings: the two small models are downloaded the first time a
+//! meeting needs them, next to the voice models, and the segmentation model is unpacked. Telling the
+//! speakers apart is the engine's `meeting::speakers`.
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 

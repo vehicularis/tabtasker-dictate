@@ -63,8 +63,6 @@ pub fn chars_at(text: &str, start: usize, length: usize) -> std::ops::Range<usiz
   from.unwrap_or(count)..to.unwrap_or(count)
 }
 
-
-
 /// Live typing types a word once two passes in a row have heard it in the same place, so the field only grows
 /// while the key is held: what the passes still disagree on (the last word or two, as a rule) waits in the orb,
 /// and release puts the finished words in at once. A typed word one pass hears differently stays as it is; once
@@ -123,7 +121,6 @@ mod tests {
     assert_eq!(next("", "Öğle yemeği", "öğle yemeği yiyelim"), "öğle yemeği");
   }
 
-
   #[test]
   fn a_correction_is_one_dictated_word_typed_over() {
     let field = "Notes: deploy to Cooper Nettis today";
@@ -150,7 +147,6 @@ mod tests {
     assert_eq!(range, 2..19);
     assert_eq!(correction(field, "🙂 gittik İstanbul'a", range), Some(("İstanbul".into(), true)));
   }
-
 
   #[test]
   fn a_pause_inside_the_word_being_typed_is_not_the_end_of_it() {

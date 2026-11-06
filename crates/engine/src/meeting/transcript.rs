@@ -118,7 +118,6 @@ pub fn document(dateline: &str, summary: Option<&str>, transcript: &str) -> Stri
   body
 }
 
-
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -128,7 +127,6 @@ mod tests {
     let start = (seconds * RATE as f64) as u64;
     Line { source, start, end: start + 2 * RATE as u64, text: text.into(), speaker: None }
   }
-
 
   #[test]
   fn the_clock_reads_hours_minutes_and_seconds() {

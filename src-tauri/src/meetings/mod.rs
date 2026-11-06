@@ -46,7 +46,6 @@ struct Header {
   saved: Option<String>,
 }
 
-
 // ---------- the spool ----------
 
 /// The file a stream's samples are spooled to.

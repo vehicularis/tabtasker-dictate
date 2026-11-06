@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::{fs::{self, File}, io::{Read, Write}, path::Path, sync::atomic::{AtomicBool, Ordering}, time::{Duration, Instant}};
 
 /// A file the voice features download once and keep, checked against its size and SHA-256 every time.
+#[derive(Debug)]
 pub struct ModelFile {
   /// Path under the models folder.
   pub name: &'static str,

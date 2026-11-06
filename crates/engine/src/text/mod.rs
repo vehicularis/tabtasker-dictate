@@ -39,6 +39,7 @@ pub enum Style {
 }
 
 /// What the pipeline does to one hold's words. `language` is Whisper's code for them.
+#[derive(Debug)]
 pub struct Rules<'a> {
   /// The app's style.
   pub style: Style,

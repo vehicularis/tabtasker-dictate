@@ -34,7 +34,6 @@ pub fn sticky_words(text: &str) -> Option<String> {
   Some(match chars.next() { Some(first) => first.to_uppercase().chain(chars).collect(), None => String::new() })
 }
 
-
 #[cfg(test)]
 mod tests {
   use super::*;

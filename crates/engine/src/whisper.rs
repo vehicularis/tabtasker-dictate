@@ -38,12 +38,12 @@ pub struct Transcript {
 
 /// What a pass checks while it runs: `stop`, and the time it has taken.
 struct Abort<'a> { stop: &'a dyn Fn() -> bool, started: Instant }
-/// No pass runs longer than this, however long its audio.
+/// No single decode runs longer than this, however long its audio.
 const DEADLINE: Duration = Duration::from_secs(120);
 
 fn stops(abort: &Abort) -> bool { (abort.stop)() || abort.started.elapsed() >= DEADLINE }
 
-unsafe extern "C" fn should_abort(data: *mut c_void) -> bool { stops(&*(data as *const Abort)) }
+unsafe extern "C" fn should_abort(data: *mut c_void) -> bool { stops(unsafe { &*(data as *const Abort) }) }
 
 unsafe extern "C" fn stop_before_encoding(_: *mut WhisperSysContext, _: *mut WhisperSysState, _: *mut c_void) -> bool { false }
 
@@ -77,6 +77,10 @@ pub fn pinned(code: &str) -> Option<i32> { if code == "auto" { None } else { lan
 /// clears its results, spectrogram and prompt at the start of each full() (no_context is on for all of
 /// ours), and `&mut self` keeps passes from sharing it. A new state each pass cost its GPU buffers.
 pub struct Whisper { whisper: WhisperContext, state: WhisperState, kind: ModelKind, prompt: Prompt }
+
+impl std::fmt::Debug for Whisper {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { f.debug_struct("Whisper").field("kind", &self.kind).finish_non_exhaustive() }
+}
 
 /// The vocabulary as Whisper was last given it: the words, those of them that fit in its prompt, and the
 /// prompt's tokens.
@@ -160,8 +164,9 @@ impl Whisper {
     Ok((language, sure.get(language as usize).copied().unwrap_or(0.0)))
   }
 
-  /// The words of a hold in `language`, with `ask`'s vocabulary, stopping once `stop` says so or after
-  /// two minutes. `quick` is the live pass's greedy decoding; the final pass searches five beams, which
+  /// The words of a hold in `language`, with `ask`'s vocabulary, stopping once `stop` says so. Each decode
+  /// gets its own two minutes, so a retry without the vocabulary can bring it to about four.
+  /// `quick` is the live pass's greedy decoding; the final pass searches five beams, which
   /// costs about the same because the encoder dominates.
   pub fn transcribe(&mut self, pcm: &[f32], language: i32, ask: &Ask, stop: &dyn Fn() -> bool, quick: bool) -> Result<Transcript> {
     if stop() { return Err(Error::Cancelled); }
@@ -219,7 +224,7 @@ impl Whisper {
     Ok(text)
   }
 
-  /// A meeting piece with timestamps, stopping once `stop` says so or after two minutes. `prompt`
+  /// A meeting piece with timestamps, stopping once `stop` says so; the decode gets its own two minutes. `prompt`
   /// replaces the vocabulary when the caller has its own.
   pub fn segments(&mut self, pcm: &[f32], language: i32, prompt: Option<&str>, ask: &Ask, translate: bool, stop: &dyn Fn() -> bool) -> Result<Vec<Segment>> {
     let mut abort = Abort { stop, started: Instant::now() };

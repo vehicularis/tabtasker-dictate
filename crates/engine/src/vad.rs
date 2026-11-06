@@ -7,6 +7,10 @@ use crate::{audio::{self, Levels}, error::{Error, Result}};
 /// The speech detection model, loaded.
 pub struct SpeechDetector { vad: WhisperVadContext }
 
+impl std::fmt::Debug for SpeechDetector {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { f.debug_struct("SpeechDetector").finish_non_exhaustive() }
+}
+
 /// What the gates made of a hold's audio, for the log as much as for the pass: never the words.
 #[derive(Debug)]
 pub struct Gate {

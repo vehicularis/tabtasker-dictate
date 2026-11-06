@@ -59,7 +59,6 @@ pub fn fill(gaps: &mut Vec<Gap>, source: Source, from: u64, to: u64) -> bool {
   true
 }
 
-
 #[cfg(test)]
 mod tests {
   use super::*;

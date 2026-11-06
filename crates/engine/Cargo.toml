@@ -9,6 +9,9 @@ publish = false
 [lib]
 name = "dictate_engine"
 
+[lints]
+workspace = true
+
 [dependencies]
 serde = { workspace = true }
 sherpa-onnx = { workspace = true }

@@ -127,12 +127,10 @@ fn status(app: &AppHandle, message: &str, code: i32) {
   let _ = app.run_on_main_thread(move || unsafe { dictate_model_status(text.as_ptr(), code); });
 }
 
-
 pub(crate) fn free_space(dir: &Path) -> Option<u64> {
   let path = CString::new(dir.as_os_str().as_encoded_bytes()).ok()?;
   u64::try_from(unsafe { dictate_meeting_free_space(path.as_ptr()) }).ok()
 }
-
 
 #[no_mangle]
 extern "C" fn dictate_prepare_models() {

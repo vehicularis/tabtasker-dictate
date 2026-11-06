@@ -38,8 +38,6 @@ extern "C" fn dictate_correction(before: *const c_char, after: *const c_char, st
 
 /// learn.m's question before it learns from a pause: whether the caret, at UTF-16 offset `caret` of
 /// `after`, is still in the word being typed over the dictated ones.
-/// learn.m's question before it learns from a pause: whether the caret, at UTF-16 offset `caret` of
-/// `after`, is still in the word being typed over the dictated ones.
 #[no_mangle]
 extern "C" fn dictate_learn_typing(before: *const c_char, after: *const c_char, caret: usize) -> bool {
   let (Some(before), Some(after)) = (read(before), read(after)) else { return false };
