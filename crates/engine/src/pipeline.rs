@@ -37,12 +37,18 @@ pub struct Heard {
 /// The language of a pass: `ask`'s if Settings pins one, else `held`, else detected. Nothing is kept:
 /// the caller decides whether a detected language is sure enough (see [`SURE`]). Stops first if `stop` says so.
 pub fn language(whisper: &mut Whisper, pcm: &[f32], ask: &Ask, held: Option<i32>, stop: &(dyn Fn() -> bool + Sync)) -> Result<(i32, LanguageFrom)> {
+  choose_language(ask, held, stop, || whisper.detect_language(pcm))
+}
+
+/// [`language`]'s rules alone, with `detect` giving the detected language and how sure it is; `detect`
+/// runs only when neither Settings nor the hold has a language, and never once `stop` says so.
+pub fn choose_language(ask: &Ask, held: Option<i32>, stop: &(dyn Fn() -> bool + Sync), detect: impl FnOnce() -> Result<(i32, f32)>) -> Result<(i32, LanguageFrom)> {
   if stop() { return Err(Error::Cancelled); }
   match (ask.language, held) {
     (Some(language), _) => Ok((language, LanguageFrom::Settings)),
     (None, Some(language)) => Ok((language, LanguageFrom::Hold)),
     (None, None) => {
-      let (language, sure) = whisper.detect_language(pcm)?;
+      let (language, sure) = detect()?;
       Ok((language, LanguageFrom::Detected { sure }))
     }
   }
@@ -60,6 +66,18 @@ pub fn hear(whisper: &mut Whisper, pcm: &[f32], ask: &Ask, held: Option<i32>, st
 mod tests {
   use super::*;
   use crate::models;
+
+  #[test]
+  fn language_precedence() {
+    let unasked = || -> Result<(i32, f32)> { panic!("detected a language it already had") };
+    let (pinned, ask) = (Ask { language: Some(3), ..Ask::default() }, Ask::default());
+    assert_eq!(choose_language(&pinned, Some(5), &|| false, unasked), Ok((3, LanguageFrom::Settings)));
+    assert_eq!(choose_language(&ask, Some(5), &|| false, unasked), Ok((5, LanguageFrom::Hold)));
+    assert_eq!(choose_language(&ask, None, &|| false, || Ok((7, 0.95))), Ok((7, LanguageFrom::Detected { sure: 0.95 })));
+    // Stopping comes first, before any language.
+    assert_eq!(choose_language(&ask, None, &|| true, unasked), Err(Error::Cancelled));
+    assert_eq!(choose_language(&pinned, Some(5), &|| true, unasked), Err(Error::Cancelled));
+  }
 
   #[test]
   #[ignore = "needs the Small model in DICTATE_MODELS"]

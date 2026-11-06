@@ -142,6 +142,8 @@ npm run tauri dev      # run from source
 npm run tauri build -- --no-sign    # an unsigned TabTasker Dictate.app and DMG in target/release/bundle
 ```
 
+To hear the speech pipeline on real audio without the app, see [the lab](crates/lab/README.md).
+
 A release, signed with the Developer ID, notarized and stapled, comes from
 [scripts/release-mac.sh](scripts/release-mac.sh), which the [release workflow](.github/workflows/release.yml)
 runs for a pushed tag. CONTRIBUTING.md says how to make one.

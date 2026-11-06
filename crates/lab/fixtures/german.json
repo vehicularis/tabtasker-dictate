@@ -1,0 +1,7 @@
+{
+  "say": "Wir treffen uns morgen früh im großen Besprechungsraum.",
+  "voice": "Anna",
+  "expect": "Wir treffen uns morgen früh im großen Besprechungsraum.",
+  "language": "auto",
+  "max_wer": 0.05
+}

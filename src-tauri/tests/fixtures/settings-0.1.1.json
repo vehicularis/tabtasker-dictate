@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "general": { "menuBarIcon": false, "showInDock": true },
+  "shortcuts": {
+    "dictate": "rightOption",
+    "handsFree": false,
+    "command": "shift",
+    "note": { "keyCode": 45, "modifiers": 1572864, "label": "⌥⌘N" },
+    "meeting": { "keyCode": 46, "modifiers": 1572864, "label": "⌥⌘M" },
+    "pasteLast": { "keyCode": 9, "modifiers": 1572864, "label": "⌥⌘V" },
+    "writeNote": { "keyCode": 13, "modifiers": 1310720, "label": "⌃⌘W" },
+    "sticky": { "keyCode": 122, "modifiers": 0, "label": "F1" },
+    "ask": { "keyCode": 0, "modifiers": 1310720, "label": "⌃⌘A" }
+  },
+  "dictation": {
+    "language": "de",
+    "translateToEnglish": true,
+    "removeFillers": false,
+    "sounds": false,
+    "soundVolume": 0.7,
+    "startSound": "Glass",
+    "stopSound": "Submarine",
+    "model": "small"
+  },
+  "vocabulary": {
+    "words": ["Kubernetes", "İstanbul"],
+    "replacements": [
+      { "from": "my email", "to": "can@example.com" },
+      { "from": "tabtasker", "to": "TabTasker" }
+    ],
+    "learn": false,
+    "suggestions": ["Whisper"]
+  },
+  "apps": {
+    "styles": [
+      { "bundleId": "com.example.a", "name": "Alpha", "style": "default", "polish": true, "send": true },
+      { "bundleId": "com.example.b", "name": "Bravo", "style": "casual", "polish": false, "send": false },
+      { "bundleId": "com.example.c", "name": "Charlie", "style": "formal", "polish": true, "send": null },
+      { "bundleId": "com.example.d", "name": "Delta", "style": "code", "polish": false, "send": null },
+      { "bundleId": "com.example.e", "name": "Echo", "style": "raw", "polish": true, "send": true }
+    ],
+    "defaultStyle": "formal"
+  },
+  "notes": {
+    "folder": "/tmp/Fixture Notes",
+    "fileName": "{title}",
+    "frontmatter": false,
+    "dailyNote": true,
+    "tags": ["voice", "inbox"],
+    "claudeTitle": false,
+    "claudeActions": true
+  },
+  "meetings": {
+    "folder": "/tmp/Fixture Meetings",
+    "systemAudio": false,
+    "summarize": false,
+    "you": "Me",
+    "others": "Them",
+    "speakers": false,
+    "decisions": false,
+    "actionItems": false
+  },
+  "claude": {
+    "enabled": true,
+    "via": "claudeCode",
+    "model": "claude-sonnet-5-5",
+    "effort": "high",
+    "commands": false,
+    "claudeCode": "/usr/local/bin/claude",
+    "localEndpoint": "http://127.0.0.1:1234",
+    "localModel": "qwen2.5",
+    "openAiEndpoint": "https://example.com",
+    "openAiModel": "fixture-model"
+  },
+  "agents": { "mcp": false, "shareHistory": true, "shareNotes": false, "shareMeetings": false, "allowWrite": true },
+  "history": { "keep": "month" },
+  "appearance": {
+    "theme": "dark",
+    "edge": "left",
+    "size": "large",
+    "idle": "hidden",
+    "hint": false,
+    "pill": ["settings", "note"],
+    "margin": 40,
+    "avoidDock": false
+  }
+}

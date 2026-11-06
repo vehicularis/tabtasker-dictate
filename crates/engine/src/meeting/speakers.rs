@@ -4,7 +4,7 @@
 use sherpa_onnx::{FastClusteringConfig, OfflineSpeakerDiarization, OfflineSpeakerDiarizationConfig, OfflineSpeakerSegmentationModelConfig, OfflineSpeakerSegmentationPyannoteModelConfig, SpeakerEmbeddingExtractorConfig};
 use std::path::Path;
 
-use crate::models::SPEAKER_EMBEDDING as EMBEDDING;
+use crate::{error::Result, models::SPEAKER_EMBEDDING as EMBEDDING};
 /// Where the unpacked segmentation model sits under the models folder.
 pub const SEGMENTATION_ONNX: &str = "speakers/pyannote-segmentation-3-0.onnx";
 /// How far apart two voiceprints must be to count as two people: sherpa-onnx's default. Higher merges more.
@@ -32,7 +32,7 @@ pub fn ready(root: &Path) -> bool {
 
 /// Who spoke when in `samples` (16 kHz mono), as the models hear it. Blocking, and slow on a long
 /// meeting (about a tenth of its length); run it where waiting is fine.
-pub fn diarize(root: &Path, samples: &[f32]) -> Result<Vec<Turn>, String> {
+pub fn diarize(root: &Path, samples: &[f32]) -> Result<Vec<Turn>> {
   if !ready(root) { return Err("The speaker models aren’t downloaded yet.".into()); }
   // Six threads: eight measured no faster, and the other stream runs alongside.
   let threads = std::thread::available_parallelism().map_or(4, |n| n.get().clamp(2, 6)) as i32;
@@ -46,7 +46,7 @@ pub fn diarize(root: &Path, samples: &[f32]) -> Result<Vec<Turn>, String> {
     min_duration_on: 0.3, min_duration_off: 0.5,
   };
   let diarizer = OfflineSpeakerDiarization::create(&config).ok_or("Couldn’t load the speaker models.")?;
-  if diarizer.sample_rate() != RATE as i32 { return Err(format!("The speaker model wants {} Hz audio", diarizer.sample_rate())); }
+  if diarizer.sample_rate() != RATE as i32 { return Err(format!("The speaker model wants {} Hz audio", diarizer.sample_rate()).into()); }
   let result = diarizer.process(samples).ok_or("Couldn’t tell the speakers apart.")?;
   let mut turns: Vec<Turn> = result.sort_by_start_time().into_iter()
     .filter(|segment| segment.speaker >= 0 && segment.end > segment.start)

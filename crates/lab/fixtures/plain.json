@@ -1,0 +1,7 @@
+{
+  "say": "The meeting moved to Thursday afternoon, so we have more time to finish the report.",
+  "voice": "Samantha",
+  "expect": "The meeting moved to Thursday afternoon, so we have more time to finish the report.",
+  "language": "auto",
+  "max_wer": 0.05
+}

@@ -776,6 +776,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "dictate-lab"
+version = "0.1.1"
+dependencies = [
+ "dictate-engine",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -1,6 +1,6 @@
 //! The app's own log, `~/Library/Logs/TabTasker Dictate/dictate.log`: one line a message, Info and up,
-//! from this crate alone (the native code's `dictate_log` lines included), so a problem on someone's Mac
-//! can be read after the fact. In a debug build the same lines go to the terminal.
+//! from this crate (the native code's `dictate_log` lines included) and the speech engine alone, so a
+//! problem on someone's Mac can be read after the fact. In a debug build the same lines go to the terminal.
 use std::path::PathBuf;
 use std::sync::Mutex;
 
@@ -35,7 +35,9 @@ fn utc_stamp(secs: u64) -> String {
 }
 
 impl log::Log for FileLog {
-  fn enabled(&self, meta: &log::Metadata) -> bool { meta.level() <= log::Level::Info && meta.target().starts_with(env!("CARGO_CRATE_NAME")) }
+  fn enabled(&self, meta: &log::Metadata) -> bool {
+    meta.level() <= log::Level::Info && [env!("CARGO_CRATE_NAME"), "dictate_engine"].iter().any(|ours| meta.target().starts_with(ours))
+  }
   fn log(&self, record: &log::Record) {
     if !self.enabled(record.metadata()) { return; }
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |age| age.as_secs());
@@ -53,5 +55,16 @@ mod tests {
     assert_eq!(super::utc_stamp(0), "1970-01-01T00:00:00Z");
     assert_eq!(super::utc_stamp(1_793_192_709), "2026-10-28T13:05:09Z");
     assert_eq!(super::utc_stamp(951_782_400), "2000-02-29T00:00:00Z", "a leap day");
+  }
+
+  #[test]
+  fn the_log_keeps_the_app_and_the_engine_only() {
+    use log::{Level, Log, Metadata};
+    let log = super::FileLog(std::sync::Mutex::new(None));
+    let kept = |target: &str, level: Level| log.enabled(&Metadata::builder().target(target).level(level).build());
+    assert!(kept(concat!(env!("CARGO_CRATE_NAME"), "::dictation::speech"), Level::Info));
+    assert!(kept("dictate_engine::pieces", Level::Warn), "the engine's lines, such as a skipped piece of a note");
+    assert!(!kept("dictate_engine::pieces", Level::Debug));
+    assert!(!kept("whisper_rs", Level::Info), "native logs can hold recognized words");
   }
 }

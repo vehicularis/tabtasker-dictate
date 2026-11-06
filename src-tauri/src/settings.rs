@@ -662,6 +662,17 @@ mod tests {
   }
 
   #[test]
+  fn a_0_1_1_settings_file_loads_and_saves_unchanged() {
+    // A settings.json as 0.1.1 wrote it, every field off its default.
+    let file: Value = serde_json::from_str(include_str!("../tests/fixtures/settings-0.1.1.json")).unwrap();
+    let settings: Settings = serde_json::from_value(file.clone()).unwrap();
+    // The one field added since 0.1.1 gets its default; everything else must come back as it was.
+    let mut saved = serde_json::to_value(&settings).unwrap();
+    assert_eq!(saved["general"].as_object_mut().unwrap().remove("checkForUpdates"), Some(json!(true)));
+    assert_eq!(saved, file);
+  }
+
+  #[test]
   fn defaults_are_the_documented_ones_in_camel_case() {
     let value = serde_json::to_value(Settings::default()).unwrap();
     assert_eq!(value["version"], 1);

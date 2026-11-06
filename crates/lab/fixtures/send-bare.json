@@ -1,0 +1,9 @@
+{
+  "say": "Thanks, Maria, see you tomorrow morning. Send.",
+  "voice": "Samantha",
+  "expect": "Thanks, Maria, see you tomorrow morning. Send.",
+  "language": "en",
+  "expect_send": true,
+  "max_wer": 0.05,
+  "known_issue": "a bare \". Send.\" is heard as \"sand\""
+}

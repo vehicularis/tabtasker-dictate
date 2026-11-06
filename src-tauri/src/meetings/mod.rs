@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tauri::{AppHandle, Emitter, Manager};
 use crate::dictation::speech;
-use dictate_engine::meeting::levels::{cut, has_voice, PIECE};
+use dictate_engine::meeting::levels::{has_speech, pause_cut, WINDOW_SAMPLES};
 use dictate_engine::meeting::speakers::{diarize, ready, Turn};
 use dictate_engine::meeting::transcript::{assign_speakers, clock, dateline, document, length, transcript, untitled};
 use dictate_engine::meeting::{fill, Gap, Line, Source, SOURCES};
@@ -421,11 +421,11 @@ fn step(job: &Job, source: Source, at: &mut Progress, retry: &mut Vec<Gap>, fail
     None => (at.done[i], job.len(source).saturating_sub(at.done[i]), job.ended.load(Ordering::SeqCst)),
   };
   if left == 0 { return Ok(false); }
-  let pcm = job.spool.read(source, from, (left as usize).min(PIECE)).map_err(|e| { log::warn!("meeting: {e}"); Trouble::Waiting("Waiting for the speech model to finish the transcript.") })?;
-  let Some(cut) = cut(&pcm, last && left as usize <= PIECE) else { return Ok(false) };
+  let pcm = job.spool.read(source, from, (left as usize).min(WINDOW_SAMPLES)).map_err(|e| { log::warn!("meeting: {e}"); Trouble::Waiting("Waiting for the speech model to finish the transcript.") })?;
+  let Some(cut) = pause_cut(&pcm, last && left as usize <= WINDOW_SAMPLES) else { return Ok(false) };
   let piece = &pcm[..cut];
   let to = from + cut as u64;
-  let heard = if has_voice(piece) {
+  let heard = if has_speech(piece) {
     match transcribe(piece) {
       Ok(heard) => Some(heard),
       // Three times over, a piece Whisper can't read is kept as audio and the meeting moves on.

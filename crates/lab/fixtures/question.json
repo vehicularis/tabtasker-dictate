@@ -1,0 +1,7 @@
+{
+  "say": "Do you know where we put the spare keys for the office?",
+  "voice": "Samantha",
+  "expect": "Do you know where we put the spare keys for the office?",
+  "language": "en",
+  "max_wer": 0.05
+}

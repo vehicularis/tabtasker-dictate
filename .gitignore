@@ -3,5 +3,7 @@ dist/
 # Checkouts made before the workspace built into src-tauri/target/.
 src-tauri/target/
 /target/
+# Fixture audio is rendered where it runs, never committed: the licence of Apple's voices limits its use.
+crates/lab/fixtures/*.wav
 .DS_Store
 release/

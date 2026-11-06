@@ -29,6 +29,8 @@ DICTATE_MODELS=/path/to/models cargo test -p dictate-engine -- --ignored
 
 The speaker test also needs a recording, `DICTATE_SPEAKER_PCM`: 16-bit little-endian 16 kHz mono, with `speakers/` among the models. `DICTATE_SPEAKER_COUNT` (default 2) is how many voices it should hear.
 
+For real audio, use [`dictate-lab`](../lab/README.md): it runs these stages on recordings and scores them against what was said.
+
 ## Rule
 
 Nothing here may depend on Tauri or AppKit. The engine holds no `extern "C"` block and no `#[no_mangle]`, and its only `unsafe` is the whisper-rs callbacks and the calls that install them, in `whisper.rs`.

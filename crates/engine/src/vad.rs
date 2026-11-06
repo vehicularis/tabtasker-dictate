@@ -51,7 +51,11 @@ impl SpeechDetector {
   /// The Silero model file at `path`.
   pub fn load(path: &Path) -> Result<Self> {
     let path = path.to_str().ok_or_else(|| Error::Other("Invalid speech model path.".into()))?;
-    WhisperVadContext::new(path, WhisperVadContextParams::default()).map(|vad| Self { vad })
+    // One thread: Silero's graph is too small to split, so more threads only wait on each other. Measured on a
+    // 40 s note, 73 ms against 102 ms for the default four, and on a 3-core CI Mac four took 30 s for 5 s.
+    let mut params = WhisperVadContextParams::default();
+    params.set_n_threads(1);
+    WhisperVadContext::new(path, params).map(|vad| Self { vad })
       .map_err(|_| Error::Other("Couldn’t load speech detection. Try again.".into()))
   }
 

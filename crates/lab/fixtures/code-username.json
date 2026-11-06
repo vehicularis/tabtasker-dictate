@@ -1,0 +1,10 @@
+{
+  "say": "Camel case user name equals camel case get user open parenthesis close parenthesis semicolon.",
+  "voice": "Samantha",
+  "expect": "userName = getUser();",
+  "expect_typed": "userName = getUser();",
+  "language": "en",
+  "style": "code",
+  "max_wer": 0.05,
+  "known_issue": "\"camel case user name\" comes out as \"username\""
+}

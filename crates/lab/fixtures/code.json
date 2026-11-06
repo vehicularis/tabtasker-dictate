@@ -1,0 +1,9 @@
+{
+  "say": "Camel case first name equals camel case get first name open parenthesis close parenthesis semicolon.",
+  "voice": "Samantha",
+  "expect": "firstName = getFirstName();",
+  "expect_typed": "firstName = getFirstName();",
+  "language": "en",
+  "style": "code",
+  "max_wer": 0.05
+}

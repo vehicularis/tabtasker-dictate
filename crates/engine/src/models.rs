@@ -1,4 +1,5 @@
 //! The speech models: which files each needs, how they are checked, and how they are downloaded.
+use crate::error::Result;
 use ring::digest::{Context as Digest, SHA256};
 use serde::{Deserialize, Serialize};
 use std::{fs::{self, File}, io::{Read, Write}, path::Path, sync::atomic::{AtomicBool, Ordering}, time::{Duration, Instant}};
@@ -76,7 +77,7 @@ impl ModelKind {
 }
 
 /// Whether the file at `path` is `model`: the right size and the right SHA-256.
-pub fn verify(path: &Path, model: &ModelFile) -> Result<(), String> {
+pub fn verify(path: &Path, model: &ModelFile) -> Result<()> {
   let mut file = File::open(path).map_err(|_| "The speech model isn’t downloaded yet.")?;
   if file.metadata().map_err(|e| e.to_string())?.len() != model.bytes { return Err("The speech model is incomplete. Download it again.".into()); }
   let mut digest = Digest::new(&SHA256);
@@ -102,14 +103,14 @@ fn passed(path: &Path, model: &ModelFile) {
 
 /// `verify`, hashing only a file that changed since it last passed: the 874 MB model would otherwise
 /// cost seconds of hashing at every launch.
-pub fn verified(path: &Path, model: &ModelFile) -> Result<(), String> {
+pub fn verified(path: &Path, model: &ModelFile) -> Result<()> {
   if stamp(path, model).is_some_and(|stamp| fs::read_to_string(path.with_extension("verified")).is_ok_and(|kept| kept == stamp)) { return Ok(()); }
   verify(path, model)?;
   passed(path, model);
   Ok(())
 }
 
-fn download_client() -> Result<reqwest::Client, String> {
+fn download_client() -> std::result::Result<reqwest::Client, String> {
   if rustls::crypto::CryptoProvider::get_default().is_none() { let _ = rustls::crypto::ring::default_provider().install_default(); }
   // No deadline on the whole download, which a slow connection can't meet: each read gets 30 s instead.
   reqwest::Client::builder().https_only(true).referer(false)
@@ -152,7 +153,7 @@ fn backoff(tries: u32) -> Option<Duration> { (tries < 3).then(|| Duration::from_
 enum Stop { Retry(String), Fail(String) }
 
 /// One attempt at `model` into `partial`, carrying on from what it holds already.
-async fn download(client: &reqwest::Client, model: &ModelFile, partial: &Path, cancel: &AtomicBool, report: &(impl Fn(&str, Option<u8>) + Sync)) -> Result<(), Stop> {
+async fn download(client: &reqwest::Client, model: &ModelFile, partial: &Path, cancel: &AtomicBool, report: &(impl Fn(&str, Option<u8>) + Sync)) -> std::result::Result<(), Stop> {
   let have = match fs::metadata(partial).map_or(0, |meta| meta.len()) {
     have if have == model.bytes => return Ok(()), // all here: its check says whether it's right
     have if have < model.bytes => have,
@@ -194,7 +195,7 @@ async fn download(client: &reqwest::Client, model: &ModelFile, partial: &Path, c
 /// a line for the person, and how much of the download is done while it is downloading. A download that
 /// stops carries on where it stopped, here or at the next try; its `.part` goes only when it fails its
 /// check or setup is cancelled. `free_space` says how many bytes are free where the file goes.
-pub async fn fetch(root: &Path, models: &'static [ModelFile], cancel: &AtomicBool, free_space: &(dyn Fn(&Path) -> Option<u64> + Sync), report: &(impl Fn(&str, Option<u8>) + Sync)) -> Result<(), String> {
+pub async fn fetch(root: &Path, models: &'static [ModelFile], cancel: &AtomicBool, free_space: &(dyn Fn(&Path) -> Option<u64> + Sync), report: &(impl Fn(&str, Option<u8>) + Sync)) -> Result<()> {
   for model in models {
     if cancel.load(Ordering::Relaxed) { return Err(CANCELLED.into()); }
     let path = root.join(model.name);
@@ -205,7 +206,7 @@ pub async fn fetch(root: &Path, models: &'static [ModelFile], cancel: &AtomicBoo
     let partial = path.with_extension("part");
     let left = fs::metadata(&partial).ok().and_then(|meta| model.bytes.checked_sub(meta.len())).unwrap_or(model.bytes);
     if let Some(short) = short_of_space(free_space(dir), left) {
-      return Err(format!("There isn’t enough space to download {}. Free up {:.1} GB and try again.", model.label, (short as f64 / 1e8).ceil() / 10.0));
+      return Err(format!("There isn’t enough space to download {}. Free up {:.1} GB and try again.", model.label, (short as f64 / 1e8).ceil() / 10.0).into());
     }
     let client = download_client()?;
     let mut tries = 0;
@@ -213,11 +214,11 @@ pub async fn fetch(root: &Path, models: &'static [ModelFile], cancel: &AtomicBoo
       let before = fs::metadata(&partial).map_or(0, |meta| meta.len());
       match download(&client, model, &partial, cancel, report).await {
         Ok(()) => break,
-        Err(Stop::Fail(error)) => return Err(error),
+        Err(Stop::Fail(error)) => return Err(error.into()),
         Err(Stop::Retry(error)) => {
           // Three tries in a row that get nowhere; one that got further starts the count again.
           if fs::metadata(&partial).is_ok_and(|meta| meta.len() > before) { tries = 0; }
-          let Some(wait) = backoff(tries) else { return Err(error) };
+          let Some(wait) = backoff(tries) else { return Err(error.into()) };
           tries += 1;
           tokio::time::sleep(wait).await;
         }
@@ -236,7 +237,8 @@ pub async fn fetch(root: &Path, models: &'static [ModelFile], cancel: &AtomicBoo
   Ok(())
 }
 
-/// What `fetch` fails with when `cancel` is set.
+/// The text `fetch` and `cancellable` fail with, as `Error::Other`, when `cancel` is set. It is not
+/// `Error::Cancelled`, whose text is a voice command's.
 pub const CANCELLED: &str = "Speech model setup was cancelled.";
 
 async fn wait_cancelled(cancel: &AtomicBool) {
@@ -244,7 +246,7 @@ async fn wait_cancelled(cancel: &AtomicBool) {
 }
 
 /// `work`, or `CANCELLED` as soon as `cancel` is set.
-pub async fn cancellable<T>(cancel: &AtomicBool, work: impl std::future::Future<Output = Result<T, String>>) -> Result<T, String> {
+pub async fn cancellable<T>(cancel: &AtomicBool, work: impl std::future::Future<Output = Result<T>>) -> Result<T> {
   tokio::select! {
     result = work => result,
     _ = wait_cancelled(cancel) => Err(CANCELLED.into()),
@@ -296,7 +298,7 @@ mod tests {
     let cancel = Arc::new(AtomicBool::new(false));
     let signal = cancel.clone();
     let waiting = tokio::spawn(async move {
-      cancellable(&signal, std::future::pending::<Result<(), String>>()).await
+      cancellable(&signal, std::future::pending::<Result<()>>()).await
     });
     tokio::task::yield_now().await;
     cancel.store(true, Ordering::Relaxed);

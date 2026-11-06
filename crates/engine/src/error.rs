@@ -50,6 +50,10 @@ impl From<Error> for String {
   fn from(error: Error) -> Self { error.to_string() }
 }
 
+impl From<&str> for Error {
+  fn from(text: &str) -> Self { Self::Other(text.to_owned()) }
+}
+
 impl From<String> for Error {
   fn from(text: String) -> Self { Self::Other(text) }
 }
