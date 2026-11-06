@@ -1,0 +1,26 @@
+[package]
+name = "dictate-engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+name = "dictate_engine"
+
+[lints]
+workspace = true
+
+[dependencies]
+serde = { workspace = true }
+sherpa-onnx = { workspace = true }
+whisper-rs = { workspace = true }
+log = { workspace = true }
+ring = { workspace = true }
+reqwest = { workspace = true }
+rustls = { workspace = true }
+tokio = { workspace = true, features = ["rt"] }
+
+[dev-dependencies]
+serde_json = { workspace = true }

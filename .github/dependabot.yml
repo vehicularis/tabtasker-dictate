@@ -11,7 +11,7 @@ updates:
       npm:
         patterns: ["*"]
   - package-ecosystem: cargo
-    directory: /src-tauri
+    directory: /
     schedule:
       interval: monthly
     # A release has to be 14 days old before it's proposed, as CONTRIBUTING.md asks of every dependency.

@@ -1,9 +1,11 @@
 [package]
 name = "tabtasker-dictate"
-version = "0.1.1"
+publish = false
+version.workspace = true
 description = "Hold fn to type with your voice, or take long spoken notes. Whisper runs on your Mac."
-edition = "2021"
-license = "Apache-2.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [lib]
 name = "dictate_lib"
@@ -13,23 +15,24 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2.7.3", features = [] }
 cc = "1"
 
+[lints]
+workspace = true
+
 [dependencies]
 tauri = { version = "2.12.4", features = ["tray-icon", "image-png", "macos-private-api", "protocol-asset"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-log = "0.4"
-whisper-rs = { version = "=0.16.0", features = ["metal"] }
-# Speaker diarization (pyannote segmentation + speaker embeddings + clustering) for meetings; its prebuilt static libraries download at build time.
-sherpa-onnx = "2.0.1"
-ring = "0.17"
+serde = { workspace = true }
+serde_json = { workspace = true }
+log = { workspace = true }
+ring = { workspace = true }
 base64 = "0.23"
-reqwest = { version = "0.13.5", default-features = false, features = ["rustls-no-provider"] }
-rustls = { version = "0.23", default-features = false, features = ["ring"] }
-tokio = { version = "1", default-features = false, features = ["macros", "sync", "time"] }
+reqwest = { workspace = true }
+rustls = { workspace = true }
+tokio = { workspace = true }
 # Updates from GitHub releases, signed with the key in tauri.conf.json (app/updates.rs); semver for its version comparison.
 # Without its zip feature, which only Windows and Linux installs use.
 tauri-plugin-updater = { version = "2.14.0", default-features = false, features = ["rustls-tls", "system-proxy"] }
 semver = "1"
+dictate-engine = { path = "../crates/engine" }
 
 [dev-dependencies]
-tokio = { version = "1", default-features = false, features = ["macros", "rt", "sync", "time"] }
+tokio = { workspace = true, features = ["rt"] }

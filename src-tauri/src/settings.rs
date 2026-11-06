@@ -5,6 +5,7 @@ use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::sync::{atomic::{AtomicBool, Ordering}, Mutex, OnceLock, RwLock};
 use tauri::{AppHandle, Emitter, Manager};
+use dictate_engine::whisper;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -89,9 +90,7 @@ impl Shortcuts {
   pub fn chords(&self) -> [&Option<Chord>; 6] { [&self.note, &self.meeting, &self.paste_last, &self.write_note, &self.sticky, &self.ask] }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum Model { Turbo, Small }
+pub use dictate_engine::models::ModelKind as Model;
 
 /// The Mac's own alert sounds, in /System/Library/Sounds, which the cues are chosen from.
 pub const SOUNDS: [&str; 14] = ["Basso", "Blow", "Bottle", "Frog", "Funk", "Glass", "Hero", "Morse", "Ping", "Pop", "Purr", "Sosumi", "Submarine", "Tink"];
@@ -118,9 +117,7 @@ impl Default for Dictation {
   }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Replacement { pub from: String, pub to: String }
+pub use dictate_engine::text::{Replacement, Style};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -133,10 +130,6 @@ pub struct Vocabulary {
 impl Default for Vocabulary {
   fn default() -> Self { Self { words: Vec::new(), replacements: Vec::new(), learn: true, suggestions: Vec::new() } }
 }
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum Style { #[default] Default, Casual, Formal, Code, Raw }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -371,7 +364,7 @@ impl Settings {
       && chords.iter().all(|chord| chord.valid()) && distinct
       && !file_name.contains(['/', ':', '\0']) && !file_name.trim_start().starts_with('.')
       && SOUNDS.contains(&self.dictation.start_sound.as_str()) && SOUNDS.contains(&self.dictation.stop_sound.as_str())
-      && (language == "auto" || (0..=whisper_rs::get_lang_max_id()).any(|id| whisper_rs::get_lang_str(id) == Some(language.as_str())))
+      && (language == "auto" || whisper::lang_codes().any(|code| code == language.as_str()))
   }
 
   /// Lengths and lists cut to what the app handles; empty names back to their defaults.
@@ -652,6 +645,20 @@ mod tests {
     assert!(!secure_endpoint("ftp://localhost"));
     assert!(!secure_endpoint("https://"));
     assert!(!secure_endpoint("https://a b"));
+  }
+
+  #[test]
+  fn settings_json_round_trips_unchanged() {
+    let mut value = serde_json::to_value(Settings::default()).unwrap();
+    let app = |id: &str, style: &str| json!({ "bundleId": id, "name": id, "style": style, "polish": false, "send": null });
+    value["apps"] = json!({
+      "styles": [app("com.a", "default"), app("com.b", "casual"), app("com.c", "formal"), app("com.d", "code"), app("com.e", "raw")],
+      "defaultStyle": "casual",
+    });
+    value["vocabulary"]["replacements"] = json!([{ "from": "my email", "to": "can@example.com" }, { "from": "tabtasker", "to": "TabTasker" }]);
+    let settings: Settings = serde_json::from_value(value.clone()).unwrap();
+    assert_eq!(settings.apps.styles.iter().map(|app| app.style).collect::<Vec<_>>(), [Style::Default, Style::Casual, Style::Formal, Style::Code, Style::Raw]);
+    assert_eq!(serde_json::to_value(&settings).unwrap(), value);
   }
 
   #[test]

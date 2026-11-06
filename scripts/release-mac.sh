@@ -41,7 +41,7 @@ IDENTITY="${DICTATE_SIGNING_IDENTITY:-Developer ID Application: VEHICULARIS LIMI
 if [[ -n "${NOTARY_KEY:-}" ]]; then NOTARY=(--key "$NOTARY_KEY" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER")
 else NOTARY=(--keychain-profile "$PROFILE"); fi
 VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
-APP="src-tauri/target/release/bundle/macos/TabTasker Dictate.app"
+APP="target/release/bundle/macos/TabTasker Dictate.app"
 DMG="release/TabTasker-Dictate-$VERSION-arm64.dmg"
 UPDATE="release/TabTasker-Dictate-$VERSION-arm64.app.tar.gz"
 mkdir -p release

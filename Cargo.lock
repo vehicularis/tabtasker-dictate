@@ -761,6 +761,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "dictate-engine"
+version = "0.1.1"
+dependencies = [
+ "log",
+ "reqwest",
+ "ring",
+ "rustls",
+ "serde",
+ "serde_json",
+ "sherpa-onnx",
+ "tokio",
+ "whisper-rs",
+]
+
+[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3705,6 +3720,7 @@ version = "0.1.1"
 dependencies = [
  "base64 0.23.1",
  "cc",
+ "dictate-engine",
  "log",
  "reqwest",
  "ring",
@@ -3712,12 +3728,10 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
- "sherpa-onnx",
  "tauri",
  "tauri-build",
  "tauri-plugin-updater",
  "tokio",
- "whisper-rs",
 ]
 
 [[package]]
