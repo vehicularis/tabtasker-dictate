@@ -33,6 +33,7 @@ function flatten(doc: PMNode) {
   return { text: parts.join(''), segments };
 }
 function findMatches(doc: PMNode, query: string, matchCase: boolean): FindMatch[] {
+  if (!query || query.includes(BOUNDARY)) return []; // before the walk: an open bar with nothing typed scans nothing
   const { text, segments } = flatten(doc);
   return findText(text, query, matchCase, segments);
 }

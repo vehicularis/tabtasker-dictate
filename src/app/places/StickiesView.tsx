@@ -3,7 +3,7 @@ import { invoke, listen } from '../../bridge';
 import { Menu, MenuItem, MenuLine } from '../../editor/Menu';
 import { stamp } from '../../lib/dates';
 import { message } from '../../lib/errors';
-import { useSelection } from '../../lib/selection';
+import { useSelection } from '../../ui/selection';
 import { firstLine, glance, ordered as orderedStickies, shape } from '../../lib/stickies';
 import { countMessage } from '../../lib/text';
 import { STICKY_HUES } from '../../store';

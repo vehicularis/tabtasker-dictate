@@ -4,7 +4,7 @@ import { listWhen, localDay, meetingLength, meetingWhen, noteClock, stamp } from
 import { message } from '../../lib/errors';
 import { KEY_NAMES } from '../../lib/keyNames';
 import { isArchived, readers, refreshLibrary, routeTo, rowText, visibleGroups } from '../../lib/library';
-import { useSelection } from '../../lib/selection';
+import { useSelection } from '../../ui/selection';
 import { countMessage } from '../../lib/text';
 import { Menu, MenuItem, MenuLine } from '../../editor/Menu';
 import { useMeetingState } from '../../overlay/MeetingPill';

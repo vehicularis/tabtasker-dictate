@@ -18,11 +18,21 @@ describe('looksLikeMarkdown', () => {
     expect(looksLikeMarkdown('some **bold** text')).toBe(true);
     expect(looksLikeMarkdown('see [the docs](https://example.com)')).toBe(true);
   });
-  it('does not see a table', () => {
-    expect(looksLikeMarkdown('| a | b |\n|---|---|\n| 1 | 2 |')).toBe(false); // Today's behaviour; see the report.
+  it('sees a table: a pipe row over a separator row', () => {
+    expect(looksLikeMarkdown('| a | b |\n|---|---|\n| 1 | 2 |')).toBe(true);
+    expect(looksLikeMarkdown('| a | b |\n| :--- | ---: |')).toBe(true);
+    expect(looksLikeMarkdown('Before\n\n| a | b |\r\n|---|---|')).toBe(true);
   });
-  it('counts a lone pair of stars around a space as bold', () => {
-    expect(looksLikeMarkdown('** **')).toBe(true); // Today's behaviour; see the report.
+  it('does not see a lone pipe line, or prose with a pipe', () => {
+    expect(looksLikeMarkdown('| a | b |')).toBe(false);
+    expect(looksLikeMarkdown('| a | b |\n| 1 | 2 |')).toBe(false);
+    expect(looksLikeMarkdown('use a | b to pipe\n---')).toBe(false);
+    expect(looksLikeMarkdown('x | y')).toBe(false);
+  });
+  it('does not count stars around only a space as bold', () => {
+    expect(looksLikeMarkdown('** **')).toBe(false);
+    expect(looksLikeMarkdown('**  **')).toBe(false);
+    expect(looksLikeMarkdown('** a **')).toBe(true);
   });
   it('does not see plain prose', () => {
     for (const text of ['', 'Hello world.', '1.5 million', '-5 degrees', 'a * b * c', '[a] (b)', '  - indented', 'bold **across\nlines**']) expect(looksLikeMarkdown(text)).toBe(false);

@@ -4,4 +4,5 @@ export { Kbd, KeyRecorder } from './keys';
 export { EmptyState, GroupHeader, PageHeader, ProgressBar, Section, Tile, TileGroup, Toast } from './layout';
 export { Icon, type IconName } from './Icon';
 export { leave, reduced, timing, useFlip } from './motion';
+export { useSelection } from './selection';
 export { applyTheme } from './theme';
