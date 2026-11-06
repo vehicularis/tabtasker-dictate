@@ -256,7 +256,8 @@ for (const name of COMMANDS) if (!handlers.has(name)) console.error(`${name} is 
 export async function invoke<K extends keyof Commands>(command: K, ...[args]: CommandArgs<K>): Promise<Commands[K]['result']> {
   const handler = handlers.get(command);
   if (!handler) throw new Error(`${command} is not in the browser mock`);
-  return (handler as Handler<K>)(args as Commands[K]['args']);
+  // Omitted args arrive as {}, as Tauri's own invoke sends them: the handlers destructure.
+  return (handler as Handler<K>)((args ?? {}) as Commands[K]['args']);
 }
 
 export async function listen<K extends keyof Events>(event: K, handler: (payload: Events[K]) => void): Promise<() => void> {

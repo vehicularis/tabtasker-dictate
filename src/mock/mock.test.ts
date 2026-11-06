@@ -15,6 +15,11 @@ describe('the browser mock', () => {
     for (const name of COMMANDS) expect(mod.mock.handled(name), name).toBeTypeOf('function');
   });
 
+  it('answers a command whose args are all optional when they are left out, as Tauri does', async () => {
+    await expect(mod.invoke('show_notes')).resolves.toBeUndefined();
+    await expect(mod.invoke('sticky_new')).resolves.toHaveProperty('id');
+  });
+
   it('keeps a setting a patch sets, and refuses one out of range', async () => {
     const set = await mod.invoke('update_settings', { patch: { appearance: { margin: 40 } } });
     expect(set.appearance.margin).toBe(40);
