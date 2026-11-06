@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { tabKey } from './tabKeys';
 
-// `key` is what a non-US layout prints (here a Turkish one); only `code` counts, so it is left out of the event.
-const press = (code: string, mods = '') => tabKey({ code, metaKey: mods.includes('m'), ctrlKey: mods.includes('c'), altKey: mods.includes('a'), shiftKey: mods.includes('s') });
+// `key` is what a non-US layout prints; only `code` counts, so every event carries a `key` that does not match it.
+// A real KeyboardEvent has more fields than tabKey reads; a variable keeps the extra `key` from tripping the literal check.
+const event = (code: string, mods = '', key = 'ŧ') => ({ key, code, metaKey: mods.includes('m'), ctrlKey: mods.includes('c'), altKey: mods.includes('a'), shiftKey: mods.includes('s') });
+
+const press = (code: string, mods = '', key?: string) => tabKey(event(code, mods, key));
 
 describe('tabKey', () => {
   it.each([
@@ -19,10 +22,11 @@ describe('tabKey', () => {
   });
 
   it.each([
-    ['Digit0', 'm'], ['KeyT', 'mc'], ['KeyT', ''], ['Tab', 'mc'], ['Tab', ''], ['Digit1', 'ms'], ['Digit1', 'ma'], ['BracketLeft', 'ma'], ['Comma', 'ms'],
+    ['Digit0', 'm'], ['KeyT', 'mc'], ['KeyT', ''], ['Tab', 'mc'], ['Tab', 'ca'], ['Tab', ''], ['Digit1', 'ms'], ['Digit1', 'ma'], ['BracketLeft', 'ma'], ['Comma', 'ms'],
   ])('%s with %s is nothing', (code, mods) => expect(press(code, mods)).toBeNull());
 
   it('ignores the printed key', () => {
-    expect(tabKey({ code: 'KeyT', key: 'ŧ', metaKey: true, ctrlKey: false, altKey: false, shiftKey: false } as Parameters<typeof tabKey>[0])).toBe('new');
+    expect(press('KeyT', 'm', 'q')).toBe('new');
+    expect(press('KeyT', 'm', 'ŧ')).toBe('new');
   });
 });

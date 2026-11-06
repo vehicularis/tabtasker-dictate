@@ -181,6 +181,7 @@ describe('loadTabs', () => {
   it.each([[null], ['{}'], ['not json'], ['{"tabs":"x"}'], ['{"tabs":[]}'], ['{"tabs":[null]}']])('falls back to one tab on notes for %s', saved => {
     expect(loadTabs(saved, '')).toEqual(one('notes'));
   });
+  it('opens on a malformed hash', () => expect(loadTabs(null, '#notes/100%')).toEqual(one('notes/100%')));
   it('falls back to the hash', () => expect(loadTabs('not json', '#help')).toEqual(one('help')));
   it('fills a missing back, forward and route', () => {
     expect(loadTabs('{"tabs":[{"id":4}],"active":0}', '').tabs).toEqual([{ id: 4, route: 'notes', back: [], forward: [] }]);
@@ -328,5 +329,19 @@ describe('applyTabAction', () => {
     expect(r.closed).toHaveLength(20);
     expect(r.closed.at(-1)?.tab.id).toBe(1);
     expect(r.closed[0].tab.id).toBe(101);
+  });
+  it('keeps the newest 20 when every tab closes', () => {
+    const old: Closed[] = Array.from({ length: 19 }, (_, i) => ({ tab: tab(100 + i), at: 0 }));
+    const r = run(strip([1, 2, 3], 0), 'close-right', -1, old);
+    expect(r.closeWindow).toBe(true);
+    expect(r.closed.map(c => c.tab.id)).toEqual([...old.map(c => c.tab.id).slice(2), 1, 2, 3]);
+  });
+  it('ignores an action it does not know', () => {
+    const state = four(), closed: Closed[] = [{ tab: tab(9), at: 0 }];
+    const r = applyTabAction(state, closed, 'select:10' as TabAction, 0);
+    expect(r.state).toBe(state);
+    expect(r.closed).toBe(closed);
+    expect(r.closeWindow).toBe(false);
+    expect(applyTabAction(state, closed, 'bogus' as TabAction, 0).state).toBe(state);
   });
 });

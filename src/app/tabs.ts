@@ -127,7 +127,7 @@ export function applyTabAction(state: Tabs, closed: Closed[], action: TabAction,
     case 'next': case 'prev': return state.tabs.length > 1 ? { ...keep, state: cycleTabs(state, action === 'next' ? 1 : -1) } : keep;
     case 'left': case 'right': return { ...keep, state: moveTab(state, state.active, state.active + (action === 'right' ? 1 : -1)) };
     case 'window': return { ...keep, closeWindow: true };
-    default: return { ...keep, state: selectTab(state, Number(action.slice(7))) };
+    default: return /^select:[1-9]$/.test(action) ? { ...keep, state: selectTab(state, Number(action.slice(7))) } : keep; // the menu bar's payload is not validated
   }
 }
 

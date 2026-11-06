@@ -21,8 +21,5 @@ describe('routeOf', () => {
   it('is notes when there is no hash', () => expect(routeOf('')).toBe('notes'));
   it('is notes for a bare #', () => expect(routeOf('#')).toBe('notes'));
   it('decodes spaces and slashes', () => expect(routeOf('#notes%2F%2FUsers%2Fyou%2FMy%20Note.md')).toBe('notes//Users/you/My Note.md'));
-  it('throws on a malformed escape', () => {
-    // Today's behaviour; see the report.
-    expect(() => routeOf('#%E0%A4%A')).toThrow();
-  });
+  it('keeps a malformed escape as it is', () => expect(routeOf('#notes/100%')).toBe('notes/100%'));
 });
