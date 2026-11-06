@@ -7,6 +7,9 @@ Thanks for helping make Dictate better. Bug reports, ideas and pull requests are
   spend time on it.
 - **A security problem:** follow [SECURITY.md](SECURITY.md), never a public issue.
 
+How the app fits together is in [docs/architecture.md](docs/architecture.md), and the rules that keep its parts
+apart are in [AGENTS.md](AGENTS.md), which AI coding agents read too.
+
 Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md).
 
 ## Building
@@ -25,18 +28,16 @@ Run `npm run dev` and open `http://localhost:1420/app.html` for the main window,
 
 ## Checks
 
-A pull request runs these in CI, the security checks before anything builds. Run them first:
+A pull request runs the same checks in CI, the security checks before anything builds. Run them all first,
+in CI's order, with one command:
 
 ```sh
-npm audit --audit-level=moderate                    # known vulnerabilities in the npm packages
-npm run build                                       # TypeScript and Vite
-npm test                                            # the frontend's unit tests
-cargo deny check                                    # the crates' advisories, licences and sources
-cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo test --workspace --locked
+npm run check
 ```
 
-`cargo deny` comes from `cargo install --locked cargo-deny`. CI also reviews the dependencies a pull request
+It is [scripts/check.sh](scripts/check.sh), which stops at the first that fails and says which. While you work,
+the quick ones are `npm test` for the frontend's rules and `cargo test -p dictate-engine` for the speech
+pipeline's. `cargo deny` comes from `cargo install --locked cargo-deny`. CI also reviews the dependencies a pull request
 adds, and runs the security checks every Monday so a new advisory shows up without a push.
 
 ## Speech
