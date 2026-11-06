@@ -400,7 +400,8 @@ pub fn score_all(
 
 /// The `eval` command: every fixture in `dir`, heard with the `kind` of Whisper in `models`.
 pub fn run(dir: &Path, models: &Path, kind: ModelKind, json: bool) -> Result<(), Failure> {
-  let cases = cases(dir)?;
+  let mut cases = cases(dir)?;
+  cases.iter_mut().for_each(|case| case.fixture.for_model(kind));
   let mut engine = Engine::load(models, kind)?;
   score_all(
     &mut engine,
@@ -864,6 +865,23 @@ mod tests {
     let (printed, done) = eval(says, &[case("send-bare", bare, speech())], false);
     assert_eq!(done, Err(Failure::Failed("1 of 1 fixtures failed".into())));
     assert!(printed.starts_with("send-bare: error, "), "{printed}");
+  }
+
+  #[test]
+  fn a_known_issue_on_one_model_is_held_to_its_budget_on_another() {
+    let json = r#"{ "expect": "Where are the keys?", "max_wer": 0.05,
+      "known_issue": "Turbo makes up a \"The\"", "known_on": "turbo" }"#;
+    let heard = |kind| {
+      let mut question = case("question", json, speech());
+      question.fixture.for_model(kind);
+      eval(Says::new([Ok("Where are the keys? The")]), &[question], false)
+    };
+    let (printed, done) = heard(ModelKind::Turbo);
+    assert_eq!(done, Ok(()), "{printed}");
+    assert!(printed.starts_with("question: known, Turbo makes up a \"The\", still over budget"), "{printed}");
+    let (printed, done) = heard(ModelKind::Small);
+    assert_eq!(done, Err(Failure::Failed("1 of 1 fixtures failed".into())));
+    assert!(printed.starts_with("question: over budget, "), "{printed}");
   }
 
   #[test]

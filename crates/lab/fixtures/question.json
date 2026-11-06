@@ -3,5 +3,7 @@
   "voice": "Samantha",
   "expect": "Do you know where we put the spare keys for the office?",
   "language": "en",
-  "max_wer": 0.05
+  "max_wer": 0.05,
+  "known_issue": "Turbo makes up a \"The\" in the 0.28 s after \"office?\"",
+  "known_on": "turbo"
 }
