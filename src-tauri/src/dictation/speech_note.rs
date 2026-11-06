@@ -80,22 +80,8 @@ impl LocalSpeech {
   }
 
   /// `pcm` transcribed piece by piece, cut where it pauses, after the words in `text` already.
-  pub(super) fn pieces(&self, engine: &mut Whisper, id: &str, mut text: String, pcm: &[f32], cancelled: Arc<AtomicBool>) -> Result<String, Error> {
-    let mut at = 0;
-    while at < pcm.len() {
-      let rest = &pcm[at..];
-      let speech = self.speech_in(rest)?;
-      if speech.is_empty() { break; }
-      let end = if rest.len() <= pieces::PIECE { rest.len() } else { pieces::cut(&speech, rest.len()).unwrap_or(pieces::PIECE) };
-      match self.piece(engine, id, &rest[..end], cancelled.clone()) {
-        Ok(words) => text = pieces::join(&text, &words),
-        Err(error) if cancelled.load(Ordering::Relaxed) => return Err(error),
-        // One piece Whisper could not read does not cost the rest of the note.
-        Err(error) => log::warn!("voice note: a piece was not transcribed: {error}"),
-      }
-      at += end;
-    }
-    if text.is_empty() { Err(Error::Unheard) } else { Ok(text) }
+  pub(super) fn pieces(&self, engine: &mut Whisper, id: &str, text: String, pcm: &[f32], cancelled: Arc<AtomicBool>) -> Result<String, Error> {
+    pieces::hear_long(text, pcm, |rest| self.speech_in(rest), |rest| self.piece(engine, id, rest, cancelled.clone()), &cancelled)
   }
 }
 

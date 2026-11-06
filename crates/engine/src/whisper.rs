@@ -73,6 +73,19 @@ pub fn lang_name(id: i32) -> Option<&'static str> { whisper_rs::get_lang_str_ful
 /// A language Settings pins, by Whisper's id; None for `auto`.
 pub fn pinned(code: &str) -> Option<i32> { if code == "auto" { None } else { lang_id(code) } }
 
+/// The words of a pass whose `first` decode recited the vocabulary (`echo`), once `retry` heard the audio
+/// again without it: the retry if [`Echo::keeps`] it, else cancelled if the pass was `stopped`, else
+/// unheard for a strict echo, else `first`. `words` are the vocabulary Whisper was given, over `samples`.
+pub fn retry_outcome(first: String, echo: &Echo, retry: Result<String>, stopped: bool, words: &[String], samples: usize) -> Result<String> {
+  match retry {
+    Ok(again) if echo.keeps(&again, words, samples) => Ok(again),
+    _ if stopped => Err(Error::Cancelled),
+    // The whole vocabulary that no retry replaces was never said.
+    _ if echo.strict => Err(Error::Unheard),
+    _ => Ok(first),
+  }
+}
+
 /// Whisper, its state and the vocabulary it was last given. Every pass reuses the one state: whisper.cpp
 /// clears its results, spectrogram and prompt at the start of each full() (no_context is on for all of
 /// ours), and `&mut self` keeps passes from sharing it. A new state each pass cost its GPU buffers.
@@ -179,14 +192,8 @@ impl Whisper {
     };
     // Logged before the retry, so a retry that ends unheard or cancelled still says it ran.
     if !quick { log::info!("dictation pass: it recited the vocabulary, heard again without it"); }
-    let retried = |text| Ok(Transcript { text, retried_without_prompt: true });
-    match self.decode(pcm, language, ask, stop, quick, false) {
-      Ok(again) if echo.keeps(&again, &self.prompt.sent, pcm.len()) => retried(again),
-      _ if stop() => Err(Error::Cancelled),
-      // The whole vocabulary that no retry replaces was never said.
-      _ if echo.strict => Err(Error::Unheard),
-      _ => retried(text),
-    }
+    let retry = self.decode(pcm, language, ask, stop, quick, false);
+    retry_outcome(text, &echo, retry, stop(), &self.prompt.sent, pcm.len()).map(|text| Transcript { text, retried_without_prompt: true })
   }
 
   fn decode(&mut self, pcm: &[f32], language: i32, ask: &Ask, stop: &(dyn Fn() -> bool + Sync), quick: bool, prompted: bool) -> Result<String> {
@@ -277,6 +284,28 @@ mod tests {
     assert_eq!(encoder_ctx(ModelKind::Turbo, 16000), 178);
     assert_eq!(encoder_ctx(ModelKind::Small, 16000), 0);
     assert_eq!(encoder_ctx(ModelKind::Small, HOLD_SAMPLES), 0);
+  }
+
+  #[test]
+  fn the_retry_is_kept_only_when_it_hears_more() {
+    let words: Vec<String> = ["Kubernetes", "Vercel", "TabTasker", "Maria Lopez"].map(String::from).to_vec();
+    let samples = 16_000;
+    let (recital, looped) = ("Kubernetes, Vercel, TabTasker, Maria Lopez.", "Vercel Vercel Vercel");
+    let (strict, fragment) = (Echo::of(recital, &words, samples).unwrap(), Echo::of(looped, &words, samples).unwrap());
+    assert!(strict.strict && !fragment.strict);
+    let outcome = |first: &str, echo: &Echo, retry: Result<String>, stopped: bool| retry_outcome(first.into(), echo, retry, stopped, &words, samples);
+    // A strict echo whose retry fails was never said.
+    assert_eq!(outcome(recital, &strict, Err(Error::Unheard), false), Err(Error::Unheard));
+    assert_eq!(outcome(recital, &strict, Ok(recital.into()), false), Err(Error::Unheard));
+    // A fragment whose retry fails, or hears no more, stays.
+    assert_eq!(outcome(looped, &fragment, Err(Error::Unheard), false), Ok(looped.into()));
+    assert_eq!(outcome(looped, &fragment, Ok("Vercel".into()), false), Ok(looped.into()));
+    // A retry that hears more is kept, even once stopped.
+    assert_eq!(outcome(recital, &strict, Ok("Ship the Vercel build".into()), false), Ok("Ship the Vercel build".into()));
+    assert_eq!(outcome(looped, &fragment, Ok("Vercel works".into()), true), Ok("Vercel works".into()));
+    // Otherwise a stopped pass is cancelled, whatever it echoed.
+    assert_eq!(outcome(recital, &strict, Err(Error::Cancelled), true), Err(Error::Cancelled));
+    assert_eq!(outcome(looped, &fragment, Err(Error::Cancelled), true), Err(Error::Cancelled));
   }
 
   #[test]
