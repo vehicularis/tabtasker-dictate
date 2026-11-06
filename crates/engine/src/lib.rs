@@ -2,6 +2,7 @@
 #![deny(missing_docs)]
 
 pub mod audio;
+pub mod meeting;
 pub mod cleanup;
 pub mod error;
 pub mod models;

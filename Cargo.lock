@@ -770,6 +770,7 @@ dependencies = [
  "rustls",
  "serde",
  "serde_json",
+ "sherpa-onnx",
  "tokio",
  "whisper-rs",
 ]
@@ -3727,7 +3728,6 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
- "sherpa-onnx",
  "tauri",
  "tauri-build",
  "tauri-plugin-updater",

@@ -19,7 +19,6 @@ tauri = { version = "2.12.4", features = ["tray-icon", "image-png", "macos-priva
 serde = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }
-sherpa-onnx = { workspace = true }
 ring = { workspace = true }
 base64 = "0.23"
 reqwest = { workspace = true }
