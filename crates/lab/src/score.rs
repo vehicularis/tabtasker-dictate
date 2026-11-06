@@ -5,10 +5,7 @@ use serde::Serialize;
 
 /// The words of `text` as they are compared: lowercase, punctuation gone.
 pub fn words(text: &str) -> Vec<String> {
-  normalize(text)
-    .split_whitespace()
-    .map(String::from)
-    .collect()
+  normalize(text).split_whitespace().map(String::from).collect()
 }
 
 /// The edits that turn what was said into what was heard.
@@ -88,12 +85,7 @@ fn align(reference: &str, heard: &str) -> Vec<Edit> {
 
 /// What was `heard` against the `reference`, each kind of edit counted.
 pub fn score(reference: &str, heard: &str) -> Score {
-  let mut score = Score {
-    substitutions: 0,
-    deletions: 0,
-    insertions: 0,
-    reference: words(reference).len(),
-  };
+  let mut score = Score { substitutions: 0, deletions: 0, insertions: 0, reference: words(reference).len() };
   for edit in align(reference, heard) {
     match edit {
       Edit::Same(_) => {}
@@ -125,20 +117,12 @@ mod tests {
   use super::*;
 
   fn s(sub: usize, del: usize, ins: usize, n: usize) -> Score {
-    Score {
-      substitutions: sub,
-      deletions: del,
-      insertions: ins,
-      reference: n,
-    }
+    Score { substitutions: sub, deletions: del, insertions: ins, reference: n }
   }
 
   #[test]
   fn identical_text_scores_zero() {
-    let got = score(
-      "The meeting moved to Thursday.",
-      "The meeting moved to Thursday.",
-    );
+    let got = score("The meeting moved to Thursday.", "The meeting moved to Thursday.");
     assert_eq!(got, s(0, 0, 0, 5));
     assert_eq!(got.wer(), 0.0);
   }
@@ -146,11 +130,8 @@ mod tests {
   #[test]
   fn each_kind_of_error_costs_one_word() {
     let said = "ship the build on friday";
-    for (heard, want) in [
-      ("ship the bill on friday", s(1, 0, 0, 5)),
-      ("ship the build friday", s(0, 1, 0, 5)),
-      ("ship the new build on friday", s(0, 0, 1, 5)),
-    ] {
+    for (heard, want) in [("ship the bill on friday", s(1, 0, 0, 5)), ("ship the build friday", s(0, 1, 0, 5)), ("ship the new build on friday", s(0, 0, 1, 5))]
+    {
       let got = score(said, heard);
       assert_eq!(got, want, "{heard}");
       assert_eq!(got.wer(), 1.0 / 5.0, "{heard}");
@@ -159,10 +140,7 @@ mod tests {
 
   #[test]
   fn punctuation_and_case_are_ignored() {
-    assert_eq!(
-      words("Hello, World!  It's  me."),
-      ["hello", "world", "its", "me"]
-    );
+    assert_eq!(words("Hello, World!  It's  me."), ["hello", "world", "its", "me"]);
     assert_eq!(score("Hello, world.", "hello world").wer(), 0.0);
   }
 
@@ -185,10 +163,7 @@ mod tests {
 
   #[test]
   fn the_diff_marks_each_word_dropped_and_added() {
-    assert_eq!(
-      diff("The cat sat on the mat.", "the bat sat the mat, too"),
-      "the [-cat-] {+bat+} sat [-on-] the mat {+too+}"
-    );
+    assert_eq!(diff("The cat sat on the mat.", "the bat sat the mat, too"), "the [-cat-] {+bat+} sat [-on-] the mat {+too+}");
     assert_eq!(diff("Hello, world.", "hello world"), "hello world");
     assert_eq!(diff("", "thank you"), "{+thank+} {+you+}");
   }

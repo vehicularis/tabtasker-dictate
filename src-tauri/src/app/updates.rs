@@ -37,23 +37,35 @@ static HEARING: AtomicBool = AtomicBool::new(false);
 // ponytail: six hours of the Mac being awake (tokio's clock stops in sleep); a menu bar app runs for weeks.
 const EVERY: Duration = Duration::from_secs(6 * 60 * 60);
 
-fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> { mutex.lock().unwrap_or_else(|e| e.into_inner()) }
+fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+  mutex.lock().unwrap_or_else(|e| e.into_inner())
+}
 
 /// Only a newer final release: never an older one (a stale or replayed manifest), never a pre-release.
-pub(crate) fn newer(current: &Version, offered: &Version) -> bool { offered.pre.is_empty() && offered > current }
+pub(crate) fn newer(current: &Version, offered: &Version) -> bool {
+  offered.pre.is_empty() && offered > current
+}
 
 /// Why a restart has to wait, if it does: it never cuts short a hold, a hands-free session or a spoken note, nor a
 /// meeting that is recording or still being saved.
 fn wait_for(hearing: bool, meeting: bool) -> Option<&'static str> {
-  if meeting { Some("Dictate can restart once your meeting is saved.") }
-  else if hearing { Some("Dictate can restart once you’ve finished talking.") }
-  else { None }
+  if meeting {
+    Some("Dictate can restart once your meeting is saved.")
+  } else if hearing {
+    Some("Dictate can restart once you’ve finished talking.")
+  } else {
+    None
+  }
 }
 
 /// The voice code's phase, from its state reports: idle, listening, transcribing or sending.
-pub(crate) fn heard(phase: &str) { HEARING.store(phase != "idle", Ordering::Relaxed); }
+pub(crate) fn heard(phase: &str) {
+  HEARING.store(phase != "idle", Ordering::Relaxed);
+}
 
-pub(crate) fn state() -> State { State { current: env!("CARGO_PKG_VERSION").into(), ..lock(&STATE).clone() } }
+pub(crate) fn state() -> State {
+  State { current: env!("CARGO_PKG_VERSION").into(), ..lock(&STATE).clone() }
+}
 
 fn set(app: &AppHandle, change: impl FnOnce(&mut State)) {
   change(&mut lock(&STATE));
@@ -78,29 +90,50 @@ fn told(state: &State) -> String {
 async fn check(app: &AppHandle) -> State {
   {
     let mut state = lock(&STATE);
-    if state.busy || state.ready { drop(state); return self::state(); }
+    if state.busy || state.ready {
+      drop(state);
+      return self::state();
+    }
     *state = State { busy: true, ..State::default() };
   }
   let _ = app.emit("dictate-update", state());
-  let found = match app.updater() { Ok(updater) => updater.check().await, Err(e) => Err(e) };
+  let found = match app.updater() {
+    Ok(updater) => updater.check().await,
+    Err(e) => Err(e),
+  };
   match found {
-    Ok(None) => set(app, |state| { state.busy = false; state.latest = true; }),
+    Ok(None) => set(app, |state| {
+      state.busy = false;
+      state.latest = true;
+    }),
     Ok(Some(update)) => {
       set(app, |state| state.version = Some(update.version.clone()));
       let app = app.clone();
       tauri::async_runtime::spawn(async move {
         match update.download(|_, _| {}, || {}).await {
-          Ok(bytes) => { *lock(&READY) = Some((update, bytes)); set(&app, |state| { state.busy = false; state.ready = true; }); }
+          Ok(bytes) => {
+            *lock(&READY) = Some((update, bytes));
+            set(&app, |state| {
+              state.busy = false;
+              state.ready = true;
+            });
+          }
           Err(e) => {
             log::warn!("updates: download: {e}");
-            set(&app, |state| { state.busy = false; state.problem = Some("Couldn’t download the update. Dictate tries again later.".into()); });
+            set(&app, |state| {
+              state.busy = false;
+              state.problem = Some("Couldn’t download the update. Dictate tries again later.".into());
+            });
           }
         }
       });
     }
     Err(e) => {
       log::warn!("updates: check: {e}");
-      set(app, |state| { state.busy = false; state.problem = Some("Couldn’t check for updates. Check you’re online and try again.".into()); });
+      set(app, |state| {
+        state.busy = false;
+        state.problem = Some("Couldn’t check for updates. Check you’re online and try again.".into());
+      });
     }
   }
   state()
@@ -108,12 +141,16 @@ async fn check(app: &AppHandle) -> State {
 
 /// The checks General asks for: a minute after launch, then every six hours.
 pub(crate) fn watch(app: &AppHandle) {
-  if cfg!(debug_assertions) { return; } // a build from source isn't a release to update
+  if cfg!(debug_assertions) {
+    return;
+  } // a build from source isn't a release to update
   let app = app.clone();
   tauri::async_runtime::spawn(async move {
     tokio::time::sleep(Duration::from_secs(60)).await;
     loop {
-      if settings::get().general.check_for_updates { check(&app).await; }
+      if settings::get().general.check_for_updates {
+        check(&app).await;
+      }
       tokio::time::sleep(EVERY).await;
     }
   });
@@ -121,7 +158,9 @@ pub(crate) fn watch(app: &AppHandle) {
 
 /// Installs the update that is ready and starts the new version, once nothing is being recorded.
 async fn restart(app: &AppHandle) -> Result<(), String> {
-  if let Some(why) = wait_for(HEARING.load(Ordering::Relaxed), meetings::in_progress()) { return Err(why.into()); }
+  if let Some(why) = wait_for(HEARING.load(Ordering::Relaxed), meetings::in_progress()) {
+    return Err(why.into());
+  }
   let Some((update, bytes)) = lock(&READY).take() else { return Err("There’s no update ready yet.".into()) };
   // Off the async threads: it unpacks the app, and may wait for an administrator's password on the main thread.
   let install = update.clone();
@@ -138,25 +177,33 @@ async fn restart(app: &AppHandle) -> Result<(), String> {
 
 /// Where the updates stand, for Settings and the pill as they open.
 #[tauri::command]
-pub(crate) fn update_state() -> State { state() }
+pub(crate) fn update_state() -> State {
+  state()
+}
 
 /// A check now: from Settings, which shows the answer itself, or from the pill's menu, which `tell`s it as a notice.
 #[tauri::command]
 pub(crate) async fn update_check(app: AppHandle, tell: bool) -> State {
   let state = check(&app).await;
-  if tell { super::events::emit("dictate-notice", serde_json::json!({ "message": told(&state) })); }
+  if tell {
+    super::events::emit("dictate-notice", serde_json::json!({ "message": told(&state) }));
+  }
   state
 }
 
 #[tauri::command]
-pub(crate) async fn update_restart(app: AppHandle) -> Result<(), String> { restart(&app).await }
+pub(crate) async fn update_restart(app: AppHandle) -> Result<(), String> {
+  restart(&app).await
+}
 
 /// The menu bar item's Check for Updates…, which turns into Restart to Update once one is ready.
 pub(crate) fn menu_item(app: &AppHandle) {
   let app = app.clone();
   tauri::async_runtime::spawn(async move {
     let message = if lock(&READY).is_some() { restart(&app).await.err() } else { Some(told(&check(&app).await)) };
-    if let Some(message) = message { super::events::emit("dictate-notice", serde_json::json!({ "message": message })); }
+    if let Some(message) = message {
+      super::events::emit("dictate-notice", serde_json::json!({ "message": message }));
+    }
   });
 }
 
@@ -168,8 +215,12 @@ mod tests {
   fn only_a_newer_final_release_is_an_update() {
     let v = |text: &str| Version::parse(text).unwrap();
     let current = v("0.1.1");
-    for offered in ["0.1.2", "0.1.10", "0.2.0", "1.0.0", "0.1.2+build.7"] { assert!(newer(&current, &v(offered)), "{offered}"); }
-    for offered in ["0.1.1", "0.1.0", "0.0.9", "0.2.0-beta.1", "1.0.0-rc.1"] { assert!(!newer(&current, &v(offered)), "{offered}"); }
+    for offered in ["0.1.2", "0.1.10", "0.2.0", "1.0.0", "0.1.2+build.7"] {
+      assert!(newer(&current, &v(offered)), "{offered}");
+    }
+    for offered in ["0.1.1", "0.1.0", "0.0.9", "0.2.0-beta.1", "1.0.0-rc.1"] {
+      assert!(!newer(&current, &v(offered)), "{offered}");
+    }
     assert!(newer(&v("0.1.9"), &v("0.1.10")), "by number, not as text");
   }
 
@@ -187,10 +238,22 @@ mod tests {
 
   #[test]
   fn a_menu_check_says_what_it_found() {
-    let state = |change: fn(&mut State)| { let mut state = State { current: "0.1.1".into(), ..State::default() }; change(&mut state); told(&state) };
+    let state = |change: fn(&mut State)| {
+      let mut state = State { current: "0.1.1".into(), ..State::default() };
+      change(&mut state);
+      told(&state)
+    };
     assert_eq!(state(|s| s.latest = true), "You’re up to date. 0.1.1 is the newest version.");
-    assert!(state(|s| { s.busy = true; s.version = Some("0.1.2".into()); }).starts_with("Downloading TabTasker Dictate 0.1.2."));
-    assert!(state(|s| { s.ready = true; s.version = Some("0.1.2".into()); }).contains("0.1.2 is ready"));
+    assert!(state(|s| {
+      s.busy = true;
+      s.version = Some("0.1.2".into());
+    })
+    .starts_with("Downloading TabTasker Dictate 0.1.2."));
+    assert!(state(|s| {
+      s.ready = true;
+      s.version = Some("0.1.2".into());
+    })
+    .contains("0.1.2 is ready"));
     assert!(state(|s| s.problem = Some("Couldn’t check.".into())) == "Couldn’t check.");
   }
 }

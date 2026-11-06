@@ -5,7 +5,12 @@ use std::ffi::{c_char, CStr};
 
 #[repr(C)]
 #[derive(Default)]
-struct Taps { down_at: f64, tap_at: f64, down: bool, tapped: bool }
+struct Taps {
+  down_at: f64,
+  tap_at: f64,
+  down: bool,
+  tapped: bool,
+}
 
 const FN: u32 = 0;
 const RIGHT_COMMAND: u32 = 1;
@@ -49,16 +54,32 @@ extern "C" {
   fn tt_globe_step(want: bool, owned: bool, current: i32, launch: bool) -> i32;
 }
 
-fn code(key: u32) -> u16 { unsafe { tt_key_code(key) } }
-fn down(key: u32, flags: u64) -> bool { unsafe { tt_key_down(key, flags) } }
-fn others(key: u32, flags: u64) -> u64 { unsafe { tt_key_others(key, flags) } }
-fn kind(others: u64, command: u64) -> i32 { unsafe { tt_hold_kind(others, command) } }
-fn chord(key_code: u16, flags: u64, chord_key: u16, chord_modifiers: u64) -> bool { unsafe { tt_chord_matches(key_code, flags, chord_key, chord_modifiers) } }
+fn code(key: u32) -> u16 {
+  unsafe { tt_key_code(key) }
+}
+fn down(key: u32, flags: u64) -> bool {
+  unsafe { tt_key_down(key, flags) }
+}
+fn others(key: u32, flags: u64) -> u64 {
+  unsafe { tt_key_others(key, flags) }
+}
+fn kind(others: u64, command: u64) -> i32 {
+  unsafe { tt_hold_kind(others, command) }
+}
+fn chord(key_code: u16, flags: u64, chord_key: u16, chord_modifiers: u64) -> bool {
+  unsafe { tt_chord_matches(key_code, flags, chord_key, chord_modifiers) }
+}
 
 /// Presses and releases at the given times, answering what each release made.
 fn taps(times: &[(f64, f64)]) -> Vec<i32> {
   let mut taps = Taps::default();
-  times.iter().map(|&(press, release)| unsafe { tt_taps_press(&mut taps, press); tt_taps_release(&mut taps, release) }).collect()
+  times
+    .iter()
+    .map(|&(press, release)| unsafe {
+      tt_taps_press(&mut taps, press);
+      tt_taps_release(&mut taps, release)
+    })
+    .collect()
 }
 
 #[test]
@@ -173,13 +194,27 @@ fn words_are_pasted_except_one_line_into_a_chromium_browser_on_a_plain_layout() 
   }
 }
 
-fn browser(id: &CStr) -> bool { unsafe { tt_typed_browser(id.as_ptr()) } }
+fn browser(id: &CStr) -> bool {
+  unsafe { tt_typed_browser(id.as_ptr()) }
+}
 
 #[test]
 fn a_chromium_browser_counts_with_its_channels_and_web_apps() {
-  for id in [c"com.google.Chrome", c"com.google.Chrome.canary", c"com.google.Chrome.app.kjgfgldnnfoeklkmfkjfagphfepbbdan", c"org.chromium.Chromium",
-    c"com.brave.Browser", c"com.brave.Browser.nightly", c"com.microsoft.edgemac", c"com.microsoft.edgemac.Dev", c"company.thebrowser.Browser",
-    c"company.thebrowser.dia", c"com.vivaldi.Vivaldi", c"com.operasoftware.Opera", c"ai.perplexity.comet"] {
+  for id in [
+    c"com.google.Chrome",
+    c"com.google.Chrome.canary",
+    c"com.google.Chrome.app.kjgfgldnnfoeklkmfkjfagphfepbbdan",
+    c"org.chromium.Chromium",
+    c"com.brave.Browser",
+    c"com.brave.Browser.nightly",
+    c"com.microsoft.edgemac",
+    c"com.microsoft.edgemac.Dev",
+    c"company.thebrowser.Browser",
+    c"company.thebrowser.dia",
+    c"com.vivaldi.Vivaldi",
+    c"com.operasoftware.Opera",
+    c"ai.perplexity.comet",
+  ] {
     assert!(browser(id), "{id:?}");
   }
   for id in [c"com.apple.Safari", c"com.google.Chromecast", c"com.google.ChromeX", c"org.mozilla.firefox", c"com.microsoft.edge", c"", c"com.google"] {
@@ -193,7 +228,14 @@ fn chunks(lengths: &[usize]) -> Vec<usize> {
   let mut ends = vec![0; lengths.len()];
   let count = unsafe { tt_type_chunks(lengths.as_ptr(), lengths.len(), ends.as_mut_ptr()) };
   let mut start = 0;
-  ends[..count].iter().map(|&end| { let size = end - start; start = end; size }).collect()
+  ends[..count]
+    .iter()
+    .map(|&end| {
+      let size = end - start;
+      start = end;
+      size
+    })
+    .collect()
 }
 
 #[test]
@@ -230,7 +272,9 @@ const DONE: i32 = 2;
 const LEFT: i32 = 3;
 const LOST: i32 = 4;
 
-fn step(now: f64, read_at: f64, ours: bool, latest: bool) -> i32 { unsafe { tt_paste_step(now, 10.0, read_at, ours, latest) } }
+fn step(now: f64, read_at: f64, ours: bool, latest: bool) -> i32 {
+  unsafe { tt_paste_step(now, 10.0, read_at, ours, latest) }
+}
 
 #[test]
 fn the_clipboard_goes_back_once_the_paste_is_read_and_only_by_the_last_paste() {
@@ -288,7 +332,9 @@ const FORGET: i32 = 3;
 const DO_NOTHING: i32 = 0;
 const EMOJI: i32 = 2;
 
-fn globe(want: bool, owned: bool, current: i32, launch: bool) -> i32 { unsafe { tt_globe_step(want, owned, current, launch) } }
+fn globe(want: bool, owned: bool, current: i32, launch: bool) -> i32 {
+  unsafe { tt_globe_step(want, owned, current, launch) }
+}
 
 #[test]
 fn the_globe_key_is_held_at_do_nothing_while_fn_dictates_and_given_back_after() {

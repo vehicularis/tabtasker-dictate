@@ -7,16 +7,31 @@ use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::mpsc::{channel, Receiver};
 use std::time::Duration;
 
-struct Server { child: Child, input: ChildStdin, output: Receiver<Value>, next: u64 }
+struct Server {
+  child: Child,
+  input: ChildStdin,
+  output: Receiver<Value>,
+  next: u64,
+}
 
 impl Server {
   fn start(home: &Path) -> Self {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_tabtasker-dictate")).arg("--mcp").env("HOME", home)
-      .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::inherit()).spawn().unwrap();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_tabtasker-dictate"))
+      .arg("--mcp")
+      .env("HOME", home)
+      .stdin(Stdio::piped())
+      .stdout(Stdio::piped())
+      .stderr(Stdio::inherit())
+      .spawn()
+      .unwrap();
     let (input, stdout) = (child.stdin.take().unwrap(), child.stdout.take().unwrap());
     let (send, output) = channel();
-    std::thread::spawn(move || for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-      if send.send(serde_json::from_str(&line).unwrap_or_else(|_| panic!("not JSON: {line}"))).is_err() { return; }
+    std::thread::spawn(move || {
+      for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+        if send.send(serde_json::from_str(&line).unwrap_or_else(|_| panic!("not JSON: {line}"))).is_err() {
+          return;
+        }
+      }
     });
     Self { child, input, output, next: 0 }
   }
@@ -26,7 +41,9 @@ impl Server {
     self.input.flush().unwrap();
   }
 
-  fn message(&self) -> Value { self.output.recv_timeout(Duration::from_secs(10)).expect("the server answers") }
+  fn message(&self) -> Value {
+    self.output.recv_timeout(Duration::from_secs(10)).expect("the server answers")
+  }
 
   /// The answer to `method`, skipping notifications.
   fn ask(&mut self, method: &str, params: Value) -> Value {
@@ -35,7 +52,9 @@ impl Server {
     self.line(&json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params }).to_string());
     loop {
       let message = self.message();
-      if message.get("method").is_some() { continue; }
+      if message.get("method").is_some() {
+        continue;
+      }
       assert_eq!(message["id"], id, "{message}");
       return message;
     }
@@ -66,7 +85,9 @@ fn write(path: &Path, text: &str) {
   std::fs::write(path, text).unwrap();
 }
 
-fn settings(home: &Path, agents: Value) { settings_with(home, json!({ "agents": agents })); }
+fn settings(home: &Path, agents: Value) {
+  settings_with(home, json!({ "agents": agents }));
+}
 
 fn settings_with(home: &Path, mut more: Value) {
   more["version"] = json!(1);
@@ -86,8 +107,13 @@ fn home(name: &str) -> PathBuf {
   write(&home.join("Documents/secret.md"), "outside");
   std::os::unix::fs::symlink(home.join("Documents/secret.md"), notes.join("escape.md")).unwrap();
   let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
-  let entry = |at: u64, text: &str| json!({ "atMs": at, "mode": "dictate", "bundleId": "com.apple.mail", "appName": "Mail", "words": 3, "seconds": 1.2, "text": text }).to_string();
-  write(&home.join("Library/Application Support/com.tabtasker.dictate/history.jsonl"), &[entry(now - 60_000, "See you Thursday"), "not json".into(), entry(now - 1000, "Thanks a lot")].join("\n"));
+  let entry = |at: u64, text: &str| {
+    json!({ "atMs": at, "mode": "dictate", "bundleId": "com.apple.mail", "appName": "Mail", "words": 3, "seconds": 1.2, "text": text }).to_string()
+  };
+  write(
+    &home.join("Library/Application Support/com.tabtasker.dictate/history.jsonl"),
+    &[entry(now - 60_000, "See you Thursday"), "not json".into(), entry(now - 1000, "Thanks a lot")].join("\n"),
+  );
   home
 }
 
@@ -104,12 +130,16 @@ fn an_agent_can_reach_only_what_settings_share() {
   server.line(r#"{ "id": 1, "method": "ping" }"#);
   assert_eq!(server.message()["error"]["code"], -32600);
 
-  let hello = server.ask("initialize", json!({ "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": { "name": "claude-code", "version": "2.0" } }));
+  let hello =
+    server.ask("initialize", json!({ "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": { "name": "claude-code", "version": "2.0" } }));
   assert_eq!(hello["result"]["protocolVersion"], "2025-06-18");
   assert_eq!(hello["result"]["serverInfo"]["name"], "tabtasker-dictate");
   assert_eq!(hello["result"]["capabilities"]["tools"]["listChanged"], true);
   assert_eq!(server.ask("initialize", json!({ "protocolVersion": "2025-03-26" }))["result"]["protocolVersion"], "2025-03-26");
-  assert_eq!(server.ask("initialize", json!({ "protocolVersion": "2099-01-01", "clientInfo": { "name": "claude-code" } }))["result"]["protocolVersion"], "2025-06-18");
+  assert_eq!(
+    server.ask("initialize", json!({ "protocolVersion": "2099-01-01", "clientInfo": { "name": "claude-code" } }))["result"]["protocolVersion"],
+    "2025-06-18"
+  );
   server.line(r#"{ "jsonrpc": "2.0", "method": "notifications/initialized" }"#);
   assert_eq!(server.ask("ping", json!({})), json!({ "jsonrpc": "2.0", "id": server.next, "result": {} }));
   assert_eq!(server.ask("resources/list", json!({}))["error"]["code"], -32601);
@@ -139,7 +169,9 @@ fn an_agent_can_reach_only_what_settings_share() {
     let (result, error) = server.call("read_note", json!({ "path": path }));
     assert!(error, "read_note {path:?} got through: {result}");
   }
-  for path in ["../2026-11-01 09.00 Venue.md", "../../secret.md"] { assert!(server.call("read_meeting", json!({ "path": path })).1, "{path}"); }
+  for path in ["../2026-11-01 09.00 Venue.md", "../../secret.md"] {
+    assert!(server.call("read_meeting", json!({ "path": path })).1, "{path}");
+  }
   assert!(server.call("read_note", json!({})).1);
 
   // Turned off, a tool says how to turn it on.
@@ -149,7 +181,12 @@ fn an_agent_can_reach_only_what_settings_share() {
 
   // A change in Settings reaches the running server, which tells the client its tools changed.
   settings(&home, json!({ "shareNotes": false, "shareHistory": true, "allowWrite": true }));
-  let changed = loop { let message = server.message(); if message.get("method").is_some() { break message; } };
+  let changed = loop {
+    let message = server.message();
+    if message.get("method").is_some() {
+      break message;
+    }
+  };
   assert_eq!(changed, json!({ "jsonrpc": "2.0", "method": "notifications/tools/list_changed" }));
   assert_eq!(server.tools(), ["list_meetings", "read_meeting", "recent_dictations", "create_note", "append_to_note"]);
   assert!(server.call("read_note", json!({ "path": "Projects/Launch.md" })).1);

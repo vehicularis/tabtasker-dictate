@@ -1,7 +1,10 @@
 //! Who said what in a meeting: speaker diarization on this Mac, with sherpa-onnx (pyannote's
 //! segmentation model finds where voices start and stop, a speaker-embedding model gives each stretch a
 //! voiceprint, and clustering groups the voiceprints into speakers).
-use sherpa_onnx::{FastClusteringConfig, OfflineSpeakerDiarization, OfflineSpeakerDiarizationConfig, OfflineSpeakerSegmentationModelConfig, OfflineSpeakerSegmentationPyannoteModelConfig, SpeakerEmbeddingExtractorConfig};
+use sherpa_onnx::{
+  FastClusteringConfig, OfflineSpeakerDiarization, OfflineSpeakerDiarizationConfig, OfflineSpeakerSegmentationModelConfig,
+  OfflineSpeakerSegmentationPyannoteModelConfig, SpeakerEmbeddingExtractorConfig,
+};
 use std::path::Path;
 
 use crate::{error::Result, models::SPEAKER_EMBEDDING as EMBEDDING};
@@ -33,22 +36,30 @@ pub fn ready(root: &Path) -> bool {
 /// Who spoke when in `samples` (16 kHz mono), as the models hear it. Blocking, and slow on a long
 /// meeting (about a tenth of its length); run it where waiting is fine.
 pub fn diarize(root: &Path, samples: &[f32]) -> Result<Vec<Turn>> {
-  if !ready(root) { return Err("The speaker models aren’t downloaded yet.".into()); }
+  if !ready(root) {
+    return Err("The speaker models aren’t downloaded yet.".into());
+  }
   // Six threads: eight measured no faster, and the other stream runs alongside.
   let threads = std::thread::available_parallelism().map_or(4, |n| n.get().clamp(2, 6)) as i32;
   let config = OfflineSpeakerDiarizationConfig {
     segmentation: OfflineSpeakerSegmentationModelConfig {
       pyannote: OfflineSpeakerSegmentationPyannoteModelConfig { model: Some(root.join(SEGMENTATION_ONNX).display().to_string()), ..Default::default() },
-      num_threads: threads, ..Default::default()
+      num_threads: threads,
+      ..Default::default()
     },
     embedding: SpeakerEmbeddingExtractorConfig { model: Some(root.join(EMBEDDING.name).display().to_string()), num_threads: threads, ..Default::default() },
     clustering: FastClusteringConfig { num_clusters: -1, threshold: THRESHOLD, ..Default::default() },
-    min_duration_on: 0.3, min_duration_off: 0.5,
+    min_duration_on: 0.3,
+    min_duration_off: 0.5,
   };
   let diarizer = OfflineSpeakerDiarization::create(&config).ok_or("Couldn’t load the speaker models.")?;
-  if diarizer.sample_rate() != RATE as i32 { return Err(format!("The speaker model wants {} Hz audio", diarizer.sample_rate()).into()); }
+  if diarizer.sample_rate() != RATE as i32 {
+    return Err(format!("The speaker model wants {} Hz audio", diarizer.sample_rate()).into());
+  }
   let result = diarizer.process(samples).ok_or("Couldn’t tell the speakers apart.")?;
-  let mut turns: Vec<Turn> = result.sort_by_start_time().into_iter()
+  let mut turns: Vec<Turn> = result
+    .sort_by_start_time()
+    .into_iter()
     .filter(|segment| segment.speaker >= 0 && segment.end > segment.start)
     .map(|segment| Turn { start: (segment.start * RATE) as u64, end: (segment.end * RATE) as u64, speaker: segment.speaker as u32 })
     .collect();
@@ -61,13 +72,17 @@ pub fn diarize(root: &Path, samples: &[f32]) -> Result<Vec<Turn>> {
 pub fn settle(mut turns: Vec<Turn>) -> Vec<Turn> {
   turns.sort_by_key(|turn| turn.start);
   let mut spoke: std::collections::HashMap<u32, u64> = std::collections::HashMap::new();
-  for turn in &turns { *spoke.entry(turn.speaker).or_default() += turn.end - turn.start; }
+  for turn in &turns {
+    *spoke.entry(turn.speaker).or_default() += turn.end - turn.start;
+  }
   let longest = spoke.values().copied().max().unwrap_or(0);
   let stands = |voice: u32| spoke[&voice] >= (SLIVER * RATE) as u64 || spoke[&voice] == longest;
   let anchors: Vec<Turn> = turns.iter().copied().filter(|turn| stands(turn.speaker)).collect();
   for turn in turns.iter_mut().filter(|turn| !stands(turn.speaker)) {
     let gap = |anchor: &Turn| anchor.start.saturating_sub(turn.end).max(turn.start.saturating_sub(anchor.end));
-    if let Some(nearest) = anchors.iter().min_by_key(|anchor| gap(anchor)) { turn.speaker = nearest.speaker; }
+    if let Some(nearest) = anchors.iter().min_by_key(|anchor| gap(anchor)) {
+      turn.speaker = nearest.speaker;
+    }
   }
   turns
 }
@@ -76,7 +91,9 @@ pub fn settle(mut turns: Vec<Turn>) -> Vec<Turn> {
 mod tests {
   use super::*;
 
-  fn turn(start: f32, end: f32, speaker: u32) -> Turn { Turn { start: (start * RATE) as u64, end: (end * RATE) as u64, speaker } }
+  fn turn(start: f32, end: f32, speaker: u32) -> Turn {
+    Turn { start: (start * RATE) as u64, end: (end * RATE) as u64, speaker }
+  }
 
   #[test]
   fn a_sliver_of_a_voice_goes_to_the_voice_nearest_in_time() {
@@ -97,13 +114,17 @@ mod tests {
   #[test]
   #[ignore = "needs the speaker models in DICTATE_MODELS and a recording in DICTATE_SPEAKER_PCM"]
   fn diarizes_a_recording_into_its_voices() {
-    let (Ok(pcm), Ok(root)) = (std::env::var("DICTATE_SPEAKER_PCM"), std::env::var("DICTATE_MODELS")) else { panic!("set DICTATE_SPEAKER_PCM and DICTATE_MODELS") };
+    let (Ok(pcm), Ok(root)) = (std::env::var("DICTATE_SPEAKER_PCM"), std::env::var("DICTATE_MODELS")) else {
+      panic!("set DICTATE_SPEAKER_PCM and DICTATE_MODELS")
+    };
     let bytes = std::fs::read(pcm).unwrap();
     let samples: Vec<f32> = bytes.as_chunks::<2>().0.iter().map(|pair| i16::from_le_bytes(*pair) as f32 / 32768.0).collect();
     let began = std::time::Instant::now();
     let turns = diarize(Path::new(&root), &samples).unwrap();
     let voices: std::collections::BTreeSet<u32> = turns.iter().map(|turn| turn.speaker).collect();
-    for turn in &turns { eprintln!("speaker {} {:6.2}s – {:6.2}s", turn.speaker, turn.start as f32 / RATE, turn.end as f32 / RATE); }
+    for turn in &turns {
+      eprintln!("speaker {} {:6.2}s – {:6.2}s", turn.speaker, turn.start as f32 / RATE, turn.end as f32 / RATE);
+    }
     eprintln!("{} voices, {} turns, {:.1}s of audio in {:.1}s", voices.len(), turns.len(), samples.len() as f32 / RATE, began.elapsed().as_secs_f32());
     let expected: usize = std::env::var("DICTATE_SPEAKER_COUNT").ok().and_then(|n| n.parse().ok()).unwrap_or(2);
     assert_eq!(voices.len(), expected, "voices heard");

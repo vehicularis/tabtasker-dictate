@@ -4,21 +4,34 @@ use super::Replacement;
 // ---------- case, as the language has it: Turkish and Azerbaijani pair i with İ and ı with I ----------
 
 pub(super) fn upper(c: char, turkish: bool) -> String {
-  match c { 'i' if turkish => "İ".into(), _ => c.to_uppercase().collect() }
+  match c {
+    'i' if turkish => "İ".into(),
+    _ => c.to_uppercase().collect(),
+  }
 }
 pub(super) fn lower(c: char, turkish: bool) -> String {
   // İ lowers to i and a combining dot outside Turkish; a plain i is what anyone means.
-  match c { 'I' if turkish => "ı".into(), 'İ' => "i".into(), _ => c.to_lowercase().collect() }
+  match c {
+    'I' if turkish => "ı".into(),
+    'İ' => "i".into(),
+    _ => c.to_lowercase().collect(),
+  }
 }
 /// One char standing for `c` when comparing without case.
-pub(super) fn fold(c: char, turkish: bool) -> char { lower(c, turkish).chars().next().unwrap_or(c) }
-pub(super) fn lowered(word: &str, turkish: bool) -> String { word.chars().map(|c| lower(c, turkish)).collect() }
+pub(super) fn fold(c: char, turkish: bool) -> char {
+  lower(c, turkish).chars().next().unwrap_or(c)
+}
+pub(super) fn lowered(word: &str, turkish: bool) -> String {
+  word.chars().map(|c| lower(c, turkish)).collect()
+}
 
 /// `word` with a capital first letter when it is a plain lower-case word. A name like iPhone, an
 /// address, a path or a number is left as it is.
 pub(super) fn capitalize(word: &str, turkish: bool) -> String {
   let Some((at, first)) = word.char_indices().find(|(_, c)| c.is_alphanumeric()) else { return word.to_owned() };
-  if !first.is_lowercase() || word.chars().any(|c| c.is_uppercase() || "@/\\:_".contains(c)) { return word.to_owned(); }
+  if !first.is_lowercase() || word.chars().any(|c| c.is_uppercase() || "@/\\:_".contains(c)) {
+    return word.to_owned();
+  }
   format!("{}{}{}", &word[..at], upper(first, turkish), &word[at + first.len_utf8()..])
 }
 
@@ -33,7 +46,9 @@ pub(super) fn words(text: &str) -> (Vec<(&str, &str)>, &str) {
   let mut rest = text;
   loop {
     let start = rest.find(|c: char| !c.is_whitespace()).unwrap_or(rest.len());
-    if start == rest.len() { return (words, rest); }
+    if start == rest.len() {
+      return (words, rest);
+    }
     let end = rest[start..].find(char::is_whitespace).map_or(rest.len(), |end| start + end);
     words.push((&rest[..start], &rest[start..end]));
     rest = &rest[end..];
@@ -54,7 +69,9 @@ pub(super) fn edges(word: &str) -> (&str, &str, &str) {
 /// word before it, so "İstanbul'a" holds the word "İstanbul".
 pub(super) fn joins(chars: &[char], at: usize, turkish: bool) -> bool {
   let c = chars[at];
-  c.is_alphanumeric() || "_-@".contains(c) || (!turkish && "'’".contains(c))
+  c.is_alphanumeric()
+    || "_-@".contains(c)
+    || (!turkish && "'’".contains(c))
     || (c == '.' && at > 0 && at + 1 < chars.len() && chars[at - 1].is_alphanumeric() && chars[at + 1].is_alphanumeric())
 }
 
@@ -64,10 +81,16 @@ pub(super) fn matches_at(text: &[char], at: usize, from: &[char]) -> Option<usiz
   let mut i = at;
   for &c in from {
     if c == ' ' {
-      if !text.get(i).is_some_and(|c| c.is_whitespace()) { return None; }
-      while text.get(i).is_some_and(|c| c.is_whitespace()) { i += 1; }
+      if !text.get(i).is_some_and(|c| c.is_whitespace()) {
+        return None;
+      }
+      while text.get(i).is_some_and(|c| c.is_whitespace()) {
+        i += 1;
+      }
     } else {
-      if text.get(i) != Some(&c) { return None; }
+      if text.get(i) != Some(&c) {
+        return None;
+      }
       i += 1;
     }
   }
@@ -77,10 +100,14 @@ pub(super) fn matches_at(text: &[char], at: usize, from: &[char]) -> Option<usiz
 /// `text` with each phrase of `pairs` replaced: whole words, in any case, the longest phrase first, and
 /// the punctuation around it kept. What a replacement types is never replaced again.
 pub(super) fn replace(text: &str, pairs: &[Replacement], turkish: bool) -> String {
-  let mut patterns: Vec<(Vec<char>, &str)> = pairs.iter()
+  let mut patterns: Vec<(Vec<char>, &str)> = pairs
+    .iter()
     .map(|pair| (pair.from.split_whitespace().collect::<Vec<_>>().join(" ").chars().map(|c| fold(c, turkish)).collect::<Vec<_>>(), pair.to.as_str()))
-    .filter(|(from, _)| !from.is_empty()).collect();
-  if patterns.is_empty() { return text.to_owned(); }
+    .filter(|(from, _)| !from.is_empty())
+    .collect();
+  if patterns.is_empty() {
+    return text.to_owned();
+  }
   patterns.sort_by_key(|(from, _)| std::cmp::Reverse(from.len()));
   let chars: Vec<char> = text.chars().collect();
   let folded: Vec<char> = chars.iter().map(|&c| fold(c, turkish)).collect();
@@ -92,14 +119,20 @@ pub(super) fn replace(text: &str, pairs: &[Replacement], turkish: bool) -> Strin
   'scan: while at < chars.len() {
     let open = at == 0 || !joins(&chars, at - 1, turkish);
     for (from, to) in &patterns {
-      if word(from[0]) && !open { continue; }
+      if word(from[0]) && !open {
+        continue;
+      }
       let Some(end) = matches_at(&folded, at, from) else { continue };
-      if word(from[from.len() - 1]) && end < chars.len() && joins(&chars, end, turkish) { continue; }
+      if word(from[from.len() - 1]) && end < chars.len() && joins(&chars, end, turkish) {
+        continue;
+      }
       let capital = chars[at].is_uppercase();
       at = end;
       if to.is_empty() {
         at = drop_phrase(&mut out, &chars, at);
-        if capital && starts_sentence(&out) { capitals.push(out.len()); }
+        if capital && starts_sentence(&out) {
+          capitals.push(out.len());
+        }
       } else {
         out.push_str(to);
       }
@@ -109,7 +142,9 @@ pub(super) fn replace(text: &str, pairs: &[Replacement], turkish: bool) -> Strin
     at += 1;
   }
   for &mark in capitals.iter().rev() {
-    if mark > out.len() || !out.is_char_boundary(mark) { continue; }
+    if mark > out.len() || !out.is_char_boundary(mark) {
+      continue;
+    }
     let start = mark + out[mark..].len() - out[mark..].trim_start().len();
     let end = out[start..].find(char::is_whitespace).map_or(out.len(), |end| start + end);
     let word = capitalize(&out[start..end], turkish);
@@ -133,12 +168,21 @@ fn drop_phrase(out: &mut String, chars: &[char], mut at: usize) -> usize {
   at += close;
   if !end.is_empty() {
     out.truncate(out.trim_end_matches([',', ';', ':']).len());
-    if !starts_sentence(out) { out.push_str(&end); }
+    if !starts_sentence(out) {
+      out.push_str(&end);
+    }
   } else if close > 0 && out.ends_with([',', ';', ':']) {
     out.pop();
   }
-  if out.is_empty() { while chars.get(at).is_some_and(|c| c.is_whitespace()) { at += 1; } }
-  else if out.ends_with('\n') { while chars.get(at).is_some_and(|c| *c == ' ' || *c == '\t') { at += 1; } }
+  if out.is_empty() {
+    while chars.get(at).is_some_and(|c| c.is_whitespace()) {
+      at += 1;
+    }
+  } else if out.ends_with('\n') {
+    while chars.get(at).is_some_and(|c| *c == ' ' || *c == '\t') {
+      at += 1;
+    }
+  }
   at
 }
 
@@ -162,7 +206,11 @@ pub(super) fn fillers(language: Option<&str>) -> &'static [&'static str] {
 
 fn squeeze(word: &str) -> String {
   let mut out = String::with_capacity(word.len());
-  for c in word.chars() { if !out.ends_with(c) { out.push(c); } }
+  for c in word.chars() {
+    if !out.ends_with(c) {
+      out.push(c);
+    }
+  }
   out
 }
 
@@ -189,24 +237,32 @@ pub(super) fn drop_fillers(text: &str, list: &[&str], turkish: bool) -> String {
         let end: String = close.chars().filter(|c| ".?!…".contains(*c)).collect();
         if !end.is_empty() {
           before.truncate(before.trim_end_matches([',', ';', ':']).len());
-          if !ends_sentence(before) { before.push_str(&end); }
+          if !ends_sentence(before) {
+            before.push_str(&end);
+          }
         } else if close.contains(',') && before.ends_with(',') {
           before.pop();
         }
       }
       capital |= starts && core.starts_with(char::is_uppercase);
       carried.push_str(open);
-      if space.contains('\n') { gap = Some(space); }
+      if space.contains('\n') {
+        gap = Some(space);
+      }
       continue;
     }
     let mut word = format!("{carried}{word}");
     carried.clear();
-    if std::mem::take(&mut capital) { word = capitalize(&word, turkish); }
+    if std::mem::take(&mut capital) {
+      word = capitalize(&word, turkish);
+    }
     let space = if kept.is_empty() { lead } else { gap.unwrap_or(space) };
     gap = None;
     kept.push((space, word));
   }
-  if kept.is_empty() { return String::new(); }
+  if kept.is_empty() {
+    return String::new();
+  }
   kept.into_iter().map(|(space, word)| format!("{space}{word}")).collect::<String>() + trailing
 }
 
@@ -216,7 +272,11 @@ pub(super) fn drop_fillers(text: &str, list: &[&str], turkish: bool) -> String {
 pub(super) fn casual(text: &str) -> String {
   let body = text.trim_end();
   let single = !body.char_indices().any(|(at, c)| ".?!…".contains(c) && body[at + c.len_utf8()..].starts_with(char::is_whitespace));
-  if single && body.ends_with('.') && !body.ends_with("..") { format!("{}{}", &body[..body.len() - 1], &text[body.len()..]) } else { text.to_owned() }
+  if single && body.ends_with('.') && !body.ends_with("..") {
+    format!("{}{}", &body[..body.len() - 1], &text[body.len()..])
+  } else {
+    text.to_owned()
+  }
 }
 
 /// A capital to start and a full stop to end, unless it ends a sentence already. A live draft gets no
@@ -227,7 +287,9 @@ pub(super) fn formal(text: &str, turkish: bool, live: bool) -> String {
   let mut out = format!("{}{}{}", &text[..start], capitalize(&text[start..end], turkish), &text[end..]);
   if !live && out.chars().any(char::is_alphanumeric) {
     out.truncate(out.trim_end().trim_end_matches([',', ';', ':']).len());
-    if !ends_sentence(&out) { out.push('.'); }
+    if !ends_sentence(&out) {
+      out.push('.');
+    }
   }
   out
 }

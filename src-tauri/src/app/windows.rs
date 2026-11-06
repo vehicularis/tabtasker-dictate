@@ -10,12 +10,20 @@ const ROUTES: &[&str] = &["notes", "meetings", "stickies", "settings", "setup", 
 pub(crate) fn overlay(app: &AppHandle) -> tauri::Result<()> {
   let window = WebviewWindowBuilder::new(app, OVERLAY, WebviewUrl::App("index.html".into()))
     .title("TabTasker | Dictate")
-    .decorations(false).transparent(true).shadow(false)
-    .always_on_top(true).visible_on_all_workspaces(true).skip_taskbar(true).resizable(false).focused(false)
+    .decorations(false)
+    .transparent(true)
+    .shadow(false)
+    .always_on_top(true)
+    .visible_on_all_workspaces(true)
+    .skip_taskbar(true)
+    .resizable(false)
+    .focused(false)
     .visible(false) // dictate.m shows it once the page has drawn the overlay
     .accept_first_mouse(true) // the overlay is never key while another app is in front
     .build()?;
-  if let Ok(native) = window.ns_window() { unsafe { dictate_overlay_attach(native) }; }
+  if let Ok(native) = window.ns_window() {
+    unsafe { dictate_overlay_attach(native) };
+  }
   Ok(())
 }
 
@@ -26,21 +34,28 @@ pub(crate) fn show_main(app: &AppHandle, route: Option<&str>) -> tauri::Result<(
   let route = route.map(|route| if ROUTES.contains(&route.split('/').next().unwrap_or_default()) { route } else { "notes" });
   app.set_activation_policy(ActivationPolicy::Regular)?;
   if let Some(window) = app.get_webview_window(MAIN) {
-    if let Some(route) = route { window.eval(format!("location.hash = '#{route}'"))?; }
+    if let Some(route) = route {
+      window.eval(format!("location.hash = '#{route}'"))?;
+    }
     window.unminimize()?;
     window.show()?;
     return window.set_focus();
   }
   let window = WebviewWindowBuilder::new(app, MAIN, WebviewUrl::App(format!("app.html#{}", route.unwrap_or("notes")).into()))
     .title("TabTasker | Dictate")
-    .inner_size(1040.0, 700.0).min_inner_size(840.0, 580.0).center()
-    .title_bar_style(TitleBarStyle::Overlay).hidden_title(true) // the lights where AppKit puts them, centred on the page's 40-point bar by its toolbar (panels.m)
+    .inner_size(1040.0, 700.0)
+    .min_inner_size(840.0, 580.0)
+    .center()
+    .title_bar_style(TitleBarStyle::Overlay)
+    .hidden_title(true) // the lights where AppKit puts them, centred on the page's 40-point bar by its toolbar (panels.m)
     // Tauri's file-drop handler answers every drag itself and never hands it to WebKit, so the page saw no
     // dragover or drop at all: a block dragged by its grip showed no line and never landed. The page takes
     // its own drops (an image into a note), and app/main.tsx stops a stray file opening in the window.
     .disable_drag_drop_handler()
     .build()?;
-  if let Ok(native) = window.ns_window() { unsafe { dictate_window_toolbar(native) }; }
+  if let Ok(native) = window.ns_window() {
+    unsafe { dictate_window_toolbar(native) };
+  }
   // The frame's colour behind the page, as Business's window: the page paints the same, so the window's
   // edge is the frame's and a resize never shows anything else.
   let dark = matches!(window.theme(), Ok(tauri::Theme::Dark));
@@ -63,7 +78,9 @@ fn percent(text: &str) -> String {
 /// the menu bar only (unless the window is open, which keeps the Dock icon until it closes).
 pub(crate) fn show_in_dock(app: &AppHandle, on: bool) {
   let policy = if on || app.get_webview_window(MAIN).is_some() { ActivationPolicy::Regular } else { ActivationPolicy::Accessory };
-  if let Err(e) = app.set_activation_policy(policy) { log::warn!("dock: {e}"); }
+  if let Err(e) = app.set_activation_policy(policy) {
+    log::warn!("dock: {e}");
+  }
 }
 
 pub(crate) fn window_event(window: &Window, event: &WindowEvent) {
@@ -73,8 +90,12 @@ pub(crate) fn window_event(window: &Window, event: &WindowEvent) {
   }
   // The title bar's toolbar follows the window into and out of full screen.
   if window.label() == MAIN && matches!(event, WindowEvent::Resized(_)) {
-    if let Ok(native) = window.ns_window() { unsafe { dictate_window_toolbar(native) }; }
+    if let Ok(native) = window.ns_window() {
+      unsafe { dictate_window_toolbar(native) };
+    }
   }
   // A sticky moved or resized comes back where it was left.
-  if window.label().starts_with("sticky-") && matches!(event, WindowEvent::Moved(_) | WindowEvent::Resized(_)) { stickies::frame_changed(window.app_handle(), window.label()); }
+  if window.label().starts_with("sticky-") && matches!(event, WindowEvent::Moved(_) | WindowEvent::Resized(_)) {
+    stickies::frame_changed(window.app_handle(), window.label());
+  }
 }

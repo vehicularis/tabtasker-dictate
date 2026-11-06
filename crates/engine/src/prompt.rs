@@ -10,15 +10,23 @@ pub const PROMPT_TOKENS: usize = 200;
 pub fn echoes_prompt(text: &str, words: &[String]) -> bool {
   let bare = |word: &str| word.trim_matches(|c: char| !c.is_alphanumeric()).to_lowercase();
   let entries: Vec<String> = words.iter().map(|word| word.trim().to_lowercase()).filter(|word| !word.is_empty()).collect();
-  let known: std::collections::HashSet<String> = entries.iter().flat_map(|entry| entry.split_whitespace().map(bare).collect::<Vec<_>>()).filter(|word| !word.is_empty()).collect();
+  let known: std::collections::HashSet<String> =
+    entries.iter().flat_map(|entry| entry.split_whitespace().map(bare).collect::<Vec<_>>()).filter(|word| !word.is_empty()).collect();
   let said: Vec<String> = text.split_whitespace().map(bare).filter(|word| !word.is_empty()).collect();
   let unique: std::collections::HashSet<&String> = said.iter().collect();
-  if unique.is_empty() || (unique.iter().filter(|word| known.contains(**word)).count() * 10) < unique.len() * 9 { return false; }
+  if unique.is_empty() || (unique.iter().filter(|word| known.contains(**word)).count() * 10) < unique.len() * 9 {
+    return false;
+  }
   let repeated = unique.iter().any(|word| said.iter().filter(|other| other == word).count() >= 3);
   let fragment = text.trim().ends_with(',') && text.trim().chars().count() <= 30;
   let lower = text.to_lowercase();
   let (mut from, mut in_order) = (0, 0);
-  for entry in &entries { if let Some(at) = lower[from..].find(entry.as_str()) { in_order += 1; from += at + entry.len(); } }
+  for entry in &entries {
+    if let Some(at) = lower[from..].find(entry.as_str()) {
+      in_order += 1;
+      from += at + entry.len();
+    }
+  }
   repeated || fragment || in_order >= 3
 }
 
@@ -32,8 +40,12 @@ pub fn normalize(text: &str) -> String {
 /// matchesDictionaryPrompt): nine in ten of its words are vocabulary, and it uses seven in ten of the vocabulary.
 pub fn recites_prompt(text: &str, words: &[String]) -> bool {
   let (said, prompt) = (normalize(text), normalize(&words.join(" ")));
-  if said.is_empty() || prompt.is_empty() { return false; }
-  if said == prompt { return true; }
+  if said.is_empty() || prompt.is_empty() {
+    return false;
+  }
+  if said == prompt {
+    return true;
+  }
   let known: std::collections::HashSet<&str> = prompt.split(' ').collect();
   let unique: std::collections::HashSet<&str> = said.split(' ').collect();
   let matched = unique.iter().filter(|word| known.contains(*word)).count();
@@ -70,19 +82,27 @@ impl Echo {
   /// isn't one either and hears more: a word more than a fragment that repeated one, or two more over 3 s.
   pub fn keeps(&self, retry: &str, words: &[String], samples: usize) -> bool {
     let unique = normalize(retry).split_whitespace().collect::<std::collections::HashSet<_>>().len();
-    if unique == 0 || recites_prompt(retry, words) { return false; }
+    if unique == 0 || recites_prompt(retry, words) {
+      return false;
+    }
     self.strict || (!echoes_prompt(retry, words) && ((self.repeated && unique > self.unique) || (samples >= SPARSE && unique >= self.unique + 2)))
   }
 }
 
 /// A period that doesn't end a sentence: after an abbreviation, an initial, a list number or another period.
 fn no_full_stop(before: &str) -> bool {
-  const SHORT: &[&str] = &["etc", "vs", "mr", "mrs", "ms", "dr", "st", "jr", "sr", "sra", "prof", "incl", "esp", "approx", "ca", "cf", "al", "no", "nr", "ex", "ej", "vgl", "bzw", "usw"];
+  const SHORT: &[&str] = &[
+    "etc", "vs", "mr", "mrs", "ms", "dr", "st", "jr", "sr", "sra", "prof", "incl", "esp", "approx", "ca", "cf", "al", "no", "nr", "ex", "ej", "vgl", "bzw",
+    "usw",
+  ];
   let word = before.rsplit(|c: char| c.is_whitespace() || c == '(').next().unwrap_or_default().to_lowercase();
   let mut last = before.chars().rev();
   let dotted = matches!((last.next(), last.next(), last.next()), (Some(a), Some('.'), Some(b)) if a.is_alphabetic() && b.is_alphabetic());
-  before.ends_with('.') || dotted || SHORT.contains(&word.as_str())
-    || (word.chars().count() == 1 && word.chars().all(char::is_alphabetic)) || ((1..=2).contains(&word.len()) && word.bytes().all(|b| b.is_ascii_digit()))
+  before.ends_with('.')
+    || dotted
+    || SHORT.contains(&word.as_str())
+    || (word.chars().count() == 1 && word.chars().all(char::is_alphabetic))
+    || ((1..=2).contains(&word.len()) && word.bytes().all(|b| b.is_ascii_digit()))
 }
 
 /// `text` without the vocabulary Whisper recited after what was said (OpenWhispr stripTrailingDictionaryEcho):
@@ -91,22 +111,31 @@ fn no_full_stop(before: &str) -> bool {
 /// opens it; OpenWhispr also strips one that closes a prompt Whisper had cut, which ours never is.
 pub fn without_recital<'a>(text: &'a str, words: &[String]) -> &'a str {
   let entries: Vec<String> = words.iter().map(|word| normalize(word)).filter(|word| !word.is_empty()).collect();
-  if entries.len() < 2 { return text; }
+  if entries.len() < 2 {
+    return text;
+  }
   let body = text.trim_end();
   let mut tail = None;
   let mut chars = body.char_indices().peekable();
   while let Some((at, c)) = chars.next() {
     let wide = matches!(c, '。' | '！' | '？');
-    if !wide && !matches!(c, '.' | '!' | '?') { continue; }
+    if !wide && !matches!(c, '.' | '!' | '?') {
+      continue;
+    }
     let mut end = at + c.len_utf8();
-    while let Some(&(next, space)) = chars.peek().filter(|(_, space)| space.is_whitespace()) { end = next + space.len_utf8(); chars.next(); }
+    while let Some(&(next, space)) = chars.peek().filter(|(_, space)| space.is_whitespace()) {
+      end = next + space.len_utf8();
+      chars.next();
+    }
     // "Node.js" stays a word, and the break must have a sentence after it.
-    if (!wide && end == at + 1) || end >= body.len() || (c == '.' && no_full_stop(&body[..at])) { continue; }
+    if (!wide && end == at + 1) || end >= body.len() || (c == '.' && no_full_stop(&body[..at])) {
+      continue;
+    }
     tail = Some(end);
   }
   let Some(start) = tail else { return text };
-  let said: Option<Vec<usize>> = body[start..].split([',', '、', '，']).map(normalize).filter(|term| !term.is_empty())
-    .map(|term| entries.iter().position(|entry| *entry == term)).collect();
+  let said: Option<Vec<usize>> =
+    body[start..].split([',', '、', '，']).map(normalize).filter(|term| !term.is_empty()).map(|term| entries.iter().position(|entry| *entry == term)).collect();
   match said {
     Some(run) if run.len() >= 2 && run[0] == 0 && run.windows(2).all(|pair| pair[1] == pair[0] + 1) => body[..start].trim_end(),
     _ => text,
@@ -124,7 +153,9 @@ pub fn prompt_text(words: &[String], fits: impl Fn(&str) -> bool) -> (String, us
   let (mut text, mut count) = (String::new(), 0);
   for word in entries(words) {
     let next = if text.is_empty() { format!(" {word}") } else { format!("{text}, {word}") };
-    if !fits(&next) { break; }
+    if !fits(&next) {
+      break;
+    }
     (text, count) = (next, count + 1);
   }
   (text, count)

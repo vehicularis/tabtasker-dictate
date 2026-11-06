@@ -44,7 +44,9 @@ fn a_meeting_piece_yields_to_a_release_but_a_holds_pass_does_not() {
 #[ignore = "Downloads are explicit; set TABTASKER_SPEECH_FIXTURE_DIR to verified models and 16 kHz mono fixture.f32"]
 fn real_local_model_transcribes_fixture_and_rejects_silence() {
   let root = PathBuf::from(std::env::var("TABTASKER_SPEECH_FIXTURE_DIR").unwrap());
-  for model in Model::Turbo.files() { models::verify(&root.join(model.name), model).unwrap(); }
+  for model in Model::Turbo.files() {
+    models::verify(&root.join(model.name), model).unwrap();
+  }
   let bytes = std::fs::read(root.join("fixture.f32")).unwrap();
   let pcm: Vec<f32> = bytes.as_chunks::<4>().0.iter().map(|b| f32::from_le_bytes(*b)).collect();
   let started = Instant::now();
@@ -75,7 +77,8 @@ fn real_local_model_transcribes_fixture_and_rejects_silence() {
   flag.store(true, Ordering::Relaxed);
   let cancelled = Instant::now();
   assert!(speech.finish("cancelled", &pcm, flag).is_err());
-  assert!(cancelled.elapsed() < Duration::from_millis(300), "{:?}", cancelled.elapsed()); // no language detection first
+  assert!(cancelled.elapsed() < Duration::from_millis(300), "{:?}", cancelled.elapsed());
+  // no language detection first
 }
 
 #[test]
@@ -90,19 +93,34 @@ fn a_long_note_is_transcribed_while_it_is_said_and_finishes_at_once() {
     bytes[at..].as_chunks::<4>().0.iter().map(|c| f32::from_le_bytes(*c)).collect()
   };
   // The English clips twice over with the pauses of someone thinking: well past the one-minute hold.
-  let english: Vec<(&str, &str)> = manifest.lines().filter_map(|line| { if !line.contains("\ten\t") { return None; } let mut cols = line.split('\t'); Some((cols.next()?, cols.nth(1)?)) }).collect();
+  let english: Vec<(&str, &str)> = manifest
+    .lines()
+    .filter_map(|line| {
+      if !line.contains("\ten\t") {
+        return None;
+      }
+      let mut cols = line.split('\t');
+      Some((cols.next()?, cols.nth(1)?))
+    })
+    .collect();
   let mut stream = Vec::new();
-  for _ in 0..2 { for (name, _) in &english { stream.extend(wav(name)); stream.extend(vec![0.0f32; 12_800]); } }
+  for _ in 0..2 {
+    for (name, _) in &english {
+      stream.extend(wav(name));
+      stream.extend(vec![0.0f32; 12_800]);
+    }
+  }
   assert!(stream.len() > 90 * 16000, "{} s", stream.len() / 16000);
   let speech = loaded(&root);
   let go = || Arc::new(AtomicBool::new(false));
   speech.note("note", |_| ()); // the first step begins it
-  // What the Mac does: every half second, the audio it still holds; it drops what is transcribed.
+                               // What the Mac does: every half second, the audio it still holds; it drops what is transcribed.
   let (mut dropped, mut steps, mut slowest) = (0, 0, Duration::ZERO);
   for now in (8000..=stream.len()).step_by(8000) {
     let started = Instant::now();
     let (committed, _) = speech.note_step(speech.engine.lock().unwrap().as_mut().unwrap(), "note", dropped, &stream[dropped..now], go()).unwrap();
-    slowest = slowest.max(started.elapsed()); steps += 1;
+    slowest = slowest.max(started.elapsed());
+    steps += 1;
     dropped = committed;
   }
   let held = stream.len() - dropped;
@@ -139,7 +157,8 @@ fn a_hands_free_session_may_send_ten_minutes_and_a_hold_five() {
   assert_eq!(max_samples("held"), MAX_SAMPLES);
   assert_eq!(MAX_SAMPLES, 5 * 60 * 16000);
   assert_eq!(max_samples("never announced"), MAX_SAMPLES);
-  context::forget("free"); context::forget("held");
+  context::forget("free");
+  context::forget("held");
 }
 
 #[test]
@@ -167,7 +186,8 @@ fn a_hands_free_session_is_heard_past_its_words_and_finished_piece_by_piece() {
   speech.note("held", |note| note.committed = 20 * 16000);
   assert_eq!(speech.unheard("held", pieces::PIECE), 0, "under a piece, nothing is in its words");
   assert_eq!(speech.unheard("held", 40 * 16000), 20 * 16000);
-  context::forget("long"); context::forget("held");
+  context::forget("long");
+  context::forget("held");
 }
 
 #[test]
@@ -175,7 +195,11 @@ fn with_no_model_loaded_one_on_this_mac_answers_while_the_chosen_one_downloads()
   let root = std::env::temp_dir().join(format!("tabtasker-speech-fallback-{}", std::process::id()));
   std::fs::create_dir_all(&root).unwrap();
   // Sparse files of the pinned sizes: what Settings counts as downloaded.
-  let put = |model: Model| for file in model.files() { std::fs::File::create(root.join(file.name)).unwrap().set_len(file.bytes).unwrap(); };
+  let put = |model: Model| {
+    for file in model.files() {
+      std::fs::File::create(root.join(file.name)).unwrap().set_len(file.bytes).unwrap();
+    }
+  };
   use Model::{Small, Turbo};
   assert_eq!(first_load(&root, Small, false), Small); // nothing here: the chosen one downloads
   put(Turbo);
@@ -207,7 +231,11 @@ fn a_pass_that_panics_gives_back_what_it_claimed() {
   *speech.draft.lock().unwrap() = Some(Draft { id: "hold".into(), samples: 16000, cancelled: flag.clone() });
   speech.note("hold", |note| note.busy = true);
   let panicked = catch_unwind(AssertUnwindSafe(|| {
-    let mut claim = Claim::new(&speech); claim.job = Some(flag.clone()); claim.draft = true; claim.step = Some("hold".into()); claim.unsent = Some(unsent.clone());
+    let mut claim = Claim::new(&speech);
+    claim.job = Some(flag.clone());
+    claim.draft = true;
+    claim.step = Some("hold".into());
+    claim.unsent = Some(unsent.clone());
     let _poisoned = speech.job.lock().unwrap(); // let go first, poisoned by the panic
     panic!("a pass that panics");
   }));
@@ -218,7 +246,8 @@ fn a_pass_that_panics_gives_back_what_it_claimed() {
   assert!(!unsent.exists());
   // A job given back early leaves a newer one alone.
   let newer = Arc::new(AtomicBool::new(false));
-  let mut claim = Claim::new(&speech); claim.job = Some(flag.clone());
+  let mut claim = Claim::new(&speech);
+  claim.job = Some(flag.clone());
   *lock(&speech.job) = Some(("next".into(), newer.clone()));
   claim.end_job();
   drop(claim);
@@ -231,7 +260,14 @@ fn a_pass_that_panics_gives_back_what_it_claimed() {
 fn a_hold_kept_on_disk_comes_back_whole() {
   let dir = temp_dir("unsent");
   assert_eq!(LocalSpeech::new(dir.join("voice-models")).unsent, dir.join("unsent"), "beside the models' folder");
-  let said = history::Entry { at_ms: 1_793_620_800_000, mode: "handsfree".into(), bundle_id: "com.apple.Notes".into(), app_name: "Notes".into(), seconds: 2.5, ..Default::default() };
+  let said = history::Entry {
+    at_ms: 1_793_620_800_000,
+    mode: "handsfree".into(),
+    bundle_id: "com.apple.Notes".into(),
+    app_name: "Notes".into(),
+    seconds: 2.5,
+    ..Default::default()
+  };
   let pcm: Vec<f32> = (0..40_000).map(|i| (i as f32 * 0.01).sin() * 0.5).chain([f32::MIN_POSITIVE, -0.0, 1.0]).collect();
   let path = keep_unsent(&dir.join("unsent"), &said, &pcm).unwrap();
   assert_eq!(path, dir.join("unsent/1793620800000.hold"));
@@ -247,4 +283,3 @@ fn a_hold_kept_on_disk_comes_back_whole() {
   assert!(read_unsent(&dir.join("unsent/3.hold")).is_err());
   std::fs::remove_dir_all(dir).unwrap();
 }
-

@@ -1,7 +1,10 @@
 //! What the pages ask for, beyond what each feature's own commands do.
 use super::events::emit;
+use super::{
+  dictate_meeting, dictate_open_at_login, dictate_overlay_layout, dictate_play_sound, dictate_request, dictate_set_enabled, dictate_set_input,
+  dictate_settings_status, dictate_type_text,
+};
 use super::{menu::show_paused, windows, FIRST_RUN};
-use super::{dictate_meeting, dictate_open_at_login, dictate_overlay_layout, dictate_play_sound, dictate_request, dictate_set_enabled, dictate_set_input, dictate_settings_status, dictate_type_text};
 use crate::dictation::history;
 use crate::library::notes;
 use crate::{meetings, settings};
@@ -12,13 +15,19 @@ use tauri::AppHandle;
 /// Runs `work` on the main thread, where AppKit and the native voice state live.
 async fn on_main<T: Send + 'static>(app: &AppHandle, work: impl FnOnce() -> T + Send + 'static) -> Result<T, String> {
   let (done, result) = tokio::sync::oneshot::channel();
-  app.run_on_main_thread(move || { let _ = done.send(work()); }).map_err(|e| e.to_string())?;
+  app
+    .run_on_main_thread(move || {
+      let _ = done.send(work());
+    })
+    .map_err(|e| e.to_string())?;
   result.await.map_err(|e| e.to_string())
 }
 
 pub(crate) fn status_json() -> Option<String> {
   let mut output = vec![0u8; 16384];
-  unsafe { dictate_settings_status(output.as_mut_ptr().cast(), output.len()) }.then(|| CStr::from_bytes_until_nul(&output).map(|text| text.to_string_lossy().into_owned()).ok()).flatten()
+  unsafe { dictate_settings_status(output.as_mut_ptr().cast(), output.len()) }
+    .then(|| CStr::from_bytes_until_nul(&output).map(|text| text.to_string_lossy().into_owned()).ok())
+    .flatten()
 }
 
 #[tauri::command]
@@ -55,7 +64,9 @@ pub(crate) async fn set_open_at_login(app: AppHandle, enabled: bool) -> Result<b
 /// send or cancel hands-free listening.
 #[tauri::command]
 pub(crate) async fn request(app: AppHandle, kind: String) -> Result<(), String> {
-  if !matches!(kind.as_str(), "microphone" | "accessibility" | "keyboard" | "note" | "send" | "cancel") { return Err("Unknown request".into()); }
+  if !matches!(kind.as_str(), "microphone" | "accessibility" | "keyboard" | "note" | "send" | "cancel") {
+    return Err("Unknown request".into());
+  }
   let kind = CString::new(kind).map_err(|e| e.to_string())?;
   on_main(&app, move || unsafe { dictate_request(kind.as_ptr()) }).await
 }
@@ -63,7 +74,9 @@ pub(crate) async fn request(app: AppHandle, kind: String) -> Result<(), String> 
 /// Where the page draws its glass (blur goes behind it) and which parts take clicks.
 #[tauri::command]
 pub(crate) fn layout(app: AppHandle, glass: Vec<[f64; 6]>, hit: Vec<[f64; 4]>, dark: Option<bool>) -> Result<(), String> {
-  if glass.len() > 16 || hit.len() > 16 { return Err("Invalid layout".into()); }
+  if glass.len() > 16 || hit.len() > 16 {
+    return Err("Invalid layout".into());
+  }
   let json = CString::new(serde_json::json!({ "glass": glass, "hit": hit, "dark": dark.unwrap_or(true) }).to_string()).map_err(|e| e.to_string())?;
   app.run_on_main_thread(move || unsafe { dictate_overlay_layout(json.as_ptr()) }).map_err(|e| e.to_string())
 }
@@ -72,10 +85,15 @@ pub(crate) fn layout(app: AppHandle, glass: Vec<[f64; 6]>, hit: Vec<[f64; 4]>, d
 /// why a meeting couldn't start.
 #[tauri::command]
 pub(crate) async fn meeting(app: AppHandle, action: String) -> Result<bool, String> {
-  if !matches!(action.as_str(), "start" | "stop") { return Err("Unknown action".into()); }
+  if !matches!(action.as_str(), "start" | "stop") {
+    return Err("Unknown action".into());
+  }
   let action = CString::new(action).map_err(|e| e.to_string())?;
   let changed = on_main(&app, move || unsafe { dictate_meeting(action.as_ptr()) }).await?;
-  match meetings::start_problem() { Some(why) if !changed => Err(why), _ => Ok(changed) }
+  match meetings::start_problem() {
+    Some(why) if !changed => Err(why),
+    _ => Ok(changed),
+  }
 }
 
 /// Opens the app's window at `route` (notes, meetings, stickies, ask, settings, settings/<page>, setup), or
@@ -100,7 +118,9 @@ pub(crate) fn paste_last(app: AppHandle) {
 /// Dictation › Sounds: plays one of the Mac's sounds once, at `volume`, so a choice can be heard before it is kept.
 #[tauri::command]
 pub(crate) fn play_sound(app: AppHandle, name: String, volume: f64) -> Result<(), String> {
-  if !settings::SOUNDS.contains(&name.as_str()) { return Err("That isn’t one of the Mac’s sounds.".into()); }
+  if !settings::SOUNDS.contains(&name.as_str()) {
+    return Err("That isn’t one of the Mac’s sounds.".into());
+  }
   let name = CString::new(name).map_err(|_| "Invalid sound".to_owned())?;
   let volume = if volume.is_finite() { volume.clamp(0.0, 1.0) } else { 0.3 };
   app.run_on_main_thread(move || unsafe { dictate_play_sound(name.as_ptr(), volume) }).map_err(|e| e.to_string())
@@ -108,17 +128,23 @@ pub(crate) fn play_sound(app: AppHandle, name: String, volume: f64) -> Result<()
 
 /// Quit, from the dots' menu (the tray and the app menu have their own item).
 #[tauri::command]
-pub(crate) fn quit(app: AppHandle) { app.exit(0); }
+pub(crate) fn quit(app: AppHandle) {
+  app.exit(0);
+}
 
 /// Opens one of TabTasker's own pages in the browser (the Business site, the privacy policy, the terms,
 /// the source): nothing else, so a page can never send the browser somewhere of its own choosing.
 #[tauri::command]
 pub(crate) fn open_site(url: String) -> Result<(), String> {
   const SITES: [&str; 3] = ["https://business.tabtasker.com", "https://tabtasker.com", "https://github.com/vehicularis/tabtasker-dictate"];
-  if !SITES.iter().any(|site| url == *site || url.starts_with(&format!("{site}/"))) { return Err("Not one of TabTasker's pages".into()); }
+  if !SITES.iter().any(|site| url == *site || url.starts_with(&format!("{site}/"))) {
+    return Err("Not one of TabTasker's pages".into());
+  }
   std::process::Command::new("/usr/bin/open").arg(&url).spawn().map(|_| ()).map_err(|e| e.to_string())
 }
 
 /// A note or meeting, opened in the app's window on its own page.
 #[tauri::command]
-pub(crate) fn note_open(app: AppHandle, path: String) -> Result<(), String> { windows::show_note(&app, &path) }
+pub(crate) fn note_open(app: AppHandle, path: String) -> Result<(), String> {
+  windows::show_note(&app, &path)
+}

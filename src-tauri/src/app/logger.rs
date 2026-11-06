@@ -13,7 +13,9 @@ impl FileLog {
       std::fs::create_dir_all(&dir).ok()?;
       let path = dir.join("dictate.log");
       // Kept to a few megabytes: a full log is moved aside and a new one started.
-      if std::fs::metadata(&path).is_ok_and(|meta| meta.len() > 4 << 20) { let _ = std::fs::rename(&path, dir.join("dictate.old.log")); }
+      if std::fs::metadata(&path).is_ok_and(|meta| meta.len() > 4 << 20) {
+        let _ = std::fs::rename(&path, dir.join("dictate.old.log"));
+      }
       std::fs::OpenOptions::new().create(true).append(true).open(path).ok()
     });
     FileLog(Mutex::new(file))
@@ -39,11 +41,17 @@ impl log::Log for FileLog {
     meta.level() <= log::Level::Info && [env!("CARGO_CRATE_NAME"), "dictate_engine"].iter().any(|ours| meta.target().starts_with(ours))
   }
   fn log(&self, record: &log::Record) {
-    if !self.enabled(record.metadata()) { return; }
+    if !self.enabled(record.metadata()) {
+      return;
+    }
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |age| age.as_secs());
     let line = format!("{} {} {}\n", utc_stamp(now), record.level(), record.args());
-    #[cfg(debug_assertions)] eprint!("{line}");
-    if let Some(file) = &mut *self.0.lock().unwrap_or_else(|e| e.into_inner()) { use std::io::Write; let _ = file.write_all(line.as_bytes()); }
+    #[cfg(debug_assertions)]
+    eprint!("{line}");
+    if let Some(file) = &mut *self.0.lock().unwrap_or_else(|e| e.into_inner()) {
+      use std::io::Write;
+      let _ = file.write_all(line.as_bytes());
+    }
   }
   fn flush(&self) {}
 }

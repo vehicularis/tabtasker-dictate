@@ -2,8 +2,8 @@
 //! hold's settings for them, and answers the native side's questions over C.
 use crate::dictation::context::HoldContext;
 use crate::settings;
-pub use dictate_engine::text::{sticky_words, without_send};
 use dictate_engine::text::{self, chars_at, Rules};
+pub use dictate_engine::text::{sticky_words, without_send};
 use std::ffi::{c_char, CStr, CString};
 
 /// The text to type for `raw`, in the hold `ctx`; `live` for a draft while the key is still held.
@@ -11,8 +11,11 @@ pub fn finish(raw: &str, ctx: &HoldContext, live: bool) -> String {
   let settings = settings::get();
   let language = crate::dictation::speech::language(&ctx.request);
   let rules = Rules {
-    style: settings.apps.style_for(&ctx.bundle_id).0, fillers: settings.dictation.remove_fillers,
-    replacements: &settings.vocabulary.replacements, language: language.as_deref(), live,
+    style: settings.apps.style_for(&ctx.bundle_id).0,
+    fillers: settings.dictation.remove_fillers,
+    replacements: &settings.vocabulary.replacements,
+    language: language.as_deref(),
+    live,
   };
   text::finish(raw, &rules)
 }
@@ -27,13 +30,24 @@ fn read(text: *const c_char) -> Option<String> {
 #[no_mangle]
 extern "C" fn dictate_correction(before: *const c_char, after: *const c_char, start: usize, length: usize, word: *mut c_char, capacity: usize) -> i32 {
   let (Some(before), Some(after)) = (read(before), read(after)) else { return 0 };
-  if word.is_null() || capacity == 0 { return 0; }
+  if word.is_null() || capacity == 0 {
+    return 0;
+  }
   let Some((found, named)) = text::correction(&before, &after, chars_at(&before, start, length)) else { return 0 };
   let bytes = found.as_bytes();
-  if bytes.len() >= capacity { return 0; }
+  if bytes.len() >= capacity {
+    return 0;
+  }
   // The word and its NUL fit in the caller's `capacity` bytes.
-  unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), word.cast(), bytes.len()); *word.add(bytes.len()) = 0; }
-  if named { 2 } else { 1 }
+  unsafe {
+    std::ptr::copy_nonoverlapping(bytes.as_ptr(), word.cast(), bytes.len());
+    *word.add(bytes.len()) = 0;
+  }
+  if named {
+    2
+  } else {
+    1
+  }
 }
 
 /// learn.m's question before it learns from a pause: whether the caret, at UTF-16 offset `caret` of
@@ -50,9 +64,14 @@ extern "C" fn dictate_learn_typing(before: *const c_char, after: *const c_char, 
 extern "C" fn dictate_live_next(typed: *const c_char, previous: *const c_char, now: *const c_char, out: *mut c_char, capacity: usize) -> usize {
   let (Some(typed), Some(previous), Some(now)) = (read(typed), read(previous), read(now)) else { return 0 };
   let next = text::live_next(&typed, &previous, &now);
-  if out.is_null() || next.is_empty() || next.len() >= capacity { return 0; }
+  if out.is_null() || next.is_empty() || next.len() >= capacity {
+    return 0;
+  }
   // The words and their NUL fit in the caller's `capacity` bytes.
-  unsafe { std::ptr::copy_nonoverlapping(next.as_ptr(), out.cast(), next.len()); *out.add(next.len()) = 0; }
+  unsafe {
+    std::ptr::copy_nonoverlapping(next.as_ptr(), out.cast(), next.len());
+    *out.add(next.len()) = 0;
+  }
   next.len()
 }
 
@@ -66,10 +85,15 @@ extern "C" fn dictate_learned(word: *const c_char) {
     use tauri::Emitter;
     let vocabulary = settings::get().vocabulary;
     let same = |other: &String| other.to_lowercase() == word.to_lowercase();
-    if !vocabulary.learn || vocabulary.words.iter().any(same) { return; }
+    if !vocabulary.learn || vocabulary.words.iter().any(same) {
+      return;
+    }
     if !vocabulary.suggestions.iter().any(same) {
       let suggestions: Vec<String> = std::iter::once(word.clone()).chain(vocabulary.suggestions).collect();
-      if let Err(e) = settings::update(&app, &serde_json::json!({ "vocabulary": { "suggestions": suggestions } })) { log::warn!("vocabulary: {e}"); return; }
+      if let Err(e) = settings::update(&app, &serde_json::json!({ "vocabulary": { "suggestions": suggestions } })) {
+        log::warn!("vocabulary: {e}");
+        return;
+      }
     }
     let _ = app.emit_to("overlay", "dictate-learned", serde_json::json!({ "word": word }));
   });
@@ -89,11 +113,15 @@ pub async fn list_apps(known: Vec<String>) -> Result<serde_json::Value, String> 
   tauri::async_runtime::spawn_blocking(move || {
     let known = CString::new(serde_json::to_string(&known).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
     let raw = unsafe { dictate_apps(known.as_ptr()) };
-    if raw.is_null() { return Err("Couldn’t get the list of your apps.".to_owned()); }
+    if raw.is_null() {
+      return Err("Couldn’t get the list of your apps.".to_owned());
+    }
     let json = unsafe { CStr::from_ptr(raw) }.to_string_lossy().into_owned();
     unsafe { dictate_free(raw) };
     serde_json::from_str(&json).map_err(|e| e.to_string())
-  }).await.map_err(|e| e.to_string())?
+  })
+  .await
+  .map_err(|e| e.to_string())?
 }
 
 #[cfg(test)]

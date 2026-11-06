@@ -26,7 +26,15 @@ pub struct Entry {
 impl Entry {
   /// An entry for `text` said now over `seconds`, in the hold `ctx`.
   pub fn new(ctx: &crate::dictation::context::HoldContext, text: &str, seconds: f64) -> Self {
-    Self { at_ms: now_ms(), mode: ctx.mode.as_str().into(), bundle_id: ctx.bundle_id.clone(), app_name: ctx.app_name.clone(), words: text.split_whitespace().count(), seconds, text: text.to_owned() }
+    Self {
+      at_ms: now_ms(),
+      mode: ctx.mode.as_str().into(),
+      bundle_id: ctx.bundle_id.clone(),
+      app_name: ctx.app_name.clone(),
+      words: text.split_whitespace().count(),
+      seconds,
+      text: text.to_owned(),
+    }
   }
 }
 
@@ -66,16 +74,23 @@ fn load(path: &Path) -> std::io::Result<(Vec<Entry>, bool)> {
 fn lines(entries: &[Entry]) -> Vec<u8> {
   let mut out = Vec::new();
   for entry in entries {
-    if serde_json::to_writer(&mut out, entry).is_ok() { out.push(b'\n'); }
+    if serde_json::to_writer(&mut out, entry).is_ok() {
+      out.push(b'\n');
+    }
   }
   out
 }
 
 /// Written beside the file, then renamed over it: a crash leaves the old history or the new, never half.
 fn rewrite(path: &Path, entries: &[Entry]) -> Result<(), String> {
-  if let Some(dir) = path.parent() { std::fs::create_dir_all(dir).map_err(|e| e.to_string())?; }
+  if let Some(dir) = path.parent() {
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+  }
   let temp = path.with_extension("jsonl.tmp");
-  let written = std::fs::File::create(&temp).and_then(|mut file| { file.write_all(&lines(entries))?; file.sync_all() });
+  let written = std::fs::File::create(&temp).and_then(|mut file| {
+    file.write_all(&lines(entries))?;
+    file.sync_all()
+  });
   if let Err(e) = written.and_then(|_| std::fs::rename(&temp, path)) {
     let _ = std::fs::remove_file(&temp);
     return Err(format!("couldn’t save: {e}"));
@@ -84,7 +99,9 @@ fn rewrite(path: &Path, entries: &[Entry]) -> Result<(), String> {
 }
 
 fn append(path: &Path, entry: &Entry) -> std::io::Result<()> {
-  if let Some(dir) = path.parent() { std::fs::create_dir_all(dir)?; }
+  if let Some(dir) = path.parent() {
+    std::fs::create_dir_all(dir)?;
+  }
   std::fs::OpenOptions::new().create(true).append(true).open(path)?.write_all(&lines(std::slice::from_ref(entry)))
 }
 
@@ -118,8 +135,17 @@ fn prune(entries: &mut [Entry], keep: Keep, now_ms: u64) -> bool {
 /// another signature is a clashing extern.
 #[repr(C)]
 pub(crate) struct Tm {
-  pub sec: i32, pub min: i32, pub hour: i32, pub mday: i32, pub mon: i32, pub year: i32,
-  _wday: i32, _yday: i32, _isdst: i32, pub gmtoff: i64, _zone: *const c_char,
+  pub sec: i32,
+  pub min: i32,
+  pub hour: i32,
+  pub mday: i32,
+  pub mon: i32,
+  pub year: i32,
+  _wday: i32,
+  _yday: i32,
+  _isdst: i32,
+  pub gmtoff: i64,
+  _zone: *const c_char,
 }
 extern "C" {
   fn localtime_r(time: *const i64, out: *mut Tm) -> *mut Tm;
@@ -130,7 +156,9 @@ pub(crate) fn local(secs: i64) -> Tm {
   // SAFETY: Tm matches macOS's struct tm, all zeros is a valid one, and localtime_r only writes into it.
   unsafe {
     let mut tm: Tm = std::mem::zeroed();
-    if localtime_r(&secs, &mut tm).is_null() { tm = std::mem::zeroed(); }
+    if localtime_r(&secs, &mut tm).is_null() {
+      tm = std::mem::zeroed();
+    }
     tm
   }
 }
@@ -146,7 +174,11 @@ pub fn local_day(at_ms: u64) -> i64 {
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AppWords { pub bundle_id: String, pub name: String, pub words: usize }
+pub struct AppWords {
+  pub bundle_id: String,
+  pub name: String,
+  pub words: usize,
+}
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -179,22 +211,38 @@ fn stats(entries: &[Entry], now_ms: u64, day: impl Fn(u64) -> i64) -> Stats {
     let on = day(entry.at_ms);
     stats.dictations += 1;
     stats.words_total += entry.words;
-    if on == today { stats.words_today += entry.words; }
-    if let Some(ago) = usize::try_from(today - on).ok().filter(|ago| *ago < CHART_DAYS) { stats.days[CHART_DAYS - 1 - ago] += entry.words; }
-    if entry.seconds.is_finite() && entry.seconds > 0.0 { spoken_words += entry.words; spoken_seconds += entry.seconds; }
-    if entry.words > 0 { active.insert(on); }
+    if on == today {
+      stats.words_today += entry.words;
+    }
+    if let Some(ago) = usize::try_from(today - on).ok().filter(|ago| *ago < CHART_DAYS) {
+      stats.days[CHART_DAYS - 1 - ago] += entry.words;
+    }
+    if entry.seconds.is_finite() && entry.seconds > 0.0 {
+      spoken_words += entry.words;
+      spoken_seconds += entry.seconds;
+    }
+    if entry.words > 0 {
+      active.insert(on);
+    }
     // A note goes to a file, not into the app in front.
     let key = if entry.bundle_id.is_empty() { entry.app_name.as_str() } else { entry.bundle_id.as_str() };
     if entry.mode != "note" && !key.is_empty() && entry.words > 0 {
       let app = apps.entry(key).or_insert_with(|| AppWords { bundle_id: entry.bundle_id.clone(), ..AppWords::default() });
       app.words += entry.words;
-      if !entry.app_name.is_empty() { app.name = entry.app_name.clone(); } // the newest name it ran under
+      if !entry.app_name.is_empty() {
+        app.name = entry.app_name.clone();
+      } // the newest name it ran under
     }
   }
-  if spoken_seconds > 0.0 { stats.wpm = spoken_words as f64 / (spoken_seconds / 60.0); }
+  if spoken_seconds > 0.0 {
+    stats.wpm = spoken_words as f64 / (spoken_seconds / 60.0);
+  }
   stats.saved_seconds = (stats.words_total as f64 / TYPING_WPM * 60.0 - spoken_seconds).max(0.0);
   let mut on = if active.contains(&today) { today } else { today - 1 };
-  while active.contains(&on) { stats.streak += 1; on -= 1; }
+  while active.contains(&on) {
+    stats.streak += 1;
+    on -= 1;
+  }
   let mut apps: Vec<AppWords> = apps.into_values().map(|app| if app.name.is_empty() { AppWords { name: app.bundle_id.clone(), ..app } } else { app }).collect();
   apps.sort_by(|a, b| b.words.cmp(&a.words).then_with(|| a.name.cmp(&b.name)));
   apps.truncate(TOP_APPS);
@@ -218,9 +266,13 @@ impl Store {
   fn open(file: PathBuf, keep: Keep, now_ms: u64) -> Self {
     let mut store = match load(&file) {
       Ok((entries, clean)) => {
-        if !clean { log::warn!("history: left out lines in {} that aren’t dictations", file.display()); }
+        if !clean {
+          log::warn!("history: left out lines in {} that aren’t dictations", file.display());
+        }
         let store = Store { file: Some(file), entries };
-        if !clean { store.save(); }
+        if !clean {
+          store.save();
+        }
         store
       }
       Err(e) => {
@@ -234,12 +286,16 @@ impl Store {
 
   fn save(&self) {
     if let Some(file) = &self.file {
-      if let Err(e) = rewrite(file, &self.entries) { log::warn!("history: {e}"); }
+      if let Err(e) = rewrite(file, &self.entries) {
+        log::warn!("history: {e}");
+      }
     }
   }
 
   fn prune_now(&mut self, keep: Keep, now_ms: u64) {
-    if prune(&mut self.entries, keep, now_ms) { self.save(); }
+    if prune(&mut self.entries, keep, now_ms) {
+      self.save();
+    }
   }
 
   /// Keeps `entry`, without its words when History keeps none, and answers it as kept. It only
@@ -253,9 +309,13 @@ impl Store {
         Err(at) => break at,
       }
     };
-    if keep == Keep::Off { entry.text.clear(); }
+    if keep == Keep::Off {
+      entry.text.clear();
+    }
     if let Some(file) = &self.file {
-      if let Err(e) = append(file, &entry) { log::warn!("history: couldn’t save a dictation: {e}"); }
+      if let Err(e) = append(file, &entry) {
+        log::warn!("history: couldn’t save a dictation: {e}");
+      }
     }
     self.entries.insert(at, entry.clone());
     entry
@@ -268,14 +328,20 @@ impl Store {
       entry.text.clear();
       changed = true;
     }
-    if changed { self.save(); }
+    if changed {
+      self.save();
+    }
   }
 
   /// The entries with words, newest first.
-  fn kept(&self) -> Vec<Entry> { self.entries.iter().rev().filter(|entry| !entry.text.is_empty()).cloned().collect() }
+  fn kept(&self) -> Vec<Entry> {
+    self.entries.iter().rev().filter(|entry| !entry.text.is_empty()).cloned().collect()
+  }
 
   /// The newest entry with words, for Paste Last Transcript.
-  fn newest(&self) -> Option<Entry> { self.entries.iter().rev().find(|entry| !entry.text.trim().is_empty()).cloned() }
+  fn newest(&self) -> Option<Entry> {
+    self.entries.iter().rev().find(|entry| !entry.text.trim().is_empty()).cloned()
+  }
 }
 
 static STORE: Mutex<Store> = Mutex::new(Store { file: None, entries: Vec::new() });
@@ -284,9 +350,15 @@ static APP: OnceLock<AppHandle> = OnceLock::new();
 /// until the app quits or History is cleared.
 static LAST: Mutex<Option<Entry>> = Mutex::new(None);
 
-fn store() -> MutexGuard<'static, Store> { STORE.lock().unwrap_or_else(|e| e.into_inner()) }
-fn last_slot() -> MutexGuard<'static, Option<Entry>> { LAST.lock().unwrap_or_else(|e| e.into_inner()) }
-fn keep() -> Keep { settings::get().history.keep }
+fn store() -> MutexGuard<'static, Store> {
+  STORE.lock().unwrap_or_else(|e| e.into_inner())
+}
+fn last_slot() -> MutexGuard<'static, Option<Entry>> {
+  LAST.lock().unwrap_or_else(|e| e.into_inner())
+}
+fn keep() -> Keep {
+  settings::get().history.keep
+}
 
 /// Reads the history at launch and prunes it. Every read prunes again, and so does a check each hour,
 /// so words never outstay Keep by more than an hour.
@@ -308,13 +380,21 @@ pub fn init(app: &AppHandle) -> Result<(), String> {
 /// Keeps a finished dictation, command or note, and tells the History page. A hold that heard no
 /// words isn't one.
 pub fn record(entry: Entry) {
-  if entry.words == 0 { return; }
+  if entry.words == 0 {
+    return;
+  }
   let kept = store().add(entry.clone(), keep());
-  if !entry.text.trim().is_empty() { *last_slot() = Some(Entry { text: entry.text, ..kept.clone() }); }
-  if let Some(app) = APP.get() { let _ = app.emit("dictate-history", serde_json::json!({ "entry": kept })); }
+  if !entry.text.trim().is_empty() {
+    *last_slot() = Some(Entry { text: entry.text, ..kept.clone() });
+  }
+  if let Some(app) = APP.get() {
+    let _ = app.emit("dictate-history", serde_json::json!({ "entry": kept }));
+  }
 }
 
-pub fn last() -> Option<Entry> { last_slot().clone() }
+pub fn last() -> Option<Entry> {
+  last_slot().clone()
+}
 
 // ---------- what the History page asks for ----------
 
@@ -339,7 +419,9 @@ pub fn history_delete(at: u64) {
   let mut store = store();
   store.forget(Some(at));
   let mut last = last_slot();
-  if last.as_ref().is_some_and(|entry| entry.at_ms == at) { *last = store.newest(); }
+  if last.as_ref().is_some_and(|entry| entry.at_ms == at) {
+    *last = store.newest();
+  }
 }
 
 /// Forgets everything said; the stats stay.
@@ -369,10 +451,12 @@ pub async fn history_type(app: AppHandle, at: u64) -> Result<(), String> {
   let text = store().entries.iter().find(|entry| entry.at_ms == at && !entry.text.is_empty()).map(|entry| entry.text.replace('\0', ""));
   let text = CString::new(text.ok_or("That dictation isn’t in your history any more.")?).map_err(|e| e.to_string())?;
   let (done, result): (Typed, _) = tokio::sync::oneshot::channel();
-  app.run_on_main_thread(move || {
-    let context = Box::into_raw(Box::new(done)).cast::<c_void>();
-    unsafe { dictate_history_type(text.as_ptr(), history_typed, context) }
-  }).map_err(|e| e.to_string())?;
+  app
+    .run_on_main_thread(move || {
+      let context = Box::into_raw(Box::new(done)).cast::<c_void>();
+      unsafe { dictate_history_type(text.as_ptr(), history_typed, context) }
+    })
+    .map_err(|e| e.to_string())?;
   let (status, target) = result.await.map_err(|e| e.to_string())?;
   match status {
     0 => Ok(()),
@@ -404,9 +488,13 @@ mod tests {
   }
 
   /// Local days at a fixed offset from UTC, in hours.
-  fn zone(hours: i64) -> impl Fn(u64) -> i64 { move |at_ms| (at_ms as i64 / 1000 + hours * 3600).div_euclid(86_400) }
+  fn zone(hours: i64) -> impl Fn(u64) -> i64 {
+    move |at_ms| (at_ms as i64 / 1000 + hours * 3600).div_euclid(86_400)
+  }
 
-  fn stats_of(entries: &[Entry]) -> Stats { stats(entries, NOON, zone(0)) }
+  fn stats_of(entries: &[Entry]) -> Stats {
+    stats(entries, NOON, zone(0))
+  }
 
   #[test]
   fn local_day_follows_the_mac() {
@@ -416,7 +504,12 @@ mod tests {
 
   #[test]
   fn pruning_drops_words_older_than_keep_and_keeps_numbers() {
-    let mut entries = vec![said(NOON - 40 * DAY_MS, 3, 1.0, "Mail"), said(NOON - 10 * DAY_MS, 4, 1.0, "Mail"), said(NOON - 2 * DAY_MS, 5, 1.0, "Mail"), said(NOON - H, 6, 1.0, "Mail")];
+    let mut entries = vec![
+      said(NOON - 40 * DAY_MS, 3, 1.0, "Mail"),
+      said(NOON - 10 * DAY_MS, 4, 1.0, "Mail"),
+      said(NOON - 2 * DAY_MS, 5, 1.0, "Mail"),
+      said(NOON - H, 6, 1.0, "Mail"),
+    ];
     let pruned = |keep: Keep| {
       let mut entries = entries.clone();
       prune(&mut entries, keep, NOON);
@@ -440,7 +533,9 @@ mod tests {
     store.add(said(NOON, 2, 1.0, "Notes"), Keep::Day);
     // A prune earlier the same UTC day, and every hour since, must not hold the words past a day.
     store.prune_now(Keep::Day, NOON + 12 * H);
-    for hour in 13..24 { store.prune_now(Keep::Day, NOON + hour * H); }
+    for hour in 13..24 {
+      store.prune_now(Keep::Day, NOON + hour * H);
+    }
     assert_eq!(store.kept().len(), 1);
     store.prune_now(Keep::Day, NOON + DAY_MS + 60_000);
     assert!(store.kept().is_empty(), "gone a minute after a day");
@@ -485,7 +580,9 @@ mod tests {
     use std::os::unix::fs::PermissionsExt;
     let file = temp("unreadable");
     let mut store = Store { file: Some(file.clone()), ..Store::default() };
-    for i in 0..3 { store.add(said(NOON + i, 2, 1.0, "Mail"), Keep::Week); }
+    for i in 0..3 {
+      store.add(said(NOON + i, 2, 1.0, "Mail"), Keep::Week);
+    }
     std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o000)).unwrap();
     let mut store = Store::open(file.clone(), Keep::Week, NOON + H);
     let at = store.add(said(NOON + H, 1, 1.0, "Mail"), Keep::Week).at_ms;
@@ -586,10 +683,14 @@ mod tests {
     assert_eq!((stats.days[29], stats.days[26]), (300, 100));
     assert_eq!(stats.days.iter().sum::<usize>(), 400);
     assert_eq!(stats.today, (NOON / DAY_MS) as i64);
-    assert_eq!(stats.apps, vec![
-      AppWords { bundle_id: "com.example.mail".into(), name: "Mail".into(), words: 100 },
-      AppWords { bundle_id: "com.example.slack".into(), name: "Slack".into(), words: 100 },
-    ], "a note counts for no app; a tie goes by name");
+    assert_eq!(
+      stats.apps,
+      vec![
+        AppWords { bundle_id: "com.example.mail".into(), name: "Mail".into(), words: 100 },
+        AppWords { bundle_id: "com.example.slack".into(), name: "Slack".into(), words: 100 },
+      ],
+      "a note counts for no app; a tie goes by name"
+    );
     assert_eq!(stats.streak, 1);
 
     let slow = stats_of(&[said(NOON, 2, 60.0, "Mail")]);
@@ -606,8 +707,10 @@ mod tests {
     entries.push(Entry { app_name: String::new(), ..said(NOON, 30, 1.0, "Nameless") });
     entries.push(Entry { app_name: "App 7 Renamed".into(), ..said(NOON, 1, 1.0, "App7") });
     let apps = stats_of(&entries).apps;
-    assert_eq!(apps.iter().map(|app| (app.name.as_str(), app.words)).collect::<Vec<_>>(),
-      [("com.example.nameless", 30), ("App 7 Renamed", 18), ("App6", 16), ("App5", 15), ("App4", 14)]);
+    assert_eq!(
+      apps.iter().map(|app| (app.name.as_str(), app.words)).collect::<Vec<_>>(),
+      [("com.example.nameless", 30), ("App 7 Renamed", 18), ("App6", 16), ("App5", 15), ("App4", 14)]
+    );
   }
 
   #[test]
@@ -637,10 +740,12 @@ mod tests {
     // 23:30 local on each of the last 8 evenings, with the clocks going back an hour 4 days ago.
     let back = NOON - 4 * DAY_MS;
     let offset = |at_ms: u64| if at_ms < back { 2 } else { 1 };
-    let evenings: Vec<Entry> = (0..8).map(|ago| {
-      let summer = NOON - ago * DAY_MS + 9 * H + H / 2;
-      said(if summer < back { summer } else { summer + H }, 1, 1.0, "Mail")
-    }).collect();
+    let evenings: Vec<Entry> = (0..8)
+      .map(|ago| {
+        let summer = NOON - ago * DAY_MS + 9 * H + H / 2;
+        said(if summer < back { summer } else { summer + H }, 1, 1.0, "Mail")
+      })
+      .collect();
     let stats = stats(&evenings, NOON + 10 * H + 3 * H / 4, |at_ms| zone(offset(at_ms))(at_ms));
     assert_eq!(stats.streak, 8);
     assert_eq!(stats.days[22..], [1; 8]);

@@ -7,11 +7,19 @@ use super::*;
 /// The note being taken. `committed` counts the samples since the note began that are in `text`;
 /// `cancelled` stops its steps when the note is.
 #[derive(Default)]
-pub(super) struct Note { id: String, text: String, pub(super) committed: usize, pub(super) busy: bool, cancelled: Arc<AtomicBool> }
+pub(super) struct Note {
+  id: String,
+  text: String,
+  pub(super) committed: usize,
+  pub(super) busy: bool,
+  cancelled: Arc<AtomicBool>,
+}
 
 impl LocalSpeech {
   /// The speech in `pcm` as sample ranges, found keenly like a hold's end; none for silence.
-  fn speech_in(&self, pcm: &[f32]) -> Result<Vec<(usize, usize)>, Error> { lock(&self.vad).as_mut().ok_or(Error::NotLoaded)?.speech_ranges(pcm) }
+  fn speech_in(&self, pcm: &[f32]) -> Result<Vec<(usize, usize)>, Error> {
+    lock(&self.vad).as_mut().ok_or(Error::NotLoaded)?.speech_ranges(pcm)
+  }
 
   /// The words of one piece; nothing for a piece that turns out to be silence.
   fn piece(&self, engine: &mut Whisper, id: &str, pcm: &[f32], cancelled: Arc<AtomicBool>) -> Result<String, Error> {
@@ -24,13 +32,18 @@ impl LocalSpeech {
   /// A note that was cancelled leaves nothing for the next one, and its step still running stops.
   pub(super) fn forget_note(&self, id: &str) {
     let mut note = lock(&self.note);
-    if note.id == id { note.cancelled.store(true, Ordering::Relaxed); *note = Note::default(); }
+    if note.id == id {
+      note.cancelled.store(true, Ordering::Relaxed);
+      *note = Note::default();
+    }
   }
 
   /// The note `id`, begun afresh if it is not the one being taken.
   pub(super) fn note<T>(&self, id: &str, use_it: impl FnOnce(&mut Note) -> T) -> T {
     let mut note = lock(&self.note);
-    if note.id != id { *note = Note { id: id.to_owned(), ..Note::default() }; }
+    if note.id != id {
+      *note = Note { id: id.to_owned(), ..Note::default() };
+    }
     use_it(&mut note)
   }
 
@@ -38,20 +51,37 @@ impl LocalSpeech {
   /// touches the next.
   pub(super) fn same_note<T>(&self, id: &str, use_it: impl FnOnce(&mut Note) -> T) -> Result<T, Error> {
     let mut note = lock(&self.note);
-    if note.id == id { Ok(use_it(&mut note)) } else { Err(Error::Cancelled) }
+    if note.id == id {
+      Ok(use_it(&mut note))
+    } else {
+      Err(Error::Cancelled)
+    }
   }
 
   /// One step while the note is being taken: `pcm` is what the Mac still holds, starting `base` samples
   /// into the note. A piece that has ended is transcribed for good; otherwise the piece still being said
   /// gets a quick pass for the preview. Answers how much of the note is now transcribed, and the preview.
-  pub(super) fn note_step(&self, engine: &mut Whisper, id: &str, base: usize, pcm: &[f32], cancelled: Arc<AtomicBool>) -> Result<(usize, Option<String>), Error> {
+  pub(super) fn note_step(
+    &self,
+    engine: &mut Whisper,
+    id: &str,
+    base: usize,
+    pcm: &[f32],
+    cancelled: Arc<AtomicBool>,
+  ) -> Result<(usize, Option<String>), Error> {
     let skip = self.same_note(id, |note| note.committed.saturating_sub(base))?.min(pcm.len());
     let tail = &pcm[skip..];
     let speech = self.speech_in(tail)?;
     if let Some(at) = pieces::cut(&speech, tail.len()) {
       let words = if speech.iter().any(|&(start, _)| start < at) { self.piece(engine, id, &tail[..at], cancelled.clone())? } else { String::new() };
-      if cancelled.load(Ordering::Relaxed) { return Err(Error::Cancelled); }
-      return self.same_note(id, |note| { note.text = pieces::join(&note.text, &words); note.committed = base + skip + at; (note.committed, None) });
+      if cancelled.load(Ordering::Relaxed) {
+        return Err(Error::Cancelled);
+      }
+      return self.same_note(id, |note| {
+        note.text = pieces::join(&note.text, &words);
+        note.committed = base + skip + at;
+        (note.committed, None)
+      });
     }
     let preview = if speech.is_empty() { None } else { self.pass(engine, id, tail, cancelled, true).ok() };
     Ok((base + skip, preview))
@@ -62,9 +92,13 @@ impl LocalSpeech {
   /// piece is in, it is an ordinary live pass, which a release can take as the answer.
   pub(super) fn long_draft(&self, engine: &mut Whisper, id: &str, base: usize, pcm: &[f32], cancelled: Arc<AtomicBool>) -> Option<String> {
     let (committed, preview) = self.note_step(engine, id, base, pcm, cancelled.clone()).ok()?;
-    if cancelled.load(Ordering::Relaxed) { return None; }
+    if cancelled.load(Ordering::Relaxed) {
+      return None;
+    }
     let said = self.same_note(id, |note| note.text.clone()).ok()?;
-    if let (0, Some(words)) = (committed, &preview) { self.hold(id, |hold| hold.heard = Some((base + pcm.len(), words.clone()))); }
+    if let (0, Some(words)) = (committed, &preview) {
+      self.hold(id, |hold| hold.heard = Some((base + pcm.len(), words.clone())));
+    }
     let text = pieces::join(&said, preview.as_deref().unwrap_or_default());
     (!text.is_empty()).then_some(text)
   }
@@ -94,16 +128,21 @@ extern "C" {
 #[no_mangle]
 extern "C" fn dictate_note_step(id: *const c_char, base: usize, samples: *const f32, count: usize) -> bool {
   let Some(app) = APP.get() else { return false };
-  if count == 0 || count > pieces::TAIL || samples.is_null() || id.is_null() { return false; }
+  if count == 0 || count > pieces::TAIL || samples.is_null() || id.is_null() {
+    return false;
+  }
   let state = app.state::<LocalSpeech>();
-  if !state.enabled.load(Ordering::Relaxed) || lock(&state.job).is_some() { return false; }
+  if !state.enabled.load(Ordering::Relaxed) || lock(&state.job).is_some() {
+    return false;
+  }
   // AppKit owns the bounded audio buffer until this synchronous copy returns.
   let (id, pcm) = unsafe { (CStr::from_ptr(id).to_string_lossy().into_owned(), std::slice::from_raw_parts(samples, count).to_vec()) };
   let Some(cancelled) = state.note(&id, |note| (!std::mem::replace(&mut note.busy, true)).then(|| note.cancelled.clone())) else { return false };
   let app = app.clone();
   tauri::async_runtime::spawn_blocking(move || {
     let state = app.state::<LocalSpeech>();
-    let mut claim = Claim::new(&state); claim.step = Some(id.clone());
+    let mut claim = Claim::new(&state);
+    claim.step = Some(id.clone());
     let step = try_lock(&state.engine).and_then(|mut engine| engine.as_mut().map(|engine| state.note_step(engine, &id, base, &pcm, cancelled)));
     drop(claim);
     let Some(Ok((committed, preview))) = step else { return };
@@ -121,36 +160,53 @@ extern "C" fn dictate_note_step(id: *const c_char, base: usize, samples: *const 
 #[no_mangle]
 extern "C" fn dictate_note_finish(id: *const c_char, base: usize, samples: *const f32, count: usize) -> bool {
   let Some(app) = APP.get() else { return false };
-  if count > pieces::TAIL || (count > 0 && samples.is_null()) || id.is_null() { return false; }
+  if count > pieces::TAIL || (count > 0 && samples.is_null()) || id.is_null() {
+    return false;
+  }
   let state = app.state::<LocalSpeech>();
-  if !state.enabled.load(Ordering::Relaxed) { return false; }
+  if !state.enabled.load(Ordering::Relaxed) {
+    return false;
+  }
   let mut job = lock(&state.job);
-  if job.is_some() { return false; }
-  let (id, pcm) = unsafe { (CStr::from_ptr(id).to_string_lossy().into_owned(), if count > 0 { std::slice::from_raw_parts(samples, count).to_vec() } else { Vec::new() }) };
+  if job.is_some() {
+    return false;
+  }
+  let (id, pcm) =
+    unsafe { (CStr::from_ptr(id).to_string_lossy().into_owned(), if count > 0 { std::slice::from_raw_parts(samples, count).to_vec() } else { Vec::new() }) };
   let cancelled = Arc::new(AtomicBool::new(false));
   *job = Some((id.clone(), cancelled.clone()));
   let app = app.clone();
   tauri::async_runtime::spawn_blocking(move || {
     let state = app.state::<LocalSpeech>();
-    let mut claim = Claim::new(&state); claim.job = Some(cancelled.clone());
+    let mut claim = Claim::new(&state);
+    claim.job = Some(cancelled.clone());
     // Waits for a step still running, so its piece is in before the rest is read.
     let result = catch_unwind(AssertUnwindSafe(|| match lock(&state.engine).as_mut() {
       Some(engine) => state.note_finish(engine, &id, base, &pcm, cancelled.clone()),
       None => Err(Error::NotLoaded),
-    })).unwrap_or_else(|_| {
+    }))
+    .unwrap_or_else(|_| {
       log::error!("voice note: its last pass panicked");
       Err(Error::Other(PANICKED.into()))
     });
     claim.end_job();
-    if cancelled.load(Ordering::Relaxed) || !state.enabled.load(Ordering::Relaxed) { return; }
-    if let Ok(text) = &result { history::record(history::Entry::new(&context::get(&id), text, (base + pcm.len()) as f64 / 16000.0)); }
+    if cancelled.load(Ordering::Relaxed) || !state.enabled.load(Ordering::Relaxed) {
+      return;
+    }
+    if let Ok(text) = &result {
+      history::record(history::Entry::new(&context::get(&id), text, (base + pcm.len()) as f64 / 16000.0));
+    }
     let id = CString::new(id).unwrap_or_default();
     let (text, error) = match result {
       Ok(text) => (Some(CString::new(text.replace('\0', "")).unwrap_or_default()), None),
       Err(error) => (None, Some(CString::new(error.to_string()).unwrap_or_default())),
     };
     let _ = app.run_on_main_thread(move || unsafe {
-      dictate_result(id.as_ptr(), text.as_ref().map_or(std::ptr::null(), |text| text.as_ptr()), error.as_ref().map_or(std::ptr::null(), |error| error.as_ptr()));
+      dictate_result(
+        id.as_ptr(),
+        text.as_ref().map_or(std::ptr::null(), |text| text.as_ptr()),
+        error.as_ref().map_or(std::ptr::null(), |error| error.as_ptr()),
+      );
     });
   });
   true

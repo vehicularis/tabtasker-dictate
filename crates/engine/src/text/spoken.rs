@@ -8,11 +8,15 @@ pub fn without_send(text: &str) -> (String, bool) {
   for phrase in ["send message", "send it", "send"] {
     let at = body.len().saturating_sub(phrase.len());
     // "send" alone is a word to type, not an order; a cut inside a letter ("Kapıyı kapat") can't be one
-    if at == 0 || !body.is_char_boundary(at) { continue; }
+    if at == 0 || !body.is_char_boundary(at) {
+      continue;
+    }
     let (head, tail) = body.split_at(at);
     if tail.eq_ignore_ascii_case(phrase) && head.ends_with(|c: char| c.is_whitespace() || c == ',' || c == '.') {
       let kept = head.trim_end().trim_end_matches([',', ';', ':']).trim_end();
-      if kept.is_empty() { continue; }
+      if kept.is_empty() {
+        continue;
+      }
       // The sentence keeps its own stop, as it was said: "Thanks, Maria. Send." → "Thanks, Maria."
       return (kept.to_owned(), true);
     }
@@ -26,12 +30,18 @@ pub fn without_send(text: &str) -> (String, bool) {
 pub fn sticky_words(text: &str) -> Option<String> {
   let text = text.trim();
   let lower = text.to_lowercase();
-  let (lead, after) = ["make a sticky note", "make a sticky", "new sticky note", "new sticky", "sticky note", "sticky"].iter()
+  let (lead, after) = ["make a sticky note", "make a sticky", "new sticky note", "new sticky", "sticky note", "sticky"]
+    .iter()
     .find_map(|lead| lower.strip_prefix(lead).map(|after| (lead.len(), after)))?;
-  if after.chars().next().is_some_and(char::is_alphanumeric) || !text.is_char_boundary(lead) { return None; }
+  if after.chars().next().is_some_and(char::is_alphanumeric) || !text.is_char_boundary(lead) {
+    return None;
+  }
   let words = text[lead..].trim_start_matches(|c: char| c.is_whitespace() || matches!(c, ',' | ':' | '.' | '-' | '—' | '!')).trim();
   let mut chars = words.chars();
-  Some(match chars.next() { Some(first) => first.to_uppercase().chain(chars).collect(), None => String::new() })
+  Some(match chars.next() {
+    Some(first) => first.to_uppercase().chain(chars).collect(),
+    None => String::new(),
+  })
 }
 
 #[cfg(test)]

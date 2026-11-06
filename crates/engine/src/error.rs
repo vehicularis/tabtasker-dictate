@@ -47,15 +47,21 @@ impl fmt::Display for Error {
 impl std::error::Error for Error {}
 
 impl From<Error> for String {
-  fn from(error: Error) -> Self { error.to_string() }
+  fn from(error: Error) -> Self {
+    error.to_string()
+  }
 }
 
 impl From<&str> for Error {
-  fn from(text: &str) -> Self { Self::Other(text.to_owned()) }
+  fn from(text: &str) -> Self {
+    Self::Other(text.to_owned())
+  }
 }
 
 impl From<String> for Error {
-  fn from(text: String) -> Self { Self::Other(text) }
+  fn from(text: String) -> Self {
+    Self::Other(text)
+  }
 }
 
 #[cfg(test)]

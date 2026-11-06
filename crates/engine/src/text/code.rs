@@ -3,60 +3,140 @@ use super::words::{capitalize, edges, lower, lowered, upper};
 
 /// Whether a symbol joins the word before it, the word after it, both, or neither.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum Fit { Spaced, Before, After, Both }
+enum Fit {
+  Spaced,
+  Before,
+  After,
+  Both,
+}
 
 /// Symbols by what you say for them, with how each sits beside its neighbours.
 const SYMBOLS: &[(&str, (&str, Fit))] = {
   use Fit::*;
   &[
-    ("dot", (".", Both)), ("comma", (",", Before)), ("colon", (":", Before)), ("semicolon", (";", Before)), ("semi colon", (";", Before)),
-    ("open paren", ("(", Both)), ("open parenthesis", ("(", Both)), ("open parentheses", ("(", Both)), ("left paren", ("(", Both)),
-    ("close paren", (")", Before)), ("close parenthesis", (")", Before)), ("close parentheses", (")", Before)), ("right paren", (")", Before)),
-    ("open bracket", ("[", Both)), ("open square bracket", ("[", Both)), ("left bracket", ("[", Both)),
-    ("close bracket", ("]", Before)), ("close square bracket", ("]", Before)), ("right bracket", ("]", Before)),
-    ("open brace", ("{", After)), ("open curly brace", ("{", After)), ("open curly", ("{", After)), ("left brace", ("{", After)),
-    ("close brace", ("}", Before)), ("close curly brace", ("}", Before)), ("close curly", ("}", Before)), ("right brace", ("}", Before)),
-    ("triple equals", ("===", Spaced)), ("double equals", ("==", Spaced)), ("not equals", ("!=", Spaced)),
-    ("equals", ("=", Spaced)), ("equal sign", ("=", Spaced)), ("equals sign", ("=", Spaced)),
-    ("plus", ("+", Spaced)), ("minus", ("-", Spaced)), ("fat arrow", ("=>", Spaced)), ("arrow", ("->", Spaced)),
-    ("less than", ("<", Spaced)), ("greater than", (">", Spaced)),
-    ("double ampersand", ("&&", Spaced)), ("ampersand", ("&", Spaced)), ("double pipe", ("||", Spaced)), ("pipe", ("|", Spaced)),
-    ("slash", ("/", Both)), ("forward slash", ("/", Both)), ("backslash", ("\\", Both)), ("back slash", ("\\", Both)),
-    ("underscore", ("_", Both)), ("hyphen", ("-", Both)), ("dash", ("-", After)),
-    ("star", ("*", After)), ("asterisk", ("*", After)), ("at sign", ("@", Both)),
-    ("hash", ("#", After)), ("hash sign", ("#", After)), ("pound sign", ("#", After)), ("dollar sign", ("$", After)),
-    ("percent", ("%", Before)), ("percent sign", ("%", Before)), ("caret", ("^", Both)), ("tilde", ("~", After)),
-    ("question mark", ("?", Before)), ("exclamation mark", ("!", Before)), ("exclamation point", ("!", Before)), ("bang", ("!", After)),
-    ("new line", ("\n", Both)), ("newline", ("\n", Both)), ("new paragraph", ("\n\n", Both)),
+    ("dot", (".", Both)),
+    ("comma", (",", Before)),
+    ("colon", (":", Before)),
+    ("semicolon", (";", Before)),
+    ("semi colon", (";", Before)),
+    ("open paren", ("(", Both)),
+    ("open parenthesis", ("(", Both)),
+    ("open parentheses", ("(", Both)),
+    ("left paren", ("(", Both)),
+    ("close paren", (")", Before)),
+    ("close parenthesis", (")", Before)),
+    ("close parentheses", (")", Before)),
+    ("right paren", (")", Before)),
+    ("open bracket", ("[", Both)),
+    ("open square bracket", ("[", Both)),
+    ("left bracket", ("[", Both)),
+    ("close bracket", ("]", Before)),
+    ("close square bracket", ("]", Before)),
+    ("right bracket", ("]", Before)),
+    ("open brace", ("{", After)),
+    ("open curly brace", ("{", After)),
+    ("open curly", ("{", After)),
+    ("left brace", ("{", After)),
+    ("close brace", ("}", Before)),
+    ("close curly brace", ("}", Before)),
+    ("close curly", ("}", Before)),
+    ("right brace", ("}", Before)),
+    ("triple equals", ("===", Spaced)),
+    ("double equals", ("==", Spaced)),
+    ("not equals", ("!=", Spaced)),
+    ("equals", ("=", Spaced)),
+    ("equal sign", ("=", Spaced)),
+    ("equals sign", ("=", Spaced)),
+    ("plus", ("+", Spaced)),
+    ("minus", ("-", Spaced)),
+    ("fat arrow", ("=>", Spaced)),
+    ("arrow", ("->", Spaced)),
+    ("less than", ("<", Spaced)),
+    ("greater than", (">", Spaced)),
+    ("double ampersand", ("&&", Spaced)),
+    ("ampersand", ("&", Spaced)),
+    ("double pipe", ("||", Spaced)),
+    ("pipe", ("|", Spaced)),
+    ("slash", ("/", Both)),
+    ("forward slash", ("/", Both)),
+    ("backslash", ("\\", Both)),
+    ("back slash", ("\\", Both)),
+    ("underscore", ("_", Both)),
+    ("hyphen", ("-", Both)),
+    ("dash", ("-", After)),
+    ("star", ("*", After)),
+    ("asterisk", ("*", After)),
+    ("at sign", ("@", Both)),
+    ("hash", ("#", After)),
+    ("hash sign", ("#", After)),
+    ("pound sign", ("#", After)),
+    ("dollar sign", ("$", After)),
+    ("percent", ("%", Before)),
+    ("percent sign", ("%", Before)),
+    ("caret", ("^", Both)),
+    ("tilde", ("~", After)),
+    ("question mark", ("?", Before)),
+    ("exclamation mark", ("!", Before)),
+    ("exclamation point", ("!", Before)),
+    ("bang", ("!", After)),
+    ("new line", ("\n", Both)),
+    ("newline", ("\n", Both)),
+    ("new paragraph", ("\n\n", Both)),
   ]
 };
 /// Quotes open and close in turn.
 const QUOTES: &[(&str, char)] = &[("quote", '"'), ("double quote", '"'), ("single quote", '\''), ("backtick", '`'), ("back tick", '`')];
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum Case { Camel, Pascal, Snake, Kebab, Constant, Upper, Lower }
+enum Case {
+  Camel,
+  Pascal,
+  Snake,
+  Kebab,
+  Constant,
+  Upper,
+  Lower,
+}
 /// Casing commands: the words after one, up to punctuation or a symbol, become one identifier.
 const CASES: &[(&str, Case)] = &[
-  ("camel case", Case::Camel), ("camelcase", Case::Camel), ("pascal case", Case::Pascal), ("pascalcase", Case::Pascal),
-  ("snake case", Case::Snake), ("snakecase", Case::Snake), ("kebab case", Case::Kebab), ("kebabcase", Case::Kebab),
-  ("constant case", Case::Constant), ("screaming snake case", Case::Constant),
-  ("all caps", Case::Upper), ("all capitals", Case::Upper), ("lower case", Case::Lower), ("lowercase", Case::Lower),
+  ("camel case", Case::Camel),
+  ("camelcase", Case::Camel),
+  ("pascal case", Case::Pascal),
+  ("pascalcase", Case::Pascal),
+  ("snake case", Case::Snake),
+  ("snakecase", Case::Snake),
+  ("kebab case", Case::Kebab),
+  ("kebabcase", Case::Kebab),
+  ("constant case", Case::Constant),
+  ("screaming snake case", Case::Constant),
+  ("all caps", Case::Upper),
+  ("all capitals", Case::Upper),
+  ("lower case", Case::Lower),
+  ("lowercase", Case::Lower),
 ];
 
 /// The longest phrase of `table` said at the start of `words` (already plain), and how many words it took.
 fn said<T: Copy>(words: &[String], table: &[(&str, T)]) -> Option<(T, usize)> {
-  table.iter().filter_map(|&(phrase, value)| {
-    let count = phrase.split(' ').count();
-    (words.len() >= count && words[..count].iter().map(String::as_str).eq(phrase.split(' '))).then_some((value, count))
-  }).max_by_key(|&(_, count)| count)
+  table
+    .iter()
+    .filter_map(|&(phrase, value)| {
+      let count = phrase.split(' ').count();
+      (words.len() >= count && words[..count].iter().map(String::as_str).eq(phrase.split(' '))).then_some((value, count))
+    })
+    .max_by_key(|&(_, count)| count)
 }
 
 /// Code built a piece at a time, spaced unless a piece joins its neighbour.
 #[derive(Default)]
-struct Code { text: String, glued: bool }
+struct Code {
+  text: String,
+  glued: bool,
+}
 impl Code {
   fn put(&mut self, piece: &str, fit: Fit) {
-    if !self.text.is_empty() && !self.glued && !matches!(fit, Fit::Before | Fit::Both) { self.text.push(' '); }
+    if !self.text.is_empty() && !self.glued && !matches!(fit, Fit::Before | Fit::Both) {
+      self.text.push(' ');
+    }
     self.text.push_str(piece);
     self.glued = matches!(fit, Fit::After | Fit::Both);
   }
@@ -105,9 +185,14 @@ pub(super) fn code(text: &str, turkish: bool) -> String {
         let (_, core, after) = edges(&tokens[at]);
         parts.extend(core.split(|c: char| !c.is_alphanumeric()).filter(|part| !part.is_empty()).map(String::from));
         at += 1;
-        if !after.is_empty() { close = after; break; }
+        if !after.is_empty() {
+          close = after;
+          break;
+        }
       }
-      if !parts.is_empty() { out.put(&format!("{}{close}", identifier(&parts, case, turkish)), Fit::Spaced); }
+      if !parts.is_empty() {
+        out.put(&format!("{}{close}", identifier(&parts, case, turkish)), Fit::Spaced);
+      }
     } else if let Some((quote, used)) = said(&plain[at..], QUOTES) {
       let which = ['"', '\'', '`'].iter().position(|&c| c == quote).unwrap_or(0);
       out.put(&quote.to_string(), if open[which] { Fit::Before } else { Fit::After });

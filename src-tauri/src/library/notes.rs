@@ -7,12 +7,19 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, UNIX_EPOCH};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Kind { Note, Meeting }
+pub enum Kind {
+  Note,
+  Meeting,
+}
 
 /// A saved note, newest first in `recent`.
 #[derive(Clone, Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NoteRef { pub path: PathBuf, pub title: String, pub modified_ms: u64 }
+pub struct NoteRef {
+  pub path: PathBuf,
+  pub title: String,
+  pub modified_ms: u64,
+}
 
 fn documents() -> Result<PathBuf, String> {
   let home = std::env::var_os("HOME").ok_or("Couldn’t find your home folder.")?;
@@ -40,14 +47,28 @@ pub(crate) fn vault_of(dir: &Path) -> Option<PathBuf> {
 
 /// When a note is made, from the page's local "YYYY-MM-DD HH.mm".
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct Stamp<'a> { date: &'a str, hour: &'a str, minute: &'a str }
+pub(crate) struct Stamp<'a> {
+  date: &'a str,
+  hour: &'a str,
+  minute: &'a str,
+}
 
 pub(crate) fn stamp(text: &str) -> Result<Stamp<'_>, String> {
   let bytes = text.as_bytes();
   let digits = |from: usize, to: usize| bytes[from..to].iter().all(u8::is_ascii_digit);
-  let shaped = bytes.len() == 16 && bytes[4] == b'-' && bytes[7] == b'-' && bytes[10] == b' ' && bytes[13] == b'.'
-    && digits(0, 4) && digits(5, 7) && digits(8, 10) && digits(11, 13) && digits(14, 16);
-  if !shaped { return Err("Invalid date".into()); }
+  let shaped = bytes.len() == 16
+    && bytes[4] == b'-'
+    && bytes[7] == b'-'
+    && bytes[10] == b' '
+    && bytes[13] == b'.'
+    && digits(0, 4)
+    && digits(5, 7)
+    && digits(8, 10)
+    && digits(11, 13)
+    && digits(14, 16);
+  if !shaped {
+    return Err("Invalid date".into());
+  }
   Ok(Stamp { date: &text[..10], hour: &text[11..13], minute: &text[14..16] })
 }
 
@@ -61,7 +82,9 @@ fn clean(text: &str) -> String {
 /// At most `bytes` of `text`, cut between letters.
 fn cut(text: &str, bytes: usize) -> &str {
   let mut end = bytes.min(text.len());
-  while !text.is_char_boundary(end) { end -= 1; }
+  while !text.is_char_boundary(end) {
+    end -= 1;
+  }
   text[..end].trim_end()
 }
 
@@ -69,10 +92,16 @@ fn cut(text: &str, bytes: usize) -> &str {
 /// so braces in it are never read as tokens.
 pub(crate) fn file_stem(template: &str, title: &str, at: Stamp) -> String {
   let title = clean(title);
-  let title = match cut(&title, 120) { "" => "Note", title => title };
+  let title = match cut(&title, 120) {
+    "" => "Note",
+    title => title,
+  };
   let name = template.replace("{date}", at.date).replace("{time}", &format!("{}.{}", at.hour, at.minute)).replace("{title}", title);
   // APFS allows 255 bytes; the rest is room for " 99.md".
-  match cut(&clean(&name), 200) { "" => "Note".into(), name => name.into() }
+  match cut(&clean(&name), 200) {
+    "" => "Note".into(),
+    name => name.into(),
+  }
 }
 
 /// A YAML value as is when it can only read as text, otherwise quoted.
@@ -80,21 +109,36 @@ fn scalar(value: &str) -> String {
   let plain = value.chars().next().is_some_and(char::is_alphabetic)
     && value.chars().all(|c| c.is_alphanumeric() || matches!(c, '-' | '_' | '/'))
     && !["true", "false", "yes", "no", "on", "off", "null", "y", "n"].contains(&value.to_lowercase().as_str());
-  if plain { value.into() } else { serde_json::Value::from(value).to_string() }
+  if plain {
+    value.into()
+  } else {
+    serde_json::Value::from(value).to_string()
+  }
 }
 
 /// A tag as Obsidian reads one: no leading #, words joined by hyphens.
-pub(crate) fn tag(text: &str) -> String { text.trim().trim_start_matches('#').split_whitespace().collect::<Vec<_>>().join("-") }
+pub(crate) fn tag(text: &str) -> String {
+  text.trim().trim_start_matches('#').split_whitespace().collect::<Vec<_>>().join("-")
+}
 
 pub(crate) fn front_matter(at: Stamp, tags: &[String], extra: &[(String, String)]) -> String {
   let mut text = format!("---\ncreated: {}T{}:{}\n", at.date, at.hour, at.minute);
   let tags: Vec<String> = tags.iter().map(|one| tag(one)).filter(|one| !one.is_empty()).collect();
-  if tags.is_empty() { text.push_str("tags: []\n"); }
-  else { text.push_str("tags:\n"); for one in &tags { text.push_str(&format!("  - {}\n", scalar(one))); } }
+  if tags.is_empty() {
+    text.push_str("tags: []\n");
+  } else {
+    text.push_str("tags:\n");
+    for one in &tags {
+      text.push_str(&format!("  - {}\n", scalar(one)));
+    }
+  }
   text.push_str("source: TabTasker Dictate\n");
   for (key, value) in extra {
-    let usable = !key.is_empty() && key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') && !["created", "tags", "source"].contains(&key.as_str());
-    if usable { text.push_str(&format!("{key}: {}\n", scalar(&value.split_whitespace().collect::<Vec<_>>().join(" ")))); }
+    let usable =
+      !key.is_empty() && key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') && !["created", "tags", "source"].contains(&key.as_str());
+    if usable {
+      text.push_str(&format!("{key}: {}\n", scalar(&value.split_whitespace().collect::<Vec<_>>().join(" "))));
+    }
   }
   text.push_str("---\n\n");
   text
@@ -103,7 +147,12 @@ pub(crate) fn front_matter(at: Stamp, tags: &[String], extra: &[(String, String)
 /// What a note becomes before anything touches the disk: its file's name, what a new file starts with,
 /// and the note itself. A daily note's file is named for the day and gets the note as a section.
 #[derive(Debug, PartialEq, Eq)]
-pub(crate) struct Composed { pub stem: String, pub daily: bool, pub header: String, pub section: String }
+pub(crate) struct Composed {
+  pub stem: String,
+  pub daily: bool,
+  pub header: String,
+  pub section: String,
+}
 
 pub(crate) fn compose(notes: &Notes, kind: Kind, title: &str, body: &str, actions: Option<&str>, at: Stamp, extra: &[(String, String)]) -> Composed {
   let daily = kind == Kind::Note && notes.daily_note;
@@ -116,7 +165,9 @@ pub(crate) fn compose(notes: &Notes, kind: Kind, title: &str, body: &str, action
     (if title.is_empty() { String::new() } else { format!("# {title}\n\n") }, "##")
   };
   let mut section = format!("{heading}{}\n", body.trim());
-  if let Some(items) = actions { section.push_str(&format!("\n{below} Action items\n\n{items}\n")); }
+  if let Some(items) = actions {
+    section.push_str(&format!("\n{below} Action items\n\n{items}\n"));
+  }
   let stem = if daily { at.date.to_owned() } else { file_stem(&notes.file_name, &title, at) };
   Composed { stem, daily, header, section }
 }
@@ -129,7 +180,11 @@ const ELOOP: i32 = 62;
 
 /// `{stem}.md`, then `{stem} 2.md` and on.
 fn candidate(dir: &Path, stem: &str, n: usize) -> PathBuf {
-  if n < 2 { dir.join(format!("{stem}.md")) } else { dir.join(format!("{stem} {n}.md")) }
+  if n < 2 {
+    dir.join(format!("{stem}.md"))
+  } else {
+    dir.join(format!("{stem} {n}.md"))
+  }
 }
 
 /// Creates a new file for `bytes`, never opening one that exists: a name that is taken, even by a dangling
@@ -137,12 +192,17 @@ fn candidate(dir: &Path, stem: &str, n: usize) -> PathBuf {
 fn write_new(dir: &Path, stem: &str, bytes: &[u8]) -> Result<PathBuf, String> {
   for n in 1..=100 {
     let path = candidate(dir, stem, n);
-    if path.symlink_metadata().is_ok() { continue; }
+    if path.symlink_metadata().is_ok() {
+      continue;
+    }
     match std::fs::OpenOptions::new().write(true).create_new(true).open(&path) {
       Ok(mut file) => {
         return match file.write_all(bytes).and_then(|_| file.sync_all()) {
           Ok(()) => Ok(path),
-          Err(e) => { let _ = std::fs::remove_file(&path); Err(format!("Couldn’t save the note: {e}")) }
+          Err(e) => {
+            let _ = std::fs::remove_file(&path);
+            Err(format!("Couldn’t save the note: {e}"))
+          }
         };
       }
       Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
@@ -157,7 +217,9 @@ fn write_new(dir: &Path, stem: &str, bytes: &[u8]) -> Result<PathBuf, String> {
 fn append_daily(dir: &Path, note: &Composed) -> Result<PathBuf, String> {
   for n in 1..=100 {
     let path = candidate(dir, &note.stem, n);
-    if path.symlink_metadata().is_ok_and(|meta| !meta.file_type().is_file()) { continue; }
+    if path.symlink_metadata().is_ok_and(|meta| !meta.file_type().is_file()) {
+      continue;
+    }
     let file = std::fs::OpenOptions::new().read(true).append(true).create(true).custom_flags(O_NOFOLLOW).open(&path);
     let mut file = match file {
       Ok(file) => file,
@@ -166,11 +228,17 @@ fn append_daily(dir: &Path, note: &Composed) -> Result<PathBuf, String> {
     };
     let len = file.metadata().map_err(|e| format!("Couldn’t save the note: {e}"))?.len();
     let mut text = String::new();
-    if len == 0 { text.push_str(&note.header); } else {
+    if len == 0 {
+      text.push_str(&note.header);
+    } else {
       // One blank line between what is there and the new section.
       let mut tail = [0u8; 2];
       let read = if len >= 2 { file.read_at(&mut tail, len - 2).unwrap_or(0) } else { file.read_at(&mut tail[1..], 0).map_or(0, |_| 1) };
-      text.push_str(match &tail[2 - read.min(2)..] { [.., b'\n', b'\n'] => "", [.., b'\n'] => "\n", _ => "\n\n" });
+      text.push_str(match &tail[2 - read.min(2)..] {
+        [.., b'\n', b'\n'] => "",
+        [.., b'\n'] => "\n",
+        _ => "\n\n",
+      });
     }
     text.push_str(&note.section);
     file.write_all(text.as_bytes()).and_then(|_| file.sync_all()).map_err(|e| format!("Couldn’t save the note: {e}"))?;
@@ -180,13 +248,24 @@ fn append_daily(dir: &Path, note: &Composed) -> Result<PathBuf, String> {
 }
 
 fn save(kind: Kind, title: &str, body: &str, actions: Option<&str>, stamp_text: &str, extra: &[(String, String)]) -> Result<PathBuf, String> {
-  if body.trim().is_empty() { return Err("There’s nothing to save.".into()); }
-  if body.chars().count() > 1_000_000 { return Err("This note is too long to save. Try splitting it in two.".into()); }
+  if body.trim().is_empty() {
+    return Err("There’s nothing to save.".into());
+  }
+  if body.chars().count() > 1_000_000 {
+    return Err("This note is too long to save. Try splitting it in two.".into());
+  }
   let at = stamp(stamp_text)?;
-  let dir = match kind { Kind::Note => notes_dir()?, Kind::Meeting => meetings_dir()? };
+  let dir = match kind {
+    Kind::Note => notes_dir()?,
+    Kind::Meeting => meetings_dir()?,
+  };
   std::fs::create_dir_all(&dir).map_err(|e| format!("Couldn’t make the notes folder: {e}"))?;
   let note = compose(&settings::get().notes, kind, title, body, actions, at, extra);
-  if note.daily { append_daily(&dir, &note) } else { write_new(&dir, &note.stem, format!("{}{}", note.header, note.section).as_bytes()) }
+  if note.daily {
+    append_daily(&dir, &note)
+  } else {
+    write_new(&dir, &note.stem, format!("{}{}", note.header, note.section).as_bytes())
+  }
 }
 
 /// Saves `body` under `title` in the folder for `kind`: a new file named by the notes template, or for a
@@ -206,13 +285,17 @@ pub fn recent(n: usize) -> Vec<NoteRef> {
 
 fn recent_in(dir: &Path, n: usize) -> Vec<NoteRef> {
   let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
-  let mut notes: Vec<NoteRef> = entries.filter_map(|entry| {
-    let entry = entry.ok()?;
-    let path = entry.path();
-    if path.extension()? != "md" || entry.file_name().as_encoded_bytes().starts_with(b".") || !entry.file_type().ok()?.is_file() { return None; }
-    let modified = entry.metadata().ok()?.modified().ok()?.duration_since(UNIX_EPOCH).ok()?.as_millis() as u64;
-    Some(NoteRef { title: path.file_stem()?.to_string_lossy().into_owned(), path, modified_ms: modified })
-  }).collect();
+  let mut notes: Vec<NoteRef> = entries
+    .filter_map(|entry| {
+      let entry = entry.ok()?;
+      let path = entry.path();
+      if path.extension()? != "md" || entry.file_name().as_encoded_bytes().starts_with(b".") || !entry.file_type().ok()?.is_file() {
+        return None;
+      }
+      let modified = entry.metadata().ok()?.modified().ok()?.duration_since(UNIX_EPOCH).ok()?.as_millis() as u64;
+      Some(NoteRef { title: path.file_stem()?.to_string_lossy().into_owned(), path, modified_ms: modified })
+    })
+    .collect();
   notes.sort_by(|a, b| b.modified_ms.cmp(&a.modified_ms).then_with(|| a.title.cmp(&b.title)));
   notes.truncate(n);
   notes
@@ -223,7 +306,15 @@ fn recent_in(dir: &Path, n: usize) -> Vec<NoteRef> {
 /// One file the Library shows: where it is, what it is called, when it last changed, and a taste of it.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct LibraryItem { pub path: String, pub title: String, pub kind: &'static str, pub modified_ms: u64, pub words: usize, pub excerpt: String, pub archived: bool }
+pub struct LibraryItem {
+  pub path: String,
+  pub title: String,
+  pub kind: &'static str,
+  pub modified_ms: u64,
+  pub words: usize,
+  pub excerpt: String,
+  pub archived: bool,
+}
 
 /// The folder archived notes and meetings move to, inside their own folder: still plain files, out of the list.
 const ARCHIVE: &str = "Archive";
@@ -237,16 +328,24 @@ fn past_front_matter(text: &str) -> &str {
 /// A file's title: `title:` in its front matter, else its first heading, else its name.
 pub(crate) fn title_of(text: &str, stem: &str) -> String {
   let front = text.strip_prefix("---\n").and_then(|rest| rest.find("\n---\n").map(|end| &rest[..end]));
-  let in_front = front.and_then(|front| front.lines().find_map(|line| line.strip_prefix("title:")))
-    .map(|title| title.trim().trim_matches(['"', '\'']).trim().to_owned()).filter(|title| !title.is_empty());
-  let heading = past_front_matter(text).lines().map(str::trim).find(|line| line.starts_with('#'))
-    .map(|line| line.trim_start_matches('#').trim().to_owned()).filter(|title| !title.is_empty());
+  let in_front = front
+    .and_then(|front| front.lines().find_map(|line| line.strip_prefix("title:")))
+    .map(|title| title.trim().trim_matches(['"', '\'']).trim().to_owned())
+    .filter(|title| !title.is_empty());
+  let heading = past_front_matter(text)
+    .lines()
+    .map(str::trim)
+    .find(|line| line.starts_with('#'))
+    .map(|line| line.trim_start_matches('#').trim().to_owned())
+    .filter(|title| !title.is_empty());
   in_front.or(heading).unwrap_or_else(|| stem.to_owned())
 }
 
 /// The words of the body: front matter, headings and list marks left out.
 fn body_words(text: &str) -> impl Iterator<Item = &str> {
-  past_front_matter(text).lines().map(str::trim)
+  past_front_matter(text)
+    .lines()
+    .map(str::trim)
     .filter(|line| !line.is_empty() && !line.starts_with('#'))
     .flat_map(|line| line.trim_start_matches(['-', '*', '>', ' ']).trim_start_matches("[ ]").trim_start_matches("[x]").split_whitespace())
 }
@@ -255,8 +354,13 @@ fn body_words(text: &str) -> impl Iterator<Item = &str> {
 pub(crate) fn excerpt_of(text: &str) -> String {
   let mut out = String::new();
   for word in body_words(text) {
-    if out.chars().count() + word.chars().count() > 160 { out.push('…'); break; }
-    if !out.is_empty() { out.push(' '); }
+    if out.chars().count() + word.chars().count() > 160 {
+      out.push('…');
+      break;
+    }
+    if !out.is_empty() {
+      out.push(' ');
+    }
     out.push_str(word);
   }
   out
@@ -267,12 +371,24 @@ fn library_in(dir: &Path, kind: &'static str, archived: bool, out: &mut Vec<Libr
   for entry in entries.flatten() {
     let path = entry.path();
     let Some(stem) = path.file_stem().map(|stem| stem.to_string_lossy().into_owned()) else { continue };
-    if path.extension().is_none_or(|ext| ext != "md") || stem.starts_with('.') || !entry.file_type().is_ok_and(|kind| kind.is_file()) { continue; }
+    if path.extension().is_none_or(|ext| ext != "md") || stem.starts_with('.') || !entry.file_type().is_ok_and(|kind| kind.is_file()) {
+      continue;
+    }
     let Ok(meta) = entry.metadata() else { continue };
-    if meta.len() > 8 << 20 { continue; } // not a note
+    if meta.len() > 8 << 20 {
+      continue;
+    } // not a note
     let modified = meta.modified().ok().and_then(|at| at.duration_since(UNIX_EPOCH).ok()).map_or(0, |age| age.as_millis() as u64);
     let text = std::fs::read_to_string(&path).unwrap_or_default();
-    out.push(LibraryItem { path: path.display().to_string(), title: title_of(&text, &stem), kind, modified_ms: modified, words: body_words(&text).count(), excerpt: excerpt_of(&text), archived });
+    out.push(LibraryItem {
+      path: path.display().to_string(),
+      title: title_of(&text, &stem),
+      kind,
+      modified_ms: modified,
+      words: body_words(&text).count(),
+      excerpt: excerpt_of(&text),
+      archived,
+    });
   }
 }
 
@@ -281,8 +397,14 @@ fn library_in(dir: &Path, kind: &'static str, archived: bool, out: &mut Vec<Libr
 /// level only.
 pub fn library() -> Vec<LibraryItem> {
   let mut items = Vec::new();
-  if let Ok(dir) = notes_dir() { library_in(&dir, "note", false, &mut items); library_in(&dir.join(ARCHIVE), "note", true, &mut items); }
-  if let Ok(dir) = meetings_dir() { library_in(&dir, "meeting", false, &mut items); library_in(&dir.join(ARCHIVE), "meeting", true, &mut items); }
+  if let Ok(dir) = notes_dir() {
+    library_in(&dir, "note", false, &mut items);
+    library_in(&dir.join(ARCHIVE), "note", true, &mut items);
+  }
+  if let Ok(dir) = meetings_dir() {
+    library_in(&dir, "meeting", false, &mut items);
+    library_in(&dir.join(ARCHIVE), "meeting", true, &mut items);
+  }
   items.sort_by(|a, b| b.modified_ms.cmp(&a.modified_ms).then_with(|| a.title.cmp(&b.title)));
   items
 }
@@ -293,7 +415,9 @@ pub(crate) fn in_library(path: &str) -> Result<PathBuf, String> {
   let file = PathBuf::from(path).canonicalize().map_err(|_| "That file isn’t there any more.".to_owned())?;
   let folders = [notes_dir(), meetings_dir()].into_iter().flatten().filter_map(|dir| dir.canonicalize().ok());
   let inside = folders.into_iter().any(|dir| file.starts_with(dir));
-  if !inside || file.extension().is_none_or(|ext| ext != "md") || !file.is_file() { return Err("Only a saved note or meeting can be opened here.".into()); }
+  if !inside || file.extension().is_none_or(|ext| ext != "md") || !file.is_file() {
+    return Err("Only a saved note or meeting can be opened here.".into());
+  }
   Ok(file)
 }
 
@@ -315,12 +439,21 @@ pub fn library_open(path: String) -> Result<(), String> {
 /// without its front matter or its heading.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NoteDoc { pub path: String, pub title: String, pub body: String, pub kind: &'static str, pub modified_ms: u64 }
+pub struct NoteDoc {
+  pub path: String,
+  pub title: String,
+  pub body: String,
+  pub kind: &'static str,
+  pub modified_ms: u64,
+}
 
 /// The front matter block, delimiters included, and what follows it.
 fn split_front(text: &str) -> (&str, &str) {
   let Some(rest) = text.strip_prefix("---\n") else { return ("", text) };
-  match rest.find("\n---\n") { Some(end) => (&text[..4 + end + 5], &rest[end + 5..]), None => ("", text) }
+  match rest.find("\n---\n") {
+    Some(end) => (&text[..4 + end + 5], &rest[end + 5..]),
+    None => ("", text),
+  }
 }
 
 /// A leading `# Title` line, and the body after it.
@@ -335,10 +468,18 @@ fn split_heading(rest: &str) -> (Option<&str>, &str) {
 
 /// The front matter with its `title:` line following `title`: changed, or dropped when the title is gone.
 fn retitled(front: &str, title: &str) -> String {
-  if front.is_empty() || !front.lines().any(|line| line.starts_with("title:")) { return front.to_owned(); }
+  if front.is_empty() || !front.lines().any(|line| line.starts_with("title:")) {
+    return front.to_owned();
+  }
   let mut out = String::new();
   for line in front.split_inclusive('\n') {
-    if line.starts_with("title:") { if !title.is_empty() { out.push_str(&format!("title: {}\n", scalar(title))); } } else { out.push_str(line); }
+    if line.starts_with("title:") {
+      if !title.is_empty() {
+        out.push_str(&format!("title: {}\n", scalar(title)));
+      }
+    } else {
+      out.push_str(line);
+    }
   }
   out
 }
@@ -346,7 +487,11 @@ fn retitled(front: &str, title: &str) -> String {
 /// Whether `file` is in the meetings folder.
 fn kind_of(file: &Path) -> &'static str {
   let in_meetings = meetings_dir().ok().and_then(|dir| dir.canonicalize().ok()).is_some_and(|dir| file.starts_with(dir));
-  if in_meetings { "meeting" } else { "note" }
+  if in_meetings {
+    "meeting"
+  } else {
+    "note"
+  }
 }
 
 fn modified_ms(path: &Path) -> u64 {
@@ -368,34 +513,52 @@ pub(crate) fn read_doc(path: &str) -> Result<NoteDoc, String> {
 /// Written beside the file and moved into place, so a crash leaves the old note, never half a new one.
 pub(crate) fn write_doc(path: &str, title: &str, body: &str) -> Result<u64, String> {
   let file = in_library(path)?;
-  if body.chars().count() > 1_000_000 { return Err("This note is too long to save. Try splitting it in two.".into()); }
+  if body.chars().count() > 1_000_000 {
+    return Err("This note is too long to save. Try splitting it in two.".into());
+  }
   let current = std::fs::read_to_string(&file).map_err(|_| "That file isn’t there any more.".to_owned())?;
   let (front, _) = split_front(&current);
   let title = title.split_whitespace().collect::<Vec<_>>().join(" ");
   let mut text = retitled(front, &title);
-  if !text.is_empty() { text.push('\n'); }
-  if !title.is_empty() { text.push_str(&format!("# {title}\n\n")); }
+  if !text.is_empty() {
+    text.push('\n');
+  }
+  if !title.is_empty() {
+    text.push_str(&format!("# {title}\n\n"));
+  }
   text.push_str(body.trim_end());
   text.push('\n');
   let dir = file.parent().ok_or("That file isn’t there any more.")?;
   let name = file.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
   let temp = dir.join(format!(".{name}.{}.tmp", std::process::id()));
-  let written = std::fs::OpenOptions::new().write(true).create_new(true).open(&temp)
+  let written = std::fs::OpenOptions::new()
+    .write(true)
+    .create_new(true)
+    .open(&temp)
     .and_then(|mut out| out.write_all(text.as_bytes()).and_then(|_| out.sync_all()))
     .and_then(|_| std::fs::rename(&temp, &file));
-  if let Err(e) = written { let _ = std::fs::remove_file(&temp); return Err(format!("Couldn’t save the note: {e}")); }
+  if let Err(e) = written {
+    let _ = std::fs::remove_file(&temp);
+    return Err(format!("Couldn’t save the note: {e}"));
+  }
   Ok(modified_ms(&file))
 }
 
 /// A new note file for the editor, with whatever words there are so far (none is fine): named by the
 /// notes template, or a section in the day's note.
 pub(crate) fn new_doc(title: &str, body: &str, stamp_text: &str) -> Result<PathBuf, String> {
-  if body.chars().count() > 1_000_000 { return Err("This note is too long to save. Try splitting it in two.".into()); }
+  if body.chars().count() > 1_000_000 {
+    return Err("This note is too long to save. Try splitting it in two.".into());
+  }
   let at = stamp(stamp_text)?;
   let dir = notes_dir()?;
   std::fs::create_dir_all(&dir).map_err(|e| format!("Couldn’t make the notes folder: {e}"))?;
   let note = compose(&settings::get().notes, Kind::Note, title, body, None, at, &[]);
-  if note.daily { append_daily(&dir, &note) } else { write_new(&dir, &note.stem, format!("{}{}", note.header, note.section).as_bytes()) }
+  if note.daily {
+    append_daily(&dir, &note)
+  } else {
+    write_new(&dir, &note.stem, format!("{}{}", note.header, note.section).as_bytes())
+  }
 }
 
 /// Keeps a picture pasted or dropped into a note beside it, in `attachments/<the note's name>/`, and
@@ -406,14 +569,22 @@ pub fn note_attach(path: String, name: String, data: String) -> Result<String, S
   use base64::Engine;
   let file = in_library(&path)?;
   let bytes = base64::engine::general_purpose::STANDARD.decode(data.trim()).map_err(|_| "That picture couldn’t be read.".to_owned())?;
-  if bytes.is_empty() { return Err("That picture is empty.".into()); }
-  if bytes.len() > 25 << 20 { return Err("That picture is too big. A note can hold pictures up to 25 MB.".into()); }
+  if bytes.is_empty() {
+    return Err("That picture is empty.".into());
+  }
+  if bytes.len() > 25 << 20 {
+    return Err("That picture is too big. A note can hold pictures up to 25 MB.".into());
+  }
   let dir = file.parent().ok_or("That file isn’t there any more.")?;
   let stem = file.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_else(|| "note".into());
   let folder = dir.join("attachments").join(clean(&stem));
   std::fs::create_dir_all(&folder).map_err(|e| format!("Couldn’t make a folder for the note’s pictures: {e}"))?;
   let suggested = Path::new(&name);
-  let ext = suggested.extension().map(|ext| ext.to_string_lossy().to_lowercase()).filter(|ext| ["png", "jpg", "jpeg", "gif", "webp", "heic", "svg", "pdf"].contains(&ext.as_str())).unwrap_or_else(|| "png".into());
+  let ext = suggested
+    .extension()
+    .map(|ext| ext.to_string_lossy().to_lowercase())
+    .filter(|ext| ["png", "jpg", "jpeg", "gif", "webp", "heic", "svg", "pdf"].contains(&ext.as_str()))
+    .unwrap_or_else(|| "png".into());
   let base = clean(&suggested.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default());
   let base = if base.is_empty() { "picture".to_owned() } else { base };
   for n in 1..=1000 {
@@ -449,15 +620,26 @@ fn archive_move(file: &Path, archived: bool) -> Result<PathBuf, String> {
   let (pictures, pictures_to) = (dir.join("attachments").join(&stem), target_dir.join("attachments").join(&stem));
   let moving_pictures = !stem.is_empty() && pictures.is_dir();
   if target.symlink_metadata().is_ok() || (moving_pictures && pictures_to.symlink_metadata().is_ok()) {
-    return Err(if archived { "There’s already one with this name in the archive. Rename this one first." } else { "There’s already one with this name. Rename this one first." }.into());
+    return Err(
+      if archived {
+        "There’s already one with this name in the archive. Rename this one first."
+      } else {
+        "There’s already one with this name. Rename this one first."
+      }
+      .into(),
+    );
   }
   std::fs::create_dir_all(&target_dir).map_err(|e| format!("Couldn’t make the Archive folder: {e}"))?;
   if moving_pictures {
-    if let Some(parent) = pictures_to.parent() { std::fs::create_dir_all(parent).map_err(|e| format!("Couldn’t move its pictures: {e}"))?; }
+    if let Some(parent) = pictures_to.parent() {
+      std::fs::create_dir_all(parent).map_err(|e| format!("Couldn’t move its pictures: {e}"))?;
+    }
     std::fs::rename(&pictures, &pictures_to).map_err(|e| format!("Couldn’t move its pictures: {e}"))?;
   }
   if let Err(e) = std::fs::rename(file, &target) {
-    if moving_pictures { let _ = std::fs::rename(&pictures_to, &pictures); }
+    if moving_pictures {
+      let _ = std::fs::rename(&pictures_to, &pictures);
+    }
     return Err(format!("Couldn’t move it: {e}"));
   }
   Ok(target)
@@ -478,7 +660,9 @@ pub fn note_delete(path: String) -> Result<(), String> {
   let stem = name.strip_suffix(".md").unwrap_or(&name);
   for n in 1..=100 {
     let target = if n == 1 { trash.join(&name) } else { trash.join(format!("{stem} {n}.md")) };
-    if target.symlink_metadata().is_ok() { continue; }
+    if target.symlink_metadata().is_ok() {
+      continue;
+    }
     return std::fs::rename(&file, &target).map_err(|e| format!("Couldn’t move it to the Trash: {e}"));
   }
   Err("Couldn’t move it to the Trash.".into())
@@ -508,9 +692,14 @@ pub fn watch(app: &tauri::AppHandle) {
   let spawned = std::thread::Builder::new().name("notes-watch".into()).spawn(move || loop {
     std::thread::sleep(Duration::from_secs(4));
     let now = shown(recent(10));
-    if now != last { last = now; crate::app::menu::recent_changed(&app); }
+    if now != last {
+      last = now;
+      crate::app::menu::recent_changed(&app);
+    }
   });
-  if let Err(e) = spawned { log::warn!("notes: can’t watch the folder: {e}"); }
+  if let Err(e) = spawned {
+    log::warn!("notes: can’t watch the folder: {e}");
+  }
 }
 
 // ---------- commands ----------
@@ -528,19 +717,24 @@ fn claude_title(text: &str) -> Option<String> {
 /// budget, and the note is saved as it is when Claude has nothing.
 #[tauri::command]
 pub async fn save_note(app: tauri::AppHandle, title: String, text: String, stamp: String, named: Option<bool>) -> Result<String, String> {
-  if text.trim().is_empty() { return Err("There’s nothing to save.".into()); }
+  if text.trim().is_empty() {
+    return Err("There’s nothing to save.".into());
+  }
   self::stamp(&stamp)?;
   let path = tauri::async_runtime::spawn_blocking(move || {
     let settings = settings::get();
     let claude = settings.claude.enabled;
     let (title, actions) = std::thread::scope(|scope| {
-      let naming = (claude && settings.notes.claude_title && (!named.unwrap_or(false) || title.trim().is_empty())).then(|| scope.spawn(|| crate::ai::title(&text)));
+      let naming =
+        (claude && settings.notes.claude_title && (!named.unwrap_or(false) || title.trim().is_empty())).then(|| scope.spawn(|| crate::ai::title(&text)));
       let listing = (claude && settings.notes.claude_actions).then(|| scope.spawn(|| crate::ai::summarize(crate::ai::Kind::Note, &text)));
       let title = naming.and_then(|job| job.join().ok().flatten()).and_then(|named| claude_title(&named)).unwrap_or(title);
       (title, listing.and_then(|job| job.join().ok().flatten()))
     });
     save(Kind::Note, &title, &text, actions.as_deref(), &stamp, &[])
-  }).await.map_err(|e| e.to_string())??;
+  })
+  .await
+  .map_err(|e| e.to_string())??;
   crate::app::menu::recent_changed(&app);
   Ok(path.display().to_string())
 }
@@ -562,7 +756,10 @@ pub fn show_notes(file: Option<String>) -> Result<(), String> {
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Folder { path: String, vault: Option<String> }
+pub struct Folder {
+  path: String,
+  vault: Option<String>,
+}
 
 /// The notes folder as it is now, and the name of the Obsidian vault it is in.
 #[tauri::command]
@@ -574,7 +771,10 @@ pub fn notes_folder() -> Result<Folder, String> {
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Preview { file_name: String, text: String }
+pub struct Preview {
+  file_name: String,
+  text: String,
+}
 
 /// The file a note would be saved as with `notes`, and what goes in it: the same code as saving.
 #[tauri::command]
@@ -584,7 +784,13 @@ pub fn preview_note(notes: Notes, title: String, body: String, actions: Option<S
 }
 
 extern "C" {
-  fn dictate_choose_folder(window: *mut c_void, message: *const c_char, start: *const c_char, context: *mut c_void, done: extern "C" fn(*mut c_void, *const c_char));
+  fn dictate_choose_folder(
+    window: *mut c_void,
+    message: *const c_char,
+    start: *const c_char,
+    context: *mut c_void,
+    done: extern "C" fn(*mut c_void, *const c_char),
+  );
 }
 
 type Chosen = tokio::sync::oneshot::Sender<Option<String>>;
@@ -602,11 +808,13 @@ pub async fn choose_folder(window: tauri::WebviewWindow, message: Option<String>
   let start = start.filter(|start| Path::new(start).is_absolute()).map(CString::new).transpose().map_err(|e| e.to_string())?;
   let (done, chosen) = tokio::sync::oneshot::channel();
   let parent = window.clone();
-  window.run_on_main_thread(move || {
-    let native = parent.ns_window().unwrap_or(std::ptr::null_mut());
-    let context = Box::into_raw(Box::new(done)).cast::<c_void>();
-    unsafe { dictate_choose_folder(native, message.as_ptr(), start.as_ref().map_or(std::ptr::null(), |start| start.as_ptr()), context, folder_chosen) };
-  }).map_err(|e| e.to_string())?;
+  window
+    .run_on_main_thread(move || {
+      let native = parent.ns_window().unwrap_or(std::ptr::null_mut());
+      let context = Box::into_raw(Box::new(done)).cast::<c_void>();
+      unsafe { dictate_choose_folder(native, message.as_ptr(), start.as_ref().map_or(std::ptr::null(), |start| start.as_ptr()), context, folder_chosen) };
+    })
+    .map_err(|e| e.to_string())?;
   chosen.await.map_err(|_| "The folder picker closed".to_string())
 }
 
@@ -641,7 +849,11 @@ mod tests {
     let (heading, body) = split_heading(rest);
     assert_eq!(heading, Some("Hello"));
     assert_eq!(body, "First line.\n\n- [ ] Call them\n");
-    assert_eq!(retitled(front, "Hello again"), "---\ncreated: 2026-11-02T13:05\ntitle: \"Hello again\"\ntags: []\n---\n", "a title with a space is quoted, as every value with one is");
+    assert_eq!(
+      retitled(front, "Hello again"),
+      "---\ncreated: 2026-11-02T13:05\ntitle: \"Hello again\"\ntags: []\n---\n",
+      "a title with a space is quoted, as every value with one is"
+    );
     assert_eq!(retitled(front, ""), "---\ncreated: 2026-11-02T13:05\ntags: []\n---\n");
     assert_eq!(retitled("---\ncreated: x\n---\n", "New"), "---\ncreated: x\n---\n", "no title line, none added");
     assert_eq!(split_front("# Plain\n\nWords\n"), ("", "# Plain\n\nWords\n"));
@@ -675,20 +887,28 @@ mod tests {
   }
 
   const AT: &str = "2026-11-01 21.40";
-  fn at() -> Stamp<'static> { stamp(AT).unwrap() }
+  fn at() -> Stamp<'static> {
+    stamp(AT).unwrap()
+  }
   fn temp(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("dictate-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir
   }
-  fn notes(change: impl FnOnce(&mut Notes)) -> Notes { let mut notes = Notes::default(); change(&mut notes); notes }
+  fn notes(change: impl FnOnce(&mut Notes)) -> Notes {
+    let mut notes = Notes::default();
+    change(&mut notes);
+    notes
+  }
 
   #[test]
   fn stamps_are_exactly_date_and_time() {
     let at = at();
     assert_eq!((at.date, at.hour, at.minute), ("2026-11-01", "21", "40"));
-    for bad in ["", "2026-11-01", "2026-11-01 21:40", "2026-11-01 21.4x", "2026-11-01T21.40", "../../../etc/x.md"] { assert!(stamp(bad).is_err(), "{bad}"); }
+    for bad in ["", "2026-11-01", "2026-11-01 21:40", "2026-11-01 21.4x", "2026-11-01T21.40", "../../../etc/x.md"] {
+      assert!(stamp(bad).is_err(), "{bad}");
+    }
   }
 
   #[test]
@@ -726,7 +946,8 @@ mod tests {
     let daily = compose(&notes(|n| n.daily_note = true), Kind::Note, "Plan", "Words", Some("- [ ] One"), at(), &[]);
     assert_eq!((daily.stem.as_str(), daily.daily), ("2026-11-01", true));
     assert_eq!(daily.section, "## 21:40 Plan\n\nWords\n\n### Action items\n\n- [ ] One\n");
-    assert!(!compose(&notes(|n| n.daily_note = true), Kind::Meeting, "Standup", "Words", None, at(), &[]).daily); // a meeting is always its own file
+    assert!(!compose(&notes(|n| n.daily_note = true), Kind::Meeting, "Standup", "Words", None, at(), &[]).daily);
+    // a meeting is always its own file
   }
 
   #[test]
@@ -751,8 +972,10 @@ mod tests {
     assert_eq!(path.file_name().unwrap(), "2026-11-01.md");
     let later = compose(&settings, Kind::Note, "", "Two", None, stamp("2026-11-01 22.05").unwrap(), &[]);
     assert_eq!(append_daily(&dir, &later).unwrap(), path);
-    assert_eq!(std::fs::read_to_string(&path).unwrap(),
-      "---\ncreated: 2026-11-01T21:40\ntags: []\nsource: TabTasker Dictate\n---\n\n## 21:40 Plan\n\nOne\n\n## 22:05\n\nTwo\n");
+    assert_eq!(
+      std::fs::read_to_string(&path).unwrap(),
+      "---\ncreated: 2026-11-01T21:40\ntags: []\nsource: TabTasker Dictate\n---\n\n## 21:40 Plan\n\nOne\n\n## 22:05\n\nTwo\n"
+    );
     // A day's file the person wrote, without a final line break, gets a blank line before the section.
     std::fs::write(dir.join("2026-11-02.md"), "My own words").unwrap();
     append_daily(&dir, &compose(&settings, Kind::Note, "Plan", "Three", None, stamp("2026-11-02 08.00").unwrap(), &[])).unwrap();
@@ -770,7 +993,18 @@ mod tests {
     std::fs::write(&target, "keep").unwrap();
     std::os::unix::fs::symlink(&target, dir.join("2026-11-01.md")).unwrap();
     std::fs::create_dir(dir.join("2026-11-01 2.md")).unwrap();
-    let note = compose(&notes(|n| { n.daily_note = true; n.frontmatter = false; }), Kind::Note, "Plan", "One", None, at(), &[]);
+    let note = compose(
+      &notes(|n| {
+        n.daily_note = true;
+        n.frontmatter = false;
+      }),
+      Kind::Note,
+      "Plan",
+      "One",
+      None,
+      at(),
+      &[],
+    );
     let path = append_daily(&dir, &note).unwrap();
     assert_eq!(path.file_name().unwrap(), "2026-11-01 3.md");
     assert_eq!(std::fs::read_to_string(&target).unwrap(), "keep");

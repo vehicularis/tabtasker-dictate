@@ -48,11 +48,7 @@ fn main() {
       Ok(())
     }
     Command::Fetch { model } => fetch::run(&args.models, model, args.json).map_err(Failure::Broken),
-    Command::Run {
-      ref files,
-      model,
-      ref hearing,
-    } => run::run(&args.models, files, model, hearing, args.json),
+    Command::Run { ref files, model, ref hearing } => run::run(&args.models, files, model, hearing, args.json),
     Command::Fixtures { ref out } => fixtures::run(out, args.json),
     Command::Eval { ref dir, model } => eval::run(dir, &args.models, model, args.json),
   };

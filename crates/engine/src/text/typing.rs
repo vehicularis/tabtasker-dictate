@@ -9,30 +9,48 @@ pub fn correction(before: &str, after: &str, dictated: std::ops::Range<usize>) -
   let (b, a): (Vec<char>, Vec<char>) = (before.chars().collect(), after.chars().collect());
   let (prefix, suffix) = unchanged(&b, &a);
   let (b_end, a_end) = (b.len() - suffix, a.len() - suffix);
-  if b_end < dictated.start || prefix > dictated.end { return None; } // an edit somewhere else
+  if b_end < dictated.start || prefix > dictated.end {
+    return None;
+  } // an edit somewhere else
   let mut start = prefix;
-  while start > 0 && word(&b[start - 1]) { start -= 1; }
+  while start > 0 && word(&b[start - 1]) {
+    start -= 1;
+  }
   let (mut b_stop, mut a_stop) = (b_end, a_end);
-  while b_stop < b.len() && word(&b[b_stop]) { b_stop += 1; a_stop += 1; }
-  if start < dictated.start || b_stop > dictated.end { return None; }
+  while b_stop < b.len() && word(&b[b_stop]) {
+    b_stop += 1;
+    a_stop += 1;
+  }
+  if start < dictated.start || b_stop > dictated.end {
+    return None;
+  }
   let trim = |chars: &[char]| chars.iter().collect::<String>().trim_matches(|c: char| !word(&c)).to_owned();
   let (old, mut new) = (trim(&b[start..b_stop]), trim(&a[start..a_stop]));
   let words = old.split_whitespace().count();
   // Only deleting is a correction inside one word ("Kuberneetes"), never across words.
-  if words == 0 || words > 3 || (a_end <= prefix && words > 1) { return None; }
+  if words == 0 || words > 3 || (a_end <= prefix && words > 1) {
+    return None;
+  }
   // A name's suffix after an apostrophe is not part of it: "İstanbul'a", "Kubernetes's".
-  if let Some(at) = new.find(['\'', '’']).filter(|&at| new.starts_with(char::is_uppercase) && new[..at].chars().count() >= 2) { new.truncate(at); }
-  if new.chars().any(|c| !word(&c)) || !(2..=64).contains(&new.chars().count()) || !new.chars().any(char::is_alphabetic) || old == new { return None; }
+  if let Some(at) = new.find(['\'', '’']).filter(|&at| new.starts_with(char::is_uppercase) && new[..at].chars().count() >= 2) {
+    new.truncate(at);
+  }
+  if new.chars().any(|c| !word(&c)) || !(2..=64).contains(&new.chars().count()) || !new.chars().any(char::is_alphabetic) || old == new {
+    return None;
+  }
   let opens = a[..start].iter().rev().find(|c| **c != ' ' && **c != '\t').is_none_or(|c| ".?!…\n\r".contains(*c));
-  let named = new.chars().skip(1).any(char::is_uppercase) || new.chars().any(|c| c.is_ascii_digit())
-    || (new.starts_with(char::is_uppercase) && !opens);
+  let named = new.chars().skip(1).any(char::is_uppercase) || new.chars().any(|c| c.is_ascii_digit()) || (new.starts_with(char::is_uppercase) && !opens);
   // A change of case alone is worth learning only as a name: "can" to "Can".
-  if old.to_lowercase() == new.to_lowercase() && !named { return None; }
+  if old.to_lowercase() == new.to_lowercase() && !named {
+    return None;
+  }
   Some((new, named))
 }
 
 /// A char of a word as corrections see it: a name may hold an apostrophe, a hyphen or an underscore.
-fn word(c: &char) -> bool { c.is_alphanumeric() || "'’-_".contains(*c) }
+fn word(c: &char) -> bool {
+  c.is_alphanumeric() || "'’-_".contains(*c)
+}
 
 /// How many chars `before` and `after` share at the start, and then at the end.
 fn unchanged(b: &[char], a: &[char]) -> (usize, usize) {
@@ -46,8 +64,12 @@ pub fn typing(before: &str, after: &str, caret: usize) -> bool {
   let (b, a): (Vec<char>, Vec<char>) = (before.chars().collect(), after.chars().collect());
   let (prefix, suffix) = unchanged(&b, &a);
   let (mut start, mut end) = (prefix, a.len() - suffix);
-  while start > 0 && word(&a[start - 1]) { start -= 1; }
-  while end < a.len() && word(&a[end]) { end += 1; }
+  while start > 0 && word(&a[start - 1]) {
+    start -= 1;
+  }
+  while end < a.len() && word(&a[end]) {
+    end += 1;
+  }
   (start + 1..=end).contains(&caret) && word(&a[caret - 1])
 }
 
@@ -55,8 +77,12 @@ pub fn typing(before: &str, after: &str, caret: usize) -> bool {
 pub fn chars_at(text: &str, start: usize, length: usize) -> std::ops::Range<usize> {
   let (mut units, mut from, mut to) = (0, None, None);
   for (i, c) in text.chars().enumerate() {
-    if from.is_none() && units >= start { from = Some(i); }
-    if to.is_none() && units >= start + length { to = Some(i); }
+    if from.is_none() && units >= start {
+      from = Some(i);
+    }
+    if to.is_none() && units >= start + length {
+      to = Some(i);
+    }
     units += c.len_utf16();
   }
   let count = text.chars().count();
@@ -79,16 +105,24 @@ pub fn live_next(typed: &str, previous: &str, now: &str) -> String {
   let heard: Vec<&str> = now.split_whitespace().collect();
   let agreed = common(&before, &heard);
   let kept = common(&typed, &heard);
-  if agreed <= kept { return String::new(); } // nothing agreed past what is typed and still heard there
+  if agreed <= kept {
+    return String::new();
+  } // nothing agreed past what is typed and still heard there
   let mut words: Vec<String> = typed[..kept].iter().map(|word| word.to_string()).collect();
   if let Some(last) = words.last_mut() {
     let gained = heard[kept - 1].strip_prefix(last.as_str()).unwrap_or("");
-    if gained.chars().all(|c| !c.is_alphanumeric()) { last.push_str(gained); }
+    if gained.chars().all(|c| !c.is_alphanumeric()) {
+      last.push_str(gained);
+    }
   }
   words.extend(heard[kept..agreed].iter().map(|word| word.to_string()));
   let mut text = words.join(" ");
   text.truncate(text.trim_end_matches(['.', ',', '!', '?', ';', ':', '…']).len());
-  if text == typed.join(" ") { String::new() } else { text }
+  if text == typed.join(" ") {
+    String::new()
+  } else {
+    text
+  }
 }
 
 #[cfg(test)]
@@ -97,7 +131,14 @@ mod tests {
 
   #[test]
   fn live_typing_types_what_two_passes_agree_on_and_recovers_from_a_pause() {
-    let next = |typed, previous, now| { let next = live_next(typed, previous, now); if next.is_empty() { "(as it is)".into() } else { next } };
+    let next = |typed, previous, now| {
+      let next = live_next(typed, previous, now);
+      if next.is_empty() {
+        "(as it is)".into()
+      } else {
+        next
+      }
+    };
     // The first pass alone agrees with nothing.
     assert_eq!(next("", "", "Call the"), "(as it is)");
     // Two passes agree on "Call": typed; the word still moving waits.
@@ -166,5 +207,4 @@ mod tests {
     assert!(!typing(field, "deploy to Kubernetes today", 99));
     assert!(!typing(field, field, 20));
   }
-
 }

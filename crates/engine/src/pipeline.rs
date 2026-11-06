@@ -1,6 +1,9 @@
 //! One pass end to end: choose the language, then transcribe.
+use crate::{
+  error::{Error, Result},
+  whisper::{Ask, Whisper},
+};
 use std::time::Instant;
-use crate::{error::{Error, Result}, whisper::{Ask, Whisper}};
 
 /// How sure detection must be for a hold to keep its language for later passes.
 pub const SURE: f32 = 0.9;
@@ -42,8 +45,15 @@ pub fn language(whisper: &mut Whisper, pcm: &[f32], ask: &Ask, held: Option<i32>
 
 /// [`language`]'s rules alone, with `detect` giving the detected language and how sure it is; `detect`
 /// runs only when neither Settings nor the hold has a language, and never once `stop` says so.
-pub fn choose_language(ask: &Ask, held: Option<i32>, stop: &(dyn Fn() -> bool + Sync), detect: impl FnOnce() -> Result<(i32, f32)>) -> Result<(i32, LanguageFrom)> {
-  if stop() { return Err(Error::Cancelled); }
+pub fn choose_language(
+  ask: &Ask,
+  held: Option<i32>,
+  stop: &(dyn Fn() -> bool + Sync),
+  detect: impl FnOnce() -> Result<(i32, f32)>,
+) -> Result<(i32, LanguageFrom)> {
+  if stop() {
+    return Err(Error::Cancelled);
+  }
   match (ask.language, held) {
     (Some(language), _) => Ok((language, LanguageFrom::Settings)),
     (None, Some(language)) => Ok((language, LanguageFrom::Hold)),
