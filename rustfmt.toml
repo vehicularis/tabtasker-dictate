@@ -1,0 +1,6 @@
+# Stable options only, as close to the hand-written style as rustfmt gets: 2-space indents and long lines.
+# Of the widths from 140 to 160, 160 changed the fewest lines.
+tab_spaces = 2
+max_width = 160
+use_small_heuristics = "Max"
+edition = "2021"
