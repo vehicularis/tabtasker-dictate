@@ -167,7 +167,7 @@ function Tester({ settings, status, down }: { settings: Settings; status: Status
   useEffect(() => { if (command) hear('command', 'Ask AI'); }, [command]);
   useEffect(() => {
     const press = (event: KeyboardEvent) => {
-      const chord = chordOf(event as unknown as ReactKeyboardEvent);
+      const chord = chordOf(event);
       const match = chord && !event.repeat && CHORDS.find(([name]) => keys[name]?.keyCode === chord.keyCode && keys[name]?.modifiers === chord.modifiers);
       if (match && !chordOff) light(match[0], match[1]);
     };
