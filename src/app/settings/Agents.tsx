@@ -1,43 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { invoke } from '../../bridge';
+import { configEntry, lastCall } from '../../lib/agents';
 import { message } from '../../lib/errors';
 import type { PageProps } from '../../store';
 import { Button, Icon, GroupHeader, Section, Tile, TileGroup, Toggle } from '../../ui';
-import type { AgentsStatus, Call } from '../../api/types';
+import type { AgentsStatus } from '../../api/types';
 
 type Target = 'claudeCode' | 'claudeDesktop';
-
-// Each tool as "Claude Code {did}" and "Claude Code tried to {do}".
-const TOOLS: Record<string, [string, string]> = {
-  list_notes: ['listed your notes', 'list your notes'],
-  read_note: ['read a note', 'read a note'],
-  search_notes: ['searched your notes', 'search your notes'],
-  list_meetings: ['listed your meetings', 'list your meetings'],
-  read_meeting: ['read a meeting', 'read a meeting'],
-  recent_dictations: ['read your recent dictations', 'read your recent dictations'],
-  create_note: ['created a note', 'create a note'],
-  append_to_note: ['added to a note', 'add to a note'],
-};
-const CLIENTS: Record<string, string> = { 'claude-code': 'Claude Code', 'claude-ai': 'Claude Desktop' };
-
-const ago = (ms: number) => {
-  const seconds = Math.round((ms - Date.now()) / 1000);
-  const format = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
-  for (const [unit, size] of [['day', 86400], ['hour', 3600], ['minute', 60]] as const) {
-    if (-seconds >= size) return format.format(Math.round(seconds / size), unit);
-  }
-  return 'just now';
-};
-
-function lastCall(call: Call | null) {
-  if (!call) return 'No agent has asked yet.';
-  const who = CLIENTS[call.client] ?? (call.clientTitle || 'An agent');
-  const [did, doing] = TOOLS[call.tool] ?? ['asked for something', 'ask for something'];
-  return call.ok ? `${who} ${did} ${ago(call.atMs)}.` : `${who} tried to ${doing} ${ago(call.atMs)}, and couldn’t.`;
-}
-
-// The entry Claude Desktop gets, which most apps take as is: a program and its arguments, never a shell line.
-const entry = ([command, ...args]: string[]) => `"tabtasker-dictate": {\n  "command": ${JSON.stringify(command)},\n  "args": ${JSON.stringify(args)}\n}`;
 
 const Failed = ({ children }: { children: string }) => <span role="alert" style={{ color: 'var(--danger)' }}>{children}</span>;
 
@@ -137,7 +106,7 @@ export function Agents({ settings, update }: PageProps) {
     setAdding(null);
     setConfirming(now => (now === target ? null : now));
   };
-  const usable = status && !status.problem ? entry(status.command) : '';
+  const usable = status && !status.problem ? configEntry(status.command) : '';
   const copy = () => void navigator.clipboard.writeText(usable).then(() => setCopied(true), () => setCopied(false));
 
   return <>
@@ -147,7 +116,7 @@ export function Agents({ settings, update }: PageProps) {
         <Tile title="Answer agents">
           <Toggle label="Answer agents" checked={agents.mcp} onChange={mcp => update({ agents: { mcp } })} />
         </Tile>
-        <Tile title="Last call" detail={status ? lastCall(status.lastCall) : 'Looking…'} />
+        <Tile title="Last call" detail={status ? lastCall(status.lastCall, Date.now()) : 'Looking…'} />
       </TileGroup>
     </Section>
     <Section title="Connect">

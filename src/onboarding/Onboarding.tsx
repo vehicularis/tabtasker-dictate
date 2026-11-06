@@ -3,11 +3,12 @@ import { closeWindow, invoke, listen } from '../bridge';
 import { message } from '../lib/errors';
 import { COMMAND_GLYPHS, GLOBE, KEY_NAMES } from '../lib/keyNames';
 import { ask } from '../lib/request';
+import { missing, setupDone, voiceReady, type StepId } from '../lib/setup';
 import { Caret, Desk, Dots, Field } from '../app/demo/Demo';
 import { Claude } from '../app/settings/Claude';
 import { Meetings } from '../app/settings/Meetings';
 import { Notes } from '../app/settings/Notes';
-import { aiIcon, aiName, setupDone, tilde, updateSettings, useSettings, useStatus, type PageProps } from '../store';
+import { aiIcon, aiName, tilde, updateSettings, useSettings, useStatus, type PageProps } from '../store';
 import type { DictateKey, Patch, Settings, Status } from '../api/types';
 import { Button, Icon, Kbd, ProgressBar, reduced, Segmented, Select, Tile, TileGroup, Toast, Toggle } from '../ui';
 import { Logo } from '../overlay/icons';
@@ -23,7 +24,6 @@ import './onboarding.css';
 // permission step shows what macOS says right now (polled while it is open) and never dead-ends: it says
 // what to click in System Settings and opens it, and every step can be skipped and finished later.
 
-type StepId = 'welcome' | 'microphone' | 'accessibility' | 'key' | 'model' | 'dots' | 'try' | 'extras' | 'done';
 const STEPS: { id: StepId; name: string }[] = [
   { id: 'welcome', name: 'Welcome' }, { id: 'microphone', name: 'Microphone' }, { id: 'accessibility', name: 'Accessibility' },
   { id: 'key', name: 'Your key' }, { id: 'model', name: 'Speech' }, { id: 'dots', name: 'The pill' },
@@ -34,15 +34,6 @@ const HOLD_MS = 350;
 // How long after a hold is let go its last words may still arrive: long enough for Whisper's final pass,
 // short enough that typing by hand afterwards doesn't count.
 const SETTLE_MS = 4_000;
-
-const voiceReady = (status: Status) => status.enabled && status.modelReady;
-
-/// What still stands between this Mac and dictating, with the step that fixes it.
-const missing = (status: Status) => ([
-  ['microphone', 'allow the microphone', status.microphone !== 'allowed'],
-  ['accessibility', 'turn on Accessibility', !status.accessibility],
-  ['model', 'download the speech model', !voiceReady(status)],
-] as [StepId, string, boolean][]).filter(([, , open]) => open);
 
 type Key = { down: boolean; tested: boolean };
 

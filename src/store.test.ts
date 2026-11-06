@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aiIcon, aiName, folderPath, needsSetup, sendsByDefault, setupDone, tilde } from './store';
-import type { Status } from './api/types';
+import { aiIcon, aiName, folderPath, sendsByDefault, tilde } from './store';
 
 describe('folderPath', () => {
   const home = '/Users/otter';
@@ -36,41 +35,6 @@ describe('tilde', () => {
   it('leaves a path when the home is unknown or empty', () => {
     expect(tilde('/Users/otter/Notes', undefined)).toBe('/Users/otter/Notes');
     expect(tilde('/Users/otter/Notes', '')).toBe('/Users/otter/Notes');
-  });
-});
-
-const ready: Status = {
-  enabled: true, microphone: 'allowed', accessibility: true, modelReady: true, modelPreparing: false, modelMessage: '', notes: '', openAtLogin: false,
-  globeKey: '', inputs: [], input: null, inputInUse: '', systemShortcuts: [],
-};
-
-describe('needsSetup', () => {
-  it('is false when everything is given', () => expect(needsSetup(ready)).toBe(false));
-  it('is true for each thing only the person can do', () => {
-    expect(needsSetup({ ...ready, microphone: 'notDetermined' })).toBe(true);
-    expect(needsSetup({ ...ready, microphone: 'denied' })).toBe(true);
-    expect(needsSetup({ ...ready, accessibility: false })).toBe(true);
-    expect(needsSetup({ ...ready, enabled: false })).toBe(true);
-    expect(needsSetup({ ...ready, modelReady: false })).toBe(true);
-  });
-  it('is false while the model is loading or downloading: that passes by itself', () => {
-    expect(needsSetup({ ...ready, modelReady: false, modelPreparing: true })).toBe(false);
-  });
-});
-
-describe('setupDone', () => {
-  it('is false before the status arrives', () => expect(setupDone(null)).toBe(false));
-  it('is true when everything is in place', () => expect(setupDone(ready)).toBe(true));
-  it('is false when any one is missing', () => {
-    expect(setupDone({ ...ready, enabled: false })).toBe(false);
-    expect(setupDone({ ...ready, microphone: 'denied' })).toBe(false);
-    expect(setupDone({ ...ready, accessibility: false })).toBe(false);
-    expect(setupDone({ ...ready, modelReady: false })).toBe(false);
-  });
-  it('is false while the model is still preparing, though that is not setup to do', () => {
-    // Today's behaviour; see the report.
-    expect(setupDone({ ...ready, modelReady: false, modelPreparing: true })).toBe(false);
-    expect(needsSetup({ ...ready, modelReady: false, modelPreparing: true })).toBe(false);
   });
 });
 
