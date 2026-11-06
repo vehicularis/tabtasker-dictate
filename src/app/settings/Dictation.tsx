@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { invoke, listen } from '../../bridge';
+import { megabytes, percent } from '../../lib/format';
 import { SOUNDS, type PageProps } from '../../store';
 import { Button, PageHeader, ProgressBar, Section, Select, Slider, Tile, TileGroup, Toggle } from '../../ui';
 import './speech.css';
@@ -20,9 +21,7 @@ const MODELS: Record<Model, { name: string; detail: string }> = {
   turbo: { name: 'Large-v3 Turbo', detail: 'Gets the most words right.' },
   small: { name: 'Small', detail: 'Faster and better at translating, but makes more mistakes.' },
 };
-const megabytes = (bytes: number) => bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : `${Math.round(bytes / 1e6)} MB`;
 const SOUND_OPTIONS = SOUNDS.map(name => ({ value: name, label: name }));
-const percent = (value: number) => `${Math.round(value * 100)}%`;
 
 /// The models, kept current by dictate-model, and asked for again when the choice changes.
 function useModels(choice: Model) {

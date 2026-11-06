@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { invoke } from '../../bridge';
 import { message } from '../../lib/errors';
+import { seconds } from '../../lib/format';
 import { COMMAND_GLYPHS, KEY_NAMES } from '../../lib/keyNames';
 import { folderPath, tilde, useStatus, type PageProps } from '../../store';
 import type { ClaudeModel, ClaudeVia, Settings } from '../../api/types';
@@ -15,8 +16,6 @@ const ABOUT: Record<ClaudeModel, string> = {
   'claude-opus-5-5': 'Opus 5.5 is the most capable, and worth it for long meetings.',
 };
 const NAME: Record<ClaudeModel, string> = { 'claude-haiku-5-5': 'Haiku', 'claude-sonnet-5-5': 'Sonnet', 'claude-opus-5-5': 'Opus' };
-
-const seconds = (ms: number) => `${(ms / 1000).toFixed(1)} s`;
 
 export function Claude({ settings, update }: PageProps) {
   const claude = settings.claude;
