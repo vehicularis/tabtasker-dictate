@@ -1,8 +1,8 @@
 // The app in a browser: real settings kept in memory, a sample status, and each feature's own commands
 // from its file here. Nothing leaves the page and nothing persists past a reload.
-import { PILL_BUTTONS, SOUNDS, STICKY_HUES } from '../store';
+import { PILL_BUTTONS, type Chord, type Settings, type Status, type Sticky, type UpdateState } from '../api/types';
+import { SOUNDS, STICKY_HUES } from '../store';
 import { chordProblem, MACOS_SHORTCUTS } from '../lib/chords';
-import type { Chord, Settings, Status, Sticky, UpdateState } from '../api/types';
 import { COMMANDS, type CommandArgs, type Commands } from '../api/commands';
 import type { Events } from '../api/events';
 import { register as input } from './input';

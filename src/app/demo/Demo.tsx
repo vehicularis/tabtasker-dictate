@@ -1,7 +1,7 @@
 import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { Dock } from '../../overlay/Dock';
 import { Logo } from '../../overlay/icons';
-import { PILL_BUTTONS } from '../../store';
+import { PILL_BUTTONS } from '../../api/types';
 import '../../overlay/overlay.css';
 import './demo.css';
 

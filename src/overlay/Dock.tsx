@@ -1,7 +1,7 @@
 import { useEffect, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from 'react';
 import { KEY_NAMES } from '../lib/keyNames';
-import { PILL_BUTTONS, useSettings } from '../store';
-import type { PillButton } from '../api/types';
+import { PILL_BUTTONS, type PillButton } from '../api/types';
+import { useSettings } from '../store';
 import { LibraryGlyph, MeetingGlyph, NoteGlyph, SettingsGlyph, StickyGlyph, WriteGlyph } from './glyphs';
 import { Orb } from './Orb';
 import { Icon } from '../ui/Icon';
