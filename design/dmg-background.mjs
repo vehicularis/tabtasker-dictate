@@ -13,7 +13,7 @@ try {
   let target;
   for (let i = 0; i < 50 && !target; i++) { await sleep(200); target = await fetch('http://127.0.0.1:9351/json/list').then(r => r.json()).then(l => l.find(t => t.type === 'page')).catch(() => null); }
   const ws = new WebSocket(target.webSocketDebuggerUrl); await new Promise(r => ws.addEventListener('open', r));
-  let id = 0; const waiting = new Map(); ws.addEventListener('message', ({ data }) => { const m = JSON.parse(data); waiting.get(m.id)?.(m.result); });
+  let id = 0; const waiting = new Map(); ws.addEventListener('message', ({ data }) => { const m = JSON.parse(data), done = waiting.get(m.id); if (typeof done === 'function') done(m.result); });
   const send = (method, params = {}) => new Promise(r => { waiting.set(++id, r); ws.send(JSON.stringify({ id, method, params })); });
   const shots = [];
   for (const scale of [1, 2]) {
