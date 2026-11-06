@@ -59,41 +59,54 @@ jobs:
       - name: Name the speech models
         id: models
         # The key is the SHA-256 lines of models.rs, so a new model downloads once and every other run,
-        # whatever else changed in that file, reuses the folder.
+        # whatever else changed in that file, reuses the folder. It names the models fetched below, so
+        # fetching another one starts a new folder rather than downloading it on every run.
         run: echo "key=$(grep -E 'sha256:' crates/engine/src/models.rs | shasum -a 256 | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
       - name: Restore the speech models
         id: restore-models
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: target/models
-          key: speech-models-${{ steps.models.outputs.key }}
+          key: speech-models-small-turbo-${{ steps.models.outputs.key }}
       - name: Build the lab
         run: cargo build -p dictate-lab --release --locked
       - name: Fetch the speech models
-        run: target/release/dictate-lab fetch --model small
+        run: |
+          target/release/dictate-lab fetch --model small
+          target/release/dictate-lab fetch --model turbo
       # Saved as soon as they are fetched, so a red eval doesn't download them again next run.
       - name: Save the speech models
         if: steps.restore-models.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: target/models
-          key: speech-models-${{ steps.models.outputs.key }}
+          key: speech-models-small-turbo-${{ steps.models.outputs.key }}
       - name: Render the fixtures
         # A voice the runner lacks skips its fixture; eval says so, and fails if no words were scored at all.
         run: target/release/dictate-lab fixtures
-      - name: Score the fixtures
+      - name: Score the fixtures on Small
+        id: small
         # With --json the table goes to stderr, so one run gives both the scores and the summary.
         run: |
           status=0
-          target/release/dictate-lab eval --model small --json > eval.json 2> table.txt || status=$?
-          { echo '```'; cat table.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          target/release/dictate-lab eval --model small --json > eval-small.json 2> table.txt || status=$?
+          { echo '### Small'; echo '```'; cat table.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           # A skipped fixture measured nothing: a warning each, so a runner without a voice is seen.
-          jq -r '.fixtures[] | select(.verdict == "skipped") | "::warning::\(.name) skipped: \(.why)"' eval.json || true
+          jq -r '.fixtures[] | select(.verdict == "skipped") | "::warning::\(.name) skipped: \(.why)"' eval-small.json || true
+          exit "$status"
+      - name: Score the fixtures on Turbo
+        # The app's default model, scored even when Small fails, so one run says how both do. Its skips
+        # are Small's: the same WAVs.
+        if: ${{ success() || steps.small.outcome == 'failure' }}
+        run: |
+          status=0
+          target/release/dictate-lab eval --model turbo --json > eval-turbo.json 2> table.txt || status=$?
+          { echo '### Turbo'; echo '```'; cat table.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           exit "$status"
       - name: Keep the scores
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: speech-eval-${{ github.run_id }}
-          path: eval.json
+          path: eval-*.json
           if-no-files-found: ignore

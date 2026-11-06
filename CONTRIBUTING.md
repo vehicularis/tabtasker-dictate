@@ -52,7 +52,7 @@ target/release/dictate-lab eval --model small     # score them; exits 1 when one
 target/release/dictate-lab run some.wav           # one recording, stage by stage
 ```
 
-CI runs the same eval as the "Speech eval" check on changes to the pipeline.
+CI runs the same eval as the "Speech eval" check on changes to the pipeline, on Small and on Turbo, the app's default. `--model turbo` scores Turbo here, after `fetch --model turbo`.
 
 ## Pull requests
 

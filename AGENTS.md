@@ -45,7 +45,8 @@ npm run dev                    # the windows in a browser, on the mock (see belo
 - `lab.html`: every setup step at once.
 
 After changing anything under `crates/engine`, `src-tauri/src/dictation` or `src-tauri/src/meetings`, or the
-Cargo files, score the spoken fixtures. CI's Speech eval does the same on those paths.
+Cargo files, score the spoken fixtures. CI's Speech eval does the same on those paths, on Small and on
+Turbo, the app's default: `--model turbo`, after `fetch --model turbo`.
 
 ```sh
 cargo build -p dictate-lab --release

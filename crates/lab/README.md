@@ -160,7 +160,7 @@ plain: over budget, WER 0.143 (budget 0.05), S/D/I 1/0/1, 260 ms, heard "The mee
 
 Because WER can't see case or symbols, a fixture can also give `expect_typed`, the exact text the app should type. Case and punctuation count there, and only the whitespace at either end is trimmed. That is how the Code and Formal fixtures check `firstName = getFirstName();` and a closing full stop, not just their words. The `code-username` row above shows it catching what WER can't: its words score 0, but `username` isn't `userName`.
 
-A fixture can pin a misrecognition the lab found with `known_issue`, one line saying what goes wrong. It is heard and scored like any other, gets the verdict `known` whether it fails or passes, and never fails the eval. When it passes, its row says so, so the issue can be taken out once it is fixed.
+A fixture can pin a misrecognition the lab found with `known_issue`, one line saying what goes wrong. It is heard and scored like any other, gets the verdict `known` whether it fails or passes, and never fails the eval. When it passes, its row says so, so the issue can be taken out once it is fixed. `known_on` pins it to one model, `small` or `turbo`: the other model holds the fixture to its budget.
 
 A row's verdict is one of:
 - `pass`;
@@ -238,6 +238,7 @@ Every field is optional, and a field the lab doesn't know is refused, so a typo 
 | `note` | `true` hears it piece by piece, as a note, however short. Audio over 25 s always is. |
 | `max_wer` | Its budget: the highest WER that still passes. `0` when absent. |
 | `known_issue` | A misrecognition it shows, in one line. It is scored, but never fails the eval. |
+| `known_on` | The model the known issue shows on, `small` or `turbo`. Every model when absent. |
 
 Write `expect` the way Whisper writes it: "three rooms for 12 people on June 14th at 7.30", not the way it was typed for `say`. Set a new fixture's `max_wer` from a real run with Small: its WER rounded up to the next 0.05, and at least 0.05.
 

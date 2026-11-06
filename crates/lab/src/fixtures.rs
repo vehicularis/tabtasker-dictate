@@ -3,7 +3,7 @@
 //! Apple's voices limits what their output may be used for.
 
 use crate::{run::Hearing, wav, Failure};
-use dictate_engine::{text::Style, whisper, SAMPLE_RATE};
+use dictate_engine::{models::ModelKind, text::Style, whisper, SAMPLE_RATE};
 use serde::Deserialize;
 use std::{
   io::Write,
@@ -56,6 +56,9 @@ pub struct Fixture {
   /// A misrecognition it is known to show, in one line. It is scored like any fixture but never fails
   /// the eval, and the eval says when it passes again.
   pub known_issue: Option<String>,
+  /// The model the known issue shows on; every model when absent. Another model holds the fixture to
+  /// its budget.
+  pub known_on: Option<ModelKind>,
 }
 
 /// Audio made without a voice.
@@ -69,6 +72,13 @@ pub enum Synth {
 }
 
 impl Fixture {
+  /// The fixture as `kind` is held to it: without a known issue `known_on` another model.
+  pub fn for_model(&mut self, kind: ModelKind) {
+    if self.known_on.is_some_and(|on| on != kind) {
+      self.known_issue = None;
+    }
+  }
+
   /// How the fixture is heard.
   pub fn hearing(&self) -> Result<Hearing, String> {
     let language = match self.language.as_deref() {
