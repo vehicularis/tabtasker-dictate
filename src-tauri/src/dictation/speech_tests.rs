@@ -132,22 +132,6 @@ fn real_local_model_transcribes_fixture_and_rejects_silence() {
 }
 
 #[test]
-fn a_note_is_cut_where_a_pause_closes_a_long_enough_piece() {
-  use note::{cut, PIECE};
-  let ms = |m: usize| m * 16;
-  let said = |a: usize, b: usize| (ms(a), ms(b));
-  assert_eq!(cut(&[said(0, 4000)], ms(4100)), None); // still talking
-  assert_eq!(cut(&[said(0, 7000), said(7600, 9000)], ms(9000)), Some(ms(7300))); // in the middle of the pause
-  assert_eq!(cut(&[said(0, 2000), said(2600, 5000)], ms(5000)), None); // a piece is a sentence, not a word
-  assert_eq!(cut(&[said(0, 8000)], ms(9000)), Some(ms(8500))); // the speech stopped
-  // Past Whisper's window: its last pause, or the window itself when the speech never paused.
-  assert_eq!(cut(&[said(0, 3000), said(3500, 26000)], ms(26000)), Some(ms(3250)));
-  assert_eq!(cut(&[said(0, 26000)], ms(26000)), Some(PIECE));
-  assert_eq!(cut(&[], ms(7000)), Some(ms(6600))); // silence goes, keeping a moment for a word starting
-  assert_eq!(cut(&[], ms(3000)), None);
-}
-
-#[test]
 #[ignore = "Needs TABTASKER_SPEECH_FIXTURE_DIR (models) and CLIPS (the eval clips with manifest.tsv)"]
 fn a_long_note_is_transcribed_while_it_is_said_and_finishes_at_once() {
   let root = PathBuf::from(std::env::var("TABTASKER_SPEECH_FIXTURE_DIR").unwrap());
@@ -211,16 +195,6 @@ fn each_model_choice_downloads_its_whisper_and_the_speech_detection() {
 }
 
 #[test]
-fn the_vocabulary_prompt_is_newest_first_and_stays_under_its_budget() {
-  let words: Vec<String> = ["Kubernetes", " ", "TabTasker", "İstanbul", "Can Turgut", "a\0b", "Vehicularis"].map(String::from).to_vec();
-  assert_eq!(prompt_text(&words, |_| true), (" Kubernetes, TabTasker, İstanbul, Can Turgut, Vehicularis".into(), 5));
-  // A budget keeps the newest words that fit, and never a part of one.
-  assert_eq!(prompt_text(&words, |text| text.chars().count() <= 40), (" Kubernetes, TabTasker, İstanbul".into(), 3));
-  assert_eq!(prompt_text(&words, |text| text.len() < 5), (String::new(), 0));
-  assert_eq!(prompt_text(&[], |_| true), (String::new(), 0));
-}
-
-#[test]
 fn a_pinned_language_skips_detection_and_auto_keeps_it() {
   assert_eq!(pinned("auto"), None);
   assert_eq!(pinned("tr"), whisper_rs::get_lang_id("tr"));
@@ -255,8 +229,8 @@ fn a_hands_free_session_is_heard_past_its_words_and_finished_piece_by_piece() {
   let speech = LocalSpeech::new(PathBuf::new());
   // Nothing in yet: a draft hears it all, and a short session finishes like a hold.
   assert_eq!(speech.unheard("long", 16000), 0);
-  assert!(!speech.long("long", note::PIECE));
-  assert!(speech.long("long", note::PIECE + 1));
+  assert!(!speech.long("long", pieces::PIECE));
+  assert!(speech.long("long", pieces::PIECE + 1));
   // With words in, only the audio past them, never past its end; and it finishes piece by piece.
   speech.note("long", |note| note.committed = 6 * 16000);
   assert_eq!(speech.unheard("long", 10 * 16000), 6 * 16000);
@@ -266,13 +240,13 @@ fn a_hands_free_session_is_heard_past_its_words_and_finished_piece_by_piece() {
   // A plain hold is heard whole and finished at once until it runs past a piece; from then on its pieces
   // go into its words while the key is held, like a hands-free session's.
   context::remember(context::HoldContext::new("held", context::Mode::Dictate, "", ""));
-  assert!(!pieced("held", note::PIECE) && pieced("held", note::PIECE + 1) && pieced("long", 16000));
-  assert_eq!(speech.unheard("held", note::PIECE), 0);
-  assert!(!speech.long("held", note::PIECE));
-  assert!(speech.long("held", note::PIECE + 1));
+  assert!(!pieced("held", pieces::PIECE) && pieced("held", pieces::PIECE + 1) && pieced("long", 16000));
+  assert_eq!(speech.unheard("held", pieces::PIECE), 0);
+  assert!(!speech.long("held", pieces::PIECE));
+  assert!(speech.long("held", pieces::PIECE + 1));
   assert!(speech.long("held", MAX_SAMPLES));
   speech.note("held", |note| note.committed = 20 * 16000);
-  assert_eq!(speech.unheard("held", note::PIECE), 0, "under a piece, nothing is in its words");
+  assert_eq!(speech.unheard("held", pieces::PIECE), 0, "under a piece, nothing is in its words");
   assert_eq!(speech.unheard("held", 40 * 16000), 20 * 16000);
   context::forget("long"); context::forget("held");
 }
@@ -294,33 +268,6 @@ fn with_no_model_loaded_one_on_this_mac_answers_while_the_chosen_one_downloads()
   std::fs::remove_file(root.join(TURBO.name)).unwrap();
   assert_eq!(first_load(&root, Turbo, false), Small);
   std::fs::remove_dir_all(root).unwrap();
-}
-
-#[test]
-fn a_window_is_silence_only_when_whisper_is_unsure_of_its_words_too() {
-  assert!(super::silent(0.9, -1.6), "no speech, and the words a guess");
-  assert!(!super::silent(0.9, -0.3), "clear words after a pause are kept");
-  assert!(!super::silent(0.4, -1.6), "unsure words where someone spoke are kept");
-  assert!(super::silent(0.7, f32::NEG_INFINITY), "a window with no words at all");
-}
-
-#[test]
-fn a_recited_vocabulary_is_told_from_a_sentence_that_uses_it() {
-  let words: Vec<String> = ["Kubernetes", "Vercel", "TabTasker", "Maria Lopez"].iter().map(|word| word.to_string()).collect();
-  assert!(super::echoes_prompt("Kubernetes, Vercel, TabTasker.", &words), "the list, in its order");
-  assert!(super::echoes_prompt("Vercel Vercel Vercel", &words), "one word over and over");
-  assert!(super::echoes_prompt("TabTasker,", &words), "a short run ending in a comma");
-  assert!(!super::echoes_prompt("Deploy it to Vercel before Maria Lopez gets in.", &words), "a sentence using two of them");
-  assert!(!super::echoes_prompt("Vercel", &words), "one vocabulary word said alone is a word");
-  assert!(!super::echoes_prompt("Kubernetes, Vercel", &[]), "nothing to echo without a vocabulary");
-}
-
-#[test]
-fn audio_quieter_than_a_breath_is_silence() {
-  assert!(super::silent_audio(&vec![0.0005; 16_000]));
-  let mut said = vec![0.0005; 16_000];
-  for (i, sample) in said[4_000..6_000].iter_mut().enumerate() { *sample = 0.02 * (i as f32 * 0.3).sin(); } // a quiet word on the built-in mic
-  assert!(!super::silent_audio(&said));
 }
 
 fn temp_dir(name: &str) -> PathBuf {
@@ -397,78 +344,6 @@ fn a_model_is_hashed_again_only_once_it_changes() {
 }
 
 #[test]
-fn a_strict_echo_is_always_heard_again_and_a_fragment_only_when_its_retry_could_count() {
-  let words: Vec<String> = ["Kubernetes", "Vercel", "TabTasker", "Maria Lopez"].iter().map(|word| word.to_string()).collect();
-  let (short, long) = (16_000, 4 * 16_000);
-  // Nine in ten of its words are vocabulary and it uses seven in ten of the vocabulary.
-  assert!(recites_prompt("Kubernetes, Vercel, TabTasker, Maria Lopez.", &words));
-  assert!(recites_prompt("kubernetes vercel tabtasker maria", &words));
-  assert!(!recites_prompt("Kubernetes, Vercel", &words), "two of five words is a sentence spelled from it");
-  assert!(!recites_prompt("Deploy Kubernetes, Vercel, TabTasker and Maria Lopez now", &words));
-  assert!(!recites_prompt("Kubernetes", &[]));
-  let strict = Echo::of("Kubernetes, Vercel, TabTasker, Maria Lopez.", &words, short).unwrap();
-  assert!(strict.strict);
-  // A fragment: tried again when a word repeats or the clip is 3 s or longer, so its retry could be kept.
-  assert_eq!(Echo::of("Vercel Vercel Vercel", &words, short), Some(Echo { strict: false, repeated: true, unique: 1 }));
-  assert_eq!(Echo::of("TabTasker,", &words, short), None);
-  assert_eq!(Echo::of("TabTasker,", &words, long), Some(Echo { strict: false, repeated: false, unique: 1 }));
-  assert_eq!(Echo::of("Deploy it to Vercel.", &words, long), None, "a sentence is never an echo");
-  // The retry is kept when it doesn't look like the prompt.
-  assert!(strict.keeps("Ship the Vercel build", &words, short));
-  assert!(strict.keeps("Vercel", &words, short), "a strict echo's retry may be one vocabulary word");
-  assert!(!strict.keeps("Kubernetes, Vercel, TabTasker, Maria Lopez", &words, short));
-  assert!(!strict.keeps("  ", &words, short));
-  // A fragment's retry has to hear more: a word more than one that repeated, two more over 3 s.
-  let looped = Echo::of("Vercel Vercel Vercel", &words, short).unwrap();
-  assert!(looped.keeps("Vercel works", &words, short));
-  assert!(!looped.keeps("Vercel", &words, short));
-  assert!(!looped.keeps("Vercel, TabTasker,", &words, short), "a fragment again");
-  let sparse = Echo::of("TabTasker,", &words, long).unwrap();
-  assert!(sparse.keeps("TabTasker is up again", &words, long));
-  assert!(!sparse.keeps("TabTasker works", &words, long));
-}
-
-#[test]
-fn the_vocabulary_recited_after_a_sentence_is_cut_off() {
-  let words: Vec<String> = ["Kubernetes", "Vercel", "TabTasker"].iter().map(|word| word.to_string()).collect();
-  let strip = |text: &str| without_recital(text, &words).to_owned();
-  assert_eq!(strip("Ship it on Friday. Kubernetes, Vercel."), "Ship it on Friday.");
-  assert_eq!(strip("Ship it on Friday! Kubernetes, Vercel, TabTasker"), "Ship it on Friday!");
-  assert_eq!(strip("我们周五发布。Kubernetes, Vercel"), "我们周五发布。");
-  assert_eq!(strip("Use Node.js. Kubernetes, Vercel."), "Use Node.js.");
-  // What stays: a run from the middle of the list, one entry, a list out of order, or no sentence before it.
-  assert_eq!(strip("Ship it on Friday. Vercel, TabTasker."), "Ship it on Friday. Vercel, TabTasker.");
-  assert_eq!(strip("Ship it on Friday. Kubernetes."), "Ship it on Friday. Kubernetes.");
-  assert_eq!(strip("Ship it on Friday. Kubernetes, TabTasker."), "Ship it on Friday. Kubernetes, TabTasker.");
-  assert_eq!(strip("Ship it. Kubernetes, Vercel, and more"), "Ship it. Kubernetes, Vercel, and more");
-  assert_eq!(strip("Kubernetes, Vercel."), "Kubernetes, Vercel.");
-  // A period that ends no sentence doesn't start one.
-  assert_eq!(strip("Ask Dr. Kubernetes, Vercel"), "Ask Dr. Kubernetes, Vercel");
-  assert_eq!(strip("Plans, etc. Kubernetes, Vercel"), "Plans, etc. Kubernetes, Vercel");
-  assert_eq!(strip("Wait... Kubernetes, Vercel"), "Wait... Kubernetes, Vercel");
-  assert_eq!(strip("Siehe z.B. Kubernetes, Vercel"), "Siehe z.B. Kubernetes, Vercel");
-  assert_eq!(strip("Point 2. Kubernetes, Vercel"), "Point 2. Kubernetes, Vercel");
-  assert_eq!(without_recital("Ship it. Kubernetes, Vercel.", &words[..1]), "Ship it. Kubernetes, Vercel.", "one entry is no list");
-}
-
-#[test]
-fn one_short_word_is_loud_enough_where_speech_detection_may_miss_it() {
-  let room = |level: f32| (0..16_000).map(|i| level * (i as f32 * 0.7).sin()).collect::<Vec<f32>>();
-  assert!(!voiced(&room(0.001)), "a quiet room");
-  // A word: one tenth of a second at RMS 0.004 with a click of 0.025 in it.
-  let mut word = room(0.001);
-  for (i, sample) in word[3_200..4_800].iter_mut().enumerate() { *sample = 0.0057 * (i as f32 * 0.3).sin(); }
-  assert!(!voiced(&word), "RMS 0.004 alone, with no peak, isn't a word");
-  word[4_000] = 0.025;
-  assert!(voiced(&word));
-  // Or plainly above that level, peak or not.
-  let mut loud = room(0.001);
-  for (i, sample) in loud[8_000..9_600].iter_mut().enumerate() { *sample = 0.0092 * (i as f32 * 0.3).sin(); }
-  assert!(voiced(&loud));
-  assert!(!voiced(&[]));
-}
-
-#[test]
 fn a_pass_that_panics_gives_back_what_it_claimed() {
   let dir = temp_dir("claim");
   let speech = LocalSpeech::new(dir.clone());
@@ -520,23 +395,3 @@ fn a_hold_kept_on_disk_comes_back_whole() {
   std::fs::remove_dir_all(dir).unwrap();
 }
 
-#[test]
-fn a_phrase_the_decoder_keeps_repeating_is_cut_to_what_the_time_allows() {
-  let looped = vec!["hello"; 400].join(" ");
-  let cut = unloop(&looped, 15.0);
-  assert_eq!(cut.split_whitespace().count(), 78, "five a second for 15 s, and three");
-  assert!(cut.split_whitespace().all(|word| word == "hello"));
-  // A loop after real words: the words stay, the loop gives way.
-  let tail = format!("Call the venue about Thursday. {}", vec!["Thank you."; 60].join(" "));
-  let cut = unloop(&tail, 4.0);
-  assert!(cut.starts_with("Call the venue about Thursday. Thank you."), "{cut}");
-  assert!(cut.split_whitespace().count() <= 23, "{cut}");
-  // Punctuation and case don't hide a repeat.
-  assert_eq!(unloop("Hello, hello. HELLO hello hello hello", 0.2), "Hello, hello. HELLO hello");
-  // What could have been said is left alone, repeats and all.
-  let said = "hello hello hello, can you hear me";
-  assert_eq!(unloop(said, 3.0), said);
-  // Too many words but no run to blame: nothing is cut.
-  let fast = "one two three four five six seven eight nine ten eleven twelve";
-  assert_eq!(unloop(fast, 1.0), fast);
-}

@@ -6,10 +6,7 @@ use crate::dictation::{context, history, text};
 use crate::{ai, settings};
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters, WhisperState, WhisperSysContext, WhisperSysState, WhisperVadContext, WhisperVadContextParams, WhisperVadParams};
 
-/// A hold listens for up to five minutes.
-const MAX_SAMPLES: usize = 5 * 60 * 16000;
-/// A hands-free session listens for up to ten minutes.
-const HANDS_FREE_SAMPLES: usize = 10 * 60 * 16000;
+use dictate_engine::{audio::{self, HANDS_FREE_SAMPLES, HOLD_SAMPLES as MAX_SAMPLES}, cleanup, pieces, prompt::{self, Echo, PROMPT_TOKENS}};
 /// A file the voice features download once and keep, checked against its size and SHA-256 every time.
 pub(crate) struct Model { pub name: &'static str, pub label: &'static str, pub url: &'static str, pub bytes: u64, pub sha256: &'static str }
 // Whisper large-v3 Turbo fine-tuned to keep its accuracy when the encoder sees only the speech rather
@@ -80,8 +77,6 @@ static APP: OnceLock<AppHandle> = OnceLock::new();
 pub(crate) fn models_root() -> Option<PathBuf> { APP.get().map(|app| app.state::<LocalSpeech>().root.clone()) }
 /// A hold with nothing to send (silence, too short, unclear): the overlay ends it quietly.
 const UNHEARD: &str = "unheard";
-/// Whisper reads at most 224 tokens of prompt; the vocabulary stays under this.
-const PROMPT_TOKENS: usize = 200;
 const CANCELLED: &str = "Speech model setup was cancelled.";
 /// A pass that panicked: dictation carries on, and this hold says so.
 const PANICKED: &str = "Couldn’t transcribe that. Try again.";
@@ -550,11 +545,7 @@ pub fn cancel(app: &AppHandle, id: &str) {
 
 /// Audio worth a pass: long enough, finite, not silent, and no longer than the longest hold.
 fn validate_audio(pcm: &[f32]) -> Result<(), String> {
-  if pcm.len() < 4000 || pcm.len() > HANDS_FREE_SAMPLES || pcm.iter().any(|sample| !sample.is_finite()) {
-    return Err(UNHEARD.into());
-  }
-  let energy = pcm.iter().map(|sample| (*sample as f64).powi(2)).sum::<f64>() / pcm.len() as f64;
-  if energy < 1e-7 { return Err(UNHEARD.into()); }
+  if !audio::worth_a_pass(pcm) { return Err(UNHEARD.into()); }
   Ok(())
 }
 
@@ -562,7 +553,7 @@ fn hands_free(id: &str) -> bool { context::get(id).mode == context::Mode::HandsF
 
 /// Whether a hold of `samples` is heard piece by piece, like a note: a hands-free session, or any hold
 /// that has run past one piece, whose pieces then go into its words while the key is still held.
-fn pieced(id: &str, samples: usize) -> bool { samples > note::PIECE || hands_free(id) }
+fn pieced(id: &str, samples: usize) -> bool { samples > pieces::PIECE || hands_free(id) }
 
 /// The most audio a hold may send: five minutes, or ten for a hands-free session.
 fn max_samples(id: &str) -> usize { if hands_free(id) { HANDS_FREE_SAMPLES } else { MAX_SAMPLES } }
@@ -600,149 +591,6 @@ impl Ask {
   }
 }
 
-/// Whether `text` is Whisper reciting the vocabulary it was prompted with rather than what was said, as it can
-/// over near-silence (OpenWhispr dictionaryEchoFilter.js): nine in ten of its words or more are vocabulary,
-/// and it is shaped like the list: one word over and over, a short run ending in a comma, or three or more
-/// entries in the list's own order. A sentence that merely uses a few vocabulary words is none of these.
-fn echoes_prompt(text: &str, words: &[String]) -> bool {
-  let bare = |word: &str| word.trim_matches(|c: char| !c.is_alphanumeric()).to_lowercase();
-  let entries: Vec<String> = words.iter().map(|word| word.trim().to_lowercase()).filter(|word| !word.is_empty()).collect();
-  let known: std::collections::HashSet<String> = entries.iter().flat_map(|entry| entry.split_whitespace().map(bare).collect::<Vec<_>>()).filter(|word| !word.is_empty()).collect();
-  let said: Vec<String> = text.split_whitespace().map(bare).filter(|word| !word.is_empty()).collect();
-  let unique: std::collections::HashSet<&String> = said.iter().collect();
-  if unique.is_empty() || (unique.iter().filter(|word| known.contains(**word)).count() * 10) < unique.len() * 9 { return false; }
-  let repeated = unique.iter().any(|word| said.iter().filter(|other| other == word).count() >= 3);
-  let fragment = text.trim().ends_with(',') && text.trim().chars().count() <= 30;
-  let lower = text.to_lowercase();
-  let (mut from, mut in_order) = (0, 0);
-  for entry in &entries { if let Some(at) = lower[from..].find(entry.as_str()) { in_order += 1; from += at + entry.len(); } }
-  repeated || fragment || in_order >= 3
-}
-
-/// Lowercase words with their punctuation gone, one space apart, as OpenWhispr compares them.
-fn normalize(text: &str) -> String {
-  let kept: String = text.to_lowercase().chars().filter(|c| c.is_alphanumeric() || c.is_whitespace()).collect();
-  kept.split_whitespace().collect::<Vec<_>>().join(" ")
-}
-
-/// Whether `text` is the vocabulary Whisper was given recited back, whole or nearly (OpenWhispr
-/// matchesDictionaryPrompt): nine in ten of its words are vocabulary, and it uses seven in ten of the vocabulary.
-fn recites_prompt(text: &str, words: &[String]) -> bool {
-  let (said, prompt) = (normalize(text), normalize(&words.join(" ")));
-  if said.is_empty() || prompt.is_empty() { return false; }
-  if said == prompt { return true; }
-  let known: std::collections::HashSet<&str> = prompt.split(' ').collect();
-  let unique: std::collections::HashSet<&str> = said.split(' ').collect();
-  let matched = unique.iter().filter(|word| known.contains(*word)).count();
-  matched * 10 >= unique.len() * 9 && matched * 10 >= known.len() * 7
-}
-
-/// Audio past which a fragment of the prompt may be what Whisper made of more than it heard.
-const SPARSE: usize = 3 * 16_000;
-
-/// A decode that may be Whisper reciting its prompt, with what its retry without the prompt is judged
-/// against (OpenWhispr audioManager.js): `strict` when it recites the whole vocabulary, otherwise it is a
-/// fragment shaped like it; `repeated` when a word comes twice, `unique` the different words in it.
-#[derive(Debug, PartialEq)]
-struct Echo { strict: bool, repeated: bool, unique: usize }
-impl Echo {
-  /// `text` heard over `samples`, when it is worth a retry: a strict echo always, a fragment only when a
-  /// retry could replace it, so with a word said twice or over 3 s of audio or more.
-  fn of(text: &str, words: &[String], samples: usize) -> Option<Self> {
-    let said = normalize(text);
-    let all: Vec<&str> = said.split_whitespace().collect();
-    let unique = all.iter().collect::<std::collections::HashSet<_>>().len();
-    let echo = Self { strict: recites_prompt(text, words), repeated: all.len() > unique, unique };
-    (echo.strict || (echoes_prompt(text, words) && (echo.repeated || samples >= SPARSE))).then_some(echo)
-  }
-
-  /// Whether the retry is what was said: it doesn't recite the vocabulary, and in place of a fragment it
-  /// isn't one either and hears more: a word more than a fragment that repeated one, or two more over 3 s.
-  fn keeps(&self, retry: &str, words: &[String], samples: usize) -> bool {
-    let unique = normalize(retry).split_whitespace().collect::<std::collections::HashSet<_>>().len();
-    if unique == 0 || recites_prompt(retry, words) { return false; }
-    self.strict || (!echoes_prompt(retry, words) && ((self.repeated && unique > self.unique) || (samples >= SPARSE && unique >= self.unique + 2)))
-  }
-}
-
-/// A period that doesn't end a sentence: after an abbreviation, an initial, a list number or another period.
-fn no_full_stop(before: &str) -> bool {
-  const SHORT: &[&str] = &["etc", "vs", "mr", "mrs", "ms", "dr", "st", "jr", "sr", "sra", "prof", "incl", "esp", "approx", "ca", "cf", "al", "no", "nr", "ex", "ej", "vgl", "bzw", "usw"];
-  let word = before.rsplit(|c: char| c.is_whitespace() || c == '(').next().unwrap_or_default().to_lowercase();
-  let mut last = before.chars().rev();
-  let dotted = matches!((last.next(), last.next(), last.next()), (Some(a), Some('.'), Some(b)) if a.is_alphabetic() && b.is_alphabetic());
-  before.ends_with('.') || dotted || SHORT.contains(&word.as_str())
-    || (word.chars().count() == 1 && word.chars().all(char::is_alphabetic)) || ((1..=2).contains(&word.len()) && word.bytes().all(|b| b.is_ascii_digit()))
-}
-
-/// `text` without the vocabulary Whisper recited after what was said (OpenWhispr stripTrailingDictionaryEcho):
-/// its last sentence, when that is two or more entries in the prompt's own order from its first. A
-/// sentence of real speech hardly ever is. Ours is the newest words and always fits whole, so a recital
-/// opens it; OpenWhispr also strips one that closes a prompt Whisper had cut, which ours never is.
-fn without_recital<'a>(text: &'a str, words: &[String]) -> &'a str {
-  let entries: Vec<String> = words.iter().map(|word| normalize(word)).filter(|word| !word.is_empty()).collect();
-  if entries.len() < 2 { return text; }
-  let body = text.trim_end();
-  let mut tail = None;
-  let mut chars = body.char_indices().peekable();
-  while let Some((at, c)) = chars.next() {
-    let wide = matches!(c, '。' | '！' | '？');
-    if !wide && !matches!(c, '.' | '!' | '?') { continue; }
-    let mut end = at + c.len_utf8();
-    while let Some(&(next, space)) = chars.peek().filter(|(_, space)| space.is_whitespace()) { end = next + space.len_utf8(); chars.next(); }
-    // "Node.js" stays a word, and the break must have a sentence after it.
-    if (!wide && end == at + 1) || end >= body.len() || (c == '.' && no_full_stop(&body[..at])) { continue; }
-    tail = Some(end);
-  }
-  let Some(start) = tail else { return text };
-  let said: Option<Vec<usize>> = body[start..].split([',', '、', '，']).map(normalize).filter(|term| !term.is_empty())
-    .map(|term| entries.iter().position(|entry| *entry == term)).collect();
-  match said {
-    Some(run) if run.len() >= 2 && run[0] == 0 && run.windows(2).all(|pair| pair[1] == pair[0] + 1) => body[..start].trim_end(),
-    _ => text,
-  }
-}
-
-/// Too quiet to hold a word: even its loudest tenth of a second is below the level of a breath (OpenWhispr
-/// localSpeechGate.js, its first rule). Whisper is never asked there, where it would make words up.
-fn silent_audio(pcm: &[f32]) -> bool {
-  pcm.chunks(1_600).map(|window| (window.iter().map(|s| s * s).sum::<f32>() / window.len() as f32).sqrt()).fold(0.0, f32::max) < 0.002
-}
-
-/// The loudest sample and the loudest tenth of a second (RMS) of `pcm`: what the gates below judge, for the log.
-fn levels(pcm: &[f32]) -> (f32, f32) {
-  let peak = pcm.iter().fold(0.0f32, |peak, s| peak.max(s.abs()));
-  let rms = pcm.chunks(1_600).map(|window| (window.iter().map(|s| s * s).sum::<f32>() / window.len() as f32).sqrt()).fold(0.0, f32::max);
-  (peak, rms)
-}
-
-/// Loud enough somewhere to be a voice (OpenWhispr localSpeechGate.js, its speech rule): a tenth of a second
-/// at the level of a word, RMS 0.003 with a peak of 0.02, or plainly above it at RMS 0.006.
-fn voiced(pcm: &[f32]) -> bool {
-  pcm.chunks(1_600).any(|window| {
-    let rms = (window.iter().map(|s| s * s).sum::<f32>() / window.len() as f32).sqrt();
-    let peak = window.iter().fold(0.0f32, |peak, s| peak.max(s.abs()));
-    rms >= 0.006 || (rms >= 0.003 && peak >= 0.02)
-  })
-}
-
-/// The vocabulary words Whisper can be given, newest first.
-fn entries(words: &[String]) -> impl Iterator<Item = &str> {
-  words.iter().map(|word| word.trim()).filter(|word| !word.is_empty() && !word.contains('\0'))
-}
-
-/// The vocabulary as Whisper's prompt, and how many words it holds: a comma list, newest first, with as
-/// many words as `fits`. It starts with a space, as the words would inside heard text.
-fn prompt_text(words: &[String], fits: impl Fn(&str) -> bool) -> (String, usize) {
-  let (mut text, mut count) = (String::new(), 0);
-  for word in entries(words) {
-    let next = if text.is_empty() { format!(" {word}") } else { format!("{text}, {word}") };
-    if !fits(&next) { break; }
-    (text, count) = (next, count + 1);
-  }
-  (text, count)
-}
-
 /// How many of `words`, newest first, Whisper is given. Counted with Whisper's own tokens when the
 /// model is loaded and free, otherwise a token for every three bytes, which errs on the side of fewer.
 #[tauri::command]
@@ -751,7 +599,7 @@ pub fn vocabulary_fit(app: AppHandle, words: Vec<String>) -> usize {
   let engine = try_lock(&state.engine);
   let whisper = engine.as_ref().and_then(|engine| engine.as_ref());
   let tokens = |text: &str| whisper.map_or_else(|| text.len().div_ceil(3), |whisper| whisper.tokens(text).len());
-  prompt_text(&words, |text| tokens(text) < PROMPT_TOKENS).1
+  prompt::prompt_text(&words, |text| tokens(text) < PROMPT_TOKENS).1
 }
 
 /// The language a hold's words are in, as Whisper's code: English when translating, the language
@@ -783,37 +631,6 @@ struct Prompt { words: Vec<String>, sent: Vec<String>, tokens: Vec<i32> }
 /// What none of our passes prints.
 fn quiet(params: &mut FullParams) {
   params.set_print_special(false); params.set_print_progress(false); params.set_print_realtime(false); params.set_print_timestamps(false);
-}
-
-/// Whisper's own test for a window nobody spoke in (openai/whisper transcribe.py, whisper.cpp, WhisperKit):
-/// the no-speech token likely *and* the words found unsure. A likely no-speech token alone is not silence:
-/// clear words after a pause score high on it too, and dropping them is "Didn't catch that" for nothing.
-fn silent(no_speech: f32, avg_logprob: f32) -> bool { no_speech > 0.6 && avg_logprob < -1.0 }
-
-/// Over a phrase said again and again, Whisper can carry on saying it long after the voice stopped: hundreds of
-/// "hello"s for fifteen seconds of them. Nobody says more than about five words a second, so past that the
-/// extra repeats are the decoder's: the longest run of one phrase over and over gives back repeats until the
-/// words fit the time. A ceiling, not a cure: what's left is as many as could have been said.
-fn unloop(text: &str, seconds: f32) -> String {
-  let mut words: Vec<&str> = text.split_whitespace().collect();
-  let budget = (seconds.max(0.0) * 5.0).ceil() as usize + 3;
-  let key = |word: &str| word.trim_matches(|c: char| !c.is_alphanumeric()).to_lowercase();
-  while words.len() > budget {
-    let keys: Vec<String> = words.iter().map(|word| key(word)).collect();
-    // The longest run: a phrase of one to four words, three times or more in a row.
-    let mut best: Option<(usize, usize, usize)> = None; // (start, phrase length, repeats)
-    for start in 0..keys.len() {
-      for n in 1..=4.min(keys.len() - start) {
-        let mut repeats = 1;
-        while start + (repeats + 1) * n <= keys.len() && keys[start + repeats * n..start + (repeats + 1) * n] == keys[start..start + n] { repeats += 1; }
-        if repeats >= 3 && best.is_none_or(|(_, m, r)| n * repeats > m * r) { best = Some((start, n, repeats)); }
-      }
-    }
-    let Some((start, n, repeats)) = best else { break }; // no run to blame: leave it be
-    let keep = repeats.saturating_sub((words.len() - budget).div_ceil(n)).max(1);
-    words.drain(start + keep * n..start + repeats * n);
-  }
-  words.join(" ")
 }
 
 /// The mean log probability of a segment's words, special tokens left out (they sort from end-of-text up).
@@ -862,9 +679,9 @@ impl Engine {
   /// Tokenizes `words` as the prompt, once for each change of them.
   fn use_words(&mut self, words: &[String]) {
     if self.prompt.words == words { return; }
-    let (text, count) = prompt_text(words, |text| self.tokens(text).len() < PROMPT_TOKENS);
+    let (text, count) = prompt::prompt_text(words, |text| self.tokens(text).len() < PROMPT_TOKENS);
     let tokens = if text.is_empty() { Vec::new() } else { self.tokens(&text) };
-    self.prompt = Prompt { words: words.to_vec(), sent: entries(words).take(count).map(Into::into).collect(), tokens };
+    self.prompt = Prompt { words: words.to_vec(), sent: prompt::entries(words).take(count).map(Into::into).collect(), tokens };
   }
 
   /// The language spoken in `pcm` and how sure Whisper is of it. It runs the encoder, about half the work
@@ -928,11 +745,11 @@ impl Engine {
     let mut text = String::new();
     let eot = self.whisper.token_eot();
     for segment in self.state.as_iter() {
-      if silent(segment.no_speech_probability(), avg_logprob(&segment, eot)) { continue; } // that window, not the whole hold
+      if cleanup::is_silent_segment(segment.no_speech_probability(), avg_logprob(&segment, eot)) { continue; } // that window, not the whole hold
       text.push_str(&segment.to_string());
     }
-    let text = if prompted { without_recital(&text, &self.prompt.sent) } else { &text }.trim().to_owned();
-    let text = unloop(&text, pcm.len() as f32 / 16_000.0);
+    let text = if prompted { prompt::without_recital(&text, &self.prompt.sent) } else { &text }.trim().to_owned();
+    let text = cleanup::unloop(&text, pcm.len() as f32 / 16_000.0);
     if text.is_empty() { return Err(UNHEARD.into()); }
     if text.chars().count() > 8000 { return Err("That was too long to type. Try a shorter one.".into()); }
     Ok(text)
@@ -958,7 +775,7 @@ impl Engine {
     // Timestamps are in hundredths of a second.
     let samples = |at: i64| (at.max(0) as usize * 160).min(pcm.len());
     let eot = self.whisper.token_eot();
-    Ok(self.state.as_iter().filter(|segment| !silent(segment.no_speech_probability(), avg_logprob(segment, eot))).filter_map(|segment| {
+    Ok(self.state.as_iter().filter(|segment| !cleanup::is_silent_segment(segment.no_speech_probability(), avg_logprob(segment, eot))).filter_map(|segment| {
       let text = segment.to_string().trim().to_owned();
       (!text.is_empty()).then(|| Segment { start: samples(segment.start_timestamp()), end: samples(segment.end_timestamp()), text })
     }).collect())
@@ -991,10 +808,10 @@ impl LocalSpeech {
   /// detection's segments and where the speech was found to end. Never the words.
   fn find_speech_end(&self, pcm: &[f32], report: bool) -> Result<usize, String> {
     validate_audio(pcm)?;
-    let (peak, rms) = levels(pcm);
+    let audio::Levels { peak, rms } = audio::levels(pcm);
     let seconds = |samples: usize| samples as f32 / 16_000.0;
     let say = |what: String| if report { log::info!("dictation gate: {:.1}s, peak {peak:.4}, loudest rms {rms:.4}: {what}", seconds(pcm.len())); };
-    if silent_audio(pcm) { say("unheard, too quiet to hold a word (loudest rms under 0.002)".into()); return Err(UNHEARD.into()); }
+    if audio::is_silent(pcm) { say("unheard, too quiet to hold a word (loudest rms under 0.002)".into()); return Err(UNHEARD.into()); }
     let mut vad = lock(&self.vad);
     let vad = vad.as_mut().ok_or("The speech model is still loading.")?;
     vad.detect_speech(pcm).map_err(|_| "Couldn’t understand that")?;
@@ -1002,7 +819,7 @@ impl LocalSpeech {
     // Speech detection wants a quarter of a second of speech, which one short word can fall short of, so
     // a level that is plainly a voice counts too.
     let found = speech.num_segments();
-    if found == 0 && !voiced(pcm) { say("unheard, no speech detected and not loud enough to count as a voice".into()); return Err(UNHEARD.into()); }
+    if found == 0 && !audio::is_voiced(pcm) { say("unheard, no speech detected and not loud enough to count as a voice".into()); return Err(UNHEARD.into()); }
     let mut keen = WhisperVadParams::default();
     keen.set_threshold(0.3); keen.set_min_speech_duration(0);
     let speech = vad.segments_from_probabilities(keen).map_err(|_| "Couldn’t understand that")?;
@@ -1064,7 +881,7 @@ impl LocalSpeech {
   /// Whether a hold of `samples` finishes as a long session, piece by piece: one past a piece, or a
   /// hands-free one with words in already.
   fn long(&self, id: &str, samples: usize) -> bool {
-    pieced(id, samples) && (samples > note::PIECE || self.note(id, |note| note.committed) > 0)
+    pieced(id, samples) && (samples > pieces::PIECE || self.note(id, |note| note.committed) > 0)
   }
 
   /// Where the audio of a live pass over `count` samples starts: past what a hold heard piece by piece

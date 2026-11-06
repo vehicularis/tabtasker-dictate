@@ -4,45 +4,15 @@
 //! session, up to ten minutes, and a hold past one piece, up to five, are transcribed the same way.
 use super::*;
 
-/// The longest piece transcribed at once: inside Whisper's 30 s window.
-pub(super) const PIECE: usize = 25 * 16000;
-/// A pause this long ends a piece...
-const PAUSE: usize = 16000 * 4 / 10;
-/// ...once the piece holds this much, so pieces are sentences rather than single words.
-const ENOUGH: usize = 6 * 16000;
-/// The untranscribed audio a note may hold at once; the Mac drops what is transcribed.
-pub(super) const TAIL: usize = 10 * 60 * 16000;
-
 /// The note being taken. `committed` counts the samples since the note began that are in `text`;
 /// `cancelled` stops its steps when the note is.
 #[derive(Default)]
 pub(super) struct Note { id: String, text: String, pub(super) committed: usize, pub(super) busy: bool, cancelled: Arc<AtomicBool> }
 
-/// Where to cut `len` untranscribed samples, given the speech in them as (start, end) sample ranges:
-/// in the middle of the last pause that closes a piece of at least ENOUGH, within PIECE. A tail that
-/// has run past PIECE is cut at its last pause, or at PIECE if the speech never paused. None while the
-/// piece is still being said.
-pub(super) fn cut(speech: &[(usize, usize)], len: usize) -> Option<usize> {
-  let Some(&(_, last_end)) = speech.last() else {
-    return (len > ENOUGH).then(|| len - PAUSE); // silence: let it go, keeping a moment for a word starting
-  };
-  let mut pauses: Vec<usize> = speech.windows(2).filter(|pair| pair[1].0 - pair[0].1 >= PAUSE).map(|pair| (pair[0].1 + pair[1].0) / 2).collect();
-  if len - last_end.min(len) >= PAUSE { pauses.push((last_end + len) / 2); }
-  let mut within = pauses.iter().copied().filter(|&at| at <= PIECE);
-  if let Some(at) = within.clone().rfind(|&at| at >= ENOUGH) { return Some(at); }
-  if len <= PIECE { return None; }
-  Some(within.next_back().unwrap_or(PIECE))
-}
-
-fn join(text: &str, more: &str) -> String {
-  match (text.is_empty(), more.is_empty()) { (true, _) => more.to_owned(), (_, true) => text.to_owned(), _ => format!("{text} {more}") }
-}
-
 impl LocalSpeech {
   /// The speech in `pcm` as sample ranges, found keenly like a hold's end; none for silence.
   fn speech_in(&self, pcm: &[f32]) -> Result<Vec<(usize, usize)>, String> {
-    let energy = pcm.iter().map(|sample| (*sample as f64).powi(2)).sum::<f64>() / pcm.len().max(1) as f64;
-    if pcm.len() < 4000 || energy < 1e-7 { return Ok(Vec::new()); }
+    if pcm.len() < 4000 || audio::energy(pcm) < 1e-7 { return Ok(Vec::new()); }
     let mut vad = lock(&self.vad);
     let vad = vad.as_mut().ok_or("The speech model is still loading.")?;
     vad.detect_speech(pcm).map_err(|_| "Couldn’t understand that")?;
@@ -88,10 +58,10 @@ impl LocalSpeech {
     let skip = self.same_note(id, |note| note.committed.saturating_sub(base))?.min(pcm.len());
     let tail = &pcm[skip..];
     let speech = self.speech_in(tail)?;
-    if let Some(at) = cut(&speech, tail.len()) {
+    if let Some(at) = pieces::cut(&speech, tail.len()) {
       let words = if speech.iter().any(|&(start, _)| start < at) { self.piece(engine, id, &tail[..at], cancelled.clone())? } else { String::new() };
       if cancelled.load(Ordering::Relaxed) { return Err("Voice command cancelled.".into()); }
-      return self.same_note(id, |note| { note.text = join(&note.text, &words); note.committed = base + skip + at; (note.committed, None) });
+      return self.same_note(id, |note| { note.text = pieces::join(&note.text, &words); note.committed = base + skip + at; (note.committed, None) });
     }
     let preview = if speech.is_empty() { None } else { self.pass(engine, id, tail, cancelled, true).ok() };
     Ok((base + skip, preview))
@@ -105,7 +75,7 @@ impl LocalSpeech {
     if cancelled.load(Ordering::Relaxed) { return None; }
     let said = self.same_note(id, |note| note.text.clone()).ok()?;
     if let (0, Some(words)) = (committed, &preview) { self.hold(id, |hold| hold.heard = Some((base + pcm.len(), words.clone()))); }
-    let text = join(&said, preview.as_deref().unwrap_or_default());
+    let text = pieces::join(&said, preview.as_deref().unwrap_or_default());
     (!text.is_empty()).then_some(text)
   }
 
@@ -126,9 +96,9 @@ impl LocalSpeech {
       let rest = &pcm[at..];
       let speech = self.speech_in(rest)?;
       if speech.is_empty() { break; }
-      let end = if rest.len() <= PIECE { rest.len() } else { cut(&speech, rest.len()).unwrap_or(PIECE) };
+      let end = if rest.len() <= pieces::PIECE { rest.len() } else { pieces::cut(&speech, rest.len()).unwrap_or(pieces::PIECE) };
       match self.piece(engine, id, &rest[..end], cancelled.clone()) {
-        Ok(words) => text = join(&text, &words),
+        Ok(words) => text = pieces::join(&text, &words),
         Err(error) if cancelled.load(Ordering::Relaxed) => return Err(error),
         // One piece Whisper could not read does not cost the rest of the note.
         Err(error) => log::warn!("voice note: a piece was not transcribed: {error}"),
@@ -148,7 +118,7 @@ extern "C" {
 #[no_mangle]
 extern "C" fn dictate_note_step(id: *const c_char, base: usize, samples: *const f32, count: usize) -> bool {
   let Some(app) = APP.get() else { return false };
-  if count == 0 || count > TAIL || samples.is_null() || id.is_null() { return false; }
+  if count == 0 || count > pieces::TAIL || samples.is_null() || id.is_null() { return false; }
   let state = app.state::<LocalSpeech>();
   if !state.enabled.load(Ordering::Relaxed) || lock(&state.job).is_some() { return false; }
   // AppKit owns the bounded audio buffer until this synchronous copy returns.
@@ -175,7 +145,7 @@ extern "C" fn dictate_note_step(id: *const c_char, base: usize, samples: *const 
 #[no_mangle]
 extern "C" fn dictate_note_finish(id: *const c_char, base: usize, samples: *const f32, count: usize) -> bool {
   let Some(app) = APP.get() else { return false };
-  if count > TAIL || (count > 0 && samples.is_null()) || id.is_null() { return false; }
+  if count > pieces::TAIL || (count > 0 && samples.is_null()) || id.is_null() { return false; }
   let state = app.state::<LocalSpeech>();
   if !state.enabled.load(Ordering::Relaxed) { return false; }
   let mut job = lock(&state.job);
