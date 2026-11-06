@@ -31,6 +31,9 @@ pub struct Fixture {
   pub expect: String,
   /// Nothing should be typed at all.
   pub expect_unheard: bool,
+  /// The exact text that should be typed, after a spoken sticky or send: case and punctuation
+  /// count, only the ends' whitespace doesn't; unchecked when absent.
+  pub expect_typed: Option<String>,
   /// The words a spoken "Sticky: ..." should put on a sticky; unchecked when absent.
   pub expect_sticky: Option<String>,
   /// Whether a spoken "send" should end the words; unchecked when absent.
@@ -301,6 +304,10 @@ pub(crate) mod tests {
         }
         (None, None, Some(_)) => assert!(f.expect_unheard && f.expect.is_empty(), "{name}"),
         _ => panic!("{name}: say with a voice, or synth"),
+      }
+      // Code and formal styles are checked letter for letter, not just word for word.
+      if matches!(f.style, Style::Code | Style::Formal) {
+        assert!(f.expect_typed.is_some(), "{name} needs expect_typed");
       }
     }
     // A misspelt field is refused, not ignored.

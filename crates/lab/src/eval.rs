@@ -56,7 +56,7 @@ pub enum Verdict {
   Pass,
   /// Its word error rate is over its budget.
   OverBudget,
-  /// Its words are within budget, but not the sticky or the send it expects.
+  /// Its words are within budget, but not the exact text, the sticky or the send it expects.
   Mismatch,
   /// It has no audio to hear.
   Skipped,
@@ -106,7 +106,7 @@ pub struct Counts {
   pub pass: usize,
   /// Over budget.
   pub over_budget: usize,
-  /// Within budget, but the wrong sticky or send.
+  /// Within budget, but the wrong text, sticky or send.
   pub mismatch: usize,
   /// Not heard, for want of audio.
   pub skipped: usize,
@@ -125,8 +125,17 @@ struct Report {
   counts: Counts,
 }
 
-/// The sticky or send `fixture` expects and `spoken` doesn't have, said as a reason.
+/// The typed text, sticky or send `fixture` expects and `spoken` doesn't have, said as a reason.
 fn mismatch(fixture: &Fixture, spoken: Option<&Spoken>) -> Option<String> {
+  let typed = spoken.map_or("", |s| s.text.as_str());
+  if let Some(want) = &fixture.expect_typed {
+    if typed.trim() != want.trim() {
+      return Some(format!(
+        "typed {}, expected exactly \"{want}\"",
+        quoted(Some(typed))
+      ));
+    }
+  }
   let sticky = spoken.and_then(|s| s.sticky.as_deref());
   if let Some(want) = &fixture.expect_sticky {
     match sticky {
@@ -610,6 +619,46 @@ mod tests {
     );
     assert!(
       lines[1].starts_with("nosend: mismatch, a spoken send, expected none, "),
+      "{printed}"
+    );
+  }
+
+  #[test]
+  fn expect_typed_is_compared_exactly() {
+    // The final typed text, after a spoken send is taken off; only the ends' whitespace is trimmed.
+    let launch = r#"{ "expect": "So, I think we should move the launch.", "expect_typed": " So, I think we should move the launch. ", "max_wer": 0.05 }"#;
+    let send =
+      r#"{ "expect": "See you soon. Send.", "expect_typed": "See you soon.", "max_wer": 0.05 }"#;
+    let cases = [
+      case("fillers", launch, speech()),
+      case("send", send, speech()),
+    ];
+    let says = Says::new([
+      Ok("So, I think we should move the launch."),
+      Ok("See you soon. Send."),
+    ]);
+    let (printed, done) = eval(says, &cases, false);
+    assert_eq!(done, Ok(()), "{printed}");
+
+    // A difference in case alone scores WER 0, and still mismatches.
+    let says = Says::new([
+      Ok("so, i think we should move the launch."),
+      Ok("See you soon, send."),
+    ]);
+    let (printed, done) = eval(says, &cases, false);
+    assert_eq!(done, Err("2 of 2 fixtures failed".into()));
+    let lines: Vec<&str> = printed.lines().collect();
+    assert!(
+      lines[0].starts_with(
+        "fillers: mismatch, typed \"so, i think we should move the launch.\", \
+         expected exactly \" So, I think we should move the launch. \", WER 0.000 (budget 0.05), "
+      ),
+      "{printed}"
+    );
+    assert!(
+      lines[1].starts_with(
+        "send: mismatch, typed \"See you soon\", expected exactly \"See you soon.\", WER 0.000 "
+      ),
       "{printed}"
     );
   }

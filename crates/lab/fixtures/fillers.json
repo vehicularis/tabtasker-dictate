@@ -2,6 +2,7 @@
   "say": "Um, so, I think we should, uh, move the launch to next week.",
   "voice": "Samantha",
   "expect": "So, I think we should move the launch to next week.",
+  "expect_typed": "So, I think we should move the launch to next week.",
   "language": "en",
   "style": "formal",
   "fillers": true,

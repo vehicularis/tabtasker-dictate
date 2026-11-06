@@ -80,7 +80,7 @@ Silence and noise are synthesized; the noise is seeded, so it is the same on eve
 
 ```
 $ dictate-lab fixtures
-code: said by Samantha, 4.82 s
+code: said by Samantha, 5.60 s
 fillers: said by Samantha, 4.54 s
 german: said by Anna, 3.54 s
 noise: synthesized noise, 3.00 s
@@ -102,8 +102,8 @@ Hears every `x.wav` beside an `x.json` in a folder (`target/fixtures` unless you
 
 ```
 $ dictate-lab eval --model small
-code: pass, WER 0.000 (budget 0.05), 169 ms, heard "totalPrice = sum(items);", expected "totalPrice = sum(items);"
-fillers: pass, WER 0.000 (budget 0.05), 172 ms, heard "So, I think we should move the launch to next week.", expected "So, I think we should move the launch to next week."
+code: pass, WER 0.000 (budget 0.05), 199 ms, heard "firstName = getFirstName();", expected "firstName = getFirstName();"
+fillers: pass, WER 0.000 (budget 0.05), 179 ms, heard "So, I think we should move the launch to next week.", expected "So, I think we should move the launch to next week."
 german: pass, WER 0.000 (budget 0.05), 239 ms, heard "Wir treffen uns morgen früh im großen Besprechungsraum.", expected "Wir treffen uns morgen früh im großen Besprechungsraum."
 noise: pass, WER 0.000 (budget 0.00), 7 ms, heard nothing, expected nothing
 note: pass, WER 0.000 (budget 0.05), 1086 ms, heard "Here is the plan for next week. On Monday we review the ...", expected "Here is the plan for next week. On Monday we review the ..."
@@ -121,10 +121,18 @@ mean WER 0.000 over 11 fixtures with words
 
 (The note's 120 words are cut short here.)
 
-WER is (substitutions + deletions + insertions) / words said. Both sides are compared lowercase and without punctuation, so "Thanks. Maria." scores the same as "Thanks, Maria,". It scores the words after the text rules, the `typed:` line of `run`. A row's verdict is one of:
+WER is (substitutions + deletions + insertions) / words said. Both sides are compared lowercase and without punctuation, so "Thanks. Maria." scores the same as "Thanks, Maria,". It scores the words after the text rules, the `typed:` line of `run`.
+
+Because WER can't see case or symbols, a fixture can also give `expect_typed`, the exact text the app should type. Case and punctuation count there, and only the whitespace at either end is trimmed. That is how the Code and Formal fixtures check `firstName = getFirstName();` and a closing full stop, not just their words:
+
+```
+code: mismatch, typed "username = get user(id);", expected exactly "userName = get user(ID);", WER 0.000 (budget 0.05), 191 ms, heard "username = get user(id);", expected "userName = get user(ID);"
+```
+
+A row's verdict is one of:
 - `pass`;
 - `over budget`: the WER is over the fixture's `max_wer`;
-- `mismatch`: the words are within budget, but the sticky or the send isn't the one expected;
+- `mismatch`: the words are within budget, but the exact text, the sticky or the send isn't the one expected;
 - `skipped`: there is no WAV beside the JSON, as when its voice isn't installed;
 - `error`: a stage failed, or a note skipped a piece.
 
@@ -161,6 +169,7 @@ Every field is optional, and a field the lab doesn't know is refused, so a typo 
 | `say`, `voice` | What `say` reads aloud, and in which voice. |
 | `synth` | `silence` or `noise`, three seconds of each, instead of `say`. |
 | `expect` | The words that should be typed. |
+| `expect_typed` | The exact text that should be typed, after a spoken sticky or send: case and punctuation count. Unchecked when absent. |
 | `expect_unheard` | `true` when nothing should be typed at all. |
 | `expect_sticky` | The words a spoken sticky should hold. Unchecked when absent. |
 | `expect_send` | Whether a spoken "send" should end the words. Unchecked when absent. |

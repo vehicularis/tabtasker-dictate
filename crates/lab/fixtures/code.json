@@ -1,7 +1,8 @@
 {
-  "say": "Camel case total price equals sum open paren items close paren semicolon.",
+  "say": "Camel case first name equals camel case get first name open paren close paren semicolon.",
   "voice": "Samantha",
-  "expect": "totalPrice = sum(items);",
+  "expect": "firstName = getFirstName();",
+  "expect_typed": "firstName = getFirstName();",
   "language": "en",
   "style": "code",
   "max_wer": 0.05
