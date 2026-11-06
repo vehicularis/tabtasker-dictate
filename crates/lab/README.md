@@ -269,3 +269,5 @@ mean WER 0.000 over 1 fixture with words
 ## Why no audio is committed
 
 The macOS licence limits what the output of Apple's voices may be used for. So the fixtures commit only their text and settings, and their audio is rendered with `say` on the machine that runs them, into `target/`, which git ignores. `crates/lab/fixtures/*.wav` is ignored too, and a test checks that folder holds only JSON. Keep your own recordings out of the repo too.
+
+Rendering on each machine has a cost: a voice sounds a little different from one macOS version to the next, so the Speech eval job in CI hears different audio from yours. GitHub's Mac runners are also small virtual machines, so the job is much slower than a local run, and a borderline word can come out differently there. So a fixture should use words Whisper hears on any Mac. `code` says "parenthesis", because CI heard its "paren" as "pair and".

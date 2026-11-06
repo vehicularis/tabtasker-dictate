@@ -50,8 +50,10 @@ jobs:
           allow-ghsas: GHSA-wrw7-89jp-8q8g
           # Not in the macOS build either (cargo tree --target aarch64-apple-darwin has none of them), and cargo-deny
           # reads their licences right: GitHub misparses dbus's "Apache-2.0/MIT" and doesn't know target-lexicon's
-          # Apache-2.0 WITH LLVM-exception.
-          allow-dependencies-licenses: pkg:cargo/dbus, pkg:cargo/libdbus-sys, pkg:cargo/target-lexicon
+          # Apache-2.0 WITH LLVM-exception. The rust-cache action (LGPL-3.0) runs in CI and ships in nothing.
+          allow-dependencies-licenses: >-
+            pkg:cargo/dbus, pkg:cargo/libdbus-sys, pkg:cargo/target-lexicon,
+            pkg:githubactions/Swatinem/rust-cache
           # The licences deny.toml allows, and the ones already among the npm packages.
           allow-licenses: >-
             MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, Zlib, 0BSD, CC0-1.0, MIT-0, Unlicense,
