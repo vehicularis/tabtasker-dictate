@@ -3,7 +3,7 @@ import { invoke, setWindowTitle } from '../../bridge';
 import { Editor } from '../../editor/Editor';
 import { message } from '../../lib/errors';
 import { KEY_NAMES } from '../../lib/keyNames';
-import { isUnnamed, refreshLibrary } from '../../lib/library';
+import { isArchived, isUnnamed, refreshLibrary } from '../../lib/library';
 import { useSettings } from '../../store';
 import type { NoteDoc } from '../../api/types';
 import { Button, Icon } from '../../ui';
@@ -71,7 +71,7 @@ export function NoteEditor({ path, kind, onChanged, onDeleted, onMoved, onError 
   const reveal = () => void invoke('show_notes', { file: doc?.path }).catch(() => onError('Couldn’t show that in Finder.'));
   const elsewhere = () => { if (doc) void invoke('library_open', { path: doc.path }).catch(() => onError('Couldn’t open that file.')); else onError('Couldn’t open that file.'); };
   // Into the folder's Archive/ or back out, saved first; the list then follows it to where it is.
-  const archived = /\/Archive\/[^/]+$/.test(path);
+  const archived = isArchived(path);
   const archive = (on: boolean) => { clearTimeout(timer.current); void save().then(() => invoke('note_archive', { path, archived: on })).then(moved => onMoved(moved, on), error => onError(message(error, on ? 'Couldn’t archive that.' : 'Couldn’t restore that.'))); };
   const remove = () => { clearTimeout(timer.current); dirty.current = false; void invoke('note_delete', { path }).then(onDeleted, error => onError(message(error, 'Couldn’t move that to the Trash.'))); };
   const rename = (event: FormEvent) => {

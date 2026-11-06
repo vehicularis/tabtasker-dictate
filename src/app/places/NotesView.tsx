@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { invoke, listen } from '../../bridge';
-import { listGroup, listWhen, localDay, stamp } from '../../lib/dates';
+import { listWhen, localDay, stamp } from '../../lib/dates';
 import { message } from '../../lib/errors';
 import { KEY_NAMES } from '../../lib/keyNames';
-import { isUnnamed, readers, refreshLibrary } from '../../lib/library';
+import { isArchived, readers, refreshLibrary, routeTo, rowText, visibleGroups } from '../../lib/library';
 import { useSelection } from '../../lib/selection';
+import { countMessage } from '../../lib/text';
 import { Menu, MenuItem, MenuLine } from '../../editor/Menu';
 import { meetingLength, meetingWhen, useMeetingState } from '../../overlay/MeetingPill';
 import type { PageProps } from '../../store';
@@ -14,22 +15,7 @@ import { Button, Icon, Segmented, useFlip } from '../../ui';
 import { ColumnGroup, ColumnHead } from '../Column';
 import { NoteEditor } from './NoteEditor';
 
-// A row is two lines, as Apple Notes has them: the title, then when and the first words, on one line.
-/// A row's two lines. The title is the name the note was given; one still under the name it was made with is called
-/// by its first sentence, as Apple Notes does, or "New note" while it's empty. The glance is what comes after: the
-/// title isn't said twice when it's a line or a sentence of its own, and a transcript's "Name 00:00:09 Words" reads
-/// as "Name: Words".
-const rowText = (item: LibraryItem) => {
-  const text = item.excerpt.replace(/(\S+) \d{1,2}:\d{2}:\d{2} /g, '$1: ').trim();
-  if (isUnnamed(item.title)) {
-    const first = text.match(/^.{1,60}?(?:[.!?](?=\s)|$)/)?.[0] ?? text.slice(0, 60);
-    return { title: first.replace(/[.!?]$/, '') || `New ${item.kind}`, glance: text.slice(first.length).trim() };
-  }
-  const rest = text.startsWith(item.title) ? text.slice(item.title.length) : null;
-  return { title: item.title, glance: rest !== null && /^(?:[.!?:]|\s*$)/.test(rest) ? rest.replace(/^[\s.!?:]+/, '') : text };
-};
 type Props = { kind: 'note' | 'meeting'; path: string | null; onError: (message: string) => void; onOpen: (route: string) => void } & PageProps;
-const routeTo = (kind: 'note' | 'meeting', path: string) => `${kind === 'note' ? 'notes' : 'meetings'}/${path}`;
 /// A note by voice, as the pill's Speak a note: the orb listens until you stop, then the note is saved and listed here.
 const speakNote = (onError: Props['onError']) => void invoke('request', { kind: 'note' }).catch(error => onError(message(error, 'Couldn’t start a spoken note.')));
 const newNote = (onOpen: Props['onOpen'], onError: Props['onError']) => void invoke('note_new', { title: '', text: '', stamp: stamp() }).then(made => onOpen(routeTo('note', made)), error => onError(message(error, 'Couldn’t make a new note.')));
@@ -59,18 +45,13 @@ export function useLibrary(kind: 'note' | 'meeting' | null, path: string | null,
 export function NotesColumn({ kind, path, items, onError, onOpen }: Props & { items: LibraryItem[] | null }) {
   const [query, setQuery] = useState('');
   // The list, or the archive: an archived one opened from a link shows the archive it is in.
-  const [inArchive, setInArchive] = useState(() => !!path && /\/Archive\/[^/]+$/.test(path));
-  useEffect(() => { if (path) setInArchive(/\/Archive\/[^/]+$/.test(path)); }, [path]); // the view follows the note that is open
+  const [inArchive, setInArchive] = useState(() => !!path && isArchived(path));
+  useEffect(() => { if (path) setInArchive(isArchived(path)); }, [path]); // the view follows the note that is open
   const archived = (items ?? []).filter(item => item.archived).length;
   const viewing = inArchive && archived > 0;
-  const words = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
-  const shown = (items ?? []).filter(item => item.archived === viewing && words.every(word => `${item.title} ${item.excerpt}`.toLocaleLowerCase().includes(word)));
+  const groups = visibleGroups(items ?? [], query, viewing, Date.now());
+  const shown = groups.flatMap(group => group.items);
   const today = localDay(Date.now());
-  const groups = shown.reduce<{ title: string; items: LibraryItem[] }[]>((acc, item) => {
-    const title = listGroup(localDay(item.modifiedMs), today), group = acc[acc.length - 1];
-    if (group && group.title === title) group.items.push(item); else acc.push({ title, items: [item] });
-    return acc;
-  }, []);
   const list = useRef<HTMLDivElement>(null);
   useFlip(list, items); // a note added, archived or moved to the top glides there; typing in the search does not
 
@@ -88,7 +69,7 @@ export function NotesColumn({ kind, path, items, onError, onOpen }: Props & { it
     sel.clear(); setAsking(null); setMenu(null);
     let done = 0;
     for (const one of paths) { try { await work(one); done++; } catch { /* left where it was */ } }
-    onError(done === paths.length ? `${said(many(done))}.` : `${said(`${done} of ${many(paths.length)}`)}. The rest weren’t changed.`);
+    onError(countMessage(done, paths.length, said, many));
     if (path && paths.includes(path)) onOpen(home);
     refreshLibrary();
   };
@@ -123,7 +104,7 @@ export function NotesColumn({ kind, path, items, onError, onOpen }: Props & { it
       <MenuItem danger onSelect={() => trash(menu.paths)}><Icon name="trash" size={15} />Move {menu.paths.length > 1 ? `${many(menu.paths.length)} ` : ''}to the Trash</MenuItem>
     </Menu>}
     <div ref={list} key={viewing ? 'archive' : 'list'} className="column-scroll" onKeyDown={sel.keys}>
-      {items && !shown.length && (words.length ? <p className="list-none">Nothing matches that search.</p> : !viewing && <p className="list-none">Everything’s in the archive.</p>)}
+      {items && !shown.length && (query.trim() ? <p className="list-none">Nothing matches that search.</p> : !viewing && <p className="list-none">Everything’s in the archive.</p>)}
       {groups.map(group => <ColumnGroup key={group.title} flip={`group:${group.title}`} title={group.title} count={group.items.length}>
         {group.items.map(item => {
           const { title, glance } = rowText(item);
