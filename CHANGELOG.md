@@ -18,6 +18,8 @@ notarized DMG, is on the [releases page](https://github.com/vehicularis/tabtaske
 - A ticked task in a note shows its tick at night, where it was a plain white dot.
 - Opening a note from the list no longer flashes “That file isn’t there any more” first.
 - Pasting a Markdown table on its own now makes a table in a note, not lines of pipes.
+- Searching notes, history and Find in a note now treats the Turkish İ and ı as i, so “istanbul” finds “İstanbul”
+  and “ılık” finds “ILIK”. A note with an İ in it no longer makes Find match case.
 
 ## [0.1.1] - 2026-11-05
 

@@ -5,7 +5,7 @@ import { dateOf, dayTitle, localDay } from '../../lib/dates';
 import { message } from '../../lib/errors';
 import { count } from '../../lib/format';
 import { barHeight, byDay, figures, HEIGHT, removedBy, searchHistory, share, sharePercent } from '../../lib/history';
-import { searchWords } from '../../lib/text';
+import { markedParts, searchWords } from '../../lib/text';
 import { KEY_NAMES } from '../../lib/keyNames';
 import type { PageProps } from '../../store';
 import type { HistoryEntry, HistoryStats, HoldMode, Keep } from '../../api/types';
@@ -208,11 +208,7 @@ function Share({ part, of, label }: { part: number; of: number; label: string })
 }
 
 /// `text` with every searched word marked.
-function marked(text: string, words: string[]): ReactNode {
-  if (!words.length) return text;
-  const pattern = new RegExp(`(${words.map(word => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'giu');
-  return text.split(pattern).map((part, i) => i % 2 ? <mark key={i}>{part}</mark> : part);
-}
+const marked = (text: string, words: string[]): ReactNode => markedParts(text, words).map((part, i) => i % 2 ? <mark key={i}>{part}</mark> : part);
 
 // Long notes fold to a few lines until opened.
 const LONG = 320;

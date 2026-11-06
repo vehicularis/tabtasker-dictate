@@ -27,9 +27,17 @@ describe('searchHistory', () => {
     expect(searchHistory([entry({ text: 'ok 👍 (done)' })], '👍 (done)')).toHaveLength(1);
     expect(searchHistory(all, '[')).toEqual([]);
   });
-  it('finds a Turkish word by its lower case form', () => {
+  it('finds a Turkish word whichever way it or the query is cased', () => {
     expect(searchHistory([entry({ text: 'ISPARTA' })], 'isparta')).toHaveLength(1);
-    expect(searchHistory([entry({ text: 'İstanbul' })], 'i̇stanbul')).toHaveLength(1);
+    expect(searchHistory([entry({ text: 'İstanbul' })], 'istanbul')).toHaveLength(1);
+    expect(searchHistory([entry({ text: 'istanbul' })], 'İSTANBUL')).toHaveLength(1);
+    expect(searchHistory([entry({ text: 'Su ILIK' })], 'ılık')).toHaveLength(1);
+    expect(searchHistory([entry({ mode: 'dictate', appName: 'İş Bankası', text: 'x' })], 'iş')).toHaveLength(1);
+  });
+  it('keeps accents apart', () => {
+    expect(searchHistory([entry({ text: 'Élan' })], 'élan')).toHaveLength(1);
+    expect(searchHistory([entry({ text: 'Élan' })], 'elan')).toHaveLength(0);
+    expect(searchHistory([entry({ text: 'şeker' })], 'seker')).toHaveLength(0);
   });
 });
 

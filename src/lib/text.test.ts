@@ -1,13 +1,56 @@
 import { describe, expect, it } from 'vitest';
-import { countMessage, same, searchWords } from './text';
+import { countMessage, fold, markedParts, same, searchWords } from './text';
+
+describe('fold', () => {
+  it('lower-cases English, so a plain I is still an i', () => {
+    expect(fold('Hello WORLD')).toBe('hello world');
+    expect(fold('I')).toBe(fold('i'));
+    expect(fold('INDIA')).toBe('india');
+  });
+  it('reads the Turkish İ and ı as i, so a Turkish word is found whichever way it is cased', () => {
+    expect(fold('İstanbul')).toBe(fold('istanbul'));
+    expect(fold('İSTANBUL')).toBe(fold('istanbul'));
+    expect(fold('ILIK')).toBe(fold('ılık'));
+    expect(fold('IŞIK')).toBe(fold('ışık'));
+  });
+  it('keeps accents, Turkish ones included', () => {
+    expect(fold('Élan')).toBe('élan');
+    expect(fold('élan')).not.toBe(fold('elan'));
+    expect(fold('ÇĞÖŞÜ')).toBe('çğöşü');
+    expect(fold('şeker')).not.toBe(fold('seker'));
+  });
+  it('leaves emoji and other scripts alone', () => {
+    expect(fold('a😀B')).toBe('a😀b');
+    expect(fold('日本 ΣΑΣ')).toBe('日本 σας');
+  });
+  it('keeps the length of every character, so its offsets are the text’s (Find relies on it)', () => {
+    let all = '';
+    for (let code = 0; code <= 0x10ffff; code += 1) if (code < 0xd800 || code > 0xdfff) all += String.fromCodePoint(code);
+    expect(fold(all).length).toBe(all.length);
+  });
+});
 
 describe('searchWords', () => {
-  it('lower-cases and splits on any whitespace, dropping empties', () => {
+  it('folds and splits on any whitespace, dropping empties', () => {
     expect(searchWords('  Hello \t WORLD\n')).toEqual(['hello', 'world']);
     expect(searchWords('   ')).toEqual([]);
     expect(searchWords('')).toEqual([]);
   });
-  it('folds case as the locale does', () => expect(searchWords('ÉCOLE')).toEqual(['école']));
+  it('folds accented and Turkish capitals', () => expect(searchWords('ÉCOLE İZMİR IŞIK')).toEqual(['école', 'izmir', 'işik']));
+});
+
+describe('markedParts', () => {
+  it('is the whole text, unmarked, with no words', () => expect(markedParts('Hello', [])).toEqual(['Hello']));
+  it('marks every word in any case, keeping the text as written', () => {
+    expect(markedParts('Lunch at noon, LUNCH', searchWords('lunch'))).toEqual(['', 'Lunch', ' at noon, ', 'LUNCH', '']);
+  });
+  it('marks a Turkish word whichever way it is cased', () => {
+    expect(markedParts('İstanbul ve ILIK su', searchWords('istanbul ılık'))).toEqual(['', 'İstanbul', ' ve ', 'ILIK', ' su']);
+  });
+  it('does not mark an unaccented word in an accented one', () => expect(markedParts('Élan', searchWords('elan'))).toEqual(['Élan']));
+  it('takes regex characters and emoji literally', () => {
+    expect(markedParts('ok 👍 (done) d', searchWords('(done) 👍'))).toEqual(['ok ', '👍', ' ', '(done)', ' d']);
+  });
 });
 
 describe('same', () => {
