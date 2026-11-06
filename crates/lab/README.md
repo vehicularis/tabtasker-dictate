@@ -11,7 +11,7 @@ It then scores the words against what was said. Its fixtures are the regression 
 
 The stages are the engine's own (`crates/engine`), in the order the app's final pass runs them (`src-tauri/src/dictation/speech.rs`). Two things differ from the app:
 - **How a long recording is cut.** The lab cuts the whole file at once, as the app does at release when a note's live steps committed nothing: a hold recovered after a crash, or a short note. While a person is still talking, the app commits each piece at the first pause past 6 s (`note_step` in `speech_note.rs`), so its cuts can fall elsewhere. The lab doesn't replay those steps.
-- **Whisper's state.** The lab hears each recording after the first on a fresh Whisper state, so its words don't depend on what was heard before it. The app reuses one state for every pass, and there a recording's words can depend on the ones before it.
+- **Whisper's state.** The lab hears each recording after the first on a fresh Whisper state, so its words don't depend on what was heard before it. The app gives each hold a fresh state at its first pass, but a hold's live passes, which the lab doesn't replay, decode on that state before its final pass does.
 
 The lab never launches the app, and never reads or writes the app's folders.
 
@@ -140,13 +140,13 @@ numbers: pass, WER 0.000 (budget 0.05), S/D/I 0/0/0, 182 ms, heard "We booked th
 plain: pass, WER 0.000 (budget 0.05), S/D/I 0/0/0, 263 ms, heard "The meeting moved to Thursday afternoon, so we have more time to finish the report.", expected "The meeting moved to Thursday afternoon, so we have more time to finish the report."
 question: pass, WER 0.000 (budget 0.05), S/D/I 0/0/0, 154 ms, heard "Do you know where we put the spare keys for the office?", expected "Do you know where we put the spare keys for the office?"
 send: pass, WER 0.000 (budget 0.05), S/D/I 0/0/0, 165 ms, heard "Thanks. Maria. See you tomorrow morning. Send.", expected "Thanks, Maria, see you tomorrow morning. Send."
-send-bare: known, a bare ". Send." is heard as "sand", passes now, so take known_issue out of send-bare.json, WER 0.000 (budget 0.05), S/D/I 0/0/0, 151 ms, heard "Thanks, Maria. See you tomorrow morning. Send.", expected "Thanks, Maria, see you tomorrow morning. Send."
+send-bare: pass, WER 0.000 (budget 0.05), S/D/I 0/0/0, 151 ms, heard "Thanks, Maria. See you tomorrow morning. Send.", expected "Thanks, Maria, see you tomorrow morning. Send."
 silence: pass, WER 0.000 (budget 0.00), S/D/I 0/0/0, 0 ms, heard nothing, expected nothing
 sticky: pass, WER 0.000 (budget 0.05), S/D/I 0/0/0, 139 ms, heard "Sticky. Call Thomas about the venue.", expected "Sticky, call Thomas about the venue."
 turkish: pass, WER 0.000 (budget 0.05), S/D/I 0/0/0, 279 ms, heard "Yarın sabah toplantıdan önce raporu bitirmemiz gerekiyor.", expected "Yarın sabah toplantıdan önce raporu bitirmemiz gerekiyor."
 vocabulary: pass, WER 0.000 (budget 0.05), S/D/I 0/0/0, 156 ms, heard "TabTasker ships the Vehicularis build on Friday.", expected "TabTasker ships the Vehicularis build on Friday."
 mean WER 0.000 over 13 fixtures with words
-15 fixtures: 13 passed, 0 over budget, 0 mismatched, 2 known issues, 0 skipped, 0 errors
+15 fixtures: 14 passed, 0 over budget, 0 mismatched, 1 known issue, 0 skipped, 0 errors
 ```
 
 (The note's 120 words are cut short here.)

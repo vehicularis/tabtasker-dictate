@@ -33,9 +33,10 @@ struct LocalSpeech {
 }
 struct Draft { id: String, samples: usize, cancelled: Arc<AtomicBool> }
 /// What the passes of the newest hold found out, for the passes after them. `spoken` is the language
-/// of its newest pass, sure or not, for the text pipeline.
+/// of its newest pass, sure or not, for the text pipeline; `fresh`, whether its first pass gave Whisper a
+/// fresh state.
 #[derive(Default)]
-struct Hold { id: String, language: Option<i32>, spoken: Option<i32>, heard: Option<(usize, String)>, live: Live }
+struct Hold { id: String, language: Option<i32>, spoken: Option<i32>, heard: Option<(usize, String)>, live: Live, fresh: bool }
 /// What the live passes of a hold cost, for the log: how many ran, how long they took, the slowest.
 #[derive(Default, Clone, Copy)]
 struct Live { passes: usize, total_ms: u128, slowest_ms: u128 }
@@ -431,6 +432,12 @@ impl LocalSpeech {
   /// of it, and reused by every later pass, since detecting again would double the work.
   fn pass(&self, engine: &mut Whisper, id: &str, pcm: &[f32], cancelled: Arc<AtomicBool>, quick: bool) -> Result<String, Error> {
     if cancelled.load(Ordering::Relaxed) { return Err(Error::Cancelled); } // before counting or logging a pass that never ran
+    // A hold's first pass, live or final, starts Whisper on a fresh state, so its words don't depend on
+    // the holds before it (a bare "Send." heard as "sand"). Once a hold: never between its passes, nor
+    // between a note's pieces. A state that can't be made keeps the old one.
+    if !self.hold(id, |hold| std::mem::replace(&mut hold.fresh, true)) {
+      if let Err(error) = engine.reset() { log::warn!("dictation: kept Whisper's state, a fresh one failed: {error}"); }
+    }
     let started = Instant::now();
     let ask = ask_now();
     let held = self.hold(id, |hold| hold.language);

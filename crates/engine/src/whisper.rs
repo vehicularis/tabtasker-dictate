@@ -91,14 +91,14 @@ pub fn retry_outcome(first: String, echo: &Echo, retry: Result<String>, stopped:
   }
 }
 
-/// Whisper, its state and the vocabulary it was last given. Every pass reuses the one state: whisper.cpp
-/// clears its results, spectrogram and prompt at the start of each full() (no_context is on for all of
-/// ours), and `&mut self` keeps passes from sharing it. A new state each pass cost its GPU buffers.
+/// Whisper, its state and the vocabulary it was last given. Passes reuse the state: whisper.cpp clears
+/// its results, spectrogram and prompt at the start of each full() (no_context is on for all of ours),
+/// and `&mut self` keeps passes from sharing it.
 ///
 /// That clearing is not the whole of it: a pass's words can still depend on what the same state decoded
 /// before. The lab's 39 s note reads "mockups" on a fresh state and "mock-ups" after another recording,
-/// and a bare "Send." comes out "sand" after eight others. [`Whisper::reset`] gives a fresh state where
-/// that matters; the app still reuses one state for every pass.
+/// and a bare "Send." comes out "sand" after eight others. So [`Whisper::reset`] gives a fresh state: the
+/// app's once a hold, before its first pass, and the lab's once a recording. A meeting's pieces never reset it.
 pub struct Whisper { whisper: WhisperContext, state: WhisperState, kind: ModelKind, prompt: Prompt }
 
 impl std::fmt::Debug for Whisper {
