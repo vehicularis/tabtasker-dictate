@@ -20,6 +20,7 @@ use serde::Serialize;
 use std::{
   cell::RefCell,
   fmt,
+  io::Write,
   path::{Path, PathBuf},
   sync::atomic::AtomicBool,
   time::Instant,
@@ -132,6 +133,8 @@ pub struct Trace {
   pub unheard: bool,
   /// The error a stage failed with.
   pub error: Option<String>,
+  /// The pieces of a note Whisper failed on, which the app skips: their words are missing.
+  pub skipped: usize,
   /// Milliseconds in each stage.
   pub ms: Times,
 }
@@ -252,6 +255,7 @@ pub fn trace(t: &mut dyn Transcriber, file: &str, pcm: &[f32], how: &Hearing) ->
     typed: None,
     unheard: false,
     error: None,
+    skipped: 0,
     ms: Times::default(),
   };
   let started = Instant::now();
@@ -378,7 +382,12 @@ fn hear(
 fn note(t: &mut dyn Transcriber, pcm: &[f32], ask: &Ask, trace: &mut Trace) -> Result<String> {
   // hear_long asks its two closures for the stages one after the other, never at once.
   let t = RefCell::new(t);
-  let Trace { passes, ms, .. } = trace;
+  let Trace {
+    passes,
+    ms,
+    skipped,
+    ..
+  } = trace;
   let (mut speech_ms, mut start, mut held) = (0, 0, None);
   let heard = pieces::hear_long(
     String::new(),
@@ -403,6 +412,7 @@ fn note(t: &mut dyn Transcriber, pcm: &[f32], ask: &Ask, trace: &mut Trace) -> R
     &AtomicBool::new(false),
   );
   ms.speech += speech_ms;
+  *skipped = passes.iter().filter(|pass| pass.error.is_some()).count();
   heard
 }
 
@@ -476,6 +486,8 @@ impl fmt::Display for Trace {
         None if self.unheard => writeln!(f, "heard: unheard, no words came of it")?,
         None => writeln!(f, "heard: failed, {error}")?,
       }
+      let s = if self.skipped == 1 { "" } else { "s" };
+      writeln!(f, "skipped: {} piece{s}", self.skipped)?;
     }
     if let Some(typed) = &self.typed {
       writeln!(f, "typed: \"{typed}\"")?;
@@ -495,9 +507,8 @@ impl fmt::Display for Trace {
   }
 }
 
-/// Hears each of `files` with the `kind` of Whisper in `dir`, printing each trace as plain lines, or
-/// all of them as one JSON array. Fails when a file can't be read, the models can't load, or a stage
-/// failed on any file.
+/// Hears each of `files` with the `kind` of Whisper in `dir` (see [`hear_all`]). Fails when a file
+/// can't be read or the models can't load, too.
 pub fn run(
   dir: &Path,
   files: &[PathBuf],
@@ -506,31 +517,49 @@ pub fn run(
   json: bool,
 ) -> std::result::Result<(), String> {
   // Every file is read before the model loads, so a wrong one fails at once.
-  let audio = files
+  let recordings = files
     .iter()
-    .map(|path| wav::read(path))
-    .collect::<std::result::Result<Vec<_>, _>>()?;
+    .map(|path| Ok((path.display().to_string(), wav::read(path)?)))
+    .collect::<std::result::Result<Vec<_>, String>>()?;
   let mut engine = Engine::load(dir, kind)?;
+  hear_all(&mut engine, &recordings, how, json, &mut std::io::stdout())
+}
+
+/// Hears each named recording with `t`, writing each trace to `out` as plain lines, or all of them as
+/// one JSON array. Fails when a stage failed on any recording, or a note skipped a piece.
+pub fn hear_all(
+  t: &mut dyn Transcriber,
+  recordings: &[(String, Vec<f32>)],
+  how: &Hearing,
+  json: bool,
+  out: &mut dyn Write,
+) -> std::result::Result<(), String> {
+  let written = |e: std::io::Error| format!("cannot write the trace: {e}");
   let mut traces = Vec::new();
-  for (path, pcm) in files.iter().zip(&audio) {
-    let one = trace(&mut engine, &path.display().to_string(), pcm, how);
+  for (name, pcm) in recordings {
+    let one = trace(t, name, pcm, how);
     if !json {
       if !traces.is_empty() {
-        println!();
+        writeln!(out).map_err(written)?;
       }
-      print!("{one}");
+      write!(out, "{one}").map_err(written)?;
     }
     traces.push(one);
   }
   if json {
-    println!(
-      "{}",
-      serde_json::to_string_pretty(&traces).map_err(|e| e.to_string())?
-    );
+    let document = serde_json::to_string_pretty(&traces).map_err(|e| e.to_string())?;
+    writeln!(out, "{document}").map_err(written)?;
   }
-  match traces.iter().filter(|t| t.error.is_some()).count() {
+  let failed = traces
+    .iter()
+    .filter(|t| t.error.is_some() || t.skipped > 0)
+    .count();
+  match failed {
     0 => Ok(()),
-    failed => Err(format!("{failed} of {} recordings failed", traces.len())),
+    failed => Err(format!(
+      "{failed} of {} recordings failed or skipped a piece",
+      traces.len()
+    )),
   }
 }
 
@@ -547,6 +576,8 @@ mod tests {
     said: Vec<(usize, usize)>,
     detected: usize,
     heard: Vec<usize>,
+    /// Whisper fails on the first pass, as it can on one piece of a long note.
+    fail_first: bool,
   }
 
   impl Fake {
@@ -556,6 +587,7 @@ mod tests {
         said: Vec::new(),
         detected: 0,
         heard: Vec::new(),
+        fail_first: false,
       }
     }
   }
@@ -606,6 +638,9 @@ mod tests {
 
     fn words(&mut self, pcm: &[f32], _: i32, ask: &Ask) -> Result<Transcript> {
       self.heard.push(pcm.len());
+      if self.fail_first && self.heard.len() == 1 {
+        return Err(Error::NotUnderstood);
+      }
       Ok(Transcript {
         text: format!("um so {} ms", pcm.len() / 16),
         retried_without_prompt: !ask.words.is_empty(),
@@ -784,6 +819,7 @@ mod tests {
       "piece 2: 10.30 to 30.00 s",
       "language: en, kept from an earlier piece",
       &format!("heard: \"{heard}\""),
+      "skipped: 0 pieces",
     ] {
       assert!(printed.lines().any(|l| l == line), "{line}\n{printed}");
     }
@@ -792,9 +828,67 @@ mod tests {
       "{printed}"
     );
 
+    assert_eq!(t.skipped, 0);
+
     // A note with no speech in it is unheard.
     let mut fake = Fake::new(false);
     let t = trace(&mut fake, "note.wav", &audio, &note);
     assert!(t.unheard && t.passes.is_empty() && t.typed.is_none());
+  }
+
+  #[test]
+  fn a_skipped_piece_is_counted_and_fails_the_run() {
+    let ms = |m: usize| m * 16;
+    let audio: Vec<f32> = (0..ms(30_000)).map(|at| at as f32).collect();
+    let fake = || {
+      let mut fake = Fake::new(true);
+      fake.said = vec![(0, ms(10_000)), (ms(10_600), ms(30_000))];
+      fake.fail_first = true;
+      fake
+    };
+    let note = Hearing {
+      note: true,
+      ..Hearing::default()
+    };
+    // The app skips the piece Whisper failed on and keeps the rest; the trace says so.
+    let t = trace(&mut fake(), "note.wav", &audio, &note);
+    assert_eq!(t.skipped, 1);
+    assert_eq!(t.heard.as_deref(), Some("um so 19700 ms"));
+    assert!(t.error.is_none() && !t.unheard);
+
+    let recordings = [("note.wav".to_string(), audio)];
+    let failed = Err("1 of 1 recordings failed or skipped a piece".to_string());
+    let mut out = Vec::new();
+    assert_eq!(
+      hear_all(&mut fake(), &recordings, &note, false, &mut out),
+      failed
+    );
+    let printed = String::from_utf8(out).unwrap();
+    assert!(
+      printed.lines().any(|l| l == "skipped: 1 piece"),
+      "{printed}"
+    );
+    assert!(
+      printed
+        .lines()
+        .any(|l| l == "whisper: failed, Couldn’t understand that"),
+      "{printed}"
+    );
+
+    let mut out = Vec::new();
+    assert_eq!(
+      hear_all(&mut fake(), &recordings, &note, true, &mut out),
+      failed
+    );
+    let json: serde_json::Value = serde_json::from_slice(&out).unwrap();
+    assert_eq!(json[0]["skipped"], 1);
+
+    // Nothing skipped, nothing failed: the run passes.
+    let mut whole = fake();
+    whole.fail_first = false;
+    assert_eq!(
+      hear_all(&mut whole, &recordings, &note, true, &mut Vec::new()),
+      Ok(())
+    );
   }
 }
