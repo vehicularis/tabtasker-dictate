@@ -49,6 +49,11 @@ unsafe extern "C" fn stop_before_encoding(_: *mut WhisperSysContext, _: *mut Whi
 
 fn threads() -> usize { std::thread::available_parallelism().map_or(4, |n| n.get().min(8)) }
 
+/// A new decoding state for `whisper`, with GPU buffers of its own.
+fn fresh_state(whisper: &WhisperContext) -> Result<WhisperState> {
+  whisper.create_state().map_err(|_| Error::Other("There isn’t enough free memory. Quit an app or two and try again.".into()))
+}
+
 /// How much of Whisper's 30 s window the encoder looks at: the audio (20 ms a position) plus the 128
 /// positions of room the fine-tuned model was evaluated with. A short command encodes several times faster.
 fn audio_ctx(samples: usize) -> i32 { (samples.div_ceil(320) + 128).min(1500) as i32 }
@@ -89,6 +94,11 @@ pub fn retry_outcome(first: String, echo: &Echo, retry: Result<String>, stopped:
 /// Whisper, its state and the vocabulary it was last given. Every pass reuses the one state: whisper.cpp
 /// clears its results, spectrogram and prompt at the start of each full() (no_context is on for all of
 /// ours), and `&mut self` keeps passes from sharing it. A new state each pass cost its GPU buffers.
+///
+/// That clearing is not the whole of it: a pass's words can still depend on what the same state decoded
+/// before. The lab's 39 s note reads "mockups" on a fresh state and "mock-ups" after another recording,
+/// and a bare "Send." comes out "sand" after eight others. [`Whisper::reset`] gives a fresh state where
+/// that matters; the app still reuses one state for every pass.
 pub struct Whisper { whisper: WhisperContext, state: WhisperState, kind: ModelKind, prompt: Prompt }
 
 impl std::fmt::Debug for Whisper {
@@ -123,10 +133,19 @@ impl Whisper {
       let mut cpu = WhisperContextParameters::default(); cpu.use_gpu(false);
       WhisperContext::new_with_params(path, cpu)
     }).map_err(|_| Error::Other("Couldn’t load the speech model. Quit an app or two to free up memory, then try again.".into()))?;
-    let state = whisper.create_state().map_err(|_| Error::Other("There isn’t enough free memory. Quit an app or two and try again.".into()))?;
+    let state = fresh_state(&whisper)?;
     let mut engine = Self { whisper, state, kind, prompt: Prompt::default() };
     engine.warm_up();
     Ok(engine)
+  }
+
+  /// A fresh decoding state in place of the one every pass reuses, created and warmed up as [`Whisper::load`]
+  /// leaves it, so the next pass hears its audio as if nothing had been decoded before. The vocabulary's
+  /// prompt is kept: its tokens come from the model, not the state, so the same words still make the same prompt.
+  pub fn reset(&mut self) -> Result<()> {
+    self.state = fresh_state(&self.whisper)?;
+    self.warm_up();
+    Ok(())
   }
 
   /// A throw-away pass over a second of silence, with the final pass's beams, so the first dictation
