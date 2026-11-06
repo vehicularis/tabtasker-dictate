@@ -172,6 +172,8 @@ impl Whisper {
     let Some(echo) = Echo::of(&text, &self.prompt.sent, pcm.len()).filter(|_| !self.prompt.tokens.is_empty()) else {
       return Ok(Transcript { text, retried_without_prompt: false });
     };
+    // Logged before the retry, so a retry that ends unheard or cancelled still says it ran.
+    if !quick { log::info!("dictation pass: it recited the vocabulary, heard again without it"); }
     let retried = |text| Ok(Transcript { text, retried_without_prompt: true });
     match self.decode(pcm, language, ask, stop, quick, false) {
       Ok(again) if echo.keeps(&again, &self.prompt.sent, pcm.len()) => retried(again),

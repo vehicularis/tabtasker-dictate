@@ -439,10 +439,7 @@ impl LocalSpeech {
       }
     };
     self.hold(id, |hold| hold.spoken = Some(language));
-    let result = engine.transcribe(pcm, language, &ask, &|| cancelled.load(Ordering::Relaxed), quick).map(|heard| {
-      if heard.retried_without_prompt && !quick { log::info!("dictation pass: it recited the vocabulary, heard again without it"); }
-      heard.text
-    });
+    let result = engine.transcribe(pcm, language, &ask, &|| cancelled.load(Ordering::Relaxed), quick).map(|heard| heard.text);
     let ms = started.elapsed().as_millis();
     if quick {
       self.hold(id, |hold| { hold.live.passes += 1; hold.live.total_ms += ms; hold.live.slowest_ms = hold.live.slowest_ms.max(ms); });
