@@ -35,6 +35,10 @@ describe('nextPicked', () => {
   it('⇧ with an anchor that left the list also toggles', () => {
     expect(of(nextPicked(picked([], 'gone'), order, 'c', false, true))).toEqual({ ids: ['c'], anchor: 'c' });
   });
+  it('⇧ with an id that is not in the list adds nothing and keeps the anchor (indexOf is -1, so the slice is empty)', () => {
+    // Today's behaviour; see the report.
+    expect(of(nextPicked(picked([], 'c'), order, 'gone', false, true))).toEqual({ ids: [], anchor: 'c' });
+  });
   it('⌘⇧ together makes the range, as ⇧ does', () => {
     expect(of(nextPicked(picked(['a'], 'a'), order, 'c', true, true))).toEqual({ ids: ['a', 'b', 'c'], anchor: 'a' });
   });

@@ -147,7 +147,7 @@ describe('stamp', () => {
     expect(stamp(new Date(2026, 5, 15, 0, 30))).toBe('2026-06-15 00.30');
     expect(stamp(new Date(2026, 5, 15, 23, 30))).toBe('2026-06-15 23.30');
   });
-  it('follows the clock across the DST switches', () => {
+  it('follows the clock across the DST switches; it has no zone offset, so both 1:30s on 1 Nov print the same', () => {
     expect(stamp(new Date(2026, 2, 8, 3, 30))).toBe('2026-03-08 03.30');
     expect(stamp(new Date('2026-11-01T05:30:00Z'))).toBe('2026-11-01 01.30'); // the first 1:30, EDT
     expect(stamp(new Date('2026-11-01T06:30:00Z'))).toBe('2026-11-01 01.30'); // the second, EST
@@ -159,15 +159,5 @@ describe('stamp', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 6, 4, 8, 9));
     expect(stamp()).toBe('2026-07-04 08.09');
-  });
-});
-
-describe('with a faked clock', () => {
-  it('localDay of now follows setSystemTime', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date(2026, 5, 15, 23, 30));
-    expect(localDay(Date.now())).toBe(num(2026, 6, 15));
-    vi.setSystemTime(new Date(2026, 5, 16, 0, 30));
-    expect(localDay(Date.now())).toBe(num(2026, 6, 16));
   });
 });

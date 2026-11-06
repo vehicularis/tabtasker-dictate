@@ -14,6 +14,12 @@ describe('chordProblem', () => {
     expect(chordProblem(chord(122, 0, 'F1'))).toBeNull();
     expect(chordProblem(chord(90, shift, 'F20'))).toBeNull();
   });
+  it.each([122, 120, 99, 118, 96, 97, 98, 100, 101, 109, 103, 111, 105, 107, 113, 106, 64, 79, 80, 90])('takes function key code %i alone', code => {
+    expect(chordProblem(chord(code, 0, 'F'))).toBeNull();
+  });
+  it('does not take a key code next to a function key', () => {
+    expect(chordProblem(chord(121, 0))).toBe('Add ⌘, ⌥ or ⌃ to it');
+  });
   it('asks for ⌘, ⌥ or ⌃ on a plain key or one with only ⇧', () => {
     expect(chordProblem(chord(40, 0))).toBe('Add ⌘, ⌥ or ⌃ to it');
     expect(chordProblem(chord(40, shift))).toBe('Add ⌘, ⌥ or ⌃ to it');

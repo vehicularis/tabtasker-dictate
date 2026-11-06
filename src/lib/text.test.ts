@@ -19,6 +19,7 @@ describe('same', () => {
     expect(same('Élan', 'Elan')).toBe(false);
     expect(same('İ', 'i̇')).toBe(true); // İ lower-cases to i + combining dot above
     expect(same('I', 'ı')).toBe(false);
-    expect(same('😀', '😀')).toBe(true);
+    expect(same('a😀B', 'A😀b')).toBe(true);
+    expect(same('a😀B', 'a😁B')).toBe(false);
   });
 });
