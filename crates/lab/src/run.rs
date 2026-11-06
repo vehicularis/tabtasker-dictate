@@ -1,8 +1,8 @@
 //! The `run` command: one recording through the pipeline's stages, with what each stage found.
 //!
 //! The stages go as the app's pass does (`src-tauri/src/dictation/speech.rs`): the gate, the language,
-//! Whisper, then the text rules a typing mode finishes with. A note is heard piece by piece through
-//! `pieces::hear_long`, as the app hears a long one.
+//! Whisper, the text rules a typing mode finishes with, then what it does with a spoken sticky or
+//! "send". A note is heard piece by piece through `pieces::hear_long`, as the app hears a long one.
 
 use crate::wav;
 use dictate_engine::{
@@ -11,7 +11,7 @@ use dictate_engine::{
   models::{self, ModelKind},
   pieces,
   pipeline::{self, LanguageFrom, SURE},
-  text::{finish, Rules, Style},
+  text::{finish, sticky_words, without_send, Rules, Style},
   vad::{Gate, SpeechDetector, Verdict},
   whisper::{lang_code, Ask, Transcript, Whisper},
   SAMPLE_RATE,
@@ -129,6 +129,8 @@ pub struct Trace {
   pub heard: Option<String>,
   /// The words after `text::finish`.
   pub typed: Option<String>,
+  /// What a typing mode does with them next: a sticky instead, or the words without a spoken "send".
+  pub spoken: Option<Spoken>,
   /// Whether the app would end here quietly, with nothing to type.
   pub unheard: bool,
   /// The error a stage failed with.
@@ -139,11 +141,64 @@ pub struct Trace {
   pub ms: Times,
 }
 
+/// What a typing mode does with the finished words, as the app's `dictate_audio` does.
+#[derive(Debug, Serialize)]
+pub struct Spoken {
+  /// The sticky's words, when "Sticky: ..." puts one on screen instead of typing.
+  pub sticky: Option<String>,
+  /// Whether a spoken "send" ended the words, so Return follows them.
+  pub send: bool,
+  /// What is typed: nothing for a sticky, the words without their "send" otherwise.
+  pub text: String,
+}
+
+impl Spoken {
+  fn of(typed: &str) -> Self {
+    match sticky_words(typed) {
+      Some(words) => Self {
+        sticky: Some(words),
+        send: false,
+        text: String::new(),
+      },
+      None => {
+        let (text, send) = without_send(typed);
+        Self {
+          sticky: None,
+          send,
+          text,
+        }
+      }
+    }
+  }
+}
+
+/// The gates' verdict.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum GateVerdict {
+  /// Speech: the pass goes on.
+  Speech,
+  /// Nothing to hear: a hold ends quietly here.
+  Unheard,
+}
+
+/// Where a pass's language came from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LanguageSource {
+  /// Pinned, here by --language.
+  Settings,
+  /// Kept from an earlier piece of the note.
+  Hold,
+  /// Detected from this pass's audio.
+  Detected,
+}
+
 /// What the gates made of the audio.
 #[derive(Debug, Serialize)]
 pub struct GateTrace {
-  /// `speech`, or `unheard` where a hold ends quietly.
-  pub verdict: &'static str,
+  /// Speech, or unheard where a hold ends quietly.
+  pub verdict: GateVerdict,
   /// Why it is unheard.
   pub why: Option<&'static str>,
   /// The loudest sample.
@@ -169,8 +224,8 @@ pub struct Pass {
   pub end: f32,
   /// The language's code; None when it couldn't be told.
   pub language: Option<String>,
-  /// Where the language came from: `settings` (here --language), `hold` (an earlier piece) or `detected`.
-  pub from: Option<&'static str>,
+  /// Where the language came from.
+  pub from: Option<LanguageSource>,
   /// How sure detection was.
   pub sure: Option<f32>,
   /// Whisper's words; empty when it heard nothing it was sure of.
@@ -201,7 +256,7 @@ fn seconds(samples: usize) -> f32 {
 impl GateTrace {
   fn unheard(Levels { peak, rms }: Levels, why: &'static str) -> Self {
     Self {
-      verdict: "unheard",
+      verdict: GateVerdict::Unheard,
       why: Some(why),
       peak,
       rms,
@@ -225,7 +280,7 @@ impl GateTrace {
         keen,
         by_level,
       } => Self {
-        verdict: "speech",
+        verdict: GateVerdict::Speech,
         why: None,
         peak: gate.levels.peak,
         rms: gate.levels.rms,
@@ -253,6 +308,7 @@ pub fn trace(t: &mut dyn Transcriber, file: &str, pcm: &[f32], how: &Hearing) ->
     passes: Vec::new(),
     heard: None,
     typed: None,
+    spoken: None,
     unheard: false,
     error: None,
     skipped: 0,
@@ -273,7 +329,7 @@ pub fn trace(t: &mut dyn Transcriber, file: &str, pcm: &[f32], how: &Hearing) ->
       return trace;
     }
   };
-  let unheard = gate.verdict == "unheard";
+  let unheard = gate.verdict == GateVerdict::Unheard;
   trace.gate = Some(gate);
   // A hold ends quietly at the gate; the app hears a long note piece by piece without it.
   if unheard && !how.note {
@@ -306,7 +362,9 @@ pub fn trace(t: &mut dyn Transcriber, file: &str, pcm: &[f32], how: &Hearing) ->
         language,
         live: false,
       };
-      trace.typed = Some(finish(&text, &rules));
+      let typed = finish(&text, &rules);
+      trace.spoken = Some(Spoken::of(&typed));
+      trace.typed = Some(typed);
       trace.heard = Some(text);
     }
     Err(Error::Unheard) => trace.unheard = true,
@@ -356,9 +414,9 @@ fn hear(
   }
   pass.language = lang_code(language).map(String::from);
   (pass.from, pass.sure) = match from {
-    LanguageFrom::Settings => (Some("settings"), None),
-    LanguageFrom::Hold => (Some("hold"), None),
-    LanguageFrom::Detected { sure } => (Some("detected"), Some(sure)),
+    LanguageFrom::Settings => (Some(LanguageSource::Settings), None),
+    LanguageFrom::Hold => (Some(LanguageSource::Hold), None),
+    LanguageFrom::Detected { sure } => (Some(LanguageSource::Detected), Some(sure)),
   };
   let started = Instant::now();
   let words = t.words(pcm, language, ask);
@@ -444,7 +502,9 @@ impl fmt::Display for Pass {
     };
     match (self.from, self.sure) {
       (_, Some(sure)) => writeln!(f, "language: {code}, detected, {sure:.2} sure")?,
-      (Some("hold"), _) => writeln!(f, "language: {code}, kept from an earlier piece")?,
+      (Some(LanguageSource::Hold), _) => {
+        writeln!(f, "language: {code}, kept from an earlier piece")?
+      }
       _ => writeln!(f, "language: {code}, set by --language")?,
     }
     match (&self.error, self.words.as_str()) {
@@ -468,7 +528,7 @@ impl fmt::Display for Trace {
       writeln!(f, "gate: failed, {error}")?;
       return writeln!(f, "times: gate {} ms", self.ms.gate);
     };
-    let goes_on = if self.note && gate.verdict == "unheard" {
+    let goes_on = if self.note && gate.verdict == GateVerdict::Unheard {
       "; a note goes on to its pieces"
     } else {
       ""
@@ -491,6 +551,18 @@ impl fmt::Display for Trace {
     }
     if let Some(typed) = &self.typed {
       writeln!(f, "typed: \"{typed}\"")?;
+    }
+    match &self.spoken {
+      Some(Spoken {
+        sticky: Some(sticky),
+        ..
+      }) => writeln!(f, "spoken: sticky \"{sticky}\", types nothing")?,
+      Some(Spoken { send, text, .. }) => writeln!(
+        f,
+        "spoken: types \"{text}\", {}",
+        if *send { "then sends" } else { "no send" }
+      )?,
+      None => {}
     }
     write!(f, "times: gate {} ms", self.ms.gate)?;
     if self.note {
@@ -578,6 +650,8 @@ mod tests {
     heard: Vec<usize>,
     /// Whisper fails on the first pass, as it can on one piece of a long note.
     fail_first: bool,
+    /// What Whisper says instead of how much it heard.
+    says: Option<&'static str>,
   }
 
   impl Fake {
@@ -588,6 +662,7 @@ mod tests {
         detected: 0,
         heard: Vec::new(),
         fail_first: false,
+        says: None,
       }
     }
   }
@@ -642,7 +717,9 @@ mod tests {
         return Err(Error::NotUnderstood);
       }
       Ok(Transcript {
-        text: format!("um so {} ms", pcm.len() / 16),
+        text: self
+          .says
+          .map_or_else(|| format!("um so {} ms", pcm.len() / 16), String::from),
         retried_without_prompt: !ask.words.is_empty(),
       })
     }
@@ -677,15 +754,23 @@ mod tests {
     let gate = t.gate.as_ref().unwrap();
     assert_eq!(
       (gate.verdict, gate.end, gate.segments),
-      ("speech", Some(2.0), 3)
+      (GateVerdict::Speech, Some(2.0), 3)
     );
     let [pass] = &t.passes[..] else {
       panic!("one pass: {:?}", t.passes)
     };
     assert_eq!(pass.language.as_deref(), Some("en"));
-    assert_eq!((pass.from, pass.sure), (Some("detected"), Some(0.98)));
+    assert_eq!(
+      (pass.from, pass.sure),
+      (Some(LanguageSource::Detected), Some(0.98))
+    );
     assert_eq!((pass.words.as_str(), pass.retried), ("um so 3000 ms", true));
     assert_eq!(t.typed.as_deref(), Some(typed("um so 3000 ms").as_str()));
+    let spoken = t.spoken.as_ref().unwrap();
+    assert_eq!(
+      (spoken.sticky.as_deref(), spoken.send, spoken.text.as_str()),
+      (None, false, typed("um so 3000 ms").as_str())
+    );
     assert!(!t.unheard && t.error.is_none());
     let printed = t.to_string();
     let lines: Vec<&str> = printed.lines().collect();
@@ -699,12 +784,16 @@ mod tests {
         &format!("typed: \"{}\"", typed("um so 3000 ms")),
       ]
     );
-    assert!(lines[5].starts_with("times: gate "), "{printed}");
+    assert_eq!(
+      lines[5],
+      format!("spoken: types \"{}\", no send", typed("um so 3000 ms"))
+    );
+    assert!(lines[6].starts_with("times: gate "), "{printed}");
     assert!(
-      lines[5].contains(" ms, language ") && lines[5].ends_with(" ms"),
+      lines[6].contains(" ms, language ") && lines[6].ends_with(" ms"),
       "{printed}"
     );
-    assert_eq!(lines.len(), 6, "{printed}");
+    assert_eq!(lines.len(), 7, "{printed}");
     // The JSON keeps the stages in the struct's order.
     let json = serde_json::to_string(&t).unwrap();
     let at = |key: &str| json.find(&format!("\"{key}\":")).unwrap();
@@ -712,8 +801,16 @@ mod tests {
       at("file") < at("gate")
         && at("gate") < at("passes")
         && at("passes") < at("typed")
-        && at("typed") < at("ms"),
+        && at("typed") < at("spoken")
+        && at("spoken") < at("unheard")
+        && at("unheard") < at("ms"),
       "{json}"
+    );
+    // The enums keep the spellings the JSON has always had.
+    let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+    assert_eq!(
+      (&value["gate"]["verdict"], &value["passes"][0]["from"]),
+      (&"speech".into(), &"detected".into())
     );
 
     // A language set with --language is the pass's, never detected.
@@ -724,6 +821,10 @@ mod tests {
     };
     let t = trace(&mut fake, "said.wav", &vec![0.1; 16_000], &pinned);
     assert_eq!(t.passes[0].language.as_deref(), Some("de"));
+    assert_eq!(
+      serde_json::to_value(&t).unwrap()["passes"][0]["from"],
+      "settings"
+    );
     assert!(t
       .to_string()
       .contains("\nlanguage: de, set by --language\n"));
@@ -734,8 +835,12 @@ mod tests {
     let mut fake = Fake::new(false);
     let t = trace(&mut fake, "quiet.wav", &vec![0.0005; 16_000], &formal());
     assert!(t.unheard);
-    assert_eq!(t.gate.as_ref().unwrap().verdict, "unheard");
-    assert!(t.passes.is_empty() && t.typed.is_none());
+    assert_eq!(t.gate.as_ref().unwrap().verdict, GateVerdict::Unheard);
+    assert_eq!(
+      serde_json::to_value(&t).unwrap()["gate"]["verdict"],
+      "unheard"
+    );
+    assert!(t.passes.is_empty() && t.typed.is_none() && t.spoken.is_none());
     assert_eq!((fake.detected, fake.heard.len()), (0, 0));
     let printed = t.to_string();
     assert!(
@@ -770,7 +875,7 @@ mod tests {
     assert_eq!(
       (gate.verdict, gate.why, gate.peak),
       (
-        "unheard",
+        GateVerdict::Unheard,
         Some("under a quarter second, silent, not finite or over ten minutes"),
         0.5
       )
@@ -808,7 +913,11 @@ mod tests {
     assert_eq!((t.passes[1].start, t.passes[1].end), (10.3, 30.0));
     // The first piece's sure language is kept for the next, as a hold keeps it.
     assert_eq!(fake.detected, 1);
-    assert_eq!(t.passes[1].from, Some("hold"));
+    assert_eq!(t.passes[1].from, Some(LanguageSource::Hold));
+    assert_eq!(
+      serde_json::to_value(&t).unwrap()["passes"][1]["from"],
+      "hold"
+    );
     let heard = "um so 10300 ms um so 19700 ms";
     assert_eq!(t.heard.as_deref(), Some(heard));
     assert_eq!(t.typed.as_deref(), Some(typed(heard).as_str()));
@@ -890,5 +999,40 @@ mod tests {
       hear_all(&mut whole, &recordings, &note, true, &mut Vec::new()),
       Ok(())
     );
+  }
+
+  #[test]
+  fn the_spoken_stage_makes_a_sticky_or_ends_on_send() {
+    let heard = |says: &'static str| {
+      let mut fake = Fake::new(true);
+      fake.says = Some(says);
+      let t = trace(
+        &mut fake,
+        "said.wav",
+        &vec![0.1; 16_000],
+        &Hearing::default(),
+      );
+      let printed = t.to_string();
+      let line = printed
+        .lines()
+        .find(|l| l.starts_with("spoken: "))
+        .unwrap()
+        .to_string();
+      (t.spoken.unwrap(), line)
+    };
+    // "Sticky: call Thomas" puts a sticky on screen, and nothing is typed.
+    let (spoken, line) = heard("Sticky: call Thomas.");
+    assert_eq!(
+      (spoken.sticky.as_deref(), spoken.send, spoken.text.as_str()),
+      (Some("Call Thomas."), false, "")
+    );
+    assert_eq!(line, "spoken: sticky \"Call Thomas.\", types nothing");
+    // A spoken "send" at the end is taken off, and Return follows the words.
+    let (spoken, line) = heard("Thanks, Maria. Send.");
+    assert_eq!(
+      (spoken.sticky.as_deref(), spoken.send, spoken.text.as_str()),
+      (None, true, "Thanks, Maria.")
+    );
+    assert_eq!(line, "spoken: types \"Thanks, Maria.\", then sends");
   }
 }

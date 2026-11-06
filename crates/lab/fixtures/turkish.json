@@ -1,0 +1,7 @@
+{
+  "say": "Yarın sabah toplantıdan önce raporu bitirmemiz gerekiyor.",
+  "voice": "Yelda",
+  "expect": "Yarın sabah toplantıdan önce raporu bitirmemiz gerekiyor.",
+  "language": "auto",
+  "max_wer": 0.05
+}

@@ -2,10 +2,10 @@
 #![deny(missing_docs)]
 
 mod args;
+mod eval;
 mod fetch;
+mod fixtures;
 mod run;
-// ponytail: eval (the next task) is its first caller.
-#[allow(dead_code)]
 mod score;
 mod text;
 mod wav;
@@ -36,6 +36,8 @@ fn main() {
       model,
       ref hearing,
     } => run::run(&args.models, files, model, hearing, args.json),
+    Command::Fixtures { ref out } => fixtures::run(out, args.json),
+    Command::Eval { ref dir, model } => eval::run(dir, &args.models, model, args.json),
   };
   if let Err(e) = done {
     eprintln!("{e}");

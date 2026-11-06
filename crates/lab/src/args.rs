@@ -48,6 +48,18 @@ pub enum Command {
     /// How each is heard.
     hearing: Hearing,
   },
+  /// Render the fixtures' audio beside their JSON.
+  Fixtures {
+    /// The folder they go in.
+    out: PathBuf,
+  },
+  /// Hear every fixture in a folder and score its words.
+  Eval {
+    /// The folder of `x.json` and `x.wav` pairs.
+    dir: PathBuf,
+    /// Which Whisper to hear them with.
+    model: ModelKind,
+  },
 }
 
 /// A parsed command line.
@@ -71,6 +83,8 @@ Usage:
   dictate-lab fetch [--model small|turbo] [--speakers]
   dictate-lab run <file.wav>... [--model small|turbo] [--language auto|CODE] [--translate]
                   [--words \"A, B\"] [--style default|casual|formal|code|raw] [--fillers] [--note]
+  dictate-lab fixtures [--out DIR]
+  dictate-lab eval [DIR] [--model small|turbo]
 
 Commands:
   text    Finish a raw transcript with the text rules alone, no model.
@@ -78,6 +92,10 @@ Commands:
   run     Hear 16 kHz mono WAV files stage by stage and print what each stage found.
           --note hears each file piece by piece, as a long note is. The model is small
           unless --model says turbo.
+  fixtures  Render the fixtures in crates/lab/fixtures with macOS say into --out DIR
+          (target/fixtures), each WAV beside its JSON. A missing voice skips its fixture.
+  eval    Hear each x.wav beside an x.json in DIR (target/fixtures) and score its words
+          against what the JSON expects. Exits 1 when one is over budget, mismatched or errors.
 
 Options for every command:
   --json         Print one JSON document and nothing else on stdout.
@@ -94,6 +112,7 @@ const VALUED: &[&str] = &[
   "--replace",
   "--model",
   "--words",
+  "--out",
 ];
 /// Flags that stand alone.
 const SWITCHES: &[&str] = &[
@@ -123,15 +142,22 @@ fn takes(command: &str) -> Option<&'static [&'static str]> {
       "--fillers",
       "--note",
     ],
+    "fixtures" => &["--out"],
+    "eval" => &["--model"],
     _ => return None,
   })
 }
 
-/// The default models folder: `<repo root>/target/models`.
+/// `<repo root>/target/<dir>`, where the lab keeps its models and rendered fixtures.
 /// The repo root is fixed at build time, which is fine for a dev tool.
-fn default_models() -> PathBuf {
+fn target(dir: &str) -> PathBuf {
   let lab = Path::new(env!("CARGO_MANIFEST_DIR"));
-  lab.ancestors().nth(2).unwrap_or(lab).join("target/models")
+  lab
+    .ancestors()
+    .nth(2)
+    .unwrap_or(lab)
+    .join("target")
+    .join(dir)
 }
 
 /// Whether `path` is inside one of the app's own folders, which the lab never reads or writes.
@@ -175,7 +201,7 @@ pub fn parse(
   let help = || Args {
     command: Command::Help,
     json: false,
-    models: env_models.clone().unwrap_or_else(default_models),
+    models: env_models.clone().unwrap_or_else(|| target("models")),
   };
   // --help wins over everything else on the line, however wrong the rest is.
   if args[..end].iter().any(|a| a == "--help" || a == "-h") {
@@ -211,8 +237,8 @@ pub fn parse(
   let (mut json, mut models) = (false, None);
   let (mut style, mut fillers, mut language, mut replacements, mut live) =
     (Style::Default, false, None, Vec::new(), false);
-  let (mut model, mut speakers, mut translate, mut words, mut note) =
-    (ModelKind::Small, false, false, Vec::new(), false);
+  let (mut model, mut speakers, mut translate, mut words, mut note, mut out) =
+    (ModelKind::Small, false, false, Vec::new(), false, None);
   for (flag, value) in flags {
     if !GLOBAL.contains(&flag) && !takes.contains(&flag) {
       return Err(format!("{command} does not take {flag}"));
@@ -245,16 +271,19 @@ pub fn parse(
           .collect()
       }
       "--note" => note = true,
+      "--out" => out = Some(PathBuf::from(value)),
       _ => unreachable!("{flag} is in VALUED or SWITCHES but not handled"),
     }
   }
-  let models = models.or(env_models).unwrap_or_else(default_models);
-  if app_data(&models) {
-    return Err(format!(
-      "{} is the app's own data; the lab keeps its models elsewhere",
-      models.display()
-    ));
-  }
+  let models = models.or(env_models).unwrap_or_else(|| target("models"));
+  let elsewhere = |path: PathBuf, what: &str| match app_data(&path) {
+    true => Err(format!(
+      "{} is the app's own data; the lab keeps its {what} elsewhere",
+      path.display()
+    )),
+    false => Ok(path),
+  };
+  let models = elsewhere(models, "models")?;
   let unexpected = |extra: &[&str]| match extra.first() {
     Some(a) => Err(format!("unexpected argument {a}")),
     None => Ok(()),
@@ -277,6 +306,24 @@ pub fn parse(
     "fetch" => {
       unexpected(free)?;
       Command::Fetch { model, speakers }
+    }
+    "fixtures" => {
+      unexpected(free)?;
+      let out = out.unwrap_or_else(|| target("fixtures"));
+      Command::Fixtures {
+        out: elsewhere(out, "fixtures")?,
+      }
+    }
+    "eval" => {
+      let (dir, extra) = match free.split_first() {
+        Some((dir, extra)) => (PathBuf::from(dir), extra),
+        None => (target("fixtures"), free),
+      };
+      unexpected(extra)?;
+      Command::Eval {
+        dir: elsewhere(dir, "fixtures")?,
+        model,
+      }
     }
     _ => {
       if free.is_empty() {
@@ -551,6 +598,45 @@ mod tests {
   }
 
   #[test]
+  fn fixtures_and_eval_take_their_folders() {
+    assert_eq!(
+      command(&["fixtures"]),
+      Command::Fixtures {
+        out: target("fixtures")
+      }
+    );
+    assert!(target("fixtures").is_absolute());
+    assert_eq!(
+      command(&["fixtures", "--out", "/tmp/f"]),
+      Command::Fixtures {
+        out: "/tmp/f".into()
+      }
+    );
+    assert_eq!(
+      command(&["eval"]),
+      Command::Eval {
+        dir: target("fixtures"),
+        model: ModelKind::Small
+      }
+    );
+    assert_eq!(
+      command(&["eval", "mine", "--model", "turbo", "--json"]),
+      Command::Eval {
+        dir: "mine".into(),
+        model: ModelKind::Turbo
+      }
+    );
+    let err = |s: &[&str]| p(s, None).unwrap_err();
+    assert_eq!(err(&["eval", "a", "b"]), "unexpected argument b");
+    assert_eq!(err(&["fixtures", "a"]), "unexpected argument a");
+    assert_eq!(err(&["eval", "--note"]), "eval does not take --note");
+    assert_eq!(
+      err(&["run", "a.wav", "--out", "x"]),
+      "run does not take --out"
+    );
+  }
+
+  #[test]
   fn the_app_s_own_folders_are_refused() {
     let home = PathBuf::from(std::env::var_os("HOME").unwrap());
     let app = home.join("Library/Application Support/com.tabtasker.dictate/models");
@@ -560,5 +646,13 @@ mod tests {
       format!("{app} is the app's own data; the lab keeps its models elsewhere")
     );
     assert!(p(&["fetch"], Some(app)).is_err());
+    // Nor are fixtures written there, or read from there.
+    let docs = home.join("Documents/TabTasker Dictate");
+    let docs = docs.to_str().unwrap();
+    assert_eq!(
+      p(&["fixtures", "--out", docs], None).unwrap_err(),
+      format!("{docs} is the app's own data; the lab keeps its fixtures elsewhere")
+    );
+    assert!(p(&["eval", docs], None).is_err());
   }
 }

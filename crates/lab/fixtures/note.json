@@ -1,0 +1,8 @@
+{
+  "say": "Here is the plan for next week. [[slnc 600]] On Monday we review the design for the new settings page, and Maria brings the mockups. [[slnc 600]] On Tuesday the team writes the migration for the history table, which has to keep every old entry. [[slnc 600]] Wednesday is for testing on older Macs, because the last release was slow on Intel machines. [[slnc 600]] On Thursday we cut the release candidate and send it to the beta group. [[slnc 600]] If nothing breaks by Friday morning, we ship it in the afternoon and write the release notes together. [[slnc 600]] Please add anything I missed to the shared document before Monday. [[slnc 600]] The week after that, we start planning the next version and decide what goes into it.",
+  "voice": "Samantha",
+  "expect": "Here is the plan for next week. On Monday we review the design for the new settings page, and Maria brings the mockups. On Tuesday the team writes the migration for the history table, which has to keep every old entry. Wednesday is for testing on older Macs, because the last release was slow on Intel machines. On Thursday we cut the release candidate and send it to the beta group. If nothing breaks by Friday morning, we ship it in the afternoon and write the release notes together. Please add anything I missed to the shared document before Monday. The week after that, we start planning the next version and decide what goes into it.",
+  "language": "auto",
+  "note": true,
+  "max_wer": 0.05
+}

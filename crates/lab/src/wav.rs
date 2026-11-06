@@ -114,8 +114,6 @@ fn parse(b: &[u8], name: &str) -> Result<Vec<f32>, String> {
 }
 
 /// Writes 16-bit PCM, 16 kHz mono, for synthesized fixtures.
-// ponytail: fixtures (the next task) is its first caller.
-#[allow(dead_code)]
 pub fn write(path: &Path, pcm: &[f32]) -> std::io::Result<()> {
   let data_len = (pcm.len() * 2) as u32;
   let mut out = Vec::with_capacity(44 + pcm.len() * 2);

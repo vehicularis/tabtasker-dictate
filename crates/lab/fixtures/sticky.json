@@ -1,0 +1,8 @@
+{
+  "say": "Sticky: call Thomas about the venue.",
+  "voice": "Samantha",
+  "expect": "Sticky, call Thomas about the venue.",
+  "language": "en",
+  "expect_sticky": "Call Thomas about the venue.",
+  "max_wer": 0.05
+}

@@ -1,0 +1,7 @@
+{
+  "say": "We booked 3 rooms for 12 people on June 14th, at 7:30 in the evening.",
+  "voice": "Samantha",
+  "expect": "We booked three rooms for 12 people on June 14th at 7.30 in the evening.",
+  "language": "en",
+  "max_wer": 0.05
+}

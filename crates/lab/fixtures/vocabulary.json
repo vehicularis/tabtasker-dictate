@@ -1,0 +1,11 @@
+{
+  "say": "Tab Tasker ships the Vehicularis build on Friday.",
+  "voice": "Samantha",
+  "expect": "TabTasker ships the Vehicularis build on Friday.",
+  "language": "en",
+  "words": [
+    "TabTasker",
+    "Vehicularis"
+  ],
+  "max_wer": 0.05
+}
