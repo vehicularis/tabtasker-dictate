@@ -7,6 +7,7 @@ import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import { Button } from '../ui/controls';
 import { Icon } from '../ui/Icon';
 import { Tool } from './Toolbar';
+import { BOUNDARY, findMatches as findText, wrap, type FindMatch, type FindSegment } from '../lib/find';
 
 // Find and replace, as TabTasker Business's Atlas pages have it (findReplace.ts, FindReplaceBar.tsx): a
 // decoration plugin over the document, and the bar under the formatting bar. Literal, not a pattern;
@@ -14,18 +15,15 @@ import { Tool } from './Toolbar';
 // **brown**") but never a block, a cell or a picture. Nothing is stored: a note saved with the bar
 // open is the same file as one saved without it.
 
-interface FindMatch { from: number; to: number }
 interface FindState { query: string; matchCase: boolean; matches: readonly FindMatch[]; active: number }
 interface FindMeta { query?: string; matchCase?: boolean; active?: number }
 
 const findKey = new PluginKey<FindState>('findReplace');
 const EMPTY: FindState = { query: '', matchCase: false, matches: [], active: 0 };
-/** Stitched in at every boundary a match must not cross. */
-const BOUNDARY = '\n';
 
 /** The whole document as one string, with the table from string offsets back to positions. */
 function flatten(doc: PMNode) {
-  const parts: string[] = [], segments: { offset: number; pos: number; len: number }[] = [];
+  const parts: string[] = [], segments: FindSegment[] = [];
   let offset = 0;
   doc.descendants((node, pos) => {
     if (node.isText && node.text) { segments.push({ offset, pos, len: node.text.length }); parts.push(node.text); offset += node.text.length; return false; }
@@ -34,26 +32,10 @@ function flatten(doc: PMNode) {
   });
   return { text: parts.join(''), segments };
 }
-function posAt(segments: { offset: number; pos: number; len: number }[], offset: number): number {
-  let lo = 0, hi = segments.length - 1;
-  while (lo <= hi) {
-    const mid = (lo + hi) >> 1, seg = segments[mid];
-    if (offset < seg.offset) hi = mid - 1; else if (offset >= seg.offset + seg.len) lo = mid + 1; else return seg.pos + (offset - seg.offset);
-  }
-  return 0;
-}
 function findMatches(doc: PMNode, query: string, matchCase: boolean): FindMatch[] {
-  if (!query || query.includes(BOUNDARY)) return [];
   const { text, segments } = flatten(doc);
-  let hay = text, needle = query;
-  // A fold that changes the length (a Turkish dotted I) would shift every position after it: then the
-  // search is case-sensitive instead, which finds fewer, never the wrong text.
-  if (!matchCase && text.toLowerCase().length === text.length && query.toLowerCase().length === query.length) { hay = text.toLowerCase(); needle = query.toLowerCase(); }
-  const out: FindMatch[] = [];
-  for (let i = hay.indexOf(needle); i !== -1; i = hay.indexOf(needle, i + needle.length)) out.push({ from: posAt(segments, i), to: posAt(segments, i + needle.length - 1) + 1 });
-  return out;
+  return findText(text, query, matchCase, segments);
 }
-const wrap = (index: number, length: number) => length ? ((index % length) + length) % length : 0;
 
 export const FindReplace = Extension.create({
   name: 'findReplace',

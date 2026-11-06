@@ -21,13 +21,11 @@ import { FindBar, FindReplace } from './Find';
 import { Menu } from './Menu';
 import { SlashCommand } from './SlashMenu';
 import { MarkdownTableHeader, TableControls } from './TableControls';
+import { looksLikeMarkdown } from '../lib/markdown';
 import { Toolbar } from './Toolbar';
 import './editor.css';
 
 const lowlight = createLowlight(common);
-
-/// Plain text that is written as Markdown: a heading, a list, a fenced block, bold or a link on one of its lines.
-const looksLikeMarkdown = (text: string) => /^(?:#{1,6} |[-*+] |\d+\. |> |```)/m.test(text) || /\*\*[^*\n]+\*\*|\[[^\]\n]+\]\([^)\n]+\)/.test(text);
 
 // The Text editor, as TabTasker Business's Atlas pages write with it (RichEditor.tsx, on TipTap): the
 // formatting bar that folds into "More" as the pane narrows, the bar over a selection, "/" for blocks,
