@@ -38,6 +38,20 @@ cargo test --workspace --locked
 `cargo deny` comes from `cargo install --locked cargo-deny`. CI also reviews the dependencies a pull request
 adds, and runs the security checks every Monday so a new advisory shows up without a push.
 
+## Speech
+
+`dictate-lab` (`crates/lab`) runs the speech pipeline without the app and scores real audio against what was said. See [its README](crates/lab/README.md). Run it from the repo root after any change under `crates/engine` or `src-tauri/src/dictation`:
+
+```sh
+cargo build -p dictate-lab --release
+target/release/dictate-lab fetch --model small    # the models, once
+target/release/dictate-lab fixtures               # render the spoken fixtures with macOS say
+target/release/dictate-lab eval --model small     # score them; exits 1 when one misses its budget
+target/release/dictate-lab run some.wav           # one recording, stage by stage
+```
+
+CI runs the same eval as the "Speech eval" check on changes to the pipeline.
+
 ## Pull requests
 
 - One change per pull request, with a title that says what it changes for the person using Dictate.

@@ -1,0 +1,73 @@
+name: Speech eval
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'crates/**'
+      - 'src-tauri/src/dictation/**'
+      - 'src-tauri/src/meetings/**'
+      - '.github/workflows/speech-eval.yml'
+  pull_request:
+    paths:
+      - 'crates/**'
+      - 'src-tauri/src/dictation/**'
+      - 'src-tauri/src/meetings/**'
+      - '.github/workflows/speech-eval.yml'
+  # Mondays: the same fixtures against the same model, to catch a runner image that changed under them.
+  schedule:
+    - cron: '47 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: speech-eval-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  eval:
+    name: Speech eval
+    # whisper.cpp with Metal only builds on a Mac. A runner without a GPU falls back to the CPU, which is slower.
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: .
+      - name: Restore the speech models
+        # The key follows models.rs, where each model's SHA-256 lives, so a new model downloads once and
+        # every other run reuses the folder.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: target/models
+          key: speech-models-${{ hashFiles('crates/engine/src/models.rs') }}
+      - name: Build the lab
+        run: cargo build -p dictate-lab --release --locked
+      - name: Fetch the speech models
+        run: target/release/dictate-lab fetch --model small
+      - name: Render the fixtures
+        # A voice the runner lacks skips its fixture, and eval says so without failing.
+        run: target/release/dictate-lab fixtures
+      - name: Score the fixtures
+        run: |
+          status=0
+          target/release/dictate-lab eval --model small --json > eval.json || status=$?
+          {
+            echo '```'
+            target/release/dictate-lab eval --model small || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+      - name: Keep the scores
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: speech-eval-${{ github.run_id }}
+          path: eval.json
+          if-no-files-found: ignore
