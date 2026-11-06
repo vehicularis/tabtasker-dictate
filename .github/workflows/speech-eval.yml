@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'crates/**'
+      - 'Cargo.toml'
       - 'Cargo.lock'
       - '.cargo/config.toml'
       - 'src-tauri/src/dictation/**'
@@ -13,6 +14,7 @@ on:
   pull_request:
     paths:
       - 'crates/**'
+      - 'Cargo.toml'
       - 'Cargo.lock'
       - '.cargo/config.toml'
       - 'src-tauri/src/dictation/**'
@@ -44,13 +46,24 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: .
+      - name: Fetch sherpa-onnx's libraries again when the cache dropped them
+        # sherpa-onnx-sys unpacks its prebuilt static libraries into target/sherpa-onnx-prebuilt. rust-cache
+        # keeps that folder's directories but not its files, and the build script, seeing a lib directory,
+        # doesn't download again; a run that has to recompile sherpa-onnx-sys (a bumped dependency) then
+        # fails to find libsherpa-onnx-c-api.a. With no libraries there, the folder goes, and so does the
+        # script's fingerprint, so it runs again and downloads them.
+        run: |
+          if ! ls target/sherpa-onnx-prebuilt/*/lib/libsherpa-onnx-c-api.a >/dev/null 2>&1; then
+            rm -rf target/sherpa-onnx-prebuilt target/*/build/sherpa-onnx-sys-* target/*/.fingerprint/sherpa-onnx-sys-*
+          fi
       - name: Name the speech models
         id: models
         # The key is the SHA-256 lines of models.rs, so a new model downloads once and every other run,
         # whatever else changed in that file, reuses the folder.
         run: echo "key=$(grep -E 'sha256:' crates/engine/src/models.rs | shasum -a 256 | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
       - name: Restore the speech models
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: restore-models
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: target/models
           key: speech-models-${{ steps.models.outputs.key }}
@@ -58,8 +71,15 @@ jobs:
         run: cargo build -p dictate-lab --release --locked
       - name: Fetch the speech models
         run: target/release/dictate-lab fetch --model small
+      # Saved as soon as they are fetched, so a red eval doesn't download them again next run.
+      - name: Save the speech models
+        if: steps.restore-models.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: target/models
+          key: speech-models-${{ steps.models.outputs.key }}
       - name: Render the fixtures
-        # A voice the runner lacks skips its fixture, and eval says so without failing.
+        # A voice the runner lacks skips its fixture; eval says so, and fails if no words were scored at all.
         run: target/release/dictate-lab fixtures
       - name: Score the fixtures
         # With --json the table goes to stderr, so one run gives both the scores and the summary.
@@ -67,6 +87,8 @@ jobs:
           status=0
           target/release/dictate-lab eval --model small --json > eval.json 2> table.txt || status=$?
           { echo '```'; cat table.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          # A skipped fixture measured nothing: a warning each, so a runner without a voice is seen.
+          jq -r '.fixtures[] | select(.verdict == "skipped") | "::warning::\(.name) skipped: \(.why)"' eval.json || true
           exit "$status"
       - name: Keep the scores
         if: ${{ !cancelled() }}

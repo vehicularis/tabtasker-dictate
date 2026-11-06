@@ -4,8 +4,8 @@
 use crate::{
   fixtures::{self, Fixture},
   run::{self, Engine, Hearing, Spoken, Trace, Transcriber},
-  score::{score, words},
-  wav,
+  score::{diff, score, words, Score},
+  wav, Failure,
 };
 use dictate_engine::models::ModelKind;
 use serde::Serialize;
@@ -24,12 +24,16 @@ pub struct Case {
 }
 
 /// Every `x.json` in `dir`, by name, each with `x.wav` when it is there. A fixture that can't be read,
-/// or a WAV the lab can't read, fails the lot at once, before any model loads.
-pub fn cases(dir: &Path) -> Result<Vec<Case>, String> {
+/// or a WAV the lab can't read, fails the lot at once as a fixture, before any model loads; a folder
+/// that can't be read, or holds none, stops the lab.
+pub fn cases(dir: &Path) -> Result<Vec<Case>, Failure> {
   let render = "Render them with: dictate-lab fixtures";
   let listed = fixtures::listed(dir).map_err(|e| format!("{e}. {render}"))?;
   if listed.is_empty() {
-    return Err(format!("{} holds no fixtures. {render}", dir.display()));
+    return Err(Failure::Broken(format!(
+      "{} holds no fixtures. {render}",
+      dir.display()
+    )));
   }
   listed
     .into_iter()
@@ -45,7 +49,8 @@ pub fn cases(dir: &Path) -> Result<Vec<Case>, String> {
         pcm,
       })
     })
-    .collect()
+    .collect::<Result<_, String>>()
+    .map_err(Failure::Failed)
 }
 
 /// What came of one fixture.
@@ -56,8 +61,11 @@ pub enum Verdict {
   Pass,
   /// Its word error rate is over its budget.
   OverBudget,
-  /// Its words are within budget, but not the exact text, the sticky or the send it expects.
+  /// Its words are within budget, but not the exact text, the sticky or the send it expects, or it
+  /// should be unheard and words were heard.
   Mismatch,
+  /// A known issue: scored like any fixture, passing or not, and never a failure.
+  Known,
   /// It has no audio to hear.
   Skipped,
   /// A stage failed, or a note skipped a piece.
@@ -70,6 +78,7 @@ impl fmt::Display for Verdict {
       Verdict::Pass => "pass",
       Verdict::OverBudget => "over budget",
       Verdict::Mismatch => "mismatch",
+      Verdict::Known => "known",
       Verdict::Skipped => "skipped",
       Verdict::Error => "error",
     })
@@ -83,10 +92,15 @@ pub struct Row {
   pub name: String,
   /// What came of it.
   pub verdict: Verdict,
-  /// Why, for a mismatch, a skip or an error.
+  /// Why, for a mismatch, a known issue, a skip or an error.
   pub why: Option<String>,
   /// The word error rate; None when it wasn't heard, or a stage failed.
   pub wer: Option<f64>,
+  /// The substitutions, deletions and insertions the WER counts, with the words said; None with no WER.
+  pub score: Option<Score>,
+  /// The words said with what was heard instead marked in them, for a row that didn't pass and has an
+  /// edit to show.
+  pub diff: Option<String>,
   /// Its budget.
   pub max_wer: f64,
   /// The words that should be typed: empty when it should be unheard.
@@ -108,6 +122,8 @@ pub struct Counts {
   pub over_budget: usize,
   /// Within budget, but the wrong text, sticky or send.
   pub mismatch: usize,
+  /// Known issues, passing or not.
+  pub known: usize,
   /// Not heard, for want of audio.
   pub skipped: usize,
   /// A stage failed.
@@ -125,8 +141,13 @@ struct Report {
   counts: Counts,
 }
 
-/// The typed text, sticky or send `fixture` expects and `spoken` doesn't have, said as a reason.
-fn mismatch(fixture: &Fixture, spoken: Option<&Spoken>) -> Option<String> {
+/// What `fixture` expects and wasn't `heard`, said as a reason: no words at all, or the typed text,
+/// sticky or send `spoken` doesn't have.
+fn mismatch(fixture: &Fixture, heard: &str, spoken: Option<&Spoken>) -> Option<String> {
+  // Whatever its budget: with nothing said, any word heard is a WER of 1, which a budget of 1 lets by.
+  if fixture.expect_unheard && !words(heard).is_empty() {
+    return Some("words were heard, expected none".into());
+  }
   let typed = spoken.map_or("", |s| s.text.as_str());
   if let Some(want) = &fixture.expect_typed {
     if typed.trim() != want.trim() {
@@ -157,7 +178,9 @@ fn mismatch(fixture: &Fixture, spoken: Option<&Spoken>) -> Option<String> {
 fn judge(case: &Case, trace: Trace) -> Row {
   let fixture = &case.fixture;
   let heard = trace.typed.clone();
-  let wer = score(fixture.expected(), heard.as_deref().unwrap_or_default()).wer();
+  let got = heard.as_deref().unwrap_or_default();
+  let scored = score(fixture.expected(), got);
+  let wer = scored.wer();
   let s = if trace.skipped == 1 { "" } else { "s" };
   let (verdict, why) = if let Some(error) = &trace.error {
     (Verdict::Error, Some(error.clone()))
@@ -169,17 +192,43 @@ fn judge(case: &Case, trace: Trace) -> Row {
   // ponytail: serde_json may read a budget a bit off its decimal, so a WER equal to it passes.
   } else if wer > fixture.max_wer + 1e-9 {
     (Verdict::OverBudget, None)
-  } else if let Some(why) = mismatch(fixture, trace.spoken.as_ref()) {
+  } else if let Some(why) = mismatch(fixture, got, trace.spoken.as_ref()) {
     (Verdict::Mismatch, Some(why))
   } else {
     (Verdict::Pass, None)
   };
+  // A known issue is scored like any fixture and never fails; it says whether it still shows. A stage
+  // that failed is not the issue it is known for, so that stays an error.
+  let (verdict, why) = match (&fixture.known_issue, verdict) {
+    (Some(issue), Verdict::Pass) => (
+      Verdict::Known,
+      Some(format!(
+        "{issue}, passes now, so take known_issue out of {}.json",
+        case.name
+      )),
+    ),
+    (Some(issue), Verdict::OverBudget) => {
+      (Verdict::Known, Some(format!("{issue}, still over budget")))
+    }
+    (Some(issue), Verdict::Mismatch) => (
+      Verdict::Known,
+      Some(format!(
+        "{issue}, still a mismatch: {}",
+        why.unwrap_or_default()
+      )),
+    ),
+    (_, verdict) => (verdict, why),
+  };
+  let edits = scored.substitutions + scored.deletions + scored.insertions;
   let ms = &trace.ms;
   Row {
     name: case.name.clone(),
     verdict,
     why,
     wer: (verdict != Verdict::Error).then_some(wer),
+    score: (verdict != Verdict::Error).then_some(scored),
+    diff: (verdict != Verdict::Pass && verdict != Verdict::Error && edits > 0)
+      .then(|| diff(fixture.expected(), got)),
     max_wer: fixture.max_wer,
     expect: fixture.expected().to_string(),
     heard,
@@ -207,13 +256,26 @@ impl fmt::Display for Row {
     if let Some(wer) = self.wer {
       write!(f, ", WER {wer:.3} (budget {:.2})", self.max_wer)?;
     }
+    if let Some(Score {
+      substitutions,
+      deletions,
+      insertions,
+      ..
+    }) = self.score
+    {
+      write!(f, ", S/D/I {substitutions}/{deletions}/{insertions}")?;
+    }
     write!(
       f,
       ", {} ms, heard {}, expected {}",
       self.ms,
       quoted(self.heard.as_deref()),
       quoted(Some(&self.expect))
-    )
+    )?;
+    match &self.diff {
+      Some(diff) => write!(f, "\n  diff: {diff}"),
+      None => Ok(()),
+    }
   }
 }
 
@@ -223,25 +285,32 @@ fn plural(n: usize, one: &str, many: &str) -> String {
 
 /// Hears every case with `t` and holds it to its budget, writing a row each as it goes, then the mean
 /// WER and the counts. They go to `out`; with `json`, they go to `table` instead and `out` holds the
-/// whole eval as one document. Fails when a fixture is over budget, mismatched or errors; a skipped
-/// one is neither a pass nor a failure.
+/// whole eval as one document. Each case after the first is heard on a fresh state, so its words don't
+/// depend on the order. Fails when a fixture is over budget, mismatched or errors, or when no fixture
+/// with words was scored; a skipped one is neither a pass nor a failure, and a known issue never fails.
 pub fn score_all(
   t: &mut dyn Transcriber,
   cases: &[Case],
   json: bool,
   out: &mut dyn Write,
   table: &mut dyn Write,
-) -> Result<(), String> {
+) -> Result<(), Failure> {
   let human: &mut dyn Write = if json { table } else { &mut *out };
-  let written = |e: std::io::Error| format!("cannot write the eval: {e}");
+  let written = |e: std::io::Error| Failure::Broken(format!("cannot write the eval: {e}"));
   let mut rows = Vec::new();
   let mut counts = Counts::default();
+  let mut heard_one = false;
   for case in cases {
     let row = match &case.pcm {
-      Some(pcm) => judge(
-        case,
-        run::trace(t, &format!("{}.wav", case.name), pcm, &case.hearing),
-      ),
+      Some(pcm) => {
+        if std::mem::replace(&mut heard_one, true) {
+          t.fresh().map_err(|e| Failure::Broken(e.to_string()))?;
+        }
+        judge(
+          case,
+          run::trace(t, &format!("{}.wav", case.name), pcm, &case.hearing),
+        )
+      }
       None => Row {
         name: case.name.clone(),
         verdict: Verdict::Skipped,
@@ -253,6 +322,8 @@ pub fn score_all(
           None => format!("no {0}.wav beside {0}.json", case.name),
         }),
         wer: None,
+        score: None,
+        diff: None,
         max_wer: case.fixture.max_wer,
         expect: case.fixture.expected().to_string(),
         heard: None,
@@ -264,6 +335,7 @@ pub fn score_all(
       Verdict::Pass => &mut counts.pass,
       Verdict::OverBudget => &mut counts.over_budget,
       Verdict::Mismatch => &mut counts.mismatch,
+      Verdict::Known => &mut counts.known,
       Verdict::Skipped => &mut counts.skipped,
       Verdict::Error => &mut counts.error,
     } += 1;
@@ -289,33 +361,45 @@ pub fn score_all(
   .map_err(written)?;
   writeln!(
     human,
-    "{}: {} passed, {} over budget, {} mismatched, {} skipped, {}",
+    "{}: {} passed, {} over budget, {} mismatched, {}, {} skipped, {}",
     plural(rows.len(), "fixture", "fixtures"),
     counts.pass,
     counts.over_budget,
     counts.mismatch,
+    plural(counts.known, "known issue", "known issues"),
     counts.skipped,
     plural(counts.error, "error", "errors")
   )
   .map_err(written)?;
+  let with_words = scored.len();
   if json {
     let report = Report {
       fixtures: rows,
       mean_wer,
-      with_words: scored.len(),
+      with_words,
       counts,
     };
     let document = serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?;
     writeln!(out, "{document}").map_err(written)?;
   }
-  match failed {
-    0 => Ok(()),
-    failed => Err(format!("{failed} of {} fixtures failed", cases.len())),
+  if failed > 0 {
+    return Err(Failure::Failed(format!(
+      "{failed} of {} fixtures failed",
+      cases.len()
+    )));
   }
+  // Silence and noise alone, as on a Mac without the voices, say nothing about recognition.
+  if with_words == 0 {
+    return Err(Failure::Failed(
+      "no fixture with words was scored, so nothing was measured. Render the spoken ones with: dictate-lab fixtures"
+        .into(),
+    ));
+  }
+  Ok(())
 }
 
 /// The `eval` command: every fixture in `dir`, heard with the `kind` of Whisper in `models`.
-pub fn run(dir: &Path, models: &Path, kind: ModelKind, json: bool) -> Result<(), String> {
+pub fn run(dir: &Path, models: &Path, kind: ModelKind, json: bool) -> Result<(), Failure> {
   let cases = cases(dir)?;
   let mut engine = Engine::load(models, kind)?;
   score_all(
@@ -334,7 +418,7 @@ mod tests {
   use dictate_engine::{
     audio::Levels,
     error::{Error, Result},
-    pipeline::LanguageFrom,
+    pipeline::{choose_language, LanguageFrom},
     vad::{Gate, Verdict as GateVerdict},
     whisper::{lang_id, Ask, Transcript},
   };
@@ -342,11 +426,18 @@ mod tests {
 
   /// A pipeline with no model: silence is unheard at the gate, the rest is speech in English, and
   /// Whisper says each of `says` in turn.
-  struct Says(VecDeque<Result<&'static str>>);
+  struct Says {
+    says: VecDeque<Result<&'static str>>,
+    /// How many times it was given a fresh state.
+    fresh: usize,
+  }
 
   impl Says {
     fn new(says: impl IntoIterator<Item = Result<&'static str>>) -> Self {
-      Self(says.into_iter().collect())
+      Self {
+        says: says.into_iter().collect(),
+        fresh: 0,
+      }
     }
   }
 
@@ -373,19 +464,24 @@ mod tests {
       Ok(vec![(0, pcm.len())])
     }
 
-    fn language(&mut self, _: &[f32], _: &Ask) -> Result<(i32, LanguageFrom)> {
-      Ok((
-        lang_id("en").unwrap(),
-        LanguageFrom::Detected { sure: 0.99 },
-      ))
+    fn language(&mut self, _: &[f32], ask: &Ask, held: Option<i32>) -> Result<(i32, LanguageFrom)> {
+      choose_language(ask, held, &|| false, || Ok((lang_id("en").unwrap(), 0.99)))
     }
 
     fn words(&mut self, _: &[f32], _: i32, _: &Ask) -> Result<Transcript> {
-      let text = self.0.pop_front().expect("Whisper asked once too often")?;
+      let text = self
+        .says
+        .pop_front()
+        .expect("Whisper asked once too often")?;
       Ok(Transcript {
         text: text.into(),
         retried_without_prompt: false,
       })
+    }
+
+    fn fresh(&mut self) -> Result<()> {
+      self.fresh += 1;
+      Ok(())
     }
   }
 
@@ -409,7 +505,7 @@ mod tests {
 
   /// Each case heard by `says`, with what was printed and whether the eval passed. A row's
   /// milliseconds read N, since a test can't know them.
-  fn eval(says: Says, cases: &[Case], json: bool) -> (String, std::result::Result<(), String>) {
+  fn eval(says: Says, cases: &[Case], json: bool) -> (String, std::result::Result<(), Failure>) {
     let (mut out, mut table) = (Vec::new(), Vec::new());
     let done = score_all(&mut { says }, cases, json, &mut out, &mut table);
     let printed = String::from_utf8(out).unwrap();
@@ -439,11 +535,11 @@ mod tests {
     assert_eq!(done, Ok(()));
     assert_eq!(
       printed,
-      "plain: pass, WER 0.167 (budget 0.20), N ms, \
+      "plain: pass, WER 0.167 (budget 0.20), S/D/I 1/0/0, N ms, \
        heard \"The meeting moved to Tuesday afternoon.\", \
        expected \"The meeting moved to Thursday afternoon.\"\n\
        mean WER 0.167 over 1 fixture with words\n\
-       1 fixture: 1 passed, 0 over budget, 0 mismatched, 0 skipped, 0 errors\n"
+       1 fixture: 1 passed, 0 over budget, 0 mismatched, 0 known issues, 0 skipped, 0 errors\n"
     );
   }
 
@@ -460,17 +556,22 @@ mod tests {
     ];
     let (printed, done) = eval(says, &cases, false);
     // main exits 1 on an Err.
-    assert_eq!(done, Err("1 of 2 fixtures failed".into()));
+    assert_eq!(done, Err(Failure::Failed("1 of 2 fixtures failed".into())));
     let lines: Vec<&str> = printed.lines().collect();
+    // A row that didn't pass counts its edits, and marks the words dropped and added on a line of its own.
     assert!(
-      lines[0].starts_with("plain: over budget, WER 0.333 (budget 0.20), "),
+      lines[0].starts_with("plain: over budget, WER 0.333 (budget 0.20), S/D/I 1/1/0, "),
       "{printed}"
     );
-    assert!(lines[1].starts_with("short: pass, WER 0.000 (budget 0.05), "));
-    assert_eq!(lines[2], "mean WER 0.167 over 2 fixtures with words");
     assert_eq!(
-      lines[3],
-      "2 fixtures: 1 passed, 1 over budget, 0 mismatched, 0 skipped, 0 errors"
+      lines[1],
+      "  diff: the meeting moved to [-thursday-] [-afternoon-] {+tuesday+}"
+    );
+    assert!(lines[2].starts_with("short: pass, WER 0.000 (budget 0.05), S/D/I 0/0/0, "));
+    assert_eq!(lines[3], "mean WER 0.167 over 2 fixtures with words");
+    assert_eq!(
+      lines[4],
+      "2 fixtures: 1 passed, 1 over budget, 0 mismatched, 0 known issues, 0 skipped, 0 errors"
     );
   }
 
@@ -484,11 +585,10 @@ mod tests {
       case("silence", UNHEARD, silence()),
       case("noise", UNHEARD, speech()),
     ];
-    let (printed, done) = eval(says, &cases, false);
-    assert_eq!(done, Ok(()));
+    let (printed, _) = eval(says, &cases, false);
     assert!(
       printed.starts_with(
-        "silence: pass, WER 0.000 (budget 0.00), N ms, heard nothing, expected nothing\n\
+        "silence: pass, WER 0.000 (budget 0.00), S/D/I 0/0/0, N ms, heard nothing, expected nothing\n\
          noise: pass, WER 0.000 (budget 0.00), "
       ),
       "{printed}"
@@ -498,15 +598,48 @@ mod tests {
   }
 
   #[test]
+  fn an_eval_with_no_words_scored_fails() {
+    // Only the synthesized fixtures were rendered, as on a Mac without the voices: nothing was measured.
+    let says = Says::new([Err(Error::Unheard)]);
+    let cases = [
+      case("silence", UNHEARD, silence()),
+      case("noise", UNHEARD, speech()),
+      case("plain", MEETING, None),
+    ];
+    let (_, done) = eval(says, &cases, false);
+    assert_eq!(
+      done,
+      Err(Failure::Failed(
+        "no fixture with words was scored, so nothing was measured. Render the spoken ones with: dictate-lab fixtures"
+          .into()
+      ))
+    );
+  }
+
+  #[test]
   fn expect_unheard_fails_when_words_are_heard() {
     let says = Says::new([Ok("Thank you for watching.")]);
     let (printed, done) = eval(says, &[case("noise", UNHEARD, speech())], false);
-    assert_eq!(done, Err("1 of 1 fixtures failed".into()));
+    assert_eq!(done, Err(Failure::Failed("1 of 1 fixtures failed".into())));
     assert!(
       printed.starts_with(
-        "noise: over budget, WER 1.000 (budget 0.00), N ms, \
-         heard \"Thank you for watching.\", expected nothing\n"
+        "noise: over budget, WER 1.000 (budget 0.00), S/D/I 0/0/4, N ms, \
+         heard \"Thank you for watching.\", expected nothing\n\
+         \x20 diff: {+thank+} {+you+} {+for+} {+watching+}\n"
       ),
+      "{printed}"
+    );
+  }
+
+  #[test]
+  fn expect_unheard_fails_on_any_words_whatever_its_budget() {
+    let loose = r#"{ "synth": "noise", "expect_unheard": true, "max_wer": 1.0 }"#;
+    let says = Says::new([Ok("Thank you.")]);
+    let (printed, done) = eval(says, &[case("noise", loose, speech())], false);
+    assert_eq!(done, Err(Failure::Failed("1 of 1 fixtures failed".into())));
+    assert!(
+      printed
+        .starts_with("noise: mismatch, words were heard, expected none, WER 1.000 (budget 1.00), "),
       "{printed}"
     );
   }
@@ -539,31 +672,33 @@ mod tests {
     );
     assert_eq!(
       lines[3],
-      "2 fixtures: 1 passed, 0 over budget, 0 mismatched, 1 skipped, 0 errors"
+      "2 fixtures: 1 passed, 0 over budget, 0 mismatched, 0 known issues, 1 skipped, 0 errors"
     );
 
-    // An empty folder, or none, says how to fill it.
+    // An empty folder, or none, says how to fill it, and stops the lab.
     let dir = scratch("eval-empty");
-    let err = cases(&dir).err().unwrap();
+    let Err(Failure::Broken(err)) = cases(&dir) else {
+      panic!("an empty folder stops the lab")
+    };
     std::fs::remove_dir_all(&dir).unwrap();
     assert!(
       err.ends_with("holds no fixtures. Render them with: dictate-lab fixtures"),
       "{err}"
     );
-    assert!(cases(&dir).is_err());
+    assert!(matches!(cases(&dir), Err(Failure::Broken(_))));
   }
 
   #[test]
   fn a_stage_error_is_counted_as_an_error() {
     let says = Says::new([Err(Error::NotUnderstood)]);
     let (printed, done) = eval(says, &[case("plain", MEETING, speech())], false);
-    assert_eq!(done, Err("1 of 1 fixtures failed".into()));
+    assert_eq!(done, Err(Failure::Failed("1 of 1 fixtures failed".into())));
     assert!(
       printed.starts_with("plain: error, Couldn’t understand that, N ms, heard nothing, "),
       "{printed}"
     );
     assert!(
-      printed.ends_with("0 mismatched, 0 skipped, 1 error\n"),
+      printed.ends_with("0 mismatched, 0 known issues, 0 skipped, 1 error\n"),
       "{printed}"
     );
   }
@@ -573,7 +708,7 @@ mod tests {
     let says = Says::new([Err(Error::NotUnderstood)]);
     let note = r#"{ "expect": "Here is the plan.", "note": true, "max_wer": 1.0 }"#;
     let (printed, done) = eval(says, &[case("note", note, speech())], false);
-    assert_eq!(done, Err("1 of 1 fixtures failed".into()));
+    assert_eq!(done, Err(Failure::Failed("1 of 1 fixtures failed".into())));
     assert!(
       printed.starts_with("note: error, skipped 1 piece, "),
       "{printed}"
@@ -596,17 +731,18 @@ mod tests {
     // Heard close enough to be in budget, but not as a sticky or a send.
     let says = Says::new([Ok("Sticky, call Tom."), Ok("See you soon, son.")]);
     let (printed, done) = eval(says, &cases, false);
-    assert_eq!(done, Err("2 of 2 fixtures failed".into()));
+    assert_eq!(done, Err(Failure::Failed("2 of 2 fixtures failed".into())));
     let lines: Vec<&str> = printed.lines().collect();
     assert!(
       lines[0].starts_with("sticky: mismatch, sticky \"Call Tom.\", expected \"Call Thomas\", "),
       "{printed}"
     );
+    assert_eq!(lines[1], "  diff: sticky call [-thomas-] {+tom+}");
     assert!(
-      lines[1].starts_with("send: mismatch, no spoken send, expected one, "),
+      lines[2].starts_with("send: mismatch, no spoken send, expected one, "),
       "{printed}"
     );
-    assert!(lines[3].contains(" 2 mismatched, "), "{printed}");
+    assert!(lines[5].contains(" 2 mismatched, "), "{printed}");
 
     let says = Says::new([Ok("Call Thomas."), Ok("Thanks. Send.")]);
     let cases = [
@@ -624,7 +760,7 @@ mod tests {
       "{printed}"
     );
     assert!(
-      lines[1].starts_with("nosend: mismatch, a spoken send, expected none, "),
+      lines[2].starts_with("nosend: mismatch, a spoken send, expected none, "),
       "{printed}"
     );
   }
@@ -652,7 +788,7 @@ mod tests {
       Ok("See you soon, send."),
     ]);
     let (printed, done) = eval(says, &cases, false);
-    assert_eq!(done, Err("2 of 2 fixtures failed".into()));
+    assert_eq!(done, Err(Failure::Failed("2 of 2 fixtures failed".into())));
     let lines: Vec<&str> = printed.lines().collect();
     assert!(
       lines[0].starts_with(
@@ -670,6 +806,80 @@ mod tests {
   }
 
   #[test]
+  fn a_known_issue_is_scored_and_never_fails_the_eval() {
+    let bare = r#"{ "expect": "See you tomorrow. Send.", "expect_send": true, "max_wer": 0.05,
+      "known_issue": "a bare \". Send.\" is heard as \"sand\"" }"#;
+    let exact = r#"{ "expect": "Hello there.", "expect_typed": "Hello there!", "max_wer": 0.05,
+      "known_issue": "an exclamation mark comes out as a full stop" }"#;
+    let says = Says::new([
+      Ok("See you tomorrow, sand."),
+      Ok("Hello there."),
+      Ok("See you tomorrow. Send."),
+      Ok("The meeting moved to Thursday afternoon."),
+    ]);
+    let cases = [
+      case("send-bare", bare, speech()),
+      case("exact", exact, speech()),
+      case("send-fixed", bare, speech()),
+      case("plain", MEETING, speech()),
+    ];
+    let (printed, done) = eval(says, &cases, false);
+    assert_eq!(done, Ok(()), "{printed}");
+    let lines: Vec<&str> = printed.lines().collect();
+    assert_eq!(
+      lines[..6],
+      [
+        "send-bare: known, a bare \". Send.\" is heard as \"sand\", still over budget, WER 0.250 (budget 0.05), \
+         S/D/I 1/0/0, N ms, heard \"See you tomorrow, sand.\", expected \"See you tomorrow. Send.\"",
+        "  diff: see you tomorrow [-send-] {+sand+}",
+        "exact: known, an exclamation mark comes out as a full stop, still a mismatch: typed \"Hello there.\", \
+         expected exactly \"Hello there!\", WER 0.000 (budget 0.05), S/D/I 0/0/0, N ms, \
+         heard \"Hello there.\", expected \"Hello there.\"",
+        // One that passes again says so, and still never counts as a pass.
+        "send-fixed: known, a bare \". Send.\" is heard as \"sand\", passes now, so take known_issue out of \
+         send-fixed.json, WER 0.000 (budget 0.05), S/D/I 0/0/0, N ms, \
+         heard \"See you tomorrow. Send.\", expected \"See you tomorrow. Send.\"",
+        "plain: pass, WER 0.000 (budget 0.20), S/D/I 0/0/0, N ms, \
+         heard \"The meeting moved to Thursday afternoon.\", expected \"The meeting moved to Thursday afternoon.\"",
+        "mean WER 0.062 over 4 fixtures with words",
+      ]
+    );
+    assert_eq!(
+      lines[6],
+      "4 fixtures: 1 passed, 0 over budget, 0 mismatched, 3 known issues, 0 skipped, 0 errors"
+    );
+    let (json, _) = eval(
+      Says::new([Ok("See you tomorrow, sand.")]),
+      &[case("send-bare", bare, speech())],
+      true,
+    );
+    let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+    assert_eq!(
+      (&v["fixtures"][0]["verdict"], &v["counts"]["known"]),
+      (&"known".into(), &1.into())
+    );
+
+    // A stage that fails is not the issue it is known for: that is still an error.
+    let says = Says::new([Err(Error::NotUnderstood)]);
+    let (printed, done) = eval(says, &[case("send-bare", bare, speech())], false);
+    assert_eq!(done, Err(Failure::Failed("1 of 1 fixtures failed".into())));
+    assert!(printed.starts_with("send-bare: error, "), "{printed}");
+  }
+
+  #[test]
+  fn each_fixture_after_the_first_is_heard_on_a_fresh_state() {
+    let cases = [
+      case("one", MEETING, speech()),
+      case("turkish", r#"{ "expect": "Merhaba." }"#, None),
+      case("two", MEETING, speech()),
+      case("three", MEETING, speech()),
+    ];
+    let mut says = Says::new((0..3).map(|_| Ok("The meeting moved to Thursday afternoon.")));
+    score_all(&mut says, &cases, true, &mut Vec::new(), &mut Vec::new()).unwrap();
+    assert_eq!((says.says.len(), says.fresh), (0, 2));
+  }
+
+  #[test]
   fn json_puts_the_table_on_its_own_writer() {
     let cases = [case("plain", MEETING, speech())];
     let (mut out, mut table) = (Vec::new(), Vec::new());
@@ -679,7 +889,10 @@ mod tests {
     let table = String::from_utf8(table).unwrap();
     assert!(table.starts_with("plain: "), "{table}");
     assert!(table.contains("mean WER"), "{table}");
-    assert!(table.lines().last().unwrap().starts_with("1 fixture: "), "{table}");
+    assert!(
+      table.lines().last().unwrap().starts_with("1 fixture: "),
+      "{table}"
+    );
   }
 
   #[test]
@@ -691,7 +904,7 @@ mod tests {
       case("turkish", r#"{ "expect": "Merhaba." }"#, None),
     ];
     let (printed, done) = eval(says, &cases, true);
-    assert_eq!(done, Err("1 of 3 fixtures failed".into()));
+    assert_eq!(done, Err(Failure::Failed("1 of 3 fixtures failed".into())));
     let v: serde_json::Value = serde_json::from_str(&printed).unwrap();
     let rows = v["fixtures"].as_array().unwrap();
     assert_eq!(rows.len(), 3);
@@ -700,19 +913,31 @@ mod tests {
       (&"plain".into(), &"over_budget".into())
     );
     assert!((rows[0]["wer"].as_f64().unwrap() - 2.0 / 6.0).abs() < 1e-9);
+    assert_eq!(
+      rows[0]["score"],
+      serde_json::json!({ "substitutions": 1, "deletions": 1, "insertions": 0, "reference": 6 })
+    );
+    assert_eq!(
+      rows[0]["diff"],
+      "the meeting moved to [-thursday-] [-afternoon-] {+tuesday+}"
+    );
     assert_eq!(rows[0]["heard"], "The meeting moved to Tuesday.");
     assert_eq!(rows[0]["trace"]["gate"]["verdict"], "speech");
     assert_eq!(
-      (&rows[1]["verdict"], &rows[1]["heard"]),
-      (&"pass".into(), &serde_json::Value::Null)
+      (&rows[1]["verdict"], &rows[1]["heard"], &rows[1]["diff"]),
+      (
+        &"pass".into(),
+        &serde_json::Value::Null,
+        &serde_json::Value::Null
+      )
     );
     assert_eq!(rows[2]["verdict"], "skipped");
-    assert!(rows[2]["trace"].is_null() && rows[2]["wer"].is_null());
+    assert!(rows[2]["trace"].is_null() && rows[2]["wer"].is_null() && rows[2]["score"].is_null());
     assert!((v["mean_wer"].as_f64().unwrap() - 2.0 / 6.0).abs() < 1e-9);
     assert_eq!(v["with_words"], 1);
     assert_eq!(
       v["counts"],
-      serde_json::json!({ "pass": 1, "over_budget": 1, "mismatch": 0, "skipped": 1, "error": 0 })
+      serde_json::json!({ "pass": 1, "over_budget": 1, "mismatch": 0, "known": 0, "skipped": 1, "error": 0 })
     );
   }
 }

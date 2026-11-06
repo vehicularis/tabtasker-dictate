@@ -36,8 +36,6 @@ pub enum Command {
   Fetch {
     /// Which Whisper to download, with the speech detection beside it.
     model: ModelKind,
-    /// Whether to download the speaker models too.
-    speakers: bool,
   },
   /// Hear recordings stage by stage.
   Run {
@@ -80,7 +78,7 @@ dictate-lab runs the dictation pipeline without the app.
 Usage:
   dictate-lab text \"<raw>\" [--style default|casual|formal|code|raw] [--fillers]
                            [--language CODE] [--replace FROM=TO]... [--live]
-  dictate-lab fetch [--model small|turbo] [--speakers]
+  dictate-lab fetch [--model small|turbo]
   dictate-lab run <file.wav>... [--model small|turbo] [--language auto|CODE] [--translate]
                   [--words \"A, B\"] [--style default|casual|formal|code|raw] [--fillers] [--note]
   dictate-lab fixtures [--out DIR]
@@ -88,21 +86,29 @@ Usage:
 
 Commands:
   text    Finish a raw transcript with the text rules alone, no model.
-  fetch   Download Whisper and the speech detection (--speakers: the speaker models too).
-  run     Hear 16 kHz mono WAV files stage by stage and print what each stage found.
-          --note hears each file piece by piece, as a long note is. The model is small
-          unless --model says turbo.
+  fetch   Download Whisper and the speech detection.
+  run     Hear 16 kHz mono WAV files stage by stage and print what each stage found. Audio
+          over 25 s is heard piece by piece, as the app finishes a hold that long; --note
+          hears shorter audio that way too. The model is small unless --model says turbo.
   fixtures  Render the fixtures in crates/lab/fixtures with macOS say into --out DIR
           (target/fixtures), each WAV beside its JSON. A missing voice skips its fixture.
   eval    Hear each x.wav beside an x.json in DIR (target/fixtures) and score its words
-          against what the JSON expects. Exits 1 when one is over budget, mismatched or errors.
+          against what the JSON expects. Fails when one is over budget, mismatched or errors,
+          or when no fixture with words was scored. A known issue never fails it.
 
 Options for every command:
   --json         Print one JSON document and nothing else on stdout.
   --models DIR   The folder models live in. Defaults to $DICTATE_MODELS,
                  then target/models in the repo.
   --help         Print this text.
-  --             End the flags: what follows is positional, such as a raw \"--text\".";
+  --             End the flags: what follows is positional, such as a raw \"--text\".
+
+Exit codes:
+  0  Done.
+  1  A fixture or a recording failed.
+  2  Bad arguments.
+  3  The lab couldn't run: a model missing or unloadable, a folder unreadable or empty,
+     or say failing.";
 
 /// Flags that take the next argument as their value.
 const VALUED: &[&str] = &[
@@ -121,7 +127,6 @@ const SWITCHES: &[&str] = &[
   "-h",
   "--fillers",
   "--live",
-  "--speakers",
   "--translate",
   "--note",
 ];
@@ -132,7 +137,7 @@ const GLOBAL: &[&str] = &["--json", "--models"];
 fn takes(command: &str) -> Option<&'static [&'static str]> {
   Some(match command {
     "text" => &["--style", "--fillers", "--language", "--replace", "--live"],
-    "fetch" => &["--model", "--speakers"],
+    "fetch" => &["--model"],
     "run" => &[
       "--model",
       "--language",
@@ -237,8 +242,8 @@ pub fn parse(
   let (mut json, mut models) = (false, None);
   let (mut style, mut fillers, mut language, mut replacements, mut live) =
     (Style::Default, false, None, Vec::new(), false);
-  let (mut model, mut speakers, mut translate, mut words, mut note, mut out) =
-    (ModelKind::Small, false, false, Vec::new(), false, None);
+  let (mut model, mut translate, mut words, mut note, mut out) =
+    (ModelKind::Small, false, Vec::new(), false, None);
   for (flag, value) in flags {
     if !GLOBAL.contains(&flag) && !takes.contains(&flag) {
       return Err(format!("{command} does not take {flag}"));
@@ -260,7 +265,6 @@ pub fn parse(
         });
       }
       "--model" => model = model_of(value)?,
-      "--speakers" => speakers = true,
       "--translate" => translate = true,
       "--words" => {
         words = value
@@ -305,7 +309,7 @@ pub fn parse(
     }
     "fetch" => {
       unexpected(free)?;
-      Command::Fetch { model, speakers }
+      Command::Fetch { model }
     }
     "fixtures" => {
       unexpected(free)?;
@@ -428,16 +432,18 @@ mod tests {
     assert_eq!(
       command(&["fetch"]),
       Command::Fetch {
-        model: ModelKind::Small,
-        speakers: false
+        model: ModelKind::Small
       }
     );
     assert_eq!(
-      command(&["fetch", "--model", "turbo", "--speakers"]),
+      command(&["fetch", "--model", "turbo"]),
       Command::Fetch {
-        model: ModelKind::Turbo,
-        speakers: true
+        model: ModelKind::Turbo
       }
+    );
+    assert_eq!(
+      p(&["fetch", "--speakers"], None).unwrap_err(),
+      "unknown flag --speakers"
     );
     assert_eq!(
       command(&["run", "a.wav"]),

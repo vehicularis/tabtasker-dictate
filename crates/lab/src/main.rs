@@ -12,6 +12,23 @@ mod wav;
 
 use args::Command;
 
+/// Why a command ended without doing what it was asked, which sets the exit code.
+#[derive(Debug, PartialEq)]
+pub enum Failure {
+  /// A fixture or a recording failed: exit 1.
+  Failed(String),
+  /// The lab couldn't run: a model missing or unloadable, a folder unreadable or empty, or `say`
+  /// failing. Exit 3.
+  Broken(String),
+}
+
+/// An error that names no fixture or recording is one the lab couldn't run past.
+impl From<String> for Failure {
+  fn from(e: String) -> Self {
+    Failure::Broken(e)
+  }
+}
+
 fn main() {
   let env = std::env::var_os("DICTATE_MODELS").map(Into::into);
   let args = match args::parse(std::env::args().skip(1), env) {
@@ -30,7 +47,7 @@ fn main() {
       println!("{}", text::run(t, args.json));
       Ok(())
     }
-    Command::Fetch { model, speakers } => fetch::run(&args.models, model, speakers, args.json),
+    Command::Fetch { model } => fetch::run(&args.models, model, args.json).map_err(Failure::Broken),
     Command::Run {
       ref files,
       model,
@@ -40,7 +57,11 @@ fn main() {
     Command::Eval { ref dir, model } => eval::run(dir, &args.models, model, args.json),
   };
   if let Err(e) = done {
+    let (code, e) = match e {
+      Failure::Failed(e) => (1, e),
+      Failure::Broken(e) => (3, e),
+    };
     eprintln!("{e}");
-    std::process::exit(1);
+    std::process::exit(code);
   }
 }

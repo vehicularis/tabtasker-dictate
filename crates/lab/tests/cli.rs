@@ -83,3 +83,22 @@ fn bad_flag_exits_2_on_stderr() {
     "unknown flag --nope\n"
   );
 }
+
+#[test]
+fn a_missing_model_exits_3() {
+  // A folder with one fixture, its audio not rendered: eval reads it, then can't load Whisper.
+  let dir = std::env::temp_dir().join(format!("dictate-lab-cli-model-{}", std::process::id()));
+  std::fs::create_dir_all(&dir).unwrap();
+  std::fs::write(dir.join("plain.json"), r#"{ "expect": "Hi." }"#).unwrap();
+  let out = Command::new(env!("CARGO_BIN_EXE_dictate-lab"))
+    .arg("eval")
+    .arg(&dir)
+    .args(["--models", "/nonexistent/dictate-lab-models"])
+    .output()
+    .unwrap();
+  std::fs::remove_dir_all(&dir).unwrap();
+  assert_eq!(out.status.code(), Some(3));
+  assert!(String::from_utf8(out.stderr)
+    .unwrap()
+    .starts_with("/nonexistent/dictate-lab-models/ggml-small-q8_0.bin is missing."));
+}

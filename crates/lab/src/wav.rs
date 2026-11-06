@@ -4,7 +4,12 @@ use std::path::Path;
 
 const HOW: &str = "Convert it with: afconvert -f WAVE -d LEI16@16000 -c 1 in.wav out.wav";
 
-/// Reads a 16 kHz mono WAV (16-bit PCM or 32-bit float) as samples in -1..1.
+/// The GUID of a WAVE_FORMAT_EXTENSIBLE sub-format after its first two bytes, which are the plain tag:
+/// 1 for PCM, 3 for float (`0000000X-0000-0010-8000-00aa00389b71`).
+const GUID_REST: [u8; 14] = [0, 0, 0, 0, 0x10, 0, 0x80, 0, 0, 0xAA, 0, 0x38, 0x9B, 0x71];
+
+/// Reads a 16 kHz mono WAV (16-bit PCM or 32-bit float, plain or WAVE_FORMAT_EXTENSIBLE as afconvert
+/// writes it) as samples in -1..1.
 pub fn read(path: &Path) -> Result<Vec<f32>, String> {
   let name = path.file_name().map_or_else(
     || path.display().to_string(),
@@ -35,11 +40,29 @@ fn parse(b: &[u8], name: &str) -> Result<Vec<f32>, String> {
     let size = u32_at(b, pos + 4) as usize;
     let body = pos + 8;
     if id == b"fmt " {
-      if size < 16 || body + 16 > b.len() {
+      if size < 16 || body + size.min(40) > b.len() {
         return Err(format!("{name} has a broken fmt chunk. {HOW}"));
       }
+      let mut tag = u16_at(b, body);
+      // WAVE_FORMAT_EXTENSIBLE: the plain tag is the start of the sub-format's GUID, after cbSize (22),
+      // the valid bits and the channel mask.
+      if tag == 0xFFFE {
+        if size < 40 || u16_at(b, body + 16) < 22 {
+          return Err(format!(
+            "{name} uses WAVE_FORMAT_EXTENSIBLE without its sub-format; the lab reads 16-bit PCM or 32-bit float. {HOW}"
+          ));
+        }
+        tag = match (u16_at(b, body + 24), &b[body + 26..body + 40]) {
+          (sub @ (1 | 3), rest) if rest == GUID_REST => sub,
+          _ => {
+            return Err(format!(
+              "{name} uses WAVE_FORMAT_EXTENSIBLE with a sub-format the lab doesn't know; the lab reads 16-bit PCM or 32-bit float. {HOW}"
+            ))
+          }
+        };
+      }
       fmt = Some((
-        u16_at(b, body),
+        tag,
         u16_at(b, body + 2),
         u32_at(b, body + 4),
         u16_at(b, body + 14),
@@ -49,11 +72,6 @@ fn parse(b: &[u8], name: &str) -> Result<Vec<f32>, String> {
         fmt.ok_or_else(|| format!("{name} has its data before its fmt chunk. {HOW}"))?;
       match (tag, bits) {
         (1, 16) | (3, 32) => {}
-        (0xFFFE, _) => {
-          return Err(format!(
-            "{name} uses WAVE_FORMAT_EXTENSIBLE; the lab reads plain PCM or float. {HOW}"
-          ))
-        }
         (1, n) => {
           return Err(format!(
             "{name} is {n}-bit PCM; the lab reads 16-bit PCM or 32-bit float. {HOW}"
@@ -242,7 +260,7 @@ mod tests {
       ),
       (
         riff(&[fmt(0xFFFE, 1, 16_000, 16), data.clone()]),
-        "bad.wav uses WAVE_FORMAT_EXTENSIBLE;",
+        "bad.wav uses WAVE_FORMAT_EXTENSIBLE without its sub-format;",
       ),
       (
         {
@@ -276,6 +294,53 @@ mod tests {
         err.ends_with("afconvert -f WAVE -d LEI16@16000 -c 1 in.wav out.wav"),
         "{err}"
       );
+    }
+  }
+
+  /// WAVE_FORMAT_EXTENSIBLE as afconvert writes it, 40 bytes: the 16, cbSize 22, the valid bits, the
+  /// channel mask, then the GUID of the sub-format, whose first two bytes are `sub`.
+  fn extensible(sub: u16, bits: u16) -> Vec<u8> {
+    let mut f = fmt(0xFFFE, 1, 16_000, bits);
+    f[4] = 40;
+    f.extend_from_slice(&22u16.to_le_bytes());
+    f.extend_from_slice(&bits.to_le_bytes());
+    f.extend_from_slice(&4u32.to_le_bytes());
+    f.extend_from_slice(&sub.to_le_bytes());
+    f.extend_from_slice(&[0, 0, 0, 0, 0x10, 0, 0x80, 0, 0, 0xAA, 0, 0x38, 0x9B, 0x71]);
+    f
+  }
+
+  #[test]
+  fn reads_wave_format_extensible_pcm_and_float() {
+    let pcm = riff(&[extensible(1, 16), chunk(b"data", &16384i16.to_le_bytes())]);
+    assert_eq!(read_bytes("ext-pcm", &pcm).unwrap(), vec![0.5]);
+    let float = riff(&[extensible(3, 32), chunk(b"data", &floats(&[0.25, -0.75]))]);
+    assert_eq!(read_bytes("ext-float", &float).unwrap(), vec![0.25, -0.75]);
+  }
+
+  #[test]
+  fn refuses_wave_format_extensible_it_cannot_read() {
+    let data = chunk(b"data", &[0, 0, 0, 0]);
+    let mut short = extensible(1, 16);
+    short[24] = 0; // cbSize, 8 bytes into the chunk and 16 into its body: 0, so no sub-format follows
+    let mut stereo = extensible(1, 16);
+    stereo[10] = 2;
+    for (fmt, want) in [
+      (
+        extensible(2, 16),
+        "bad.wav uses WAVE_FORMAT_EXTENSIBLE with a sub-format the lab doesn't know;",
+      ),
+      (
+        short,
+        "bad.wav uses WAVE_FORMAT_EXTENSIBLE without its sub-format;",
+      ),
+      (extensible(1, 24), "bad.wav is 24-bit PCM;"),
+      (extensible(3, 64), "bad.wav is 64-bit float;"),
+      (stereo, "bad.wav is 16000 Hz stereo;"),
+    ] {
+      let err = read_bytes("ext-refused", &riff(&[fmt, data.clone()])).unwrap_err();
+      assert!(err.starts_with(want), "{err}");
+      assert!(err.ends_with(HOW), "{err}");
     }
   }
 

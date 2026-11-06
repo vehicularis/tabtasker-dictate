@@ -1,10 +1,17 @@
 //! The `run` command: one recording through the pipeline's stages, with what each stage found.
 //!
-//! The stages go as the app's pass does (`src-tauri/src/dictation/speech.rs`): the gate, the language,
-//! Whisper, the text rules a typing mode finishes with, then what it does with a spoken sticky or
-//! "send". A note is heard piece by piece through `pieces::hear_long`, as the app hears a long one.
+//! The stages go as the app's final pass does (`src-tauri/src/dictation/speech.rs`): the gate, the
+//! language, Whisper, the text rules a typing mode finishes with, then what it does with a spoken
+//! sticky or "send".
+//!
+//! Audio over one piece (`pieces::PIECE`, 25 s) is heard as a note, as the app finishes a hold that
+//! long; `--note` hears shorter audio that way too. The lab cuts the whole file at once, through
+//! `pieces::hear_long`: that is what the app does at release when a note's live steps committed
+//! nothing, as for a hold recovered after a crash, or a short note. While a person is still talking,
+//! the app commits each piece at the first pause past 6 s (`note_step` in `speech_note.rs`), so its
+//! cuts can fall elsewhere. The lab doesn't replay those steps.
 
-use crate::wav;
+use crate::{wav, Failure};
 use dictate_engine::{
   audio::{self, Levels},
   error::{Error, Result},
@@ -33,10 +40,15 @@ pub trait Transcriber {
   fn gate(&mut self, pcm: &[f32]) -> Result<Gate>;
   /// The speech in `pcm` as sample ranges, which is where a long note is cut into pieces.
   fn speech(&mut self, pcm: &[f32]) -> Result<Vec<(usize, usize)>>;
-  /// The pass's language, by Whisper's id, and where it came from.
-  fn language(&mut self, pcm: &[f32], ask: &Ask) -> Result<(i32, LanguageFrom)>;
+  /// The pass's language, by Whisper's id, and where it came from: `ask`'s, else `held` (a note's
+  /// earlier sure one), else detected, by the engine's own rule.
+  fn language(&mut self, pcm: &[f32], ask: &Ask, held: Option<i32>) -> Result<(i32, LanguageFrom)>;
   /// Whisper's words in `language`.
   fn words(&mut self, pcm: &[f32], language: i32, ask: &Ask) -> Result<Transcript>;
+  /// Forgets every recording heard so far, so the next is heard as if it were the first.
+  fn fresh(&mut self) -> Result<()> {
+    Ok(())
+  }
 }
 
 /// Whisper and the speech detection beside it, loaded from the models folder.
@@ -83,14 +95,19 @@ impl Transcriber for Engine {
     self.vad.speech_ranges(pcm)
   }
 
-  fn language(&mut self, pcm: &[f32], ask: &Ask) -> Result<(i32, LanguageFrom)> {
-    pipeline::language(&mut self.whisper, pcm, ask, None, &|| false)
+  fn language(&mut self, pcm: &[f32], ask: &Ask, held: Option<i32>) -> Result<(i32, LanguageFrom)> {
+    pipeline::language(&mut self.whisper, pcm, ask, held, &|| false)
   }
 
   fn words(&mut self, pcm: &[f32], language: i32, ask: &Ask) -> Result<Transcript> {
     self
       .whisper
       .transcribe(pcm, language, ask, &|| false, false)
+  }
+
+  /// A fresh Whisper state: what one decode leaves in the state can change the next one's words.
+  fn fresh(&mut self) -> Result<()> {
+    self.whisper.reset()
   }
 }
 
@@ -107,7 +124,7 @@ pub struct Hearing {
   pub style: Style,
   /// Whether fillers are dropped.
   pub fillers: bool,
-  /// Whether it is heard piece by piece, as a long note is.
+  /// Whether it is heard piece by piece, as a note is, however short. Audio over one piece always is.
   pub note: bool,
 }
 
@@ -119,8 +136,11 @@ pub struct Trace {
   pub file: String,
   /// How long it is.
   pub seconds: f32,
-  /// Whether it was heard as a long note.
+  /// Whether it was heard piece by piece, as a note.
   pub note: bool,
+  /// Whether it runs past one piece (`pieces::PIECE`, 25 s), so it was heard as a note whatever was
+  /// asked, as the app finishes a hold that long.
+  pub long: bool,
   /// What the gates found; None when they failed.
   pub gate: Option<GateTrace>,
   /// Each pass: one for a hold, one for each piece of a note.
@@ -300,10 +320,14 @@ pub fn trace(t: &mut dyn Transcriber, file: &str, pcm: &[f32], how: &Hearing) ->
     translate: how.translate,
     words: how.words.clone(),
   };
+  // The app finishes a hold past one piece as a note, piece by piece (`long` in speech.rs).
+  let long = pcm.len() > pieces::PIECE;
+  let as_note = how.note || long;
   let mut trace = Trace {
     file: file.to_string(),
     seconds: seconds(pcm.len()),
-    note: how.note,
+    note: as_note,
+    long,
     gate: None,
     passes: Vec::new(),
     heard: None,
@@ -332,11 +356,11 @@ pub fn trace(t: &mut dyn Transcriber, file: &str, pcm: &[f32], how: &Hearing) ->
   let unheard = gate.verdict == GateVerdict::Unheard;
   trace.gate = Some(gate);
   // A hold ends quietly at the gate; the app hears a long note piece by piece without it.
-  if unheard && !how.note {
+  if unheard && !as_note {
     trace.unheard = true;
     return trace;
   }
-  let heard = if how.note {
+  let heard = if as_note {
     note(t, pcm, &ask, &mut trace)
   } else {
     let (pass, heard) = hear(t, pcm, 0, &ask, &mut None, &mut trace.ms);
@@ -394,10 +418,7 @@ fn hear(
     error: None,
   };
   let started = Instant::now();
-  let language = match *held {
-    Some(id) if ask.language.is_none() => Ok((id, LanguageFrom::Hold)),
-    _ => t.language(pcm, ask),
-  };
+  let language = t.language(pcm, ask, *held);
   ms.language += started.elapsed().as_millis();
   let (language, from) = match language {
     Ok(language) => language,
@@ -406,7 +427,8 @@ fn hear(
       return (pass, Err(e));
     }
   };
-  // Kept for the note's later pieces only when detection was sure of it, as the app keeps a hold's.
+  // Kept for the note's later pieces only when detection was sure of it, as the app keeps a hold's
+  // (`LocalSpeech::pass`): the hold's memory is the app's, not the engine's.
   if let LanguageFrom::Detected { sure } = from {
     if sure >= SURE {
       *held = Some(language);
@@ -524,6 +546,15 @@ impl fmt::Display for Trace {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     let error = self.error.as_deref().unwrap_or_default();
     writeln!(f, "file: {}, {:.2} s", self.file, self.seconds)?;
+    if self.long {
+      writeln!(
+        f,
+        "note: over {} s, so heard piece by piece, as the app finishes a hold that long",
+        pieces::PIECE / SAMPLE_RATE
+      )?;
+    } else if self.note {
+      writeln!(f, "note: heard piece by piece, as asked")?;
+    }
     let Some(gate) = &self.gate else {
       writeln!(f, "gate: failed, {error}")?;
       return writeln!(f, "times: gate {} ms", self.ms.gate);
@@ -579,36 +610,41 @@ impl fmt::Display for Trace {
   }
 }
 
-/// Hears each of `files` with the `kind` of Whisper in `dir` (see [`hear_all`]). Fails when a file
-/// can't be read or the models can't load, too.
+/// Hears each of `files` with the `kind` of Whisper in `dir` (see [`hear_all`]). A file that can't be
+/// read fails as a recording; models that can't load, as the lab.
 pub fn run(
   dir: &Path,
   files: &[PathBuf],
   kind: ModelKind,
   how: &Hearing,
   json: bool,
-) -> std::result::Result<(), String> {
+) -> std::result::Result<(), Failure> {
   // Every file is read before the model loads, so a wrong one fails at once.
   let recordings = files
     .iter()
     .map(|path| Ok((path.display().to_string(), wav::read(path)?)))
-    .collect::<std::result::Result<Vec<_>, String>>()?;
+    .collect::<std::result::Result<Vec<_>, String>>()
+    .map_err(Failure::Failed)?;
   let mut engine = Engine::load(dir, kind)?;
   hear_all(&mut engine, &recordings, how, json, &mut std::io::stdout())
 }
 
-/// Hears each named recording with `t`, writing each trace to `out` as plain lines, or all of them as
-/// one JSON array. Fails when a stage failed on any recording, or a note skipped a piece.
+/// Hears each named recording with `t`, each after the first on a fresh state, so none depends on the
+/// ones before it. Each trace goes to `out` as plain lines, or all of them as one JSON array. Fails
+/// when a stage failed on any recording, or a note skipped a piece.
 pub fn hear_all(
   t: &mut dyn Transcriber,
   recordings: &[(String, Vec<f32>)],
   how: &Hearing,
   json: bool,
   out: &mut dyn Write,
-) -> std::result::Result<(), String> {
-  let written = |e: std::io::Error| format!("cannot write the trace: {e}");
+) -> std::result::Result<(), Failure> {
+  let written = |e: std::io::Error| Failure::Broken(format!("cannot write the trace: {e}"));
   let mut traces = Vec::new();
-  for (name, pcm) in recordings {
+  for (i, (name, pcm)) in recordings.iter().enumerate() {
+    if i > 0 {
+      t.fresh().map_err(|e| Failure::Broken(e.to_string()))?;
+    }
     let one = trace(t, name, pcm, how);
     if !json {
       if !traces.is_empty() {
@@ -628,17 +664,17 @@ pub fn hear_all(
     .count();
   match failed {
     0 => Ok(()),
-    failed => Err(format!(
+    failed => Err(Failure::Failed(format!(
       "{failed} of {} recordings failed or skipped a piece",
       traces.len()
-    )),
+    ))),
   }
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
-  use dictate_engine::whisper::lang_id;
+  use dictate_engine::{pipeline::choose_language, whisper::lang_id};
 
   /// A pipeline with no model: speech or silence at the gate, English detected 0.98 sure, and words
   /// that name how many ms of audio each pass heard.
@@ -652,6 +688,8 @@ mod tests {
     fail_first: bool,
     /// What Whisper says instead of how much it heard.
     says: Option<&'static str>,
+    /// How many times it was given a fresh state.
+    fresh: usize,
   }
 
   impl Fake {
@@ -663,6 +701,7 @@ mod tests {
         heard: Vec::new(),
         fail_first: false,
         says: None,
+        fresh: 0,
       }
     }
   }
@@ -700,14 +739,11 @@ mod tests {
       )
     }
 
-    fn language(&mut self, _: &[f32], ask: &Ask) -> Result<(i32, LanguageFrom)> {
-      self.detected += 1;
-      Ok(match ask.language {
-        Some(id) => (id, LanguageFrom::Settings),
-        None => (
-          lang_id("en").unwrap(),
-          LanguageFrom::Detected { sure: 0.98 },
-        ),
+    /// The engine's own rule, with English detected 0.98 sure.
+    fn language(&mut self, _: &[f32], ask: &Ask, held: Option<i32>) -> Result<(i32, LanguageFrom)> {
+      choose_language(ask, held, &|| false, || {
+        self.detected += 1;
+        Ok((lang_id("en").unwrap(), 0.98))
       })
     }
 
@@ -722,6 +758,11 @@ mod tests {
           .map_or_else(|| format!("um so {} ms", pcm.len() / 16), String::from),
         retried_without_prompt: !ask.words.is_empty(),
       })
+    }
+
+    fn fresh(&mut self) -> Result<()> {
+      self.fresh += 1;
+      Ok(())
     }
   }
 
@@ -862,7 +903,7 @@ mod tests {
       fn speech(&mut self, _: &[f32]) -> Result<Vec<(usize, usize)>> {
         unreachable!()
       }
-      fn language(&mut self, _: &[f32], _: &Ask) -> Result<(i32, LanguageFrom)> {
+      fn language(&mut self, _: &[f32], _: &Ask, _: Option<i32>) -> Result<(i32, LanguageFrom)> {
         unreachable!()
       }
       fn words(&mut self, _: &[f32], _: i32, _: &Ask) -> Result<Transcript> {
@@ -946,6 +987,52 @@ mod tests {
   }
 
   #[test]
+  fn audio_over_one_piece_is_heard_as_a_note_without_asking() {
+    // The app finishes a hold over pieces::PIECE piece by piece, --note or not.
+    let ms = |m: usize| m * 16;
+    let audio: Vec<f32> = (0..ms(30_000)).map(|at| at as f32).collect();
+    let mut fake = Fake::new(true);
+    fake.said = vec![(0, ms(10_000)), (ms(10_600), ms(30_000))];
+    let t = trace(&mut fake, "long.wav", &audio, &Hearing::default());
+    assert_eq!(fake.heard, [ms(10_300), ms(19_700)]);
+    assert!(t.note && t.long);
+    let json = serde_json::to_value(&t).unwrap();
+    assert_eq!((&json["note"], &json["long"]), (&true.into(), &true.into()));
+    let printed = t.to_string();
+    assert_eq!(
+      printed.lines().nth(1),
+      Some("note: over 25 s, so heard piece by piece, as the app finishes a hold that long"),
+      "{printed}"
+    );
+    // Within one piece, it is one pass unless --note asks.
+    let mut fake = Fake::new(true);
+    let t = trace(
+      &mut fake,
+      "short.wav",
+      &audio[..pieces::PIECE],
+      &Hearing::default(),
+    );
+    assert_eq!(fake.heard, [pieces::PIECE]);
+    assert!(!t.note && !t.long);
+    assert!(!t.to_string().contains("\nnote: "));
+    let asked = Hearing {
+      note: true,
+      ..Hearing::default()
+    };
+    let t = trace(
+      &mut Fake::new(true),
+      "short.wav",
+      &audio[..pieces::PIECE],
+      &asked,
+    );
+    assert!(t.note && !t.long);
+    assert_eq!(
+      t.to_string().lines().nth(1),
+      Some("note: heard piece by piece, as asked")
+    );
+  }
+
+  #[test]
   fn a_skipped_piece_is_counted_and_fails_the_run() {
     let ms = |m: usize| m * 16;
     let audio: Vec<f32> = (0..ms(30_000)).map(|at| at as f32).collect();
@@ -966,7 +1053,9 @@ mod tests {
     assert!(t.error.is_none() && !t.unheard);
 
     let recordings = [("note.wav".to_string(), audio)];
-    let failed = Err("1 of 1 recordings failed or skipped a piece".to_string());
+    let failed = Err(Failure::Failed(
+      "1 of 1 recordings failed or skipped a piece".to_string(),
+    ));
     let mut out = Vec::new();
     assert_eq!(
       hear_all(&mut fake(), &recordings, &note, false, &mut out),
@@ -999,6 +1088,33 @@ mod tests {
       hear_all(&mut whole, &recordings, &note, true, &mut Vec::new()),
       Ok(())
     );
+  }
+
+  #[test]
+  fn each_recording_after_the_first_is_heard_on_a_fresh_state() {
+    let recordings: Vec<(String, Vec<f32>)> = ["a.wav", "b.wav", "c.wav"]
+      .map(|name| (name.to_string(), vec![0.1; 16_000]))
+      .to_vec();
+    let mut fake = Fake::new(true);
+    hear_all(
+      &mut fake,
+      &recordings,
+      &Hearing::default(),
+      true,
+      &mut Vec::new(),
+    )
+    .unwrap();
+    assert_eq!((fake.heard.len(), fake.fresh), (3, 2));
+    let mut fake = Fake::new(true);
+    hear_all(
+      &mut fake,
+      &recordings[..1],
+      &Hearing::default(),
+      true,
+      &mut Vec::new(),
+    )
+    .unwrap();
+    assert_eq!(fake.fresh, 0);
   }
 
   #[test]
