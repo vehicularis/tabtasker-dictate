@@ -1,6 +1,7 @@
 // The app in a browser: real settings kept in memory, a sample status, and each feature's own commands
 // from its file here. Nothing leaves the page and nothing persists past a reload.
-import { chordProblem, MODIFIERS, PILL_BUTTONS, SOUNDS, STICKY_HUES } from '../store';
+import { PILL_BUTTONS, SOUNDS, STICKY_HUES } from '../store';
+import { chordProblem, MACOS_SHORTCUTS } from '../lib/chords';
 import type { Chord, Settings, Status, Sticky, UpdateState } from '../api/types';
 import { COMMANDS, type CommandArgs, type Commands } from '../api/commands';
 import type { Events } from '../api/events';
@@ -54,18 +55,10 @@ const DEFAULTS: Settings = {
   appearance: { theme: 'system', edge: 'right', size: 'medium', idle: 'dots', hint: true, pill: ['note', 'write', 'sticky', 'meeting', 'library', 'settings'], margin: 8, avoidDock: true },
 };
 
-// The pairs of Shortcuts.tsx's MACOS list (the Mac reports the ones System Settings has on); keep the two the same.
-const { control: CTRL, option: OPT, shift: SHIFT, command: CMD } = MODIFIERS;
-const MACOS_SHORTCUTS: [number, number][] = [
-  [49, CMD], [49, CMD | OPT], [49, CTRL], [49, CTRL | OPT], [49, CTRL | CMD], [48, CMD], [48, CMD | SHIFT], [50, CMD],
-  [20, CMD | SHIFT], [21, CMD | SHIFT], [23, CMD | SHIFT], [20, CTRL | CMD | SHIFT], [21, CTRL | CMD | SHIFT],
-  [12, CTRL | CMD], [12, CMD | SHIFT], [53, CMD | OPT], [2, CMD | OPT], [126, CTRL], [125, CTRL], [123, CTRL], [124, CTRL],
-];
-
 const status: Status = {
   enabled: true, microphone: 'allowed', accessibility: true, modelReady: true, modelPreparing: false, modelMessage: '',
   notes: '/Users/you/Documents/TabTasker | Dictate', home: '/Users/you', globeKey: '', openAtLogin: true,
-  systemShortcuts: MACOS_SHORTCUTS,
+  systemShortcuts: MACOS_SHORTCUTS.map(([key, mods]) => [key, mods]),
   inputs: [{ id: 'built-in', name: 'MacBook Pro Microphone' }, { id: 'airpods', name: 'AirPods Pro' }], input: null, inputInUse: 'MacBook Pro Microphone',
 };
 // `?status=new` starts as a Mac that has never been set up, for the setup flow.

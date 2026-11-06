@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { COMMANDS } from '../api/commands';
+import { MACOS_SHORTCUTS } from '../lib/chords';
 
 // What the mock reads when it loads: the page's address, and the keys and blur it listens for.
 vi.stubGlobal('location', new URL('http://localhost:1462/app.html'));
@@ -11,6 +12,11 @@ let mod: Mod;
 beforeAll(async () => { mod = await import('./index'); });
 
 describe('the browser mock', () => {
+  it('reports the macOS shortcuts the settings page lists', async () => {
+    const status = await mod.invoke('status');
+    expect(status.systemShortcuts).toEqual(MACOS_SHORTCUTS.map(([key, mods]) => [key, mods]));
+  });
+
   it('answers every command', () => {
     for (const name of COMMANDS) expect(mod.mock.handled(name), name).toBeTypeOf('function');
   });

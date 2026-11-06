@@ -1,66 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { MODIFIERS, aiIcon, aiName, chordProblem, folderPath, needsSetup, sendsByDefault, setupDone, tilde } from './store';
-import type { Chord, Status } from './api/types';
-
-const { control, option, shift, command } = MODIFIERS;
-const chord = (keyCode: number, modifiers: number, label = 'K'): Chord => ({ keyCode, modifiers, label });
-
-describe('chordProblem', () => {
-  it('takes a key with ⌘, ⌥ or ⌃', () => {
-    expect(chordProblem(chord(40, command))).toBeNull();
-    expect(chordProblem(chord(40, option | shift))).toBeNull();
-    expect(chordProblem(chord(40, control))).toBeNull();
-  });
-  it('takes a function key alone', () => {
-    expect(chordProblem(chord(122, 0, 'F1'))).toBeNull();
-    expect(chordProblem(chord(90, shift, 'F20'))).toBeNull();
-  });
-  it.each([122, 120, 99, 118, 96, 97, 98, 100, 101, 109, 103, 111, 105, 107, 113, 106, 64, 79, 80, 90])('takes function key code %i alone', code => {
-    expect(chordProblem(chord(code, 0, 'F'))).toBeNull();
-  });
-  it('does not take a key code next to a function key', () => {
-    expect(chordProblem(chord(121, 0))).toBe('Add ⌘, ⌥ or ⌃ to it');
-  });
-  it('asks for ⌘, ⌥ or ⌃ on a plain key or one with only ⇧', () => {
-    expect(chordProblem(chord(40, 0))).toBe('Add ⌘, ⌥ or ⌃ to it');
-    expect(chordProblem(chord(40, shift))).toBe('Add ⌘, ⌥ or ⌃ to it');
-  });
-  it('refuses a key code that is not an integer in 0 to 127', () => {
-    expect(chordProblem(chord(-1, command))).toBe('That key can’t be a shortcut');
-    expect(chordProblem(chord(128, command))).toBe('That key can’t be a shortcut');
-    expect(chordProblem(chord(1.5, command))).toBe('That key can’t be a shortcut');
-    expect(chordProblem(chord(NaN, command))).toBe('That key can’t be a shortcut');
-    expect(chordProblem(chord(0, command))).toBeNull();
-    expect(chordProblem(chord(127, command))).toBeNull();
-  });
-  it('refuses modifiers that are not integers or hold other bits', () => {
-    expect(chordProblem(chord(40, 1))).toBe('That key can’t be a shortcut');
-    expect(chordProblem(chord(40, command | 1))).toBe('That key can’t be a shortcut');
-    expect(chordProblem(chord(40, 0.5))).toBe('That key can’t be a shortcut');
-  });
-  it('refuses a label that is empty, blank or not a string', () => {
-    expect(chordProblem(chord(40, command, ''))).toBe('That key can’t be a shortcut');
-    expect(chordProblem(chord(40, command, '  '))).toBe('That key can’t be a shortcut');
-    expect(chordProblem({ keyCode: 40, modifiers: command, label: 5 as unknown as string })).toBe('That key can’t be a shortcut');
-  });
-  it('refuses a chord another shortcut uses, by name', () => {
-    const others = [{ name: 'Take a note', chord: chord(45, command | shift) }];
-    expect(chordProblem(chord(45, command | shift), others)).toBe('Already used for “Take a note”');
-  });
-  it('says the other shortcut\'s own reason when it has one', () => {
-    const others = [{ name: 'Spotlight', chord: chord(49, command), reason: 'The Mac keeps ⌘Space' }];
-    expect(chordProblem(chord(49, command), others)).toBe('The Mac keeps ⌘Space');
-  });
-  it('does not mind the same key with other modifiers, or others with no chord', () => {
-    const others = [{ name: 'A', chord: chord(45, command) }, { name: 'B', chord: null }];
-    expect(chordProblem(chord(45, command | option), others)).toBeNull();
-    expect(chordProblem(chord(46, command), others)).toBeNull();
-  });
-  it('checks the rules before the conflicts', () => {
-    const others = [{ name: 'A', chord: chord(40, 0) }];
-    expect(chordProblem(chord(40, 0), others)).toBe('Add ⌘, ⌥ or ⌃ to it');
-  });
-});
+import { aiIcon, aiName, folderPath, needsSetup, sendsByDefault, setupDone, tilde } from './store';
+import type { Status } from './api/types';
 
 describe('folderPath', () => {
   const home = '/Users/otter';

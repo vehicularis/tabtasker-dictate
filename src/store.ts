@@ -1,5 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import type { Chord, ClaudeVia, Patch, PillButton, Settings, Size, Status, StickyHue, UpdateState } from './api/types';
+import type { ClaudeVia, Patch, PillButton, Settings, Size, Status, StickyHue, UpdateState } from './api/types';
 import { invoke, listen } from './bridge';
 
 /// What the connected AI is called on its answer card, and the glyph beside it: Claude by name when it is Claude,
@@ -27,22 +27,6 @@ export function useUpdates(): UpdateState | null {
     return listen('dictate-update', setState);
   }, []);
   return state;
-}
-
-// NSEvent modifier flags, as the native side matches them.
-export const MODIFIERS = { control: 1 << 18, option: 1 << 19, shift: 1 << 17, command: 1 << 20 } as const;
-// F1 to F20, which work as a shortcut on their own.
-const FUNCTION_KEYS = [122, 120, 99, 118, 96, 97, 98, 100, 101, 109, 103, 111, 105, 107, 113, 106, 64, 79, 80, 90];
-
-/// Why the store refuses `chord`, or null when it takes it: the same rules as settings.rs (a key with ⌃,
-/// ⌥ or ⌘, or a function key alone) plus never a chord `others` already use, said with its `reason` when it has one.
-export function chordProblem(chord: Chord, others: { name: string; chord: Chord | null; reason?: string }[] = []): string | null {
-  const { control, option, shift, command } = MODIFIERS;
-  if (!Number.isInteger(chord.keyCode) || chord.keyCode < 0 || chord.keyCode >= 0x80 || !Number.isInteger(chord.modifiers)
-    || chord.modifiers & ~(control | option | shift | command) || typeof chord.label !== 'string' || !chord.label.trim()) return 'That key can’t be a shortcut';
-  if (!(chord.modifiers & (control | option | command)) && !FUNCTION_KEYS.includes(chord.keyCode)) return 'Add ⌘, ⌥ or ⌃ to it';
-  const taken = others.find(other => other.chord?.keyCode === chord.keyCode && other.chord.modifiers === chord.modifiers);
-  return taken ? taken.reason ?? `Already used for “${taken.name}”` : null;
 }
 
 /// Something only the person can do: a permission to give, or a model never downloaded or whose last try

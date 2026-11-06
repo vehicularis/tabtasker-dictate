@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { listen } from '../../bridge';
 import { Globe } from '../../overlay/icons';
-import { MODIFIERS as FLAGS, useStatus, type PageProps } from '../../store';
+import { useStatus, type PageProps } from '../../store';
+import { chordOf, reserved } from '../../lib/chords';
 import type { Chord, CommandKey, DictateKey, Settings, Status } from '../../api/types';
-import { chordOf, Icon, Kbd, KeyRecorder, PageHeader, Section, Select, Tile, TileGroup, Toggle } from '../../ui';
+import { Icon, Kbd, KeyRecorder, PageHeader, Section, Select, Tile, TileGroup, Toggle } from '../../ui';
 import './shortcuts.css';
 
 type Key = { value: DictateKey; name: string; glyph: string; code?: string };
@@ -28,35 +29,6 @@ const COMMAND_KEYS: { value: CommandKey; label: string }[] = [
 
 type ChordName = 'note' | 'meeting' | 'pasteLast' | 'writeNote' | 'sticky';
 const CHORDS: [ChordName, string][] = [['note', 'Speak a note'], ['meeting', 'Start or stop a meeting'], ['pasteLast', 'Paste last transcript'], ['writeNote', 'Write a note'], ['sticky', 'New sticky']];
-
-// Shortcuts a chord must not take: macOS's own, by the names System Settings gives them, then the ones
-// nearly every app has. The app reports which of macOS's are on, with any the person added; a browser
-// has only this list.
-const { control: CTRL, option: OPT, shift: SHIFT, command: CMD } = FLAGS;
-const MACOS: [number, number, string][] = [
-  [49, CMD, 'Spotlight'], [49, CMD | OPT, 'Finder search'], [49, CTRL, 'Input sources'], [49, CTRL | OPT, 'Input sources'], [49, CTRL | CMD, 'Emoji & Symbols'],
-  [48, CMD, 'Switching apps'], [48, CMD | SHIFT, 'Switching apps'], [50, CMD, 'Switching windows'],
-  [20, CMD | SHIFT, 'Screenshots'], [21, CMD | SHIFT, 'Screenshots'], [23, CMD | SHIFT, 'Screenshots'], [20, CTRL | CMD | SHIFT, 'Screenshots'], [21, CTRL | CMD | SHIFT, 'Screenshots'],
-  [12, CTRL | CMD, 'Lock Screen'], [12, CMD | SHIFT, 'Log Out'], [53, CMD | OPT, 'Force Quit'], [2, CMD | OPT, 'Show or hide the Dock'],
-  [126, CTRL, 'Mission Control'], [125, CTRL, 'App windows'], [123, CTRL, 'Switching spaces'], [124, CTRL, 'Switching spaces'],
-];
-const APPS: [number, number, string][] = [
-  [0, CMD, 'Select All'], [8, CMD, 'Copy'], [9, CMD, 'Paste'], [7, CMD, 'Cut'], [6, CMD, 'Undo'], [6, CMD | SHIFT, 'Redo'], [12, CMD, 'Quit'], [13, CMD, 'Close'],
-  [4, CMD, 'Hide'], [4, CMD | OPT, 'Hide Others'], [46, CMD, 'Minimize'], [45, CMD, 'New'], [31, CMD, 'Open'], [35, CMD, 'Print'], [1, CMD, 'Save'],
-  [17, CMD, 'New Tab'], [17, CMD | SHIFT, 'Reopen Closed Tab'], [15, CMD, 'Reload'], [37, CMD, 'Open Location'], [3, CMD, 'Find'], [5, CMD, 'Find Next'],
-  [11, CMD, 'Bold'], [34, CMD, 'Italic'], [40, CMD, 'Add Link'], [43, CMD, 'Settings'], [3, CTRL | CMD, 'Full screen'],
-];
-type Taken = { name: string; chord: Chord; reason?: string };
-const taken = ([keyCode, modifiers, name]: [number, number, string]): Taken => ({ name, chord: { keyCode, modifiers, label: name } });
-function reserved(status: Status | null): Taken[] {
-  // One the person added in System Settings has no name here.
-  const system = ([keyCode, modifiers]: [number, number]): Taken => {
-    const name = MACOS.find(([k, m]) => k === keyCode && m === modifiers)?.[2];
-    return name ? taken([keyCode, modifiers, name]) : { ...taken([keyCode, modifiers, 'macOS']), reason: 'macOS already uses this shortcut' };
-  };
-  const macos = status ? status.systemShortcuts.map(system) : MACOS.map(taken);
-  return [...macos, ...APPS.map(taken)];
-}
 
 export function Shortcuts({ settings, update }: PageProps) {
   const keys = settings.shortcuts;
