@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { listen } from '../../bridge';
 import { Globe } from '../../overlay/icons';
-import { MODIFIERS as FLAGS, useStatus, type Chord, type CommandKey, type DictateKey, type PageProps, type Settings, type Status } from '../../store';
+import { MODIFIERS as FLAGS, useStatus, type PageProps } from '../../store';
+import type { Chord, CommandKey, DictateKey, Settings, Status } from '../../api/types';
 import { chordOf, Icon, Kbd, KeyRecorder, PageHeader, Section, Select, Tile, TileGroup, Toggle } from '../../ui';
 import './shortcuts.css';
 
@@ -48,13 +49,12 @@ const APPS: [number, number, string][] = [
 type Taken = { name: string; chord: Chord; reason?: string };
 const taken = ([keyCode, modifiers, name]: [number, number, string]): Taken => ({ name, chord: { keyCode, modifiers, label: name } });
 function reserved(status: Status | null): Taken[] {
-  const live = (status as (Status & { systemShortcuts?: [number, number][] }) | null)?.systemShortcuts;
   // One the person added in System Settings has no name here.
   const system = ([keyCode, modifiers]: [number, number]): Taken => {
     const name = MACOS.find(([k, m]) => k === keyCode && m === modifiers)?.[2];
     return name ? taken([keyCode, modifiers, name]) : { ...taken([keyCode, modifiers, 'macOS']), reason: 'macOS already uses this shortcut' };
   };
-  const macos = live ? live.map(system) : MACOS.map(taken);
+  const macos = status ? status.systemShortcuts.map(system) : MACOS.map(taken);
   return [...macos, ...APPS.map(taken)];
 }
 
@@ -105,7 +105,7 @@ export function Shortcuts({ settings, update }: PageProps) {
 /// The dictate key, held or not, as the app hears it: dictate-fn follows the chosen key.
 function useKeyDown() {
   const [down, setDown] = useState(false);
-  useEffect(() => listen<{ down: boolean }>('dictate-fn', ({ down }) => setDown(down)), []);
+  useEffect(() => listen('dictate-fn', ({ down }) => setDown(down)), []);
   return down;
 }
 

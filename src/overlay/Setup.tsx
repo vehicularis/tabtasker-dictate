@@ -1,7 +1,9 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
+import type { RequestKind } from '../api/commands';
 import { invoke } from '../bridge';
 import { GLOBE, KEY_NAMES } from '../lib/keyNames';
-import { setupDone, useSettings, type DictateKey, type Status } from '../store';
+import { setupDone, useSettings } from '../store';
+import type { DictateKey, Status } from '../api/types';
 import { Globe, Logo, NoteIcon, X } from './icons';
 import { leave } from '../ui/motion';
 
@@ -12,7 +14,7 @@ export function Setup({ status, fnDown, fnTested, onClose }: { status: Status | 
   const settings = useSettings();
   const chosen = settings?.shortcuts.dictate ?? 'fn';
   const name = KEY_NAMES[chosen];
-  const ask = (kind: string) => { if (kind === 'accessibility') setAsked(true); void invoke('request', { kind }).catch(() => {}); };
+  const ask = (kind: RequestKind) => { if (kind === 'accessibility') setAsked(true); void invoke('request', { kind }).catch(() => {}); };
   const full = () => { onClose(); void invoke('open_app', { route: 'setup' }).catch(() => {}); };
   const notes = status?.notes.replace(/^\/Users\/[^/]+/, '~') ?? '~/Documents/TabTasker | Dictate';
   const ready = setupDone(status);

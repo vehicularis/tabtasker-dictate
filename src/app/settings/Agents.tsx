@@ -3,12 +3,8 @@ import { invoke } from '../../bridge';
 import { message } from '../../lib/errors';
 import type { PageProps } from '../../store';
 import { Button, Icon, GroupHeader, Section, Tile, TileGroup, Toggle } from '../../ui';
+import type { AgentsStatus, Call } from '../../api/types';
 
-// What mcp.rs's agents_status reports.
-type Added = 'no' | 'yes' | 'elsewhere';
-type Install = { found: boolean; added: Added };
-type Call = { atMs: number; tool: string; client: string; clientTitle?: string | null; ok: boolean };
-export type AgentsStatus = { command: string[]; claudeCode: Install; claudeDesktop: Install; lastCall: Call | null; problem: string | null };
 type Target = 'claudeCode' | 'claudeDesktop';
 
 // Each tool as "Claude Code {did}" and "Claude Code tried to {do}".
@@ -112,7 +108,7 @@ export function Agents({ settings, update }: PageProps) {
   const refresh = useCallback(() => {
     if (inFlight.current) return;
     const mine = ++asked.current;
-    invoke<AgentsStatus>('agents_status').then(next => { if (mine === asked.current) setStatus(next); }).catch(() => {});
+    invoke('agents_status').then(next => { if (mine === asked.current) setStatus(next); }).catch(() => {});
   }, []);
   // Again on focus, and each minute while it shows: the last call changes while you are in the agent.
   useEffect(() => {
@@ -131,7 +127,7 @@ export function Agents({ settings, update }: PageProps) {
     setFailed(null);
     setSaid('');
     try {
-      const next = await invoke<AgentsStatus>('agents_add', { target });
+      const next = await invoke('agents_add', { target });
       if (mine === asked.current) setStatus(next);
       setSaid(`Added to ${name}.`);
     } catch (error) {

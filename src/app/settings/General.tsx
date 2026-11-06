@@ -2,7 +2,8 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { invoke } from '../../bridge';
 import { message } from '../../lib/errors';
 import { ask } from '../../lib/request';
-import { resetSettings, useStatus, useUpdates, type PageProps, type UpdateState } from '../../store';
+import { resetSettings, useStatus, useUpdates, type PageProps } from '../../store';
+import type { UpdateState } from '../../api/types';
 import { Button, Icon, PageHeader, Section, Select, Tile, TileGroup, Toggle } from '../../ui';
 
 export function General({ settings, update }: PageProps) {

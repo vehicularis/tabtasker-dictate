@@ -1,28 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import { invoke, listen } from '../bridge';
 import { message } from '../lib/errors';
-import type { Events } from '../store';
+import type { Leftover, MeetingEvent, MeetingState, SystemSound } from '../api/types';
 import { X } from './icons';
 import { leave } from '../ui/motion';
 import { PREVIEW } from './preview';
 import './meeting-pill.css';
 
-/// What the Mac's own sound is doing in a meeting: waiting for macOS, recorded, or why it is not.
-type SystemSound = 'pending' | 'on' | 'off' | 'unsupported' | 'denied' | 'failed';
-/// dictate-meeting, with what meeting.rs adds: which meeting, the Mac's sound, and a recording kept to retry.
-export type MeetingEvent = Events['dictate-meeting'] & { id?: string; system?: SystemSound; leftover?: string };
-/// A recording kept until someone chooses: a meeting that stopped before it was saved (a crash, a quit,
-/// a full disk), or one `saved` with parts Whisper couldn't read.
-export type Leftover = { id: string; sinceMs: number; seconds: number; saved: boolean };
-export type MeetingState = {
-  recording: MeetingEvent | null; saving: string[]; leftovers: Leftover[];
-  systemAudio: 'unsupported' | 'notDetermined' | 'allowed' | 'denied';
-};
-
 /// meeting_state, asked again whenever a meeting changes and when the window comes back.
 export function useMeetingState(): [MeetingState | null, () => void] {
   const [state, setState] = useState<MeetingState | null>(null);
-  const look = useCallback(() => void invoke<MeetingState>('meeting_state').then(setState).catch(() => {}), []);
+  const look = useCallback(() => void invoke('meeting_state').then(setState).catch(() => {}), []);
   useEffect(() => {
     look();
     const off = listen('dictate-meeting', look);
@@ -86,14 +74,14 @@ export function MeetingPill() {
 
   const look = useCallback((known: string[] = []) => {
     if (PREVIEW) return;
-    void invoke<MeetingState>('meeting_state').then(state => {
+    void invoke('meeting_state').then(state => {
       setRecording(state.recording);
       setLeftover(state.leftovers.find(one => !known.includes(one.id)) ?? null);
       if (!state.recording && state.saving.length) setOutcome(current => current ?? { state: 'saving', id: state.saving[0], message: 'Finishing the transcript' });
     }).catch(() => {});
   }, []);
   useEffect(() => look(), [look]);
-  useEffect(() => listen<MeetingEvent>('dictate-meeting', event => {
+  useEffect(() => listen('dictate-meeting', event => {
     if (event.state === 'recording') { setRecording(event); return; }
     setRecording(current => current?.id === event.id ? null : current);
     setOutcome(event);

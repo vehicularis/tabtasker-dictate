@@ -1,5 +1,5 @@
 import type { Mock } from '.';
-import type { Settings } from '../store';
+import type { Settings } from '../api/types';
 
 // In a browser: the notes folder, file names and front matter, composed as notes.rs composes them.
 

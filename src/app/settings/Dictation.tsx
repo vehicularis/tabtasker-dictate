@@ -3,6 +3,7 @@ import { invoke, listen } from '../../bridge';
 import { SOUNDS, type PageProps } from '../../store';
 import { Button, PageHeader, ProgressBar, Section, Select, Slider, Tile, TileGroup, Toggle } from '../../ui';
 import './speech.css';
+import type { Model, Models } from '../../api/types';
 
 // The languages Whisper knows best, by name; any of its codes works in settings.json.
 const LANGUAGES: [string, string][] = [
@@ -15,14 +16,6 @@ const LANGUAGES: [string, string][] = [
 ];
 const sorted = [...LANGUAGES].sort((a, b) => a[1].localeCompare(b[1])).map(([value, label]) => ({ value, label }));
 
-type Model = 'turbo' | 'small';
-/// What speech.rs says about the models: the one in use, each one's size and whether it is on this
-/// Mac, and the newest download or load, under way or failed.
-type Models = {
-  active: Model | null; enabled: boolean;
-  step: { model: Model; message: string; percent: number | null; failed: boolean } | null;
-  models: { model: Model; bytes: number; downloaded: boolean }[];
-};
 const MODELS: Record<Model, { name: string; detail: string }> = {
   turbo: { name: 'Large-v3 Turbo', detail: 'Gets the most words right.' },
   small: { name: 'Small', detail: 'Faster and better at translating, but makes more mistakes.' },
@@ -34,10 +27,10 @@ const percent = (value: number) => `${Math.round(value * 100)}%`;
 /// The models, kept current by dictate-model, and asked for again when the choice changes.
 function useModels(choice: Model) {
   const [models, setModels] = useState<Models | null>(null);
-  useEffect(() => listen<Models>('dictate-model', setModels), []);
+  useEffect(() => listen('dictate-model', setModels), []);
   useEffect(() => {
     let live = true;
-    void invoke<Models>('speech_models').then(next => { if (live) setModels(next); }).catch(() => {});
+    void invoke('speech_models').then(next => { if (live) setModels(next); }).catch(() => {});
     return () => { live = false; };
   }, [choice]);
   return models;

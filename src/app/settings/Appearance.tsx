@@ -3,7 +3,8 @@ import { KEY_NAMES } from '../../lib/keyNames';
 import { createGlass, flatWave, paintInside, type Glass } from '../../overlay/glass';
 import { LibraryGlyph, MeetingGlyph, NoteGlyph, SettingsGlyph, StickyGlyph, WriteGlyph } from '../../overlay/glyphs';
 import { isDark } from '../../ui/theme';
-import { PILL_BUTTONS, SIZES, type Edge, type PageProps, type Patch, type PillButton, type Settings, type Theme } from '../../store';
+import { PILL_BUTTONS, SIZES, type PageProps } from '../../store';
+import type { Edge, Patch, PillButton, Settings, Theme } from '../../api/types';
 import { Icon, PageHeader, reduced, Section, Segmented, Slider, Tile, TileGroup, timing, Toggle } from '../../ui';
 
 const THEMES: { value: Theme; label: string }[] = [{ value: 'system', label: 'Automatic' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }];

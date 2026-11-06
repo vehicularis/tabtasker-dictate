@@ -2,7 +2,8 @@ import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent 
 import { invoke } from '../../bridge';
 import { message } from '../../lib/errors';
 import { COMMAND_GLYPHS, KEY_NAMES } from '../../lib/keyNames';
-import { folderPath, tilde, useStatus, type ClaudeModel, type ClaudeVia, type PageProps, type Settings } from '../../store';
+import { folderPath, tilde, useStatus, type PageProps } from '../../store';
+import type { ClaudeModel, ClaudeVia, Settings } from '../../api/types';
 import { Button, Icon, GroupHeader, Section, Segmented, TextField, Tile, TileGroup, Toggle } from '../../ui';
 
 const MODELS: { value: ClaudeModel; label: string }[] = [
@@ -42,7 +43,7 @@ export function Claude({ settings, update }: PageProps) {
   const find = () => {
     if (finding) return;
     setFinding(true); setProblem(null);
-    void invoke<string | null>('claude_code_find').then(found => {
+    void invoke('claude_code_find').then(found => {
       if (!found) setProblem('Couldn’t find Claude Code. Install it, then click Find again.');
     }, error => setProblem(message(error, 'Couldn’t look for Claude Code. Try again in a moment.'))).finally(() => setFinding(false));
   };
@@ -147,7 +148,7 @@ function Connection({ claude, home, via, onVia: setVia }: { claude: Settings['cl
   const test = () => {
     if (busy) return;
     setBusy('test'); setNote(null);
-    void invoke<number>('claude_test').then(ms => setNote({ text: `${claude.via === 'local' ? claude.localModel : claude.via === 'openAi' ? claude.openAiModel : NAME[model]} answered in ${seconds(ms)}.` }),
+    void invoke('claude_test').then(ms => setNote({ text: `${claude.via === 'local' ? claude.localModel : claude.via === 'openAi' ? claude.openAiModel : NAME[model]} answered in ${seconds(ms)}.` }),
       error => setNote({ text: message(error, 'The test didn’t go through. Try again in a moment.'), error: true })).finally(() => setBusy(null));
   };
   const confirm = () => { setRemoving(true); setNote(null); focus('cancel'); };

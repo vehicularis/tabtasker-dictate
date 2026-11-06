@@ -4,7 +4,7 @@ import { KEY_NAMES } from '../../lib/keyNames';
 import { MeetingGlyph, NoteGlyph, SettingsGlyph, StickyGlyph } from '../../overlay/glyphs';
 import { Logo } from '../../overlay/icons';
 import { Sheet } from '../../sticky/Sheet';
-import type { Chord, Settings } from '../../store';
+import type { Chord, Settings } from '../../api/types';
 import { Icon, Kbd, PageHeader, Section, Tile, TileGroup } from '../../ui';
 import { ColumnGroup, ColumnHead } from '../Column';
 import { Caret, Desk, Dots, Field } from '../demo/Demo';

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { MODIFIERS, aiIcon, aiName, chordProblem, folderPath, needsSetup, sendsByDefault, setupDone, tilde, type Chord, type Status } from './store';
+import { MODIFIERS, aiIcon, aiName, chordProblem, folderPath, needsSetup, sendsByDefault, setupDone, tilde } from './store';
+import type { Chord, Status } from './api/types';
 
 const { control, option, shift, command } = MODIFIERS;
 const chord = (keyCode: number, modifiers: number, label = 'K'): Chord => ({ keyCode, modifiers, label });
@@ -99,8 +100,8 @@ describe('tilde', () => {
 });
 
 const ready: Status = {
-  enabled: true, microphone: 'allowed', accessibility: true, modelReady: true, modelPreparing: false, modelMessage: '', notes: '',
-  globeKey: '', inputs: [], input: null, inputInUse: '',
+  enabled: true, microphone: 'allowed', accessibility: true, modelReady: true, modelPreparing: false, modelMessage: '', notes: '', openAtLogin: false,
+  globeKey: '', inputs: [], input: null, inputInUse: '', systemShortcuts: [],
 };
 
 describe('needsSetup', () => {

@@ -1,5 +1,5 @@
 import type { Mock } from '.';
-import type { DictateKey } from '../store';
+import type { DictateKey } from '../api/types';
 
 // In a browser: the first-run flow and the General page, walkable from start to end.
 // - `?step=` opens the setup on a step (welcome, microphone, accessibility, key, model, dots, try, extras, done);

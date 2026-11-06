@@ -2,14 +2,13 @@ import { useEffect, useState, type KeyboardEvent } from 'react';
 import { aiIcon, aiName, useSettings } from '../store';
 import { invoke, listen } from '../bridge';
 import { message } from '../lib/errors';
-import type { Events } from '../store';
+import type { Command } from '../api/types';
 import { Icon } from '../ui/Icon';
 import { X } from './icons';
 import { leave } from '../ui/motion';
 import { PREVIEW } from './preview';
 import './command-card.css';
 
-type Command = Events['dictate-command'];
 
 // `?preview=command`, `command-thinking` or `command-error`.
 const SAMPLES: Record<string, Command> = {
@@ -39,7 +38,7 @@ export function CommandCard() {
   const [copied, setCopied] = useState(false);
   const [inserting, setInserting] = useState(false);
   const [problem, setProblem] = useState<string | null>(null); // the answer stays, with what went wrong
-  useEffect(() => listen<Command>('dictate-command', next => {
+  useEffect(() => listen('dictate-command', next => {
     if (next.phase === 'done') setCommand(current => current?.request === next.request ? null : current);
     else { setCommand(next); setCopied(false); setProblem(null); }
   }), []);

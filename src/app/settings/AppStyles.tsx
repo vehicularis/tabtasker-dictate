@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { invoke } from '../../bridge';
 import { same } from '../../lib/text';
-import { sendsByDefault, type AppStyle, type PageProps, type Style } from '../../store';
+import { sendsByDefault, type PageProps } from '../../store';
+import type { AppStyle, Style } from '../../api/types';
 import { Button, Icon, PageHeader, Section, Select, Tile, TileGroup, Toggle } from '../../ui';
 import './speech.css';
+import type { AppInfo } from '../../api/types';
 
 const STYLES: { value: Style; label: string; detail: string; said?: string; typed?: string }[] = [
   { value: 'default', label: 'Default', detail: 'Types what you said, using your vocabulary and filler settings.' },
@@ -13,10 +15,8 @@ const STYLES: { value: Style; label: string; detail: string; said?: string; type
   { value: 'raw', label: 'Raw', detail: 'Exactly what Dictate heard, fillers and all.' },
 ];
 
-/// An app as list_apps finds it.
-type App = { bundleId: string; name: string; icon: string | null; running: boolean; recent: boolean };
 // Kept for the window's life, so coming back shows icons at once while a fresh list is made.
-let cache: App[] | null = null;
+let cache: AppInfo[] | null = null;
 
 function AppName({ name, icon }: { name: string; icon?: string | null }) {
   return <span className="app-name">
@@ -26,12 +26,12 @@ function AppName({ name, icon }: { name: string; icon?: string | null }) {
 }
 
 /// Running and recent apps without a style yet, to search and pick from, or any app by its bundle ID.
-function Picker({ apps, failed, styled, onPick, onClose }: { apps: App[] | null; failed: boolean; styled: AppStyle[]; onPick: (app: Pick<App, 'bundleId' | 'name'>) => void; onClose: () => void }) {
+function Picker({ apps, failed, styled, onPick, onClose }: { apps: AppInfo[] | null; failed: boolean; styled: AppStyle[]; onPick: (app: Pick<AppInfo, 'bundleId' | 'name'>) => void; onClose: () => void }) {
   const [query, setQuery] = useState('');
   const field = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLUListElement>(null);
   const words = query.trim().toLowerCase();
-  const matches = (app: Pick<App, 'bundleId' | 'name'>) => !words || app.name.toLowerCase().includes(words) || app.bundleId.toLowerCase().includes(words);
+  const matches = (app: Pick<AppInfo, 'bundleId' | 'name'>) => !words || app.name.toLowerCase().includes(words) || app.bundleId.toLowerCase().includes(words);
   const taken = (bundleId: string) => styled.some(app => same(app.bundleId, bundleId));
   const candidates = (apps ?? []).filter(app => !taken(app.bundleId) && (app.running || app.recent)).filter(matches);
   const typed = /^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/.test(query.trim()) && !taken(query.trim()) && !candidates.some(app => same(app.bundleId, query.trim())) ? query.trim() : null;
@@ -77,21 +77,21 @@ function Picker({ apps, failed, styled, onPick, onClose }: { apps: App[] | null;
 
 export function AppStyles({ settings, update }: PageProps) {
   const apps = settings.apps;
-  const [found, setFound] = useState<App[] | null>(cache);
+  const [found, setFound] = useState<AppInfo[] | null>(cache);
   const [failed, setFailed] = useState(false);
   const [picking, setPicking] = useState(false);
   // Once per visit: apps added meanwhile come from this list, with their icons.
   const known = useRef(apps.styles.map(app => app.bundleId));
   useEffect(() => {
     let live = true;
-    void invoke<App[]>('list_apps', { known: known.current })
+    void invoke('list_apps', { known: known.current })
       .then(list => { cache = list; if (live) setFound(list); }, () => { if (live) setFailed(true); });
     return () => { live = false; };
   }, []);
   const icon = (bundleId: string) => found?.find(app => same(app.bundleId, bundleId))?.icon;
   const set = (bundleId: string, change: Partial<AppStyle>) => update({ apps: { styles: apps.styles.map(app => app.bundleId === bundleId ? { ...app, ...change } : app) } });
   const close = () => { setPicking(false); requestAnimationFrame(() => document.querySelector<HTMLElement>('[data-add-app]')?.focus()); };
-  const pick = (app: Pick<App, 'bundleId' | 'name'>) => {
+  const pick = (app: Pick<AppInfo, 'bundleId' | 'name'>) => {
     setPicking(false);
     void update({ apps: { styles: [{ bundleId: app.bundleId, name: app.name, style: apps.defaultStyle, polish: false }, ...apps.styles] } })
       .then(() => requestAnimationFrame(() => document.querySelector<HTMLElement>(`[aria-label="Style in ${CSS.escape(app.name)}"]`)?.focus()));

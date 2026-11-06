@@ -7,7 +7,8 @@ import { Caret, Desk, Dots, Field } from '../app/demo/Demo';
 import { Claude } from '../app/settings/Claude';
 import { Meetings } from '../app/settings/Meetings';
 import { Notes } from '../app/settings/Notes';
-import { aiIcon, aiName, setupDone, tilde, updateSettings, useSettings, useStatus, type DictateKey, type PageProps, type Patch, type Settings, type Status } from '../store';
+import { aiIcon, aiName, setupDone, tilde, updateSettings, useSettings, useStatus, type PageProps } from '../store';
+import type { DictateKey, Patch, Settings, Status } from '../api/types';
 import { Button, Icon, Kbd, ProgressBar, reduced, Segmented, Select, Tile, TileGroup, Toast, Toggle } from '../ui';
 import { Logo } from '../overlay/icons';
 import { AccessGlyph, DownloadGlyph, ICON_GLYPHS } from '../overlay/glyphs';
@@ -52,7 +53,7 @@ function useDictateKey(chosen: DictateKey | undefined): Key {
   const [tested, setTested] = useState<DictateKey | null>(null);
   const since = useRef(0), key = useRef(chosen);
   key.current = chosen;
-  useEffect(() => listen<{ down: boolean }>('dictate-fn', event => {
+  useEffect(() => listen('dictate-fn', event => {
     setDown(event.down);
     if (event.down) { since.current = performance.now(); return; }
     if (since.current && performance.now() - since.current > HOLD_MS) setTested(key.current ?? null);
@@ -433,7 +434,7 @@ function TryIt({ status, settings, dictateKey, practiced, onPracticed, go, frame
   // Text counts only while a hold that began in the box lasts, and for a moment after it: a tap, a hold
   // somewhere else and typing by hand don't pass.
   const counts = useRef({ since: 0, until: 0 });
-  useEffect(() => listen<{ down: boolean }>('dictate-fn', ({ down }) => {
+  useEffect(() => listen('dictate-fn', ({ down }) => {
     const now = performance.now(), { since } = counts.current;
     if (down) counts.current = document.activeElement === box.current ? { since: now, until: Infinity } : { since: 0, until: 0 };
     else counts.current = { since: 0, until: since && now - since > HOLD_MS ? now + SETTLE_MS : 0 };

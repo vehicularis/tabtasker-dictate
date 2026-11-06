@@ -3,16 +3,10 @@ import { invoke, listen } from '../../bridge';
 import { DAY, dateOf, dayTitle, localDay } from '../../lib/dates';
 import { message } from '../../lib/errors';
 import { KEY_NAMES } from '../../lib/keyNames';
-import type { HistoryEntry, HoldMode, Keep, PageProps } from '../../store';
+import type { PageProps } from '../../store';
+import type { HistoryEntry, HistoryStats, HoldMode, Keep } from '../../api/types';
 import { Button, EmptyState, Icon, PageHeader, Section, Select, Tile, TileGroup, Toast } from '../../ui';
 import './history.css';
-
-/// history.rs's stats: `today` is a local day number (days since 1970-01-01 on this Mac) and `days`
-/// the words on each of the last 30, ending on it.
-export type HistoryStats = {
-  dictations: number; wordsToday: number; wordsTotal: number; wpm: number; savedSeconds: number; streak: number;
-  today: number; days: number[]; apps: { bundleId: string; name: string; words: number }[];
-};
 
 const KEEP: { value: Keep; label: string }[] = [
   { value: 'off', label: 'Don’t keep' }, { value: 'day', label: 'For a day' }, { value: 'week', label: 'For a week' }, { value: 'month', label: 'For a month' }, { value: 'forever', label: 'Forever' },
@@ -61,8 +55,8 @@ export function History({ settings, update }: PageProps) {
 
   const fail = useCallback((error: unknown, fallback: string) => setToast({ message: message(error, fallback), error: true }), []);
   const refresh = useCallback(() => {
-    void invoke<HistoryStats>('history_stats').then(setStats).catch(error => fail(error, 'Couldn’t load your stats'));
-    void invoke<HistoryEntry[]>('history_list').then(setEntries).catch(error => fail(error, 'Couldn’t load your history'));
+    void invoke('history_stats').then(setStats).catch(error => fail(error, 'Couldn’t load your stats'));
+    void invoke('history_list').then(setEntries).catch(error => fail(error, 'Couldn’t load your history'));
   }, [fail]);
   // A change to Keep prunes on the next read, so read again.
   useEffect(refresh, [refresh, keep]);

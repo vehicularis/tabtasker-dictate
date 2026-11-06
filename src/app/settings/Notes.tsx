@@ -2,12 +2,11 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { invoke } from '../../bridge';
 import { stamp } from '../../lib/dates';
 import { message } from '../../lib/errors';
-import { tilde, useStatus, type PageProps, type Settings } from '../../store';
+import { tilde, useStatus, type PageProps } from '../../store';
+import type { Settings } from '../../api/types';
 import { Button, ChipList, Icon, PageHeader, Section, Tile, TileGroup, Toggle } from '../../ui';
 import './notes.css';
-
-type Folder = { path: string; vault: string | null };
-type Preview = { fileName: string; text: string };
+import type { Folder, Preview } from '../../api/types';
 
 const DEFAULT_NAME = '{date} {title}';
 // The note the preview saves.
@@ -39,7 +38,7 @@ export function Notes({ settings, update }: PageProps) {
   useEffect(() => setTemplate(notes.fileName), [notes.fileName]);
   useEffect(() => {
     let live = true;
-    void invoke<Folder>('notes_folder').then(next => { if (live) setFolder(next); }).catch(() => {});
+    void invoke('notes_folder').then(next => { if (live) setFolder(next); }).catch(() => {});
     return () => { live = false; };
   }, [notes.folder]);
 
@@ -51,7 +50,7 @@ export function Notes({ settings, update }: PageProps) {
   const previewKey = JSON.stringify([shown, actions]);
   useEffect(() => {
     let live = true;
-    void invoke<Preview>('preview_note', { notes: shown, title: SAMPLE.title, body: SAMPLE.body, actions, stamp: stamp(new Date()) })
+    void invoke('preview_note', { notes: shown, title: SAMPLE.title, body: SAMPLE.body, actions, stamp: stamp(new Date()) })
       .then(next => { if (live) setPreview(next); }).catch(() => {});
     return () => { live = false; };
   }, [previewKey]);
@@ -60,7 +59,7 @@ export function Notes({ settings, update }: PageProps) {
     setChoosing(true);
     setFolderProblem(null);
     try {
-      const path = await invoke<string | null>('choose_folder', { message: 'Choose where to save your notes.', start: folder?.path ?? null });
+      const path = await invoke('choose_folder', { message: 'Choose where to save your notes.', start: folder?.path ?? null });
       if (!path) return;
       const saved = await update({ notes: { folder: path } });
       if (saved && saved.notes.folder !== path) setFolderProblem('Dictate can’t save notes in that folder. Choose another one.');

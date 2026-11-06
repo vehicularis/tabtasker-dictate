@@ -1,5 +1,5 @@
 import type { Mock } from '.';
-import type { AgentsStatus } from '../app/settings/Agents';
+import type { AgentsStatus } from '../api/types';
 
 // In a browser: the MCP server and adding it to Claude. `?agents=missing` is a Mac with neither Claude
 // app, `?agents=added` one with both, `?agents=elsewhere` one set up for another copy of the app (last

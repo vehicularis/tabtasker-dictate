@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { listen } from '../bridge';
-import { updateSettings, useSettings, type Events } from '../store';
+import { updateSettings, useSettings } from '../store';
 import { PREVIEW } from './preview';
 import { leave } from '../ui/motion';
 
@@ -10,7 +10,7 @@ export function Learned() {
   const settings = useSettings();
   const [word, setWord] = useState<string | null>(PREVIEW === 'learned' ? 'Kubernetes' : null);
   const [failed, setFailed] = useState(false);
-  useEffect(() => listen<Events['dictate-learned']>('dictate-learned', ({ word }) => { setWord(word); setFailed(false); }), []);
+  useEffect(() => listen('dictate-learned', ({ word }) => { setWord(word); setFailed(false); }), []);
   useEffect(() => { if (!word || PREVIEW) return; const timer = setTimeout(() => setWord(null), 12_000); return () => clearTimeout(timer); }, [word]);
   if (!word || !settings) return null;
   const add = () => {

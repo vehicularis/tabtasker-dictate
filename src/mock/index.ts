@@ -1,6 +1,9 @@
 // The app in a browser: real settings kept in memory, a sample status, and each feature's own commands
 // from its file here. Nothing leaves the page and nothing persists past a reload.
-import { chordProblem, PILL_BUTTONS, SOUNDS, STICKY_HUES, type Chord, type Settings, type Status, type Sticky, type UpdateState } from '../store';
+import { chordProblem, MODIFIERS, PILL_BUTTONS, SOUNDS, STICKY_HUES } from '../store';
+import type { Chord, Settings, Status, Sticky, UpdateState } from '../api/types';
+import type { CommandArgs, Commands } from '../api/commands';
+import type { Events } from '../api/events';
 import { register as input } from './input';
 import { register as speech } from './speech';
 import { register as notes } from './notes';
@@ -53,6 +56,7 @@ const DEFAULTS: Settings = {
 const status: Status = {
   enabled: true, microphone: 'allowed', accessibility: true, modelReady: true, modelPreparing: false, modelMessage: '',
   notes: '/Users/you/Documents/TabTasker | Dictate', home: '/Users/you', globeKey: '', openAtLogin: true,
+  systemShortcuts: [[49, MODIFIERS.command], [49, MODIFIERS.command | MODIFIERS.option], [48, MODIFIERS.command], [50, MODIFIERS.command], [12, MODIFIERS.control | MODIFIERS.command], [126, MODIFIERS.control]],
   inputs: [{ id: 'built-in', name: 'MacBook Pro Microphone' }, { id: 'airpods', name: 'AirPods Pro' }], input: null, inputInUse: 'MacBook Pro Microphone',
 };
 // `?status=new` starts as a Mac that has never been set up, for the setup flow.
@@ -163,13 +167,13 @@ const folderOf = () => settings.notes.folder ?? status.notes;
 const stickies: Sticky[] = [{ id: 'demo', text: 'Call the venue about Thursday', hue: 'amber', x: 120, y: 140, width: 240, height: 200, pinned: true, folded: false, closed: false, archived: false, createdMs: Date.now(), updatedMs: Date.now() },
   { id: 'list', text: 'Groceries\n- milk\n- coffee', hue: 'sage', x: 380, y: 160, width: 240, height: 200, pinned: false, folded: false, closed: true, archived: false, createdMs: Date.now() - 86_400_000, updatedMs: Date.now() - 86_400_000 },
   { id: 'old', text: 'Book the dentist', hue: 'sky', x: 200, y: 260, width: 240, height: 200, pinned: true, folded: false, closed: true, archived: true, createdMs: Date.now() - 9 * 86_400_000, updatedMs: Date.now() - 9 * 86_400_000 }].filter(() => new URLSearchParams(location.search).get('stickies') !== 'empty') as Sticky[];
-for (const one of stickies) Object.assign(one, one.id === 'demo' ? { title: 'Venue', titled: true, tilt: 'slight', weight: 'bold' } : { title: '', titled: false, tilt: 'none', weight: 'bold' });
+for (const one of stickies) Object.assign(one, { gutter: 44 }, one.id === 'demo' ? { title: 'Venue', titled: true, tilt: 'slight', weight: 'bold' } : { title: '', titled: false, tilt: 'none', weight: 'bold' });
 const stickyHue = (hue: unknown): Sticky['hue'] => (typeof hue === 'string' && hue in STICKY_HUES ? hue : 'amber') as Sticky['hue'];
 mock.handle('sticky_list', () => copy(stickies));
 mock.handle('sticky_get', ({ id }) => { const found = stickies.find(one => one.id === id) ?? stickies[0]; if (!found) throw 'That sticky is gone.'; return copy(found); });
 mock.handle('sticky_new', ({ hue, text }) => {
   const last = stickies.at(-1);
-  const made: Sticky = { id: Math.random().toString(16).slice(2, 14), text: typeof text === 'string' ? text : '', hue: stickyHue(hue ?? ['amber', 'sky', 'sage', 'coral', 'violet', 'teal'][stickies.length % 6]), x: (last?.x ?? 92) + 28, y: (last?.y ?? 112) + 28, width: last?.width ?? 240, height: last?.height ?? 200, pinned: true, folded: false, closed: false, title: '', titled: last?.titled ?? false, tilt: last?.tilt ?? 'none', weight: last?.weight ?? 'bold', archived: false, createdMs: Date.now(), updatedMs: Date.now() };
+  const made: Sticky = { id: Math.random().toString(16).slice(2, 14), text: typeof text === 'string' ? text : '', hue: stickyHue(hue ?? ['amber', 'sky', 'sage', 'coral', 'violet', 'teal'][stickies.length % 6]), x: (last?.x ?? 92) + 28, y: (last?.y ?? 112) + 28, width: last?.width ?? 240, height: last?.height ?? 200, pinned: true, folded: false, closed: false, title: '', gutter: 44, titled: last?.titled ?? false, tilt: last?.tilt ?? 'none', weight: last?.weight ?? 'bold', archived: false, createdMs: Date.now(), updatedMs: Date.now() };
   stickies.push(made); emit('dictate-stickies', { count: stickies.length }); return copy(made);
 });
 mock.handle('sticky_update', ({ id, text, hue, title, titled, tilt, weight }) => { const found = stickies.find(one => one.id === id); if (!found) throw 'That sticky is gone.'; if (typeof text === 'string') found.text = text; if (hue) found.hue = stickyHue(hue); if (typeof title === 'string') found.title = title; if (typeof titled === 'boolean') found.titled = titled; if (tilt === 'none' || tilt === 'slight' || tilt === 'random') found.tilt = tilt; if (weight === 'regular' || weight === 'bold') found.weight = weight; found.updatedMs = Date.now(); return copy(found); });
@@ -228,15 +232,16 @@ mock.handle('update_restart', () => emit('dictate-notice', { message: 'Restart t
 // Input goes last: its `request` adds Send and Cancel to the permission answers setup gives.
 for (const register of [speech, notes, meetings, claude, agents, stats, setup, design, input]) register(mock);
 
-export async function invoke(command: string, args: Record<string, unknown>): Promise<unknown> {
+export async function invoke<K extends keyof Commands>(command: K, ...[args]: CommandArgs<K>): Promise<Commands[K]['result']> {
   const handler = handlers.get(command);
   if (!handler) throw new Error(`${command} is not in the browser mock`);
-  return handler(args);
+  return handler(args ?? {}) as Commands[K]['result'];
 }
 
-export async function listen(event: string, handler: (payload: unknown) => void): Promise<() => void> {
+export async function listen<K extends keyof Events>(event: K, handler: (payload: Events[K]) => void): Promise<() => void> {
   const set = listeners.get(event) ?? new Set();
   listeners.set(event, set);
-  set.add(handler);
-  return () => { set.delete(handler); };
+  const hear = handler as (payload: unknown) => void;
+  set.add(hear);
+  return () => { set.delete(hear); };
 }

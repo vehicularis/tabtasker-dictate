@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties, type HTMLAttributes, type ReactNode } from 'react';
-import { STICKY_HUES, type StickyHue, type StickyTilt, type StickyWeight } from '../store';
+import { STICKY_HUES } from '../store';
+import type { StickyHue, StickyTilt, StickyWeight } from '../api/types';
 import { Icon } from '../ui/Icon';
 
 export const HUES = Object.keys(STICKY_HUES) as StickyHue[];

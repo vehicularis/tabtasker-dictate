@@ -5,7 +5,8 @@ import { Menu, MenuItem, MenuLine } from '../editor/Menu';
 import { Onboarding } from '../onboarding/Onboarding';
 import { PLACE_GLYPHS, SETTINGS_GLYPHS } from '../overlay/glyphs';
 import { Logo, BusinessMark } from '../overlay/icons';
-import { updateSettings, useSettings, type PageProps, type Patch } from '../store';
+import { updateSettings, useSettings, type PageProps } from '../store';
+import type { Patch, TabAction } from '../api/types';
 import { applyTheme, Icon, leave, Toast, useFlip, type IconName } from '../ui';
 import { ColumnHead, ColumnResizer } from './Column';
 import { Appearance } from './settings/Appearance';
@@ -138,7 +139,7 @@ export function App() {
     closed.current = [...closed.current, ...result.closed].slice(-20);
     setState(result.state);
   }, []);
-  const tabAction = useCallback((action: string, index = now.current.active) => {
+  const tabAction = useCallback((action: TabAction, index = now.current.active) => {
     const s = now.current, tab = s.tabs[index];
     if (action === 'new') setState(openTab(s));
     else if (action === 'close' && tab) close([tab.id]);
@@ -154,7 +155,7 @@ export function App() {
   const newTab = useCallback(() => tabAction('new'), [tabAction]);
   const closeTab = useCallback((at: number) => tabAction('close', at), [tabAction]);
   // The menu bar's File and Window items (lib.rs), when the page didn't take the key first.
-  useEffect(() => listen<string>('dictate-tab', action => tabAction(action)), [tabAction]);
+  useEffect(() => listen('dictate-tab', action => tabAction(action)), [tabAction]);
   const drag = useTabDrag((from, to) => setState(s => moveTab(s, from, to)));
   const [tabMenu, setTabMenu] = useState<{ index: number; x: number; y: number } | null>(null);
   // One element, two refs: the FLIP's and the drag's.
@@ -178,7 +179,7 @@ export function App() {
     // the layout prints on them.
     const key = (event: KeyboardEvent) => {
       const { metaKey: cmd, ctrlKey: ctrl, altKey: alt, shiftKey: shift, code } = event;
-      let action: string | null = null;
+      let action: TabAction | null = null;
       if (ctrl && !cmd && !alt && code === 'Tab') action = shift ? 'prev' : 'next';
       else if (cmd && !ctrl) {
         if (alt && shift && (code === 'ArrowLeft' || code === 'ArrowRight')) action = code === 'ArrowRight' ? 'right' : 'left';
@@ -189,7 +190,7 @@ export function App() {
         else if (!alt && !shift && code === 'Comma') { go('settings'); event.preventDefault(); return; }
         else if (!alt && code === 'KeyT') action = shift ? 'reopen' : 'new';
         else if (!alt && code === 'KeyW') action = shift ? 'window' : 'close';
-        else if (!alt && !shift && /^Digit[1-9]$/.test(code)) action = `select:${code.slice(5)}`;
+        else if (!alt && !shift && /^Digit[1-9]$/.test(code)) action = `select:${code.slice(5)}` as TabAction; // Digit1 to Digit9, as the test says
       }
       if (!action) return;
       event.preventDefault();

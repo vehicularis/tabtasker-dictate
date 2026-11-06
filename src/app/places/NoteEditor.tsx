@@ -4,7 +4,8 @@ import { Editor } from '../../editor/Editor';
 import { message } from '../../lib/errors';
 import { KEY_NAMES } from '../../lib/keyNames';
 import { isUnnamed, refreshLibrary } from '../../lib/library';
-import { useSettings, type NoteDoc } from '../../store';
+import { useSettings } from '../../store';
+import type { NoteDoc } from '../../api/types';
 import { Button, Icon } from '../../ui';
 
 type State = 'reading' | 'clean' | 'dirty' | 'saving' | 'saved' | 'error';
@@ -28,7 +29,7 @@ export function NoteEditor({ path, kind, onChanged, onDeleted, onMoved, onError 
   const inFlight = useRef<Promise<void> | null>(null);
   const loaded = useRef(false);
   useEffect(() => {
-    void invoke<NoteDoc>('note_read', { path }).then(found => {
+    void invoke('note_read', { path }).then(found => {
       setDoc(found); setTitle(found.title); latest.current = { title: found.title, body: found.body }; setState('clean'); loaded.current = true;
       setWindowTitle(found.title || (kind === 'meeting' ? 'Meeting' : 'Note'));
     }, error => { onError(message(error, 'This note has been moved or deleted.')); setState('error'); });
@@ -39,7 +40,7 @@ export function NoteEditor({ path, kind, onChanged, onDeleted, onMoved, onError 
     if (inFlight.current) return inFlight.current;
     const { title, body } = latest.current;
     setState('saving');
-    inFlight.current = invoke<number>('note_write', { path, title: title.trim(), body })
+    inFlight.current = invoke('note_write', { path, title: title.trim(), body })
       .then(() => { setState('saved'); onChanged(); }, error => { setState('error'); onError(message(error, 'Couldn’t save the note.')); })
       .finally(() => { inFlight.current = null; });
     return inFlight.current;
@@ -68,10 +69,10 @@ export function NoteEditor({ path, kind, onChanged, onDeleted, onMoved, onError 
   }, [kind, path]);
   const file = doc ? doc.path.split('/').pop() : '';
   const reveal = () => void invoke('show_notes', { file: doc?.path }).catch(() => onError('Couldn’t show that in Finder.'));
-  const elsewhere = () => void invoke('library_open', { path: doc?.path }).catch(() => onError('Couldn’t open that file.'));
+  const elsewhere = () => { if (doc) void invoke('library_open', { path: doc.path }).catch(() => onError('Couldn’t open that file.')); else onError('Couldn’t open that file.'); };
   // Into the folder's Archive/ or back out, saved first; the list then follows it to where it is.
   const archived = /\/Archive\/[^/]+$/.test(path);
-  const archive = (on: boolean) => { clearTimeout(timer.current); void save().then(() => invoke<string>('note_archive', { path, archived: on })).then(moved => onMoved(moved, on), error => onError(message(error, on ? 'Couldn’t archive that.' : 'Couldn’t restore that.'))); };
+  const archive = (on: boolean) => { clearTimeout(timer.current); void save().then(() => invoke('note_archive', { path, archived: on })).then(moved => onMoved(moved, on), error => onError(message(error, on ? 'Couldn’t archive that.' : 'Couldn’t restore that.'))); };
   const remove = () => { clearTimeout(timer.current); dirty.current = false; void invoke('note_delete', { path }).then(onDeleted, error => onError(message(error, 'Couldn’t move that to the Trash.'))); };
   const rename = (event: FormEvent) => {
     event.preventDefault();

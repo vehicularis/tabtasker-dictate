@@ -1,7 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { invoke, listen } from '../../bridge';
-import { meetingLength, meetingWhen, useMeetingState, type MeetingEvent } from '../../overlay/MeetingPill';
+import { meetingLength, meetingWhen, useMeetingState } from '../../overlay/MeetingPill';
 import { folderPath, tilde, useStatus, type PageProps } from '../../store';
+import type { MeetingEvent } from '../../api/types';
 import { Button, PageHeader, Section, TextField, Tile, TileGroup, Toggle } from '../../ui';
 
 const sentence = (text: string) => /[.!?]$/.test(text) ? text : `${text}.`;
@@ -24,7 +25,7 @@ export function Meetings({ settings, update }: PageProps) {
   const chord = settings.shortcuts.meeting?.label;
   const leftovers = state?.leftovers ?? [];
 
-  useEffect(() => listen<MeetingEvent>('dictate-meeting', event => { if (event.state !== 'recording') setOutcome(event); }), []);
+  useEffect(() => listen('dictate-meeting', event => { if (event.state !== 'recording') setOutcome(event); }), []);
   useEffect(() => {
     const next = focusNext.current && document.getElementById(focusNext.current);
     if (next) { focusNext.current = null; next.focus(); }
@@ -33,7 +34,7 @@ export function Meetings({ settings, update }: PageProps) {
   const startOrStop = () => {
     setStartProblem(null);
     const action = recording ? 'stop' : 'start';
-    void invoke<boolean>('meeting', { action }).then(changed => {
+    void invoke('meeting', { action }).then(changed => {
       if (!changed && action === 'start') setStartProblem('Couldn’t start the meeting. Check that Dictate is allowed to use the microphone.');
       refresh();
     }, (error: unknown) => setStartProblem(typeof error === 'string' ? sentence(error) : 'Couldn’t start the meeting.'));

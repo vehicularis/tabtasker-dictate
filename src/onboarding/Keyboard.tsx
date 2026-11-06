@@ -1,4 +1,4 @@
-import type { DictateKey } from '../store';
+import type { DictateKey } from '../api/types';
 
 /// The globe that shares the fn key, in the current text colour.
 export const Globe = ({ size = 12 }: { size?: number }) => <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">

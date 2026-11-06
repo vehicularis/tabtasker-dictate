@@ -1,7 +1,6 @@
 import type { Mock } from '.';
 import { DAY, localDay } from '../lib/dates';
-import type { HistoryEntry, Keep } from '../store';
-import type { HistoryStats } from '../app/settings/History';
+import type { HistoryEntry, HistoryStats, Keep } from '../api/types';
 
 // In a browser: a month of sample dictations, with history.rs's pruning and stats math.
 // `?history=empty` starts with nothing said.

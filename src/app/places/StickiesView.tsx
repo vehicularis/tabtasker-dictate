@@ -4,7 +4,8 @@ import { Menu, MenuItem, MenuLine } from '../../editor/Menu';
 import { stamp } from '../../lib/dates';
 import { message } from '../../lib/errors';
 import { useSelection } from '../../lib/selection';
-import { STICKY_HUES, type Sticky } from '../../store';
+import { STICKY_HUES } from '../../store';
+import type { Sticky } from '../../api/types';
 import { StickyGlyph } from '../../overlay/glyphs';
 import { firstLine } from '../../sticky/Sheet';
 import { Button, Icon, PageHeader, Segmented, useFlip, type IconName } from '../../ui';
@@ -33,7 +34,7 @@ export function StickiesView({ onError }: { onError: (message: string) => void }
   const sel = useSelection(useMemo(() => ordered.map(sticky => sticky.id), [ordered]));
   const [asking, setAsking] = useState<{ ids: string[]; at: HTMLElement | (() => DOMRect) } | null>(null);
   const [menu, setMenu] = useState<{ ids: string[]; x: number; y: number } | null>(null);
-  const refresh = useCallback(() => { void invoke<Sticky[]>('sticky_list').then(setStickies, error => onError(message(error, 'Couldn’t load your stickies.'))); }, [onError]);
+  const refresh = useCallback(() => { void invoke('sticky_list').then(setStickies, error => onError(message(error, 'Couldn’t load your stickies.'))); }, [onError]);
   useEffect(refresh, [refresh]);
   useEffect(() => { const off = listen('dictate-stickies', refresh); addEventListener('focus', refresh); return () => { off(); removeEventListener('focus', refresh); }; }, [refresh]);
   const act = (work: Promise<unknown>, failed: string) => void work.then(refresh, error => onError(message(error, failed)));

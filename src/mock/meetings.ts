@@ -1,6 +1,6 @@
 import type { Mock } from '.';
 import { stamp } from '../lib/dates';
-import type { Leftover, MeetingEvent, MeetingState } from '../overlay/MeetingPill';
+import type { Leftover, MeetingEvent, MeetingState } from '../api/types';
 import { fileStem } from './notes';
 
 // In a browser: recording, the pill and the meetings folder.

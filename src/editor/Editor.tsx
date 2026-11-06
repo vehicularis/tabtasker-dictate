@@ -51,7 +51,7 @@ export function Editor({ markdown, onChange, placeholder, compact = false, autoF
     if (!path) return false;
     if (!file.type.startsWith('image/')) return false;
     const data = await new Promise<string>((done, fail) => { const reader = new FileReader(); reader.onload = () => done(String(reader.result).split(',')[1] ?? ''); reader.onerror = () => fail(reader.error); reader.readAsDataURL(file); });
-    const src = await invoke<string>('note_attach', { path, name: file.name || 'picture.png', data });
+    const src = await invoke('note_attach', { path, name: file.name || 'picture.png', data });
     const node = { type: 'image', attrs: { src, alt: file.name.replace(/\.[a-z0-9]+$/i, '') } };
     if (at === undefined) editor.chain().focus().insertContent(node).run(); else editor.chain().focus().insertContentAt(at, node).run();
     return true;

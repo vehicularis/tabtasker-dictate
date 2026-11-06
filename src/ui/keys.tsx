@@ -1,5 +1,6 @@
 import { useEffect, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { chordProblem, MODIFIERS, type Chord } from '../store';
+import { chordProblem, MODIFIERS } from '../store';
+import type { Chord } from '../api/types';
 import { Icon } from './Icon';
 
 export const Kbd = ({ children }: { children: ReactNode }) => <kbd className="ui-kbd">{children}</kbd>;

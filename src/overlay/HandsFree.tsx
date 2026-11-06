@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { listen } from '../bridge';
 import { KEY_NAMES } from '../lib/keyNames';
 import { ask } from '../lib/request';
-import { useSettings, type Events } from '../store';
+import { useSettings } from '../store';
 import { X } from './icons';
 import { leave } from '../ui/motion';
 import { PREVIEW } from './preview';
@@ -18,7 +18,7 @@ export function HandsFree() {
   const settings = useSettings();
   const [since, setSince] = useState<number | null>(PREVIEW === 'hands-free' ? Date.now() - 42_000 : null);
   const [, setClock] = useState(0);
-  useEffect(() => listen<Events['dictate-hands-free']>('dictate-hands-free', ({ locked }) => setSince(locked ? Date.now() : null)), []);
+  useEffect(() => listen('dictate-hands-free', ({ locked }) => setSince(locked ? Date.now() : null)), []);
   useEffect(() => {
     if (since == null) return;
     const timer = setInterval(() => setClock(tick => tick + 1), 1000);

@@ -7,7 +7,8 @@ import { isUnnamed, readers, refreshLibrary } from '../../lib/library';
 import { useSelection } from '../../lib/selection';
 import { Menu, MenuItem, MenuLine } from '../../editor/Menu';
 import { meetingLength, meetingWhen, useMeetingState } from '../../overlay/MeetingPill';
-import type { LibraryItem, PageProps } from '../../store';
+import type { PageProps } from '../../store';
+import type { LibraryItem } from '../../api/types';
 import { PLACE_GLYPHS } from '../../overlay/glyphs';
 import { Button, Icon, Segmented, useFlip } from '../../ui';
 import { ColumnGroup, ColumnHead } from '../Column';
@@ -31,7 +32,7 @@ type Props = { kind: 'note' | 'meeting'; path: string | null; onError: (message:
 const routeTo = (kind: 'note' | 'meeting', path: string) => `${kind === 'note' ? 'notes' : 'meetings'}/${path}`;
 /// A note by voice, as the pill's Speak a note: the orb listens until you stop, then the note is saved and listed here.
 const speakNote = (onError: Props['onError']) => void invoke('request', { kind: 'note' }).catch(error => onError(message(error, 'Couldn’t start a spoken note.')));
-const newNote = (onOpen: Props['onOpen'], onError: Props['onError']) => void invoke<string>('note_new', { title: '', text: '', stamp: stamp() }).then(made => onOpen(routeTo('note', made)), error => onError(message(error, 'Couldn’t make a new note.')));
+const newNote = (onOpen: Props['onOpen'], onError: Props['onError']) => void invoke('note_new', { title: '', text: '', stamp: stamp() }).then(made => onOpen(routeTo('note', made)), error => onError(message(error, 'Couldn’t make a new note.')));
 
 // The library as last read, notes and meetings both, for every place that asks: one opened again knows at once
 // whether it has a list, so its column doesn't flash in and out while the folder is read again.
@@ -41,7 +42,7 @@ let known: LibraryItem[] | null = null;
 /// window comes forward. Null only before the very first read: the window shows no column until it knows.
 export function useLibrary(kind: 'note' | 'meeting' | null, path: string | null, onError: (message: string) => void) {
   const [all, setAll] = useState(known);
-  const refresh = useCallback(() => { if (kind) void invoke<LibraryItem[]>('library_list').then(items => { known = items; setAll(items); }, error => onError(message(error, 'Couldn’t read your notes.'))); }, [kind, onError]);
+  const refresh = useCallback(() => { if (kind) void invoke('library_list').then(items => { known = items; setAll(items); }, error => onError(message(error, 'Couldn’t read your notes.'))); }, [kind, onError]);
   useEffect(refresh, [refresh, path]);
   useEffect(() => {
     if (!kind) return;
@@ -172,7 +173,7 @@ function MeetingAction({ onError, labelled = false }: { onError: (message: strin
     if (busy) return;
     setBusy(true);
     const action = recording ? 'stop' : 'start';
-    void invoke<boolean>('meeting', { action }).then(changed => { if (!changed && action === 'start') onError('Couldn’t start the meeting. Check your microphone in Settings.'); refresh(); },
+    void invoke('meeting', { action }).then(changed => { if (!changed && action === 'start') onError('Couldn’t start the meeting. Check your microphone in Settings.'); refresh(); },
       error => onError(message(error, 'Couldn’t start the meeting.'))).finally(() => setBusy(false));
   };
   return <button type="button" className={`ui-button record${recording ? ' on' : labelled ? ' primary' : ' quiet'}`} aria-label={recording ? 'Stop the meeting' : 'Start a meeting'} title={recording ? 'Stop the meeting' : 'Start a meeting'} disabled={!state || busy} onClick={toggle}>
