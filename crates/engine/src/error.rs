@@ -1,7 +1,7 @@
 //! What can go wrong in a pass, each worded as the person sees it.
 use std::fmt;
 
-/// Why a pass or a model load gave no words. Its `Display` is what the app shows, word for word: the overlay ends a hold
+/// Why a pass or a model load failed. Its `Display` is what the app shows, word for word: the overlay ends a hold
 /// quietly only on the exact text `unheard`.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Error {

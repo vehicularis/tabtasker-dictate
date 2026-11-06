@@ -92,12 +92,12 @@ mod tests {
   }
 
   /// Runs the real models over a recording: `DICTATE_SPEAKER_PCM` is 16-bit little-endian 16 kHz mono,
-  /// `DICTATE_MODELS_ROOT` the voice-models folder with `speakers/` in it. Ignored by default, since
-  /// it needs both on disk: `cargo test diarizes -- --ignored`.
+  /// `DICTATE_MODELS` the models folder with `speakers/` in it. Ignored by default, since
+  /// it needs both on disk: `cargo test -p dictate-engine diarizes -- --ignored`.
   #[test]
-  #[ignore]
+  #[ignore = "needs the speaker models in DICTATE_MODELS and a recording in DICTATE_SPEAKER_PCM"]
   fn diarizes_a_recording_into_its_voices() {
-    let (Ok(pcm), Ok(root)) = (std::env::var("DICTATE_SPEAKER_PCM"), std::env::var("DICTATE_MODELS_ROOT")) else { panic!("set DICTATE_SPEAKER_PCM and DICTATE_MODELS_ROOT") };
+    let (Ok(pcm), Ok(root)) = (std::env::var("DICTATE_SPEAKER_PCM"), std::env::var("DICTATE_MODELS")) else { panic!("set DICTATE_SPEAKER_PCM and DICTATE_MODELS") };
     let bytes = std::fs::read(pcm).unwrap();
     let samples: Vec<f32> = bytes.as_chunks::<2>().0.iter().map(|pair| i16::from_le_bytes(*pair) as f32 / 32768.0).collect();
     let began = std::time::Instant::now();

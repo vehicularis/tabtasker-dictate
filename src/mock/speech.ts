@@ -19,7 +19,7 @@ const APPS: [string, string, string, 'open' | 'recent' | 'installed'][] = [
 ];
 const icon = (name: string, fill: string) => `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect x="4" y="4" width="56" height="56" rx="13" fill="${fill}"/><text x="32" y="42" text-anchor="middle" font-family="-apple-system, sans-serif" font-size="26" font-weight="600" fill="#fff">${name[0]}</text></svg>`)}`;
 
-/// speech.rs's prompt_text with its estimate: a token for every three bytes, under 200.
+/// crates/engine/src/prompt.rs's prompt_text with its estimate: a token for every three bytes, under 200.
 const fit = (words: string[]) => {
   let text = '', count = 0;
   for (const word of words.map(word => word.trim()).filter(Boolean)) {

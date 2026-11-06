@@ -397,7 +397,7 @@ fn transcribe(pcm: &[f32]) -> Result<Vec<Segment>, Trouble> {
   };
   speech::transcribe_piece(pcm, options).map_err(|error| match &error {
     Error::Interrupted => Trouble::Interrupted,
-    Error::Other(why) if why == "Dictation is paused." => Trouble::Waiting("Turn dictation back on to finish the transcript."),
+    Error::Other(why) if why == speech::PAUSED => Trouble::Waiting("Turn dictation back on to finish the transcript."),
     Error::NotUnderstood => Trouble::Unreadable,
     _ => {
       log::warn!("meeting: a piece waits: {error}");

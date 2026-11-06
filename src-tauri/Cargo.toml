@@ -1,5 +1,6 @@
 [package]
 name = "tabtasker-dictate"
+publish = false
 version.workspace = true
 description = "Hold fn to type with your voice, or take long spoken notes. Whisper runs on your Mac."
 edition.workspace = true

@@ -28,7 +28,7 @@ pub struct Heard {
   pub language: i32,
   /// Where the language came from.
   pub from: LanguageFrom,
-  /// Whether the vocabulary prompt made it hear nothing and it was heard again without.
+  /// Whether Whisper recited the vocabulary, so the audio was heard again without it. True even if the retry was discarded.
   pub retried_without_prompt: bool,
   /// How long the pass took, detection included.
   pub ms: u128,
@@ -36,7 +36,7 @@ pub struct Heard {
 
 /// The language of a pass: `ask`'s if Settings pins one, else `held`, else detected. Nothing is kept:
 /// the caller decides whether a detected language is sure enough (see [`SURE`]). Stops first if `stop` says so.
-pub fn language(whisper: &mut Whisper, pcm: &[f32], ask: &Ask, held: Option<i32>, stop: &dyn Fn() -> bool) -> Result<(i32, LanguageFrom)> {
+pub fn language(whisper: &mut Whisper, pcm: &[f32], ask: &Ask, held: Option<i32>, stop: &(dyn Fn() -> bool + Sync)) -> Result<(i32, LanguageFrom)> {
   if stop() { return Err(Error::Cancelled); }
   match (ask.language, held) {
     (Some(language), _) => Ok((language, LanguageFrom::Settings)),
@@ -48,8 +48,8 @@ pub fn language(whisper: &mut Whisper, pcm: &[f32], ask: &Ask, held: Option<i32>
   }
 }
 
-/// A whole pass: [`language`], then the words. Does no logging and keeps nothing.
-pub fn hear(whisper: &mut Whisper, pcm: &[f32], ask: &Ask, held: Option<i32>, stop: &dyn Fn() -> bool, quick: bool) -> Result<Heard> {
+/// A whole pass: [`language`], then the words. Keeps nothing; the only logging is `Whisper::transcribe`'s vocabulary-retry line.
+pub fn hear(whisper: &mut Whisper, pcm: &[f32], ask: &Ask, held: Option<i32>, stop: &(dyn Fn() -> bool + Sync), quick: bool) -> Result<Heard> {
   let started = Instant::now();
   let (language, from) = language(whisper, pcm, ask, held, stop)?;
   let heard = whisper.transcribe(pcm, language, ask, stop, quick)?;

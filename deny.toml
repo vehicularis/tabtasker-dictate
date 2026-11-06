@@ -1,5 +1,5 @@
 # What CI checks in the Mac app's dependency tree before anything builds: known vulnerabilities, licences,
-# and where crates come from. Run it yourself with `cargo deny check` in src-tauri.
+# and where crates come from. Run it yourself with `cargo deny check` at the repository root.
 
 [graph]
 targets = ["aarch64-apple-darwin"]
@@ -36,6 +36,8 @@ allow = [
 # Several versions of one crate come from upstream crates and only cost build time.
 multiple-versions = "allow"
 wildcards = "deny"
+# The app's path dependency on dictate-engine is not a wildcard.
+allow-wildcard-paths = true
 
 [sources]
 unknown-registry = "deny"

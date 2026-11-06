@@ -32,12 +32,12 @@ pub struct Transcript {
   /// What was said.
   pub text: String,
   /// Whether Whisper recited the vocabulary instead of what was said, so the audio was heard again
-  /// without it.
+  /// without it. True even if the retry was discarded.
   pub retried_without_prompt: bool,
 }
 
 /// What a pass checks while it runs: `stop`, and the time it has taken.
-struct Abort<'a> { stop: &'a dyn Fn() -> bool, started: Instant }
+struct Abort<'a> { stop: &'a (dyn Fn() -> bool + Sync), started: Instant }
 /// No single decode runs longer than this, however long its audio.
 const DEADLINE: Duration = Duration::from_secs(120);
 
@@ -168,7 +168,7 @@ impl Whisper {
   /// gets its own two minutes, so a retry without the vocabulary can bring it to about four.
   /// `quick` is the live pass's greedy decoding; the final pass searches five beams, which
   /// costs about the same because the encoder dominates.
-  pub fn transcribe(&mut self, pcm: &[f32], language: i32, ask: &Ask, stop: &dyn Fn() -> bool, quick: bool) -> Result<Transcript> {
+  pub fn transcribe(&mut self, pcm: &[f32], language: i32, ask: &Ask, stop: &(dyn Fn() -> bool + Sync), quick: bool) -> Result<Transcript> {
     if stop() { return Err(Error::Cancelled); }
     self.use_words(&ask.words);
     let text = self.decode(pcm, language, ask, stop, quick, true)?;
@@ -189,7 +189,7 @@ impl Whisper {
     }
   }
 
-  fn decode(&mut self, pcm: &[f32], language: i32, ask: &Ask, stop: &dyn Fn() -> bool, quick: bool, prompted: bool) -> Result<String> {
+  fn decode(&mut self, pcm: &[f32], language: i32, ask: &Ask, stop: &(dyn Fn() -> bool + Sync), quick: bool, prompted: bool) -> Result<String> {
     let mut params = FullParams::new(if quick { SamplingStrategy::Greedy { best_of: 1 } } else { SamplingStrategy::BeamSearch { beam_size: 5, patience: -1.0 } });
     params.set_n_threads(threads() as i32);
     params.set_language(lang_code(language));
@@ -226,7 +226,7 @@ impl Whisper {
 
   /// A meeting piece with timestamps, stopping once `stop` says so; the decode gets its own two minutes. `prompt`
   /// replaces the vocabulary when the caller has its own.
-  pub fn segments(&mut self, pcm: &[f32], language: i32, prompt: Option<&str>, ask: &Ask, translate: bool, stop: &dyn Fn() -> bool) -> Result<Vec<Segment>> {
+  pub fn segments(&mut self, pcm: &[f32], language: i32, prompt: Option<&str>, ask: &Ask, translate: bool, stop: &(dyn Fn() -> bool + Sync)) -> Result<Vec<Segment>> {
     let mut abort = Abort { stop, started: Instant::now() };
     let own = prompt.map(str::trim).filter(|prompt| !prompt.is_empty()).map(|prompt| self.tokens(&format!(" {}", prompt.replace('\0', ""))));
     if own.is_none() { self.use_words(&ask.words); }

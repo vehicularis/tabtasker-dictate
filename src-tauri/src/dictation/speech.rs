@@ -68,6 +68,9 @@ extern "C" {
   fn dictate_meeting_free_space(path: *const c_char) -> i64;
 }
 
+/// The error text of a pass refused while dictation is off; the meetings code matches it.
+pub(crate) const PAUSED: &str = "Dictation is paused.";
+
 impl LocalSpeech {
   fn new(root: PathBuf) -> Self {
     Self {
@@ -227,7 +230,7 @@ fn load(app: &AppHandle, root: &Path, model: Model, cancel: &AtomicBool) -> Resu
   let state = app.state::<LocalSpeech>();
   // Declared first, so the new model is dropped before it is let go.
   let _loading = state.loading.lock().unwrap_or_else(|e| e.into_inner());
-  if !state.enabled.load(Ordering::Relaxed) { return Err("Dictation is paused.".into()); }
+  if !state.enabled.load(Ordering::Relaxed) { return Err(PAUSED.into()); }
   let whisper = Whisper::load(&root.join(model.files()[0].name), model)?;
   let vad = if lock(&state.vad).is_none() { Some(SpeechDetector::load(&root.join(SILERO.name))?) } else { None };
   // Waits for a pass in flight: the old model goes only once nothing is using it.
@@ -376,6 +379,9 @@ pub fn language(request: &str) -> Option<String> {
 }
 
 impl LocalSpeech {
+  /// Whether a meeting piece stops: its own flag, or [`Self::piece_yields`]. A hold's pass checks its flag alone.
+  fn piece_stopped(&self, cancelled: &AtomicBool) -> bool { cancelled.load(Ordering::Relaxed) || self.piece_yields() }
+
   /// A meeting piece stops when voice is off (Pause, Quit) or a release is waiting for the engine.
   fn piece_yields(&self) -> bool { !self.enabled.load(Ordering::Relaxed) || self.releases.load(Ordering::SeqCst) > 0 }
 
@@ -671,7 +677,7 @@ pub fn transcribe_piece(pcm: &[f32], opts: PieceOptions) -> Result<Vec<Segment>,
   if pcm.len() > 30 * 16000 || pcm.iter().any(|sample| !sample.is_finite()) { return Err(Error::InvalidAudio); }
   if !audio::worth_a_pass(pcm) { return Ok(Vec::new()); }
   let state = app.state::<LocalSpeech>();
-  if !state.enabled.load(Ordering::Relaxed) { return Err(Error::Other("Dictation is paused.".into())); }
+  if !state.enabled.load(Ordering::Relaxed) { return Err(Error::Other(PAUSED.into())); }
   let ask = ask_now();
   let language = match opts.language.as_deref() {
     None => ask.language,
@@ -679,7 +685,7 @@ pub fn transcribe_piece(pcm: &[f32], opts: PieceOptions) -> Result<Vec<Segment>,
     Some(code) => Some(whisper::lang_id(code).ok_or(Error::UnknownLanguage)?),
   };
   let cancelled = opts.cancel.unwrap_or_default();
-  let stopped = || cancelled.load(Ordering::Relaxed) || state.piece_yields();
+  let stopped = || state.piece_stopped(&cancelled);
   let mut engine = state.engine.lock().unwrap_or_else(|e| e.into_inner());
   if stopped() { return Err(Error::Interrupted); }
   let engine = engine.as_mut().ok_or(Error::NotLoaded)?;

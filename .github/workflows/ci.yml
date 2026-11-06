@@ -115,3 +115,11 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Tests
         run: cargo test --workspace --locked
+      - name: Engine tests on their own
+        run: cargo test -p dictate-engine --locked
+      - name: Engine docs
+        run: cargo doc -p dictate-engine --no-deps --locked
+        env:
+          RUSTDOCFLAGS: -D warnings
+      - name: Engine does not depend on Tauri
+        run: "! cargo tree -p dictate-engine -e normal --locked | grep -qi tauri"

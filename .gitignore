@@ -1,5 +1,7 @@
 node_modules/
 dist/
+# Checkouts made before the workspace built into src-tauri/target/.
+src-tauri/target/
 /target/
 .DS_Store
 release/

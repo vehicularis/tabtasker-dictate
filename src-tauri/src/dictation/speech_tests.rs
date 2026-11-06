@@ -23,6 +23,24 @@ fn a_meeting_piece_gives_the_engine_up_to_a_release_pause_and_quit() {
 }
 
 #[test]
+fn a_meeting_piece_yields_to_a_release_but_a_holds_pass_does_not() {
+  let speech = LocalSpeech::new(PathBuf::new());
+  let own = AtomicBool::new(false);
+  speech.enabled.store(true, Ordering::Relaxed);
+  assert!(!speech.piece_stopped(&own));
+  speech.releases.fetch_add(1, Ordering::SeqCst);
+  assert!(speech.piece_stopped(&own));
+  // A hold's pass stops on its own flag only.
+  assert!(!own.load(Ordering::Relaxed));
+  speech.releases.fetch_sub(1, Ordering::SeqCst);
+  speech.enabled.store(false, Ordering::Relaxed);
+  assert!(speech.piece_stopped(&own));
+  speech.enabled.store(true, Ordering::Relaxed);
+  own.store(true, Ordering::Relaxed);
+  assert!(speech.piece_stopped(&own));
+}
+
+#[test]
 #[ignore = "Downloads are explicit; set TABTASKER_SPEECH_FIXTURE_DIR to verified models and 16 kHz mono fixture.f32"]
 fn real_local_model_transcribes_fixture_and_rejects_silence() {
   let root = PathBuf::from(std::env::var("TABTASKER_SPEECH_FIXTURE_DIR").unwrap());

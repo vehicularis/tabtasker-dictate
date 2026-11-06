@@ -1,24 +1,24 @@
 //! Where a meeting's audio pauses and whether anyone spoke, from how loud it is.
 use crate::audio::SAMPLE_RATE as RATE;
 
-/// The longest piece transcribed at once: inside Whisper's 30 s window.
+/// The longest piece transcribed at once: inside Whisper's 30 s window. In samples at 16 kHz.
 pub const PIECE: usize = 25 * RATE;
 /// A pause ends a piece once it holds this much, so pieces are sentences rather than single words.
-pub const ENOUGH: usize = 8 * RATE;
+const ENOUGH: usize = 8 * RATE;
 /// Loudness is measured over 30 ms frames...
-pub const FRAME: usize = RATE * 3 / 100;
+const FRAME: usize = RATE * 3 / 100;
 /// ...and half a second of quiet ones is a pause.
-pub const PAUSE: usize = 17;
+const PAUSE: usize = 17;
 
 /// The loudness (RMS) of each FRAME of `pcm`.
-pub fn levels(pcm: &[f32]) -> Vec<f32> {
+fn levels(pcm: &[f32]) -> Vec<f32> {
   pcm.chunks(FRAME).map(|frame| (frame.iter().map(|s| s * s).sum::<f32>() / frame.len() as f32).sqrt()).collect()
 }
 
 /// What counts as quiet and as a voice in `levels`: measured against the quietest stretch, so a
 /// humming room and digital silence both work, within bounds so a window of nothing but speech still
 /// has pauses.
-pub fn thresholds(levels: &[f32]) -> (f32, f32) {
+fn thresholds(levels: &[f32]) -> (f32, f32) {
   let mut sorted = levels.to_vec();
   sorted.sort_by(f32::total_cmp);
   let floor = sorted.get(sorted.len() / 10).copied().unwrap_or(0.0);
