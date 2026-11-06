@@ -1,0 +1,21 @@
+[workspace]
+resolver = "2"
+members = ["src-tauri", "crates/engine"]
+
+[workspace.package]
+version = "0.1.1"
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/vehicularis/tabtasker-dictate"
+
+[workspace.dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+log = "0.4"
+whisper-rs = { version = "=0.16.0", features = ["metal"] }
+# Speaker diarization (pyannote segmentation + speaker embeddings + clustering) for meetings; its prebuilt static libraries download at build time.
+sherpa-onnx = "2.0.1"
+ring = "0.17"
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls-no-provider"] }
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
+tokio = { version = "1", default-features = false, features = ["macros", "sync", "time"] }

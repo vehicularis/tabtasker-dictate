@@ -39,7 +39,7 @@ jobs:
       - name: Advisories, licences, bans and sources of the Rust crates
         uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
         with:
-          manifest-path: src-tauri/Cargo.toml
+          manifest-path: Cargo.toml
           arguments: ''
           command: check advisories bans licenses sources
 

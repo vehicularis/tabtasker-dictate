@@ -32,7 +32,7 @@ jobs:
       - name: Advisories, licences, bans and sources of the Rust crates
         uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
         with:
-          manifest-path: src-tauri/Cargo.toml
+          manifest-path: Cargo.toml
           arguments: ''
           command: check advisories bans licenses sources
 
@@ -46,7 +46,7 @@ jobs:
       - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           fail-on-severity: moderate
-          # The licences src-tauri/deny.toml allows, and the ones already among the npm packages.
+          # The licences deny.toml allows, and the ones already among the npm packages.
           allow-licenses: >-
             MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, Zlib, 0BSD, CC0-1.0, MIT-0, Unlicense,
             Unicode-3.0, MPL-2.0, CDLA-Permissive-2.0, bzip2-1.0.6
@@ -100,7 +100,7 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          workspaces: src-tauri
+          workspaces: .
       - name: Fetch sherpa-onnx's libraries again when the cache dropped them
         # sherpa-onnx-sys unpacks its prebuilt static libraries into target/sherpa-onnx-prebuilt. rust-cache
         # keeps that folder's directories but not its files, and the build script, seeing a lib directory,
@@ -108,12 +108,10 @@ jobs:
         # fails to find libsherpa-onnx-c-api.a. With no libraries there, the folder goes, and so does the
         # script's fingerprint, so it runs again and downloads them.
         run: |
-          if ! ls src-tauri/target/sherpa-onnx-prebuilt/*/lib/libsherpa-onnx-c-api.a >/dev/null 2>&1; then
-            rm -rf src-tauri/target/sherpa-onnx-prebuilt src-tauri/target/*/build/sherpa-onnx-sys-* src-tauri/target/*/.fingerprint/sherpa-onnx-sys-*
+          if ! ls target/sherpa-onnx-prebuilt/*/lib/libsherpa-onnx-c-api.a >/dev/null 2>&1; then
+            rm -rf target/sherpa-onnx-prebuilt target/*/build/sherpa-onnx-sys-* target/*/.fingerprint/sherpa-onnx-sys-*
           fi
       - name: Clippy
-        working-directory: src-tauri
-        run: cargo clippy --all-targets --locked -- -D warnings
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Tests
-        working-directory: src-tauri
-        run: cargo test --locked
+        run: cargo test --workspace --locked

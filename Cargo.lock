@@ -761,6 +761,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "dictate-engine"
+version = "0.1.1"
+
+[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3705,6 +3709,7 @@ version = "0.1.1"
 dependencies = [
  "base64 0.23.1",
  "cc",
+ "dictate-engine",
  "log",
  "reqwest",
  "ring",

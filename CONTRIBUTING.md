@@ -30,10 +30,9 @@ A pull request runs these in CI, the security checks before anything builds. Run
 ```sh
 npm audit --audit-level=moderate                    # known vulnerabilities in the npm packages
 npm run build                                       # TypeScript and Vite
-cd src-tauri
 cargo deny check                                    # the crates' advisories, licences and sources
-cargo clippy --all-targets --locked -- -D warnings
-cargo test --locked
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo test --workspace --locked
 ```
 
 `cargo deny` comes from `cargo install --locked cargo-deny`. CI also reviews the dependencies a pull request
@@ -50,12 +49,12 @@ adds, and runs the security checks every Monday so a new advisory shows up witho
 - Dependencies: avoid one when the platform can do the job. A new one must be MIT, Apache-2.0, BSD, ISC or
   Zlib licensed, pinned to an exact version, and at least 14 days old. After changing dependencies, run
   `node scripts/notices.mjs` to update [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt). The licences
-  CI accepts across the crates are in [src-tauri/deny.toml](src-tauri/deny.toml).
+  CI accepts across the crates are in [deny.toml](deny.toml).
 
 ## Releases
 
 A release is a commit on `main` that sets the version in `package.json`, `src-tauri/tauri.conf.json`,
-`src-tauri/Cargo.toml` and their lock files, and gives it a section in [CHANGELOG.md](CHANGELOG.md). Pushing
+`[workspace.package] version` in the root `Cargo.toml` and their lock files, and gives it a section in [CHANGELOG.md](CHANGELOG.md). Pushing
 its tag runs the [release workflow](.github/workflows/release.yml):
 
 ```sh

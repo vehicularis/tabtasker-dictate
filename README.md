@@ -139,7 +139,7 @@ Install Rust, Node 24 and Xcode’s command line tools, then:
 ```sh
 npm install
 npm run tauri dev      # run from source
-npm run tauri build -- --no-sign    # an unsigned TabTasker Dictate.app and DMG in src-tauri/target/release/bundle
+npm run tauri build -- --no-sign    # an unsigned TabTasker Dictate.app and DMG in target/release/bundle
 ```
 
 A release, signed with the Developer ID, notarized and stapled, comes from

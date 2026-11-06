@@ -11,16 +11,16 @@ const FILE = new URL('../THIRD_PARTY_NOTICES.txt', import.meta.url).pathname;
 const ROOT = dirname(FILE);
 
 // What `cargo build --release` links on a Mac: normal dependencies only, never dev or build ones.
-const meta = JSON.parse(execFileSync('cargo', ['metadata', '--manifest-path', join(ROOT, 'src-tauri/Cargo.toml'), '--format-version', '1', '--offline', '--filter-platform', 'aarch64-apple-darwin'], { maxBuffer: 1 << 28 }));
+const meta = JSON.parse(execFileSync('cargo', ['metadata', '--manifest-path', join(ROOT, 'Cargo.toml'), '--format-version', '1', '--offline', '--filter-platform', 'aarch64-apple-darwin'], { maxBuffer: 1 << 28 }));
 const nodes = new Map(meta.resolve.nodes.map(node => [node.id, node]));
-const linked = new Set(), stack = [meta.resolve.root];
+const linked = new Set(), stack = meta.packages.filter(pkg => pkg.name === 'tabtasker-dictate').map(pkg => pkg.id);
 while (stack.length) {
   const id = stack.pop();
   if (linked.has(id)) continue;
   linked.add(id);
   for (const dep of nodes.get(id).deps) if (dep.dep_kinds.some(kind => kind.kind === null)) stack.push(dep.pkg);
 }
-const crates = meta.packages.filter(pkg => linked.has(pkg.id) && pkg.id !== meta.resolve.root);
+const crates = meta.packages.filter(pkg => linked.has(pkg.id) && !meta.workspace_members.includes(pkg.id));
 
 // A dual licence offers a choice; MIT is the one shipped when it is offered.
 const filesOf = dir => readdirSync(dir).filter(name => /^(licen[cs]e|copying|notice)/i.test(name)).sort();
