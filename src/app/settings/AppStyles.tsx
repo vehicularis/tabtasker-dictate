@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { invoke } from '../../bridge';
-import { same } from '../../lib/text';
+import { fold, same } from '../../lib/text';
 import { sendsByDefault, type PageProps } from '../../store';
 import type { AppInfo, AppStyle, Style } from '../../api/types';
 import { Button, Icon, PageHeader, Section, Select, Tile, TileGroup, Toggle } from '../../ui';
@@ -29,8 +29,8 @@ function Picker({ apps, failed, styled, onPick, onClose }: { apps: AppInfo[] | n
   const [query, setQuery] = useState('');
   const field = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLUListElement>(null);
-  const words = query.trim().toLowerCase();
-  const matches = (app: Pick<AppInfo, 'bundleId' | 'name'>) => !words || app.name.toLowerCase().includes(words) || app.bundleId.toLowerCase().includes(words);
+  const words = fold(query.trim());
+  const matches = (app: Pick<AppInfo, 'bundleId' | 'name'>) => !words || fold(app.name).includes(words) || fold(app.bundleId).includes(words);
   const taken = (bundleId: string) => styled.some(app => same(app.bundleId, bundleId));
   const candidates = (apps ?? []).filter(app => !taken(app.bundleId) && (app.running || app.recent)).filter(matches);
   const typed = /^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/.test(query.trim()) && !taken(query.trim()) && !candidates.some(app => same(app.bundleId, query.trim())) ? query.trim() : null;

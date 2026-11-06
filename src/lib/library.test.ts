@@ -133,11 +133,20 @@ describe('visibleGroups', () => {
     const turkish = [item({ path: 't', title: 'Trip', excerpt: 'İstanbul in May' })];
     const found = (query: string, list = turkish) => visibleGroups(list, query, false, now).length > 0;
     it('finds İstanbul with İstanbul', () => { expect(found('İstanbul')).toBe(true); });
-    // Today's behaviour; see the report.
-    it('does not find İstanbul with istanbul, nor istanbul with İstanbul (the folding is not changed)', () => {
-      expect(found('istanbul')).toBe(false);
-      expect(found('İstanbul', [item({ title: 'Trip', excerpt: 'istanbul in May' })])).toBe(false);
+    it('finds İstanbul with istanbul, and istanbul with İstanbul', () => {
+      expect(found('istanbul')).toBe(true);
+      expect(found('ISTANBUL')).toBe(true);
+      expect(found('İstanbul', [item({ title: 'Trip', excerpt: 'istanbul in May' })])).toBe(true);
       expect(found('istanbul', [item({ title: 'Trip', excerpt: 'istanbul in May' })])).toBe(true);
+    });
+    it('finds a dotless ı with I, in the title too', () => {
+      expect(found('ılık', [item({ title: 'ILIK SU', excerpt: '' })])).toBe(true);
+      expect(found('ILIK', [item({ title: 'Trip', excerpt: 'ılık su' })])).toBe(true);
+    });
+    it('still finds an English I with i, and keeps accents apart', () => {
+      expect(found('india', [item({ title: 'INDIA', excerpt: '' })])).toBe(true);
+      expect(found('elan', [item({ title: 'Élan', excerpt: '' })])).toBe(false);
+      expect(found('şeker', [item({ title: 'Seker', excerpt: '' })])).toBe(false);
     });
   });
 });

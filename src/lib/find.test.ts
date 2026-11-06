@@ -43,12 +43,21 @@ describe('findMatches', () => {
     expect(find([['Élan']], 'élan')).toEqual([{ from: 1, to: 5 }]);
     expect(find([['Elan']], 'élan')).toEqual([]);
   });
-  it('falls back to exact when a fold changes the length (Turkish İ)', () => {
-    expect(find([['İstanbul istanbul']], 'istanbul')).toEqual([{ from: 10, to: 18 }]); // Today's behaviour; see the report.
-    expect(find([['istanbul']], 'İSTANBUL')).toEqual([]); // Today's behaviour; see the report.
+  it('finds a Turkish İ with i and I with ı, both ways', () => {
+    expect(find([['İstanbul istanbul']], 'istanbul')).toEqual([{ from: 1, to: 9 }, { from: 10, to: 18 }]);
+    expect(find([['istanbul']], 'İSTANBUL')).toEqual([{ from: 1, to: 9 }]);
+    expect(find([['ılık']], 'ILIK')).toEqual([{ from: 1, to: 5 }]);
+    expect(find([['ILIK']], 'ılık')).toEqual([{ from: 1, to: 5 }]);
   });
-  it('does not match a dotless ı with I', () => {
-    expect(find([['ılık']], 'ILIK')).toEqual([]); // Today's behaviour; see the report.
+  it('keeps the positions after a Turkish İ right, and stays case-insensitive for the rest of the note', () => {
+    expect(find([['İİ x', 'Foo']], 'x')).toEqual([{ from: 4, to: 5 }]);
+    expect(find([['İzmir'], ['Foo foo']], 'foo')).toEqual([{ from: 8, to: 11 }, { from: 12, to: 15 }]);
+  });
+  it('still finds an English I with i', () => {
+    expect(find([['Fix it']], 'I')).toEqual([{ from: 2, to: 3 }, { from: 5, to: 6 }]);
+  });
+  it('is exact for Turkish letters with matchCase', () => {
+    expect(find([['İstanbul istanbul']], 'istanbul', true)).toEqual([{ from: 10, to: 18 }]);
   });
 });
 
@@ -104,8 +113,8 @@ describe('filterSlash', () => {
     expect(filterSlash(items, ' ul ')).toEqual([items[1]]);
     expect(filterSlash(items, 'title')).toEqual([items[0]]);
   });
-  it('compares keywords as written, so a capital in one is never matched', () => {
-    expect(filterSlash(items, 'check')).toEqual([]); // Today's behaviour; see the report.
+  it('folds keywords too, so a capital in one still matches', () => {
+    expect(filterSlash(items, 'check')).toEqual([items[2]]);
   });
   it('returns nothing when nothing matches', () => {
     expect(filterSlash(items, 'zzz')).toEqual([]);
