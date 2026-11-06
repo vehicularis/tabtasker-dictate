@@ -46,7 +46,7 @@ export type Status = {
   inputs: { id: string; name: string }[]; input: string | null; inputInUse: string;
   /// The shortcuts macOS has on, as key code and modifier flags; any the person added in System Settings too.
   systemShortcuts: [number, number][];
-  home?: string; // the home folder, for paths written with ~
+  home?: string | null; // the home folder, for paths written with ~
   firstRun?: boolean; // this launch is the first and opened the full setup in Settings
 };
 /// Where updates stand (updates.rs): checking or downloading while `busy`, a newer `version` there to install once `ready`.

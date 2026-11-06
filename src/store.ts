@@ -99,7 +99,7 @@ export function useStatus(every = 0): [Status | null, () => void] {
 
 /// A folder typed by hand: a full path, or one in the home folder written with ~. Null for empty (the
 /// default folder); undefined when it is neither.
-export function folderPath(typed: string, home: string | undefined): string | null | undefined {
+export function folderPath(typed: string, home: string | null | undefined): string | null | undefined {
   const path = typed.trim();
   if (!path) return null;
   if (path.startsWith('/')) return path;
@@ -107,7 +107,7 @@ export function folderPath(typed: string, home: string | undefined): string | nu
   return undefined;
 }
 /// `path` with the home folder written as ~.
-export const tilde = (path: string, home: string | undefined) => home && (path === home || path.startsWith(`${home}/`)) ? `~${path.slice(home.length)}` : path;
+export const tilde = (path: string, home: string | null | undefined) => home && (path === home || path.startsWith(`${home}/`)) ? `~${path.slice(home.length)}` : path;
 
 /// What every settings page gets: the settings and a way to change them. `update` shows its own errors
 /// and answers the settings as saved, or undefined when saving failed.

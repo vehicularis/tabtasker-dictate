@@ -68,9 +68,9 @@ export function register(mock: Mock) {
     step = null;
     prepare();
   });
-  mock.handle('vocabulary_fit', ({ words }) => fit(Array.isArray(words) ? words.filter((word): word is string => typeof word === 'string') : []));
+  mock.handle('vocabulary_fit', ({ words }) => fit(words));
   mock.handle('list_apps', ({ known }) => new Promise(done => setTimeout(() => {
-    const wanted = new Set((Array.isArray(known) ? known : []).map(id => String(id).toLowerCase()));
+    const wanted = new Set(known.map(id => id.toLowerCase()));
     done(APPS.filter(([bundleId, , , kind]) => kind !== 'installed' || wanted.has(bundleId.toLowerCase()))
       .map(([bundleId, name, fill, kind]) => ({ bundleId, name, icon: icon(name, fill), running: kind === 'open', recent: kind === 'recent' })));
   }, 300)));

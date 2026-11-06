@@ -93,7 +93,7 @@ const VIAS: { value: ClaudeVia; label: string }[] = [{ value: 'claudeCode', labe
 /// falls back to the top of the page: it stays in the field while a key is tested, and moves with each step.
 /// `via` is the way being chosen (Claude holds it: the model settings under this follow it). It starts on Claude
 /// Code when it is on this Mac, since there is nothing to paste.
-function Connection({ claude, home, via, onVia: setVia }: { claude: Settings['claude']; home?: string; via: ClaudeVia; onVia: (via: ClaudeVia) => void }) {
+function Connection({ claude, home, via, onVia: setVia }: { claude: Settings['claude']; home?: string | null; via: ClaudeVia; onVia: (via: ClaudeVia) => void }) {
   const { enabled: connected, model } = claude;
   const id = useId();
   const [key, setKey] = useState('');

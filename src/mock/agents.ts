@@ -26,7 +26,6 @@ export function register(mock: Mock) {
   const copy = () => JSON.parse(JSON.stringify(status)) as AgentsStatus;
   mock.handle('agents_status', copy);
   mock.handle('agents_add', ({ target }) => new Promise((done, fail) => setTimeout(() => {
-    if (target !== 'claudeCode' && target !== 'claudeDesktop') return fail('Unknown agent');
     if (status.problem) return fail(status.problem);
     if (scene === 'fails') return fail(failures[target]);
     status[target].added = 'yes';

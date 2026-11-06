@@ -20,3 +20,5 @@ void invoke('set_enable', { enabled: true });
 // @ts-expect-error the wrong kind of argument
 void invoke('request', { kind: 'telepathy' });
 export const answer: Promise<boolean> = invoke('set_open_at_login', { enabled: true });
+// @ts-expect-error the result is a boolean, not a string
+export const wrong: Promise<string> = invoke('set_open_at_login', { enabled: true });

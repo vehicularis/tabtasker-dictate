@@ -20,7 +20,7 @@ export function register(mock: Mock) {
   mock.update({ claude: { enabled: saved || viaCode, via: viaCode ? 'claudeCode' : 'api', claudeCode: installed ? CLAUDE_CODE : null } });
 
   mock.handle('claude_save_key', async ({ key }) => {
-    const pasted = typeof key === 'string' ? key.trim() : '';
+    const pasted = key.trim();
     if (!pasted.startsWith('sk-ant-') || pasted.length < 30 || /\s/.test(pasted)) throw 'That doesn’t look like an Anthropic API key. Keys start with sk-ant-.';
     await later(900);
     if (pasted.includes('bad')) throw 'Anthropic didn’t accept the key. Check it and paste it again.';
@@ -35,8 +35,8 @@ export function register(mock: Mock) {
     return mock.update({ claude: { enabled: true, via: 'claudeCode' } });
   });
   mock.handle('claude_disconnect', () => mock.update({ claude: { enabled: saved, via: 'api' } }));
-  mock.handle('claude_connect_local', async ({ endpoint, model }) => { await later(500); if (typeof endpoint !== 'string' || !/^https?:\/\//.test(endpoint)) throw 'Use the address Ollama listens on, like http://localhost:11434.'; if (!model) throw 'Name the model as Ollama knows it, like llama3.2.'; return mock.update({ claude: { enabled: true, via: 'local', localEndpoint: endpoint, localModel: model } }); });
-  mock.handle('claude_connect_open_ai', async ({ endpoint, key, model }) => { await later(500); if (typeof endpoint !== 'string' || !/^https?:\/\//.test(endpoint)) throw 'Use the service’s address, like https://api.openai.com.'; if (typeof key !== 'string' || !key.trim()) throw 'Paste the service’s API key.'; return mock.update({ claude: { enabled: true, via: 'openAi', openAiEndpoint: String(endpoint).replace(/\/+$/, ''), openAiModel: String(model) } }); });
+  mock.handle('claude_connect_local', async ({ endpoint, model }) => { await later(500); if (!/^https?:\/\//.test(endpoint)) throw 'Use the address Ollama listens on, like http://localhost:11434.'; if (!model) throw 'Name the model as Ollama knows it, like llama3.2.'; return mock.update({ claude: { enabled: true, via: 'local', localEndpoint: endpoint, localModel: model } }); });
+  mock.handle('claude_connect_open_ai', async ({ endpoint, key, model }) => { await later(500); if (!/^https?:\/\//.test(endpoint)) throw 'Use the service’s address, like https://api.openai.com.'; if (!key.trim()) throw 'Paste the service’s API key.'; return mock.update({ claude: { enabled: true, via: 'openAi', openAiEndpoint: endpoint.replace(/\/+$/, ''), openAiModel: model } }); });
   mock.handle('claude_test', async () => {
     const claude = mock.settings().claude;
     await later(claude.via === 'claudeCode' ? 1800 : 700);
@@ -59,7 +59,7 @@ export function register(mock: Mock) {
     return kept;
   });
   mock.handle('claude_code_set', ({ path }) => {
-    const next = typeof path === 'string' ? path : null;
+    const next = path ?? null;
     if (next && !PROGRAMS.includes(next)) throw 'There’s no program at that path.';
     return mock.update({ claude: { claudeCode: next } });
   });
