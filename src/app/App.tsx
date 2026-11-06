@@ -5,7 +5,10 @@ import { Menu, MenuItem, MenuLine } from '../editor/Menu';
 import { Onboarding } from '../onboarding/Onboarding';
 import { PLACE_GLYPHS, SETTINGS_GLYPHS } from '../overlay/glyphs';
 import { Logo, BusinessMark } from '../overlay/icons';
-import { updateSettings, useSettings, type PageProps, type Patch } from '../store';
+import { updateSettings, useSettings, type PageProps } from '../store';
+import type { Patch, TabAction } from '../api/types';
+import { noteTitle, routeOf, split } from '../lib/routes';
+import { tabKey } from '../lib/tabKeys';
 import { applyTheme, Icon, leave, Toast, useFlip, type IconName } from '../ui';
 import { ColumnHead, ColumnResizer } from './Column';
 import { Appearance } from './settings/Appearance';
@@ -22,7 +25,7 @@ import { About } from './places/About';
 import { HelpView } from './places/HelpView';
 import { NotePage, NotesColumn, useLibrary } from './places/NotesView';
 import { StickiesView } from './places/StickiesView';
-import { closeTabs, cycleTabs, duplicateTab, moveTab, openTab, reopenTab, selectTab, useTabDrag, type Closed, type Tabs } from './tabs';
+import { applyTabAction, goBack, goForward, loadTabs, moveTab, useTabDrag, visit, type Closed } from './tabs';
 
 // The app's one window, in TabTasker Business's Mac shell: a title bar across the top with the traffic
 // lights, the column's toggle, back and forward, the open places as tabs and a plus for one more; a spine
@@ -60,12 +63,6 @@ const EXTRA: Record<string, Place> = {
 };
 
 const TABS = 'tabtasker-dictate:tabs';
-const routeOf = () => decodeURIComponent(location.hash.slice(1)) || 'notes';
-/// `notes//Users/you/Documents/TabTasker Dictate/Hello.md` is the place `notes` with that path.
-const split = (route: string): [string, string | null] => {
-  const slash = route.indexOf('/');
-  return slash < 0 ? [route, null] : [route.slice(0, slash), route.slice(slash + 1) || null];
-};
 const placeOf = (route: string): Place => {
   const [place] = split(route);
   if (place === 'settings') return SETTINGS.find(page => page.route === route) ?? SETTINGS[0];
@@ -76,31 +73,12 @@ const titleOf = (route: string) => {
   const place = placeOf(route);
   const [kind, arg] = split(route);
   if (!arg || (kind !== 'notes' && kind !== 'meetings')) return place.title;
-  const file = arg.split('/').pop() ?? '';
-  return file.replace(/\.md$/, '').replace(/^\d{4}-\d\d-\d\d( \d\d\.\d\d)? ?/, '') || place.title;
-};
-const loadTabs = (): Tabs => {
-  const fallback: Tabs = { tabs: [{ id: 1, route: routeOf(), back: [], forward: [] }], active: 0 };
-  try {
-    const saved = JSON.parse(localStorage.getItem(TABS) ?? 'null') as Tabs | null;
-    if (!saved?.tabs?.length) return fallback;
-    const active = Math.min(Math.max(0, saved.active | 0), saved.tabs.length - 1);
-    const tabs = saved.tabs.map(tab => ({ id: tab.id, route: tab.route || 'notes', back: tab.back ?? [], forward: tab.forward ?? [] }));
-    // The hash is what was asked for (a note from the dots, a settings page from the menu): it goes to the open tab.
-    if (location.hash.length > 1) tabs[active] = { ...tabs[active], route: routeOf(), forward: [] };
-    return { tabs, active };
-  } catch { return fallback; }
-};
-/// The open tab routed to `to`, remembering where it was.
-const visit = (state: Tabs, to: string): Tabs => {
-  const open = state.tabs[state.active];
-  if (open.route === to) return state;
-  return { ...state, tabs: state.tabs.map((tab, i) => i === state.active ? { ...tab, route: to, back: [...tab.back, tab.route].slice(-50), forward: [] } : tab) };
+  return noteTitle(arg) || place.title;
 };
 
 export function App() {
   const settings = useSettings();
-  const [state, setState] = useState(loadTabs);
+  const [state, setState] = useState(() => { let saved: string | null = null; try { saved = localStorage.getItem(TABS); } catch { /* a convenience */ } return loadTabs(saved, location.hash); });
   const [toast, setToast] = useState<string | null>(null);
   const [column, setColumn] = useState(() => { try { return localStorage.getItem(`${TABS}:column`) !== 'closed'; } catch { return true; } });
   const { tabs, active } = state;
@@ -112,10 +90,10 @@ export function App() {
   // The hash follows the open tab; a hash set from outside (a note opened from the dots) moves the tab.
   useEffect(() => {
     try { localStorage.setItem(TABS, JSON.stringify(state)); } catch { /* a convenience */ }
-    if (routeOf() !== route) location.hash = encodeURIComponent(route); // a route holds the path as it is; the hash, encoded
+    if (routeOf(location.hash) !== route) location.hash = encodeURIComponent(route); // a route holds the path as it is; the hash, encoded
   }, [state, route]);
   useEffect(() => {
-    const changed = () => setState(s => visit(s, routeOf()));
+    const changed = () => setState(s => visit(s, routeOf(location.hash)));
     addEventListener('hashchange', changed); return () => removeEventListener('hashchange', changed);
   }, []);
   useEffect(() => { try { localStorage.setItem(`${TABS}:column`, column ? 'open' : 'closed'); } catch { /* a convenience */ } }, [column]);
@@ -132,29 +110,16 @@ export function App() {
   // are now are read from a ref, so closing the last one can close the window outside a state update.
   const now = useRef(state); now.current = state;
   const closed = useRef<Closed[]>([]); // newest last, for Reopen Closed Tab
-  const close = useCallback((ids: number[]) => {
-    const result = closeTabs(now.current, new Set(ids));
-    if (!result) { closed.current = [...closed.current, ...now.current.tabs.map((tab, at) => ({ tab, at }))].slice(-20); closeWindow(); return; }
-    closed.current = [...closed.current, ...result.closed].slice(-20);
-    setState(result.state);
+  const tabAction = useCallback((action: TabAction, index = now.current.active) => {
+    const result = applyTabAction(now.current, closed.current, action, index);
+    closed.current = result.closed;
+    if (result.state !== now.current) setState(result.state);
+    if (result.closeWindow) closeWindow();
   }, []);
-  const tabAction = useCallback((action: string, index = now.current.active) => {
-    const s = now.current, tab = s.tabs[index];
-    if (action === 'new') setState(openTab(s));
-    else if (action === 'close' && tab) close([tab.id]);
-    else if (action === 'close-others' && tab) close(s.tabs.filter(other => other.id !== tab.id).map(other => other.id));
-    else if (action === 'close-right') close(s.tabs.slice(index + 1).map(other => other.id));
-    else if (action === 'reopen') { const last = closed.current.at(-1); if (last) { closed.current = closed.current.slice(0, -1); setState(reopenTab(s, last)); } }
-    else if (action === 'duplicate') setState(duplicateTab(s, index));
-    else if (action === 'next' || action === 'prev') { if (s.tabs.length > 1) setState(cycleTabs(s, action === 'next' ? 1 : -1)); }
-    else if (action === 'left' || action === 'right') setState(moveTab(s, s.active, s.active + (action === 'right' ? 1 : -1)));
-    else if (action === 'window') closeWindow();
-    else if (/^select:[1-9]$/.test(action)) setState(selectTab(s, Number(action.slice(7))));
-  }, [close]);
   const newTab = useCallback(() => tabAction('new'), [tabAction]);
   const closeTab = useCallback((at: number) => tabAction('close', at), [tabAction]);
   // The menu bar's File and Window items (lib.rs), when the page didn't take the key first.
-  useEffect(() => listen<string>('dictate-tab', action => tabAction(action)), [tabAction]);
+  useEffect(() => listen('dictate-tab', action => tabAction(action)), [tabAction]);
   const drag = useTabDrag((from, to) => setState(s => moveTab(s, from, to)));
   const [tabMenu, setTabMenu] = useState<{ index: number; x: number; y: number } | null>(null);
   // One element, two refs: the FLIP's and the drag's.
@@ -163,37 +128,18 @@ export function App() {
   // The tab on screen is never scrolled out of the strip.
   const tabId = tab.id;
   useEffect(() => { strip.current?.querySelector(`[data-tab-id="${tabId}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' }); }, [tabId]);
-  const back = useCallback(() => setState(s => {
-    const t = s.tabs[s.active]; const to = t.back.at(-1); if (!to) return s;
-    return { ...s, tabs: s.tabs.map((x, i) => i === s.active ? { ...x, route: to, back: x.back.slice(0, -1), forward: [x.route, ...x.forward] } : x) };
-  }), []);
-  const forward = useCallback(() => setState(s => {
-    const t = s.tabs[s.active]; const to = t.forward[0]; if (!to) return s;
-    return { ...s, tabs: s.tabs.map((x, i) => i === s.active ? { ...x, route: to, back: [...x.back, x.route], forward: x.forward.slice(1) } : x) };
-  }), []);
+  const back = useCallback(() => setState(goBack), []);
+  const forward = useCallback(() => setState(goForward), []);
   useEffect(() => {
-    // The tab keys of Safari and Chrome. ⌃Tab and ⌃⇧Tab; ⌘⇧] and ⌘⇧[, or ⌘⌥→ and ⌘⌥←, for the next and the
-    // previous tab; ⌘⌥⇧→ and ⌘⌥⇧← move the tab itself. The menu bar lists them too (lib.rs), and acts only on a
-    // key the page has not taken. `event.code` for the brackets and digits: they are on the same keys whatever
-    // the layout prints on them.
+    // The menu bar lists these keys too (lib.rs), and acts only on a key the page has not taken.
     const key = (event: KeyboardEvent) => {
-      const { metaKey: cmd, ctrlKey: ctrl, altKey: alt, shiftKey: shift, code } = event;
-      let action: string | null = null;
-      if (ctrl && !cmd && !alt && code === 'Tab') action = shift ? 'prev' : 'next';
-      else if (cmd && !ctrl) {
-        if (alt && shift && (code === 'ArrowLeft' || code === 'ArrowRight')) action = code === 'ArrowRight' ? 'right' : 'left';
-        else if (alt && !shift && (code === 'ArrowLeft' || code === 'ArrowRight')) action = code === 'ArrowRight' ? 'next' : 'prev';
-        else if (!alt && shift && (code === 'BracketLeft' || code === 'BracketRight')) action = code === 'BracketRight' ? 'next' : 'prev';
-        else if (!alt && !shift && code === 'BracketLeft') { back(); event.preventDefault(); return; }
-        else if (!alt && !shift && code === 'BracketRight') { forward(); event.preventDefault(); return; }
-        else if (!alt && !shift && code === 'Comma') { go('settings'); event.preventDefault(); return; }
-        else if (!alt && code === 'KeyT') action = shift ? 'reopen' : 'new';
-        else if (!alt && code === 'KeyW') action = shift ? 'window' : 'close';
-        else if (!alt && !shift && /^Digit[1-9]$/.test(code)) action = `select:${code.slice(5)}`;
-      }
+      const action = tabKey(event);
       if (!action) return;
       event.preventDefault();
-      tabAction(action);
+      if (action === 'back') back();
+      else if (action === 'forward') forward();
+      else if (action === 'settings') go('settings');
+      else tabAction(action);
     };
     addEventListener('keydown', key); return () => removeEventListener('keydown', key);
   }, [go, tabAction, back, forward]);

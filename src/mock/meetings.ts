@@ -1,6 +1,6 @@
 import type { Mock } from '.';
 import { stamp } from '../lib/dates';
-import type { Leftover, MeetingEvent, MeetingState } from '../overlay/MeetingPill';
+import type { Leftover, MeetingEvent, MeetingState } from '../api/types';
 import { fileStem } from './notes';
 
 // In a browser: recording, the pill and the meetings folder.
@@ -51,6 +51,7 @@ export function register(mock: Mock) {
       return true;
     }
     if (recording) return true;
+    if (saving.size) throw 'The last meeting is still saving. Try again in a moment.'; // as meetings/mod.rs refuses, and commands.rs rejects with
     if (mock.status.microphone !== 'allowed') { mock.emit('dictate-error', { message: 'microphone' }); return false; }
     const since = Date.now();
     const id = String(since);

@@ -1,10 +1,10 @@
 import type { Mock } from '.';
+import type { Model, Models } from '../api/types';
 
 // In a browser: the speech models, the vocabulary's prompt budget and the apps to give a style.
 // `?speech=fail` makes a model download stop partway, to check the error state.
 
-type Model = 'turbo' | 'small';
-type Step = { model: Model; message: string; percent: number | null; failed: boolean };
+type Step = NonNullable<Models['step']>;
 const BYTES: Record<Model, number> = { turbo: 874188075, small: 264464607 };
 const LABEL: Record<Model, string> = { turbo: 'Whisper large-v3 Turbo', small: 'Whisper small' };
 const failing = new URLSearchParams(location.search).get('speech') === 'fail';
@@ -68,9 +68,9 @@ export function register(mock: Mock) {
     step = null;
     prepare();
   });
-  mock.handle('vocabulary_fit', ({ words }) => fit(Array.isArray(words) ? words.filter((word): word is string => typeof word === 'string') : []));
+  mock.handle('vocabulary_fit', ({ words }) => fit(words));
   mock.handle('list_apps', ({ known }) => new Promise(done => setTimeout(() => {
-    const wanted = new Set((Array.isArray(known) ? known : []).map(id => String(id).toLowerCase()));
+    const wanted = new Set(known.map(id => id.toLowerCase()));
     done(APPS.filter(([bundleId, , , kind]) => kind !== 'installed' || wanted.has(bundleId.toLowerCase()))
       .map(([bundleId, name, fill, kind]) => ({ bundleId, name, icon: icon(name, fill), running: kind === 'open', recent: kind === 'recent' })));
   }, 300)));

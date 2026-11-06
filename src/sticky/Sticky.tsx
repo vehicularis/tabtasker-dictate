@@ -4,7 +4,8 @@ import { stamp } from '../lib/dates';
 import { message } from '../lib/errors';
 import { KEY_NAMES } from '../lib/keyNames';
 import { leave, reduced, timing } from '../ui/motion';
-import { STICKY_HUES, STICKY_SIZES, useSettings, type Events, type Sticky as Record, type StickyHue, type StickyTilt, type StickyWeight } from '../store';
+import { STICKY_HUES, STICKY_SIZES, useSettings } from '../store';
+import type { Sticky as Record, StickyHue, StickyTilt, StickyWeight } from '../api/types';
 import { Editor } from '../editor/Editor';
 import { HUES, Sheet } from './Sheet';
 
@@ -39,11 +40,11 @@ export function Sticky() {
   // menu are open, or the keyboard is in it. The Mac is told the pill's width once it is laid out, to know where.
   const [hover, setHover] = useState(false);
   const [held, setHeld] = useState(false);
-  useEffect(() => NATIVE ? listen<Events['dictate-sticky-hover']>('dictate-sticky-hover', pill => { if (pill.id === id) setHover(pill.up); }) : undefined, []);
+  useEffect(() => NATIVE ? listen('dictate-sticky-hover', pill => { if (pill.id === id) setHover(pill.up); }) : undefined, []);
   useEffect(() => { if (NATIVE) void invoke('sticky_hold', { id, hold: held || !!menu }).catch(() => {}); }, [held, !!menu]); // eslint-disable-line react-hooks/exhaustive-deps -- whether the menu is open, not where
   const timer = useRef<number | undefined>(undefined);
   const titleTimer = useRef<number | undefined>(undefined);
-  useEffect(() => { void invoke<Record>('sticky_get', { id }).then(found => { setSticky(found); setText(found.text); }, () => setProblem('Couldn’t find this sticky. It may have been deleted.')); }, []);
+  useEffect(() => { void invoke('sticky_get', { id }).then(found => { setSticky(found); setText(found.text); }, () => setProblem('Couldn’t find this sticky. It may have been deleted.')); }, []);
   useEffect(() => {
     if (!NATIVE || !sticky) return;
     const width = document.querySelector('.sticky-pill')?.getBoundingClientRect().width;

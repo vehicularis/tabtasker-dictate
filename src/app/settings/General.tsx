@@ -2,7 +2,8 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { invoke } from '../../bridge';
 import { message } from '../../lib/errors';
 import { ask } from '../../lib/request';
-import { resetSettings, useStatus, useUpdates, type PageProps, type UpdateState } from '../../store';
+import { updateDetail } from '../../lib/updates';
+import { resetSettings, useStatus, useUpdates, type PageProps } from '../../store';
 import { Button, Icon, PageHeader, Section, Select, Tile, TileGroup, Toggle } from '../../ui';
 
 export function General({ settings, update }: PageProps) {
@@ -95,11 +96,5 @@ export function General({ settings, update }: PageProps) {
     </Section>
   </>;
 }
-
-/// What the version row says under its name: the last check's answer, or the download under way.
-const updateDetail = (updates: UpdateState) =>
-  updates.problem ?? (updates.ready ? `Version ${updates.version} is downloaded and ready.`
-    : updates.busy ? (updates.version ? `Downloading version ${updates.version}…` : 'Checking for a new version…')
-    : updates.latest ? 'You’re up to date.' : undefined);
 
 const State = ({ children }: { children: string }) => <span className="state" data-on><Icon name="check" size={14} />{children}</span>;

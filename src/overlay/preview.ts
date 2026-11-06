@@ -1,11 +1,11 @@
-import type { Edge, Status } from '../store';
+import type { Edge, Status } from '../api/types';
 
 // `?preview=…` shows one state without the app around it, for checking the design in a browser (menu, and
 // mics or size for the menu with that list open, among them).
 export const PREVIEW = new URLSearchParams(location.search).get('preview');
 export const PREVIEW_EDGE = new URLSearchParams(location.search).get('edge') as Edge | null;
 export const SAMPLE: Status = { enabled: true, microphone: 'allowed', accessibility: true, modelReady: true, modelPreparing: false, modelMessage: '', notes: '/Users/you/Documents/TabTasker | Dictate', globeKey: '', openAtLogin: true,
-  inputs: [{ id: 'built-in', name: 'MacBook Pro Microphone' }, { id: 'airpods', name: 'AirPods Pro' }], input: null, inputInUse: 'MacBook Pro Microphone' };
+  inputs: [{ id: 'built-in', name: 'MacBook Pro Microphone' }, { id: 'airpods', name: 'AirPods Pro' }], input: null, inputInUse: 'MacBook Pro Microphone', systemShortcuts: [] };
 // Setup previews, one per step: setup, setup-fn, setup-test, setup-hold, setup-globe, setup-download, setup-model, setup-done.
 export const SETUP: Record<string, Partial<Status>> = {
   setup: { microphone: 'notDetermined', accessibility: false, enabled: false, modelReady: false },

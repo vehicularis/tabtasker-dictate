@@ -3,17 +3,14 @@ import { invoke, listen } from '../../bridge';
 import { Menu, MenuItem, MenuLine } from '../../editor/Menu';
 import { stamp } from '../../lib/dates';
 import { message } from '../../lib/errors';
-import { useSelection } from '../../lib/selection';
-import { STICKY_HUES, type Sticky } from '../../store';
+import { useSelection } from '../../ui/selection';
+import { firstLine, glance, ordered as orderedStickies, shape } from '../../lib/stickies';
+import { countMessage } from '../../lib/text';
+import { STICKY_HUES } from '../../store';
+import type { Sticky } from '../../api/types';
 import { StickyGlyph } from '../../overlay/glyphs';
-import { firstLine } from '../../sticky/Sheet';
 import { Button, Icon, PageHeader, Segmented, useFlip, type IconName } from '../../ui';
 import '../../sticky/sticky.css';
-
-/// A sticky's words as a glance: Markdown marks dropped.
-const glance = (text: string) => text.replace(/^#+\s*/gm, '').replace(/^[-*]\s+(\[[ x]\]\s*)?/gm, '• ').replace(/[*_`]/g, '').trim();
-/// Its paper in the shape it has on the screen, within reason.
-const shape = (sticky: Sticky) => `1 / ${Math.min(1.4, Math.max(0.6, sticky.height / sticky.width)).toFixed(3)}`;
 
 // The stickies as they are on the screen: each one its own paper, with the sticky's own bar and the tools that
 // make sense from here in it. The ones on the screen float; the ones closed from their own window lie flat
@@ -25,15 +22,11 @@ export function StickiesView({ onError }: { onError: (message: string) => void }
   // Many at once, as the notes list has it: ⌘-click or ⇧-click picks papers (in the order they're shown), a plain
   // click still shows one, ⌘A picks every one in view, Escape or a click on the page lets go. What to do with them
   // takes the header's right side; a right-click does the same for the paper under it. Deleting asks first.
-  const ordered = useMemo(() => {
-    const all = stickies ?? [];
-    return all.some(sticky => sticky.archived) && view === 'archive' ? all.filter(sticky => sticky.archived)
-      : [...all.filter(sticky => !sticky.archived && !sticky.closed), ...all.filter(sticky => !sticky.archived && sticky.closed)];
-  }, [stickies, view]);
+  const ordered = useMemo(() => orderedStickies(stickies ?? [], view === 'archive'), [stickies, view]);
   const sel = useSelection(useMemo(() => ordered.map(sticky => sticky.id), [ordered]));
   const [asking, setAsking] = useState<{ ids: string[]; at: HTMLElement | (() => DOMRect) } | null>(null);
   const [menu, setMenu] = useState<{ ids: string[]; x: number; y: number } | null>(null);
-  const refresh = useCallback(() => { void invoke<Sticky[]>('sticky_list').then(setStickies, error => onError(message(error, 'Couldn’t load your stickies.'))); }, [onError]);
+  const refresh = useCallback(() => { void invoke('sticky_list').then(setStickies, error => onError(message(error, 'Couldn’t load your stickies.'))); }, [onError]);
   useEffect(refresh, [refresh]);
   useEffect(() => { const off = listen('dictate-stickies', refresh); addEventListener('focus', refresh); return () => { off(); removeEventListener('focus', refresh); }; }, [refresh]);
   const act = (work: Promise<unknown>, failed: string) => void work.then(refresh, error => onError(message(error, failed)));
@@ -61,8 +54,8 @@ export function StickiesView({ onError }: { onError: (message: string) => void }
     let done = 0;
     for (const sticky of list) { try { await work(sticky); done++; } catch { /* left as it was */ } }
     refresh();
-    if (done < list.length) onError(`${said ? said(`${done} of ${many(list.length)}`) : `Changed ${done} of ${many(list.length)}`}. The rest weren’t changed.`);
-    else if (said) onError(`${said(many(done))}.`);
+    const told = countMessage(done, list.length, said, many);
+    if (told) onError(told);
   };
   const showAll = (list: Sticky[]) => void each(list.filter(sticky => sticky.closed), sticky => invoke('sticky_show', { id: sticky.id }));
   const closeAll = (list: Sticky[]) => void each(list.filter(sticky => !sticky.closed), sticky => invoke('sticky_close', { id: sticky.id }));

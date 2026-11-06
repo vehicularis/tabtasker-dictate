@@ -1,8 +1,10 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { invoke } from '../../bridge';
 import { message } from '../../lib/errors';
+import { seconds } from '../../lib/format';
 import { COMMAND_GLYPHS, KEY_NAMES } from '../../lib/keyNames';
-import { folderPath, tilde, useStatus, type ClaudeModel, type ClaudeVia, type PageProps, type Settings } from '../../store';
+import { folderPath, tilde, useStatus, type PageProps } from '../../store';
+import type { ClaudeModel, ClaudeVia, Settings } from '../../api/types';
 import { Button, Icon, GroupHeader, Section, Segmented, TextField, Tile, TileGroup, Toggle } from '../../ui';
 
 const MODELS: { value: ClaudeModel; label: string }[] = [
@@ -14,8 +16,6 @@ const ABOUT: Record<ClaudeModel, string> = {
   'claude-opus-5-5': 'Opus 5.5 is the most capable, and worth it for long meetings.',
 };
 const NAME: Record<ClaudeModel, string> = { 'claude-haiku-5-5': 'Haiku', 'claude-sonnet-5-5': 'Sonnet', 'claude-opus-5-5': 'Opus' };
-
-const seconds = (ms: number) => `${(ms / 1000).toFixed(1)} s`;
 
 export function Claude({ settings, update }: PageProps) {
   const claude = settings.claude;
@@ -42,7 +42,7 @@ export function Claude({ settings, update }: PageProps) {
   const find = () => {
     if (finding) return;
     setFinding(true); setProblem(null);
-    void invoke<string | null>('claude_code_find').then(found => {
+    void invoke('claude_code_find').then(found => {
       if (!found) setProblem('Couldn’t find Claude Code. Install it, then click Find again.');
     }, error => setProblem(message(error, 'Couldn’t look for Claude Code. Try again in a moment.'))).finally(() => setFinding(false));
   };
@@ -92,7 +92,7 @@ const VIAS: { value: ClaudeVia; label: string }[] = [{ value: 'claudeCode', labe
 /// falls back to the top of the page: it stays in the field while a key is tested, and moves with each step.
 /// `via` is the way being chosen (Claude holds it: the model settings under this follow it). It starts on Claude
 /// Code when it is on this Mac, since there is nothing to paste.
-function Connection({ claude, home, via, onVia: setVia }: { claude: Settings['claude']; home?: string; via: ClaudeVia; onVia: (via: ClaudeVia) => void }) {
+function Connection({ claude, home, via, onVia: setVia }: { claude: Settings['claude']; home?: string | null; via: ClaudeVia; onVia: (via: ClaudeVia) => void }) {
   const { enabled: connected, model } = claude;
   const id = useId();
   const [key, setKey] = useState('');
@@ -147,7 +147,7 @@ function Connection({ claude, home, via, onVia: setVia }: { claude: Settings['cl
   const test = () => {
     if (busy) return;
     setBusy('test'); setNote(null);
-    void invoke<number>('claude_test').then(ms => setNote({ text: `${claude.via === 'local' ? claude.localModel : claude.via === 'openAi' ? claude.openAiModel : NAME[model]} answered in ${seconds(ms)}.` }),
+    void invoke('claude_test').then(ms => setNote({ text: `${claude.via === 'local' ? claude.localModel : claude.via === 'openAi' ? claude.openAiModel : NAME[model]} answered in ${seconds(ms)}.` }),
       error => setNote({ text: message(error, 'The test didn’t go through. Try again in a moment.'), error: true })).finally(() => setBusy(null));
   };
   const confirm = () => { setRemoving(true); setNote(null); focus('cancel'); };

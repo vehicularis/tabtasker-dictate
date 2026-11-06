@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
 import { invoke, listen } from '../bridge';
-import { stamp } from '../lib/dates';
+import { noteClock, stamp } from '../lib/dates';
 import { message } from '../lib/errors';
-import { needsSetup, setupDone, updateSettings, useSettings, useUpdates, type Edge, type Events, type Size, type Status } from '../store';
+import { needsSetup, setupDone } from '../lib/setup';
+import { updateSettings, useSettings, useUpdates } from '../store';
+import type { Edge, Phase, Size, Status } from '../api/types';
 import { applyTheme, isDark } from '../ui/theme';
 import { leave } from '../ui/motion';
 import { CommandCard } from './CommandCard';
@@ -14,7 +16,6 @@ import { Menu, type Sub } from './Menu';
 import { PREVIEW, PREVIEW_EDGE, SAMPLE, SETUP } from './preview';
 import { Setup } from './Setup';
 
-type Phase = 'idle' | 'listening' | 'transcribing' | 'sending';
 const EDGE = 'tabtasker-dictate:edge'; // where the dots sat before the edge moved into settings
 
 const stored = <T,>(key: string, fallback: T): T => { try { return (JSON.parse(localStorage.getItem(key) ?? 'null') as T) ?? fallback; } catch { return fallback; } };
@@ -61,7 +62,7 @@ export function Overlay() {
   const [fnDown, setFnDown] = useState(PREVIEW === 'setup-hold');
   const fnDownAt = useRef(0);
 
-  const refresh = useCallback(() => { if (!PREVIEW) void invoke<Status>('status').then(setStatus).catch(() => {}); }, []);
+  const refresh = useCallback(() => { if (!PREVIEW) void invoke('status').then(setStatus).catch(() => {}); }, []);
   useEffect(refresh, [refresh]);
   // Setup follows macOS live: permissions and the model download change while it is open.
   useEffect(() => { if (!setup) return; const timer = setInterval(refresh, 1000); return () => clearInterval(timer); }, [setup, refresh]);
@@ -97,7 +98,7 @@ export function Overlay() {
   // ---------- the native voice code ----------
   useEffect(() => {
     const offs = [
-      listen<{ phase: Phase; level: number; dictating: boolean }>('dictate-state', next => {
+      listen('dictate-state', next => {
         if (next.phase === 'listening' && heard.current !== 'listening') { // a new recording, not its 30-a-second levels
           setLive(null); setSaved(null); setMenu(false);
           if (noteRequested.current) { setNoting(true); setSince(Date.now()); }
@@ -108,27 +109,27 @@ export function Overlay() {
         setDictating(next.phase !== 'idle' && next.dictating);
         level.current = next.phase === 'listening' ? next.level : 0;
       }),
-      listen<{ text: string; live: boolean }>('dictate-said', said => { if (said.live) setLive(said.text); }),
+      listen('dictate-said', said => { if (said.live) setLive(said.text); }),
       // A spoken note is done: it is saved as it is (the model names it, or its first words do) and opened
       // in the window, where it can be read and changed. Nothing to confirm.
-      listen<{ text: string }>('dictate-note', note => {
+      listen('dictate-note', note => {
         setLive(null);
-        void invoke<string>('save_note', { title: '', text: note.text, stamp: stamp(new Date()), named: false })
+        void invoke('save_note', { title: '', text: note.text, stamp: stamp(new Date()), named: false })
           .then(path => { setSaved(path); return invoke('note_open', { path }); })
           .catch(error => setToast(message(error, 'Couldn’t save the note. Check there’s space on your disk.')));
       }),
-      listen<{ message: string }>('dictate-error', ({ message }) => {
+      listen('dictate-error', ({ message }) => {
         if (message === 'microphone') setSetup(true);
         else if (message !== 'unheard') setToast(message);
       }),
-      listen<{ message: string }>('dictate-notice', ({ message }) => setToast(message)),
-      listen<{ down: boolean }>('dictate-fn', ({ down }) => {
+      listen('dictate-notice', ({ message }) => setToast(message)),
+      listen('dictate-fn', ({ down }) => {
         setFnDown(down);
         if (down) fnDownAt.current = performance.now();
         else if (fnDownAt.current && performance.now() - fnDownAt.current > 350) setFnTested(true);
       }),
       // An overlay behind another app gets no hover from WebKit: the native side reports the pointer.
-      listen<{ x: number; y: number } | null>('dictate-pointer', at => {
+      listen('dictate-pointer', at => {
         const spot = root.current?.querySelector('[data-spot]');
         setHover(!!at && !!spot?.contains(document.elementFromPoint(at.x, at.y)));
       }),
@@ -143,8 +144,8 @@ export function Overlay() {
     const report = () => {
       const node = root.current;
       if (node) {
-        const box = (element: Element, pad = 0) => { const r = element.getBoundingClientRect(); return [r.x - pad, r.y - pad, r.width + pad * 2, r.height + pad * 2]; };
-        const glass = [...node.querySelectorAll<HTMLElement>('[data-glass]')].filter(element => element.getClientRects().length).map(element => {
+        const box = (element: Element, pad = 0): [number, number, number, number] => { const r = element.getBoundingClientRect(); return [r.x - pad, r.y - pad, r.width + pad * 2, r.height + pad * 2]; };
+        const glass = [...node.querySelectorAll<HTMLElement>('[data-glass]')].filter(element => element.getClientRects().length).map((element): [number, number, number, number, number, number] => {
           const style = getComputedStyle(element);
           // The radius as drawn: the box comes scaled (Appearance size, springs), the computed radius doesn't;
           // and a pill's 999px is drawn as half its height, where the native mask would square the blur's corners.
@@ -217,19 +218,19 @@ export function Overlay() {
   // A note to type: a new file at once, open in the window with the keyboard in it (hold the key to talk into it).
   const writeNote = useCallback(() => {
     setMenu(false); setHover(false);
-    void invoke<string>('note_new', { title: '', text: '', stamp: stamp(new Date()) }).then(path => invoke('note_open', { path }))
+    void invoke('note_new', { title: '', text: '', stamp: stamp(new Date()) }).then(path => invoke('note_open', { path }))
       .catch(error => setToast(message(error, 'Couldn’t make a new note.')));
   }, []);
   const newSticky = useCallback(() => { setMenu(false); void invoke('sticky_new', {}).catch(error => setToast(message(error, 'Couldn’t make a new sticky.'))); }, []);
   // The global shortcut for a typed note, which the native side hears and hands here.
-  useEffect(() => listen<{ what: string }>('dictate-open', ({ what }) => { if (what === 'writeNote') writeNote(); }), [writeNote]);
+  useEffect(() => listen('dictate-open', ({ what }) => { if (what === 'writeNote') writeNote(); }), [writeNote]);
   // The Dock that hides itself, sliding out over the dots' edge: the dots step aside by its strip until it goes.
   const [dockInset, setDockInset] = useState(0);
-  useEffect(() => listen<Events['dictate-dock']>('dictate-dock', dock => setDockInset(dock.shown && dock.edge === edge ? dock.strip : 0)), [edge]);
+  useEffect(() => listen('dictate-dock', dock => setDockInset(dock.shown && dock.edge === edge ? dock.strip : 0)), [edge]);
   const startMeeting = () => {
     setMenu(false);
     const action = meetings?.recording ? 'stop' : 'start';
-    void invoke<boolean>('meeting', { action }).then(changed => { if (!changed && action === 'start') setToast('Couldn’t start the meeting.'); })
+    void invoke('meeting', { action }).then(changed => { if (!changed && action === 'start') setToast('Couldn’t start the meeting.'); })
       .catch((error: unknown) => setToast(message(error, 'Couldn’t start the meeting.')));
   };
   const restartToUpdate = () => { setMenu(false); setOffer(false); void invoke('update_restart').catch(error => setToast(message(error, 'Couldn’t restart Dictate.'))); };
@@ -237,7 +238,7 @@ export function Overlay() {
   const hideForAnHour = () => { setMenu(false); setHidden(true); setTimeout(() => setHidden(false), 60 * 60 * 1000); };
   const pickSize = (size: Size) => { setMenu(false); void updateSettings({ appearance: { size } }).catch(() => setToast('Couldn’t change the size. Try again.')); };
   const pickMic = (id: string | null) => { setMenu(false); void invoke('set_input', { id }).then(refresh).catch(() => setToast('Couldn’t switch to that microphone. Try again.')); };
-  const login = () => { const on = !status?.openAtLogin; void invoke<boolean>('set_open_at_login', { enabled: on }).then(refresh).catch(() => setToast('Couldn’t change whether Dictate opens at login.')); };
+  const login = () => { const on = !status?.openAtLogin; void invoke('set_open_at_login', { enabled: on }).then(refresh).catch(() => setToast('Couldn’t change whether Dictate opens at login.')); };
   // A click on the dots: stops a note being taken, finishes setup, or opens the window.
   const clickDots = () => {
     if (dragged.current) return;
@@ -271,7 +272,7 @@ export function Overlay() {
     <div ref={dock} className="dock">
       {setup && <Setup status={status} fnDown={fnDown} fnTested={fnTested} onClose={() => setSetup(false)} />}
       {noting && phase === 'listening' && !card && <p ref={leave} className="glass said" data-glass data-live role="status">
-        <small>Note · {clockOf(since)}</small><span>{live ?? 'Listening…'}</span>
+        <small>Note · {noteClock(since, Date.now())}</small><span>{live ?? 'Listening…'}</span>
       </p>}
       {saved && !card && <button ref={leave} type="button" className="glass said saved" data-glass data-hit onClick={() => { void invoke('note_open', { path: saved }).catch(() => {}); setSaved(null); }}>
         <small>Saved · Open</small><span>{saved.split('/').pop()?.replace(/\.md$/, '')}</span>
@@ -295,8 +296,3 @@ export function Overlay() {
 }
 
 // ---------- helpers ----------
-
-const clockOf = (start: number) => {
-  const seconds = start ? Math.max(0, Math.floor((Date.now() - start) / 1000)) : 0;
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
-};

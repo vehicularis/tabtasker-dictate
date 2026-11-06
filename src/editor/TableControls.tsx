@@ -5,6 +5,7 @@ import { Fragment, type Node as PMNode } from '@tiptap/pm/model';
 import { Plugin } from '@tiptap/pm/state';
 import { CellSelection, TableMap } from '@tiptap/pm/tables';
 import { Icon } from '../ui/Icon';
+import { dropIndex, gapAt, moved, type Band } from '../lib/reorder';
 import { keep, Menu, MenuItem, MenuKeys, MenuLine } from './Menu';
 
 // Business's TableControls.tsx and tableMoves.ts: over the hovered table, a grip left of its row and one
@@ -14,7 +15,6 @@ import { keep, Menu, MenuItem, MenuKeys, MenuLine } from './Menu';
 // always, and no widths, so neither would survive the file.
 
 type Axis = 'row' | 'col';
-interface Band { start: number; end: number }
 
 /// A Markdown table's header is its first row and only that row, whatever the file is read as. So it
 /// is kept that way on screen too: a row moved to the top, put above, or left on top by a delete becomes
@@ -49,12 +49,6 @@ const isPlainGrid = (table: PMNode) => {
   return plain;
 };
 const children = (node: PMNode) => { const out: PMNode[] = []; node.forEach(child => out.push(child)); return out; };
-const moved = <T,>(items: T[], from: number, to: number): T[] | null => {
-  if (from === to || !items[from] || to < 0 || to >= items.length) return null;
-  const next = items.slice();
-  next.splice(to, 0, ...next.splice(from, 1));
-  return next;
-};
 function moveRow(table: PMNode, from: number, to: number): PMNode | null {
   if (!isPlainGrid(table)) return null;
   const rows = moved(children(table), from, to);
@@ -70,11 +64,6 @@ function moveColumn(table: PMNode, from: number, to: number): PMNode | null {
   }
   return table.copy(Fragment.from(rows));
 }
-/** Which gap the pointer is over: 0 before the first band, `bands.length` after the last. */
-const gapAt = (bands: Band[], pointer: number) => { for (let i = 0; i < bands.length; i++) if (pointer < (bands[i].start + bands[i].end) / 2) return i; return bands.length; };
-/** The index a band lands on when it leaves `from` for `gap`: past the origin, the gaps close up by one. */
-const dropIndex = (from: number, gap: number) => gap > from ? gap - 1 : gap;
-
 // ---- the controls ----
 
 function locate(editor: Editor, cell: HTMLElement) {

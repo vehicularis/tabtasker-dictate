@@ -1,15 +1,14 @@
 import { useEffect, useState, type KeyboardEvent } from 'react';
 import { aiIcon, aiName, useSettings } from '../store';
 import { invoke, listen } from '../bridge';
+import { copyText } from '../lib/clipboard';
 import { message } from '../lib/errors';
-import type { Events } from '../store';
+import type { Command } from '../api/types';
 import { Icon } from '../ui/Icon';
 import { X } from './icons';
 import { leave } from '../ui/motion';
 import { PREVIEW } from './preview';
 import './command-card.css';
-
-type Command = Events['dictate-command'];
 
 // `?preview=command`, `command-thinking` or `command-error`.
 const SAMPLES: Record<string, Command> = {
@@ -17,19 +16,6 @@ const SAMPLES: Record<string, Command> = {
   'command-thinking': { request: 'preview', phase: 'thinking', instruction: 'Make this sound friendlier' },
   'command-error': { request: 'preview', phase: 'error', instruction: 'Summarize this', text: 'Too many requests for this key right now. Try again in a minute.' },
 };
-
-async function copyText(text: string) {
-  try { await navigator.clipboard.writeText(text); } catch {
-    // An older web view: the selection way, which a click still allows.
-    const area = document.createElement('textarea');
-    area.value = text;
-    document.body.append(area);
-    area.select();
-    const done = document.execCommand('copy');
-    area.remove();
-    if (!done) throw new Error('copy');
-  }
-}
 
 // Claude's answer to a spoken command, near the dots: it listens for dictate-command itself. While
 // Claude works it shows what was asked; an answer comes as a card with Insert, Copy and Close; a typed
@@ -39,7 +25,7 @@ export function CommandCard() {
   const [copied, setCopied] = useState(false);
   const [inserting, setInserting] = useState(false);
   const [problem, setProblem] = useState<string | null>(null); // the answer stays, with what went wrong
-  useEffect(() => listen<Command>('dictate-command', next => {
+  useEffect(() => listen('dictate-command', next => {
     if (next.phase === 'done') setCommand(current => current?.request === next.request ? null : current);
     else { setCommand(next); setCopied(false); setProblem(null); }
   }), []);

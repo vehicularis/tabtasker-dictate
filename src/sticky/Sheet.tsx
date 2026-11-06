@@ -1,18 +1,10 @@
 import { useEffect, useState, type CSSProperties, type HTMLAttributes, type ReactNode } from 'react';
-import { STICKY_HUES, type StickyHue, type StickyTilt, type StickyWeight } from '../store';
+import { firstLine, tiltOf } from '../lib/stickies';
+import { STICKY_HUES } from '../store';
+import type { StickyHue, StickyTilt, StickyWeight } from '../api/types';
 import { Icon } from '../ui/Icon';
 
 export const HUES = Object.keys(STICKY_HUES) as StickyHue[];
-/// A sticky's first line, as words: for the folded band.
-export const firstLine = (text: string) => text.split('\n').map(line => line.replace(/^#+\s*|^[-*]\s+(\[[ x]\]\s*)?/g, '').replace(/[*_`]/g, '').trim()).find(Boolean) ?? '';
-/// A sticky's tilt in degrees, from its id, so it is the same every time it opens and on the Stickies page:
-/// slight leans a little, one way or the other; random, anywhere within a few degrees.
-export const tiltOf = (id: string, tilt: StickyTilt) => {
-  if (tilt === 'none') return 0;
-  let hash = 0;
-  for (const c of id) hash = (hash * 31 + c.charCodeAt(0)) >>> 0;
-  return tilt === 'slight' ? (hash % 2 ? 1.2 : -1.2) : (hash % 480) / 100 - 2.4;
-};
 export type SheetActions = { fold: () => void; pin: () => void; note: () => void; close: () => void; recolour: (hue: StickyHue) => void; retitle: (title: string) => void; more?: (at: { x: number; y: number }) => void };
 
 /// The sticker, as TabTasker Business's whiteboard sticker is: paper in its hue with the ink from it, corners

@@ -9,7 +9,8 @@ import { TextSelection } from '@tiptap/pm/state';
 // ---- the string rules (lib/toolbox/text) ----
 
 const isAcronym = (word: string) => word.length > 1 && word === word.toUpperCase();
-function changeCase(input: string, mode: 'upper' | 'lower' | 'title' | 'sentence'): string {
+/// The case rules of the selection menu; an acronym keeps its capitals in title case, not in sentence case.
+export function changeCase(input: string, mode: 'upper' | 'lower' | 'title' | 'sentence'): string {
   if (mode === 'upper') return input.toUpperCase();
   if (mode === 'lower') return input.toLowerCase();
   // Title case keeps an acronym ("the PDF export" stays "The PDF Export").
@@ -18,15 +19,18 @@ function changeCase(input: string, mode: 'upper' | 'lower' | 'title' | 'sentence
 }
 const lines = (input: string) => input.replace(/\r\n|\r/g, '\n');
 /// Runs of spaces to one, three or more line breaks to one blank line.
-const tidySpacing = (input: string) => lines(input.replace(/[ \t]+/g, ' ')).replace(/\n{3,}/g, '\n\n');
-function sortLines(input: string): string {
+export const tidySpacing = (input: string) => lines(input.replace(/[ \t]+/g, ' ')).replace(/\n{3,}/g, '\n\n');
+/// Code-unit order, blank lines first; one trailing newline stays.
+export function sortLines(input: string): string {
   const text = lines(input), trailing = text.endsWith('\n');
   const sorted = (trailing ? text.slice(0, -1) : text).split('\n').sort((a, b) => a < b ? -1 : a > b ? 1 : 0).join('\n');
   return trailing ? `${sorted}\n` : sorted;
 }
-const dedupeLines = (input: string) => [...new Set(lines(input).split('\n'))].join('\n');
+/// The first of each line, in order.
+export const dedupeLines = (input: string) => [...new Set(lines(input).split('\n'))].join('\n');
 const SLUG_TRANSLITERATIONS: Record<string, string> = { 'ı': 'i', 'ß': 'ss' };
-function slugify(input: string): string {
+/// Lowercase a-z, 0-9 and single hyphens: accents stripped, ı and ß spelled out, everything else dropped.
+export function slugify(input: string): string {
   let base = input.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase();
   for (const [char, replacement] of Object.entries(SLUG_TRANSLITERATIONS)) base = base.replaceAll(char, replacement);
   return base.replace(/['’]/g, '').replace(/[^a-z0-9\s-]+/g, '').trim().replace(/[\s-]+/g, '-').replace(/^-+|-+$/g, '');

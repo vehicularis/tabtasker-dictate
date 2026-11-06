@@ -1,5 +1,6 @@
 import { useEffect, useRef, type KeyboardEvent } from 'react';
-import { SIZES, type Size, type Status } from '../store';
+import { SIZES } from '../store';
+import type { Size, Status } from '../api/types';
 import { Icon } from '../ui/Icon';
 import { AlarmIcon, Caret, Check, GearIcon, LibraryIcon, MeetingIcon, MicIcon, NoteIcon, PasteIcon, SetupIcon, UpdateIcon } from './icons';
 

@@ -90,7 +90,7 @@ const Legal = ({ rows }: { rows: [string, string][] }) => <dl className="legal">
 export function About(_: PageProps) {
   const [version, setVersion] = useState<string | null>(null);
   const [reading, setReading] = useState(false);
-  useEffect(() => { void invoke<string>('plugin:app|version').then(setVersion).catch(() => {}); }, []);
+  useEffect(() => { void invoke('plugin:app|version').then(setVersion).catch(() => {}); }, []);
   return <>
     <header className="about">
       <AppIcon />

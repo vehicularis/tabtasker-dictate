@@ -30,6 +30,7 @@ A pull request runs these in CI, the security checks before anything builds. Run
 ```sh
 npm audit --audit-level=moderate                    # known vulnerabilities in the npm packages
 npm run build                                       # TypeScript and Vite
+npm test                                            # the frontend's unit tests
 cargo deny check                                    # the crates' advisories, licences and sources
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked

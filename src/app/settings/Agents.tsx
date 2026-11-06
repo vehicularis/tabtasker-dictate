@@ -1,51 +1,15 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { invoke } from '../../bridge';
+import { copyText } from '../../lib/clipboard';
+import { configEntry, lastCall } from '../../lib/agents';
 import { message } from '../../lib/errors';
 import type { PageProps } from '../../store';
 import { Button, Icon, GroupHeader, Section, Tile, TileGroup, Toggle } from '../../ui';
-
-// What mcp.rs's agents_status reports.
-type Added = 'no' | 'yes' | 'elsewhere';
-type Install = { found: boolean; added: Added };
-type Call = { atMs: number; tool: string; client: string; clientTitle?: string | null; ok: boolean };
-export type AgentsStatus = { command: string[]; claudeCode: Install; claudeDesktop: Install; lastCall: Call | null; problem: string | null };
-type Target = 'claudeCode' | 'claudeDesktop';
-
-// Each tool as "Claude Code {did}" and "Claude Code tried to {do}".
-const TOOLS: Record<string, [string, string]> = {
-  list_notes: ['listed your notes', 'list your notes'],
-  read_note: ['read a note', 'read a note'],
-  search_notes: ['searched your notes', 'search your notes'],
-  list_meetings: ['listed your meetings', 'list your meetings'],
-  read_meeting: ['read a meeting', 'read a meeting'],
-  recent_dictations: ['read your recent dictations', 'read your recent dictations'],
-  create_note: ['created a note', 'create a note'],
-  append_to_note: ['added to a note', 'add to a note'],
-};
-const CLIENTS: Record<string, string> = { 'claude-code': 'Claude Code', 'claude-ai': 'Claude Desktop' };
-
-const ago = (ms: number) => {
-  const seconds = Math.round((ms - Date.now()) / 1000);
-  const format = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
-  for (const [unit, size] of [['day', 86400], ['hour', 3600], ['minute', 60]] as const) {
-    if (-seconds >= size) return format.format(Math.round(seconds / size), unit);
-  }
-  return 'just now';
-};
-
-function lastCall(call: Call | null) {
-  if (!call) return 'No agent has asked yet.';
-  const who = CLIENTS[call.client] ?? (call.clientTitle || 'An agent');
-  const [did, doing] = TOOLS[call.tool] ?? ['asked for something', 'ask for something'];
-  return call.ok ? `${who} ${did} ${ago(call.atMs)}.` : `${who} tried to ${doing} ${ago(call.atMs)}, and couldn’t.`;
-}
-
-// The entry Claude Desktop gets, which most apps take as is: a program and its arguments, never a shell line.
-const entry = ([command, ...args]: string[]) => `"tabtasker-dictate": {\n  "command": ${JSON.stringify(command)},\n  "args": ${JSON.stringify(args)}\n}`;
+import type { AgentsStatus, AgentTarget } from '../../api/types';
 
 const Failed = ({ children }: { children: string }) => <span role="alert" style={{ color: 'var(--danger)' }}>{children}</span>;
 
-const COPY: Record<Target, { name: string; about: string; added: string; missing: string; confirm: string }> = {
+const COPY: Record<AgentTarget, { name: string; about: string; added: string; missing: string; confirm: string }> = {
   claudeCode: {
     name: 'Claude Code',
     about: 'Lets Claude Code use your notes in every project.',
@@ -63,7 +27,7 @@ const COPY: Record<Target, { name: string; about: string; added: string; missing
 };
 
 function Connect({ target, status, adding, confirming, failed, onConfirm, onCancel, onAdd }: {
-  target: Target; status: AgentsStatus | null; adding: Target | null; confirming: boolean; failed: string | null; onConfirm: () => void; onCancel: () => void; onAdd: () => void;
+  target: AgentTarget; status: AgentsStatus | null; adding: AgentTarget | null; confirming: boolean; failed: string | null; onConfirm: () => void; onCancel: () => void; onAdd: () => void;
 }) {
   const copy = COPY[target];
   const install = status?.[target];
@@ -100,9 +64,9 @@ export function Agents({ settings, update }: PageProps) {
   const agents = settings.agents;
   const off = !agents.mcp;
   const [status, setStatus] = useState<AgentsStatus | null>(null);
-  const [confirming, setConfirming] = useState<Target | null>(null);
-  const [adding, setAdding] = useState<Target | null>(null);
-  const [failed, setFailed] = useState<{ target: Target; message: string } | null>(null);
+  const [confirming, setConfirming] = useState<AgentTarget | null>(null);
+  const [adding, setAdding] = useState<AgentTarget | null>(null);
+  const [failed, setFailed] = useState<{ target: AgentTarget; message: string } | null>(null);
   const [said, setSaid] = useState('');
   const [copied, setCopied] = useState<boolean | null>(null);
   // A status asked for before an add finishes may predate it, so only the newest answer is kept.
@@ -112,7 +76,7 @@ export function Agents({ settings, update }: PageProps) {
   const refresh = useCallback(() => {
     if (inFlight.current) return;
     const mine = ++asked.current;
-    invoke<AgentsStatus>('agents_status').then(next => { if (mine === asked.current) setStatus(next); }).catch(() => {});
+    invoke('agents_status').then(next => { if (mine === asked.current) setStatus(next); }).catch(() => {});
   }, []);
   // Again on focus, and each minute while it shows: the last call changes while you are in the agent.
   useEffect(() => {
@@ -123,7 +87,7 @@ export function Agents({ settings, update }: PageProps) {
   }, [refresh]);
   useEffect(() => { if (copied === null) return; const timer = setTimeout(() => setCopied(null), copied ? 1600 : 4000); return () => clearTimeout(timer); }, [copied]);
 
-  const add = async (target: Target) => {
+  const add = async (target: AgentTarget) => {
     const name = COPY[target].name;
     inFlight.current = true;
     const mine = ++asked.current;
@@ -131,7 +95,7 @@ export function Agents({ settings, update }: PageProps) {
     setFailed(null);
     setSaid('');
     try {
-      const next = await invoke<AgentsStatus>('agents_add', { target });
+      const next = await invoke('agents_add', { target });
       if (mine === asked.current) setStatus(next);
       setSaid(`Added to ${name}.`);
     } catch (error) {
@@ -141,8 +105,8 @@ export function Agents({ settings, update }: PageProps) {
     setAdding(null);
     setConfirming(now => (now === target ? null : now));
   };
-  const usable = status && !status.problem ? entry(status.command) : '';
-  const copy = () => void navigator.clipboard.writeText(usable).then(() => setCopied(true), () => setCopied(false));
+  const usable = status && !status.problem ? configEntry(status.command) : '';
+  const copy = () => void copyText(usable).then(() => setCopied(true), () => setCopied(false));
 
   return <>
     <GroupHeader title="Reading your notes">Let agents read your notes and meetings: Claude Code, Claude Desktop and any app that speaks MCP. If you connected Claude Code above, it’s already set up.</GroupHeader>
@@ -151,7 +115,7 @@ export function Agents({ settings, update }: PageProps) {
         <Tile title="Answer agents">
           <Toggle label="Answer agents" checked={agents.mcp} onChange={mcp => update({ agents: { mcp } })} />
         </Tile>
-        <Tile title="Last call" detail={status ? lastCall(status.lastCall) : 'Looking…'} />
+        <Tile title="Last call" detail={status ? lastCall(status.lastCall, Date.now()) : 'Looking…'} />
       </TileGroup>
     </Section>
     <Section title="Connect">

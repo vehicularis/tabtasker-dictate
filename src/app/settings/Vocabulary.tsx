@@ -10,7 +10,7 @@ function useFit(words: string[]) {
   const [fit, setFit] = useState<number | null>(null);
   useEffect(() => {
     let live = true;
-    void invoke<number>('vocabulary_fit', { words }).then(count => { if (live) setFit(count); }).catch(() => {});
+    void invoke('vocabulary_fit', { words }).then(count => { if (live) setFit(count); }).catch(() => {});
     return () => { live = false; };
   }, [words]);
   return fit;

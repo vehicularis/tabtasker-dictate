@@ -1,6 +1,10 @@
 // The app in a browser: real settings kept in memory, a sample status, and each feature's own commands
 // from its file here. Nothing leaves the page and nothing persists past a reload.
-import { chordProblem, PILL_BUTTONS, SOUNDS, STICKY_HUES, type Chord, type Settings, type Status, type Sticky, type UpdateState } from '../store';
+import { PILL_BUTTONS, type Chord, type Settings, type Status, type Sticky, type UpdateState } from '../api/types';
+import { SOUNDS, STICKY_HUES } from '../store';
+import { chordProblem, MACOS_SHORTCUTS } from '../lib/chords';
+import { COMMANDS, type CommandArgs, type Commands } from '../api/commands';
+import type { Events } from '../api/events';
 import { register as input } from './input';
 import { register as speech } from './speech';
 import { register as notes } from './notes';
@@ -11,13 +15,14 @@ import { register as stats } from './stats';
 import { register as setup } from './setup';
 import { register as design } from './design';
 
-type Handler = (args: Record<string, unknown>) => unknown;
+/// What answers `K` in the browser: the same arguments and result as the Mac's command.
+export type Handler<K extends keyof Commands> = (args: Commands[K]['args']) => Commands[K]['result'] | Promise<Commands[K]['result']>;
 export type Mock = {
   /// Answers `command` in the browser. A later handler replaces an earlier one.
-  handle: (command: string, handler: Handler) => void;
+  handle: <K extends keyof Commands>(command: K, handler: Handler<K>) => void;
   /// The handler `command` has now, for a later one that adds to it rather than replacing it.
-  handled: (command: string) => Handler | undefined;
-  emit: (event: string, payload: unknown) => void;
+  handled: <K extends keyof Commands>(command: K) => Handler<K> | undefined;
+  emit: <K extends keyof Events>(event: K, payload: Events[K]) => void;
   settings: () => Settings;
   /// A change from a feature's own mock, as settings.rs's `update`: the store's rules, and it can turn Claude on.
   update: (patch: unknown) => Settings;
@@ -53,6 +58,7 @@ const DEFAULTS: Settings = {
 const status: Status = {
   enabled: true, microphone: 'allowed', accessibility: true, modelReady: true, modelPreparing: false, modelMessage: '',
   notes: '/Users/you/Documents/TabTasker | Dictate', home: '/Users/you', globeKey: '', openAtLogin: true,
+  systemShortcuts: MACOS_SHORTCUTS.map(([key, mods]) => [key, mods]),
   inputs: [{ id: 'built-in', name: 'MacBook Pro Microphone' }, { id: 'airpods', name: 'AirPods Pro' }], input: null, inputInUse: 'MacBook Pro Microphone',
 };
 // `?status=new` starts as a Mac that has never been set up, for the setup flow.
@@ -142,15 +148,15 @@ const patched = (base: Settings, patch: unknown): Settings => {
   return clamp(good);
 };
 
-const handlers = new Map<string, Handler>();
-const listeners = new Map<string, Set<(payload: unknown) => void>>();
-const emit = (event: string, payload: unknown) => listeners.get(event)?.forEach(handler => handler(copy(payload)));
+// One table for every command, so its entries are loose; `handle` and `handled` are what keep each to its own types.
+const handlers = new Map<string, (args: never) => unknown>();
+const listeners = new Map<string, Set<(payload: never) => void>>();
+const emit = <K extends keyof Events>(event: K, payload: Events[K]) => listeners.get(event)?.forEach(handler => handler(copy(payload) as never));
 const changed = () => { emit('dictate-settings', settings); return copy(settings); };
-const mock: Mock = { handle: (command, handler) => handlers.set(command, handler), handled: command => handlers.get(command), emit, settings: () => copy(settings), status, update: patch => { settings = patched(settings, patch); return changed(); } };
+export const mock: Mock = { handle: (command, handler) => { handlers.set(command, handler); }, handled: command => handlers.get(command) as Handler<typeof command> | undefined, emit, settings: () => copy(settings), status, update: patch => { settings = patched(settings, patch); return changed(); } };
 
 mock.handle('get_settings', () => copy(settings));
 mock.handle('update_settings', ({ patch }) => {
-  if (!object(patch)) throw 'Invalid settings';
   const request = copy(patch);
   if (object(request.claude)) { delete request.claude.enabled; delete request.claude.via; } // only the app turns Claude on, once a connection is tested
   return mock.update(request);
@@ -163,29 +169,40 @@ const folderOf = () => settings.notes.folder ?? status.notes;
 const stickies: Sticky[] = [{ id: 'demo', text: 'Call the venue about Thursday', hue: 'amber', x: 120, y: 140, width: 240, height: 200, pinned: true, folded: false, closed: false, archived: false, createdMs: Date.now(), updatedMs: Date.now() },
   { id: 'list', text: 'Groceries\n- milk\n- coffee', hue: 'sage', x: 380, y: 160, width: 240, height: 200, pinned: false, folded: false, closed: true, archived: false, createdMs: Date.now() - 86_400_000, updatedMs: Date.now() - 86_400_000 },
   { id: 'old', text: 'Book the dentist', hue: 'sky', x: 200, y: 260, width: 240, height: 200, pinned: true, folded: false, closed: true, archived: true, createdMs: Date.now() - 9 * 86_400_000, updatedMs: Date.now() - 9 * 86_400_000 }].filter(() => new URLSearchParams(location.search).get('stickies') !== 'empty') as Sticky[];
-for (const one of stickies) Object.assign(one, one.id === 'demo' ? { title: 'Venue', titled: true, tilt: 'slight', weight: 'bold' } : { title: '', titled: false, tilt: 'none', weight: 'bold' });
-const stickyHue = (hue: unknown): Sticky['hue'] => (typeof hue === 'string' && hue in STICKY_HUES ? hue : 'amber') as Sticky['hue'];
+for (const one of stickies) Object.assign(one, { gutter: 44 }, one.id === 'demo' ? { title: 'Venue', titled: true, tilt: 'slight', weight: 'bold' } : { title: '', titled: false, tilt: 'none', weight: 'bold' });
+const stickyHue = (hue: string | null | undefined): Sticky['hue'] => (hue && hue in STICKY_HUES ? hue : 'amber') as Sticky['hue'];
+// stickies.rs's `changed`: every save tells the windows.
+const saved = () => emit('dictate-stickies', { count: stickies.length });
+const sticky = (id: string) => { const found = stickies.find(one => one.id === id); if (!found) throw 'That sticky is gone.'; return found; };
 mock.handle('sticky_list', () => copy(stickies));
 mock.handle('sticky_get', ({ id }) => { const found = stickies.find(one => one.id === id) ?? stickies[0]; if (!found) throw 'That sticky is gone.'; return copy(found); });
 mock.handle('sticky_new', ({ hue, text }) => {
   const last = stickies.at(-1);
-  const made: Sticky = { id: Math.random().toString(16).slice(2, 14), text: typeof text === 'string' ? text : '', hue: stickyHue(hue ?? ['amber', 'sky', 'sage', 'coral', 'violet', 'teal'][stickies.length % 6]), x: (last?.x ?? 92) + 28, y: (last?.y ?? 112) + 28, width: last?.width ?? 240, height: last?.height ?? 200, pinned: true, folded: false, closed: false, title: '', titled: last?.titled ?? false, tilt: last?.tilt ?? 'none', weight: last?.weight ?? 'bold', archived: false, createdMs: Date.now(), updatedMs: Date.now() };
-  stickies.push(made); emit('dictate-stickies', { count: stickies.length }); return copy(made);
+  const made: Sticky = { id: Math.random().toString(16).slice(2, 14), text: text ?? '', hue: stickyHue(hue ?? ['amber', 'sky', 'sage', 'coral', 'violet', 'teal'][stickies.length % 6]), x: (last?.x ?? 92) + 28, y: (last?.y ?? 112) + 28, width: last?.width ?? 240, height: last?.height ?? 200, pinned: true, folded: false, closed: false, title: '', gutter: 44, titled: last?.titled ?? false, tilt: last?.tilt ?? 'none', weight: last?.weight ?? 'bold', archived: false, createdMs: Date.now(), updatedMs: Date.now() };
+  stickies.push(made); saved(); return copy(made);
 });
-mock.handle('sticky_update', ({ id, text, hue, title, titled, tilt, weight }) => { const found = stickies.find(one => one.id === id); if (!found) throw 'That sticky is gone.'; if (typeof text === 'string') found.text = text; if (hue) found.hue = stickyHue(hue); if (typeof title === 'string') found.title = title; if (typeof titled === 'boolean') found.titled = titled; if (tilt === 'none' || tilt === 'slight' || tilt === 'random') found.tilt = tilt; if (weight === 'regular' || weight === 'bold') found.weight = weight; found.updatedMs = Date.now(); return copy(found); });
-mock.handle('sticky_size', ({ id, width, height }) => { const found = stickies.find(one => one.id === id); if (!found) throw 'That sticky is gone.'; found.width = Number(width); found.height = Number(height); return copy(found); });
-const stickyChange = (id: unknown, edit: (one: Sticky) => void) => { const found = stickies.find(one => one.id === id); if (!found) throw 'That sticky is gone.'; edit(found); emit('dictate-stickies', { count: stickies.length }); };
-mock.handle('sticky_show', ({ id }) => stickyChange(id, one => { one.closed = false; one.archived = false; }));
-mock.handle('sticky_close', ({ id }) => stickyChange(id, one => { one.closed = true; }));
-mock.handle('sticky_archive', ({ id, archived }) => stickyChange(id, one => { one.archived = !!archived; one.closed = true; }));
+mock.handle('sticky_update', ({ id, text, hue, title, titled, tilt, weight }) => {
+  const found = sticky(id);
+  if (typeof text === 'string') found.text = text;
+  if (hue) found.hue = stickyHue(hue);
+  if (typeof title === 'string') found.title = title;
+  if (typeof titled === 'boolean') found.titled = titled;
+  if (tilt) found.tilt = tilt;
+  if (weight) found.weight = weight;
+  found.updatedMs = Date.now(); saved(); return copy(found);
+});
+mock.handle('sticky_size', ({ id, width, height }) => { const found = sticky(id); found.width = width; found.height = height; saved(); return copy(found); });
+mock.handle('sticky_show', ({ id }) => { const found = sticky(id); found.closed = false; found.archived = false; saved(); });
+mock.handle('sticky_close', ({ id }) => { sticky(id).closed = true; saved(); });
+mock.handle('sticky_archive', ({ id, archived }) => { const found = sticky(id); found.archived = archived; found.closed = true; saved(); });
 mock.handle('sticky_watch', () => {});
 mock.handle('sticky_hold', () => {});
-mock.handle('sticky_pin', ({ id, pinned }) => { const found = stickies.find(one => one.id === id); if (!found) throw 'That sticky is gone.'; found.pinned = !!pinned; return copy(found); });
-mock.handle('sticky_fold', ({ id, folded }) => { const found = stickies.find(one => one.id === id); if (!found) throw 'That sticky is gone.'; found.folded = !!folded; return copy(found); });
-mock.handle('sticky_remove', ({ id }) => { const at = stickies.findIndex(one => one.id === id); if (at >= 0) stickies.splice(at, 1); emit('dictate-stickies', { count: stickies.length }); });
-mock.handle('sticky_to_note', ({ id }) => { const at = stickies.findIndex(one => one.id === id); if (at < 0) throw 'That sticky is gone.'; const [gone] = stickies.splice(at, 1); return `${folderOf()}/${gone.text.split('\n')[0].slice(0, 40)}.md`; });
+mock.handle('sticky_pin', ({ id, pinned }) => { const found = sticky(id); found.pinned = pinned; saved(); return copy(found); });
+mock.handle('sticky_fold', ({ id, folded }) => { const found = sticky(id); found.folded = folded; saved(); return copy(found); });
+mock.handle('sticky_remove', ({ id }) => { const at = stickies.findIndex(one => one.id === id); if (at >= 0) stickies.splice(at, 1); saved(); });
+mock.handle('sticky_to_note', ({ id }) => { const at = stickies.findIndex(one => one.id === id); if (at < 0) throw 'That sticky is gone.'; const [gone] = stickies.splice(at, 1); saved(); return `${folderOf()}/${gone.text.split('\n')[0].slice(0, 40)}.md`; });
 mock.handle('set_enabled', ({ enabled }) => {
-  status.enabled = !!enabled;
+  status.enabled = enabled;
   if (!enabled) { Object.assign(status, { modelReady: false, modelPreparing: false, modelMessage: 'Dictation is paused. The speech model stays on this Mac.' }); return; }
   // A download that finishes in a few seconds.
   let percent = 0;
@@ -196,18 +213,18 @@ mock.handle('set_enabled', ({ enabled }) => {
     if (percent === 100) { clearInterval(timer); Object.assign(status, { modelPreparing: false, modelReady: true, modelMessage: 'Whisper large-v3 Turbo · automatic language detection · audio stays on this Mac' }); }
   }, 600);
 });
-mock.handle('set_input', ({ id }) => { status.input = (id as string | null) ?? null; status.inputInUse = status.inputs.find(input => input.id === id)?.name ?? status.inputs[0].name; });
-mock.handle('set_open_at_login', ({ enabled }) => (status.openAtLogin = !!enabled));
+mock.handle('set_input', ({ id }) => { status.input = id ?? null; status.inputInUse = status.inputs.find(input => input.id === id)?.name ?? status.inputs[0].name; });
+mock.handle('set_open_at_login', ({ enabled }) => (status.openAtLogin = enabled));
 mock.handle('request', ({ kind }) => {
   if (kind === 'microphone') status.microphone = 'allowed';
   if (kind === 'accessibility') status.accessibility = true;
 });
 mock.handle('layout', () => {});
-mock.handle('meeting', () => false);
-mock.handle('open_app', ({ route }) => { open(`/app.html${location.search}#${typeof route === 'string' ? route : 'notes'}`, '_blank'); });
+mock.handle('meeting', () => false); // meetings.ts answers for real
+mock.handle('open_app', ({ route }) => { open(`/app.html${location.search}#${route ?? 'notes'}`, '_blank'); });
 mock.handle('paste_last', () => emit('dictate-notice', { message: 'Nothing to paste yet' }));
 mock.handle('quit', () => emit('dictate-notice', { message: 'Quit (in the app, it would)' }));
-mock.handle('open_site', ({ url }) => { window.open(url as string, '_blank', 'noopener'); });
+mock.handle('open_site', ({ url }) => { window.open(url, '_blank', 'noopener'); });
 mock.handle('save_note', ({ title, stamp }) => `${status.notes}/${stamp} ${title || 'Note'}.md`);
 mock.handle('show_notes', () => {});
 mock.handle('plugin:app|version', () => '0.1.0');
@@ -227,16 +244,19 @@ mock.handle('update_restart', () => emit('dictate-notice', { message: 'Restart t
 
 // Input goes last: its `request` adds Send and Cancel to the permission answers setup gives.
 for (const register of [speech, notes, meetings, claude, agents, stats, setup, design, input]) register(mock);
+for (const name of COMMANDS) if (!handlers.has(name)) console.error(`${name} is not in the browser mock`);
 
-export async function invoke(command: string, args: Record<string, unknown>): Promise<unknown> {
+export async function invoke<K extends keyof Commands>(command: K, ...[args]: CommandArgs<K>): Promise<Commands[K]['result']> {
   const handler = handlers.get(command);
   if (!handler) throw new Error(`${command} is not in the browser mock`);
-  return handler(args);
+  // Omitted args arrive as {}, as Tauri's own invoke sends them: the handlers destructure.
+  return (handler as Handler<K>)((args ?? {}) as Commands[K]['args']);
 }
 
-export async function listen(event: string, handler: (payload: unknown) => void): Promise<() => void> {
+export async function listen<K extends keyof Events>(event: K, handler: (payload: Events[K]) => void): Promise<() => void> {
   const set = listeners.get(event) ?? new Set();
   listeners.set(event, set);
-  set.add(handler);
-  return () => { set.delete(handler); };
+  const hear = handler as (payload: unknown) => void;
+  set.add(hear);
+  return () => { set.delete(hear); };
 }

@@ -1,10 +1,11 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { invoke, listen } from '../../bridge';
-import { meetingLength, meetingWhen, useMeetingState, type MeetingEvent } from '../../overlay/MeetingPill';
+import { meetingLength, meetingWhen } from '../../lib/dates';
+import { sentence } from '../../lib/errors';
+import { useMeetingState } from '../../overlay/MeetingPill';
 import { folderPath, tilde, useStatus, type PageProps } from '../../store';
+import type { MeetingEvent } from '../../api/types';
 import { Button, PageHeader, Section, TextField, Tile, TileGroup, Toggle } from '../../ui';
-
-const sentence = (text: string) => /[.!?]$/.test(text) ? text : `${text}.`;
 
 export function Meetings({ settings, update }: PageProps) {
   const meetings = settings.meetings;
@@ -24,7 +25,7 @@ export function Meetings({ settings, update }: PageProps) {
   const chord = settings.shortcuts.meeting?.label;
   const leftovers = state?.leftovers ?? [];
 
-  useEffect(() => listen<MeetingEvent>('dictate-meeting', event => { if (event.state !== 'recording') setOutcome(event); }), []);
+  useEffect(() => listen('dictate-meeting', event => { if (event.state !== 'recording') setOutcome(event); }), []);
   useEffect(() => {
     const next = focusNext.current && document.getElementById(focusNext.current);
     if (next) { focusNext.current = null; next.focus(); }
@@ -33,7 +34,7 @@ export function Meetings({ settings, update }: PageProps) {
   const startOrStop = () => {
     setStartProblem(null);
     const action = recording ? 'stop' : 'start';
-    void invoke<boolean>('meeting', { action }).then(changed => {
+    void invoke('meeting', { action }).then(changed => {
       if (!changed && action === 'start') setStartProblem('Couldn’t start the meeting. Check that Dictate is allowed to use the microphone.');
       refresh();
     }, (error: unknown) => setStartProblem(typeof error === 'string' ? sentence(error) : 'Couldn’t start the meeting.'));
@@ -91,7 +92,7 @@ export function Meetings({ settings, update }: PageProps) {
           const detail = confirming
             ? (leftover.saved ? 'Discard this recording? Your saved meeting stays.' : 'Discard this recording? There’s no undo.')
             : `${meetingLength(leftover.seconds)} · ${leftover.saved ? 'Saved, but parts weren’t transcribed' : 'Not saved yet'}`;
-          return <Tile key={leftover.id} title={meetingWhen(leftover.sinceMs)} detail={detail}>
+          return <Tile key={leftover.id} title={meetingWhen(leftover.sinceMs, Date.now())} detail={detail}>
             {confirming
               ? <><Button id={`${base}-keep-${leftover.id}`} small onClick={() => keep(leftover.id)}>Keep</Button><Button small variant="danger" onClick={() => recover(leftover.id, false)}>Discard</Button></>
               : <><Button id={`${base}-discard-${leftover.id}`} small variant="quiet" onClick={() => confirm(leftover.id)}>Discard</Button>

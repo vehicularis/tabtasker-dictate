@@ -1,5 +1,5 @@
 import type { Mock } from '.';
-import type { AgentsStatus } from '../app/settings/Agents';
+import type { AgentsStatus } from '../api/types';
 
 // In a browser: the MCP server and adding it to Claude. `?agents=missing` is a Mac with neither Claude
 // app, `?agents=added` one with both, `?agents=elsewhere` one set up for another copy of the app (last
@@ -26,7 +26,6 @@ export function register(mock: Mock) {
   const copy = () => JSON.parse(JSON.stringify(status)) as AgentsStatus;
   mock.handle('agents_status', copy);
   mock.handle('agents_add', ({ target }) => new Promise((done, fail) => setTimeout(() => {
-    if (target !== 'claudeCode' && target !== 'claudeDesktop') return fail('Unknown agent');
     if (status.problem) return fail(status.problem);
     if (scene === 'fails') return fail(failures[target]);
     status[target].added = 'yes';

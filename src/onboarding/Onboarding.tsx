@@ -3,11 +3,13 @@ import { closeWindow, invoke, listen } from '../bridge';
 import { message } from '../lib/errors';
 import { COMMAND_GLYPHS, GLOBE, KEY_NAMES } from '../lib/keyNames';
 import { ask } from '../lib/request';
+import { missing, setupDone, voiceReady, type StepId } from '../lib/setup';
 import { Caret, Desk, Dots, Field } from '../app/demo/Demo';
 import { Claude } from '../app/settings/Claude';
 import { Meetings } from '../app/settings/Meetings';
 import { Notes } from '../app/settings/Notes';
-import { aiIcon, aiName, setupDone, tilde, updateSettings, useSettings, useStatus, type DictateKey, type PageProps, type Patch, type Settings, type Status } from '../store';
+import { aiIcon, aiName, tilde, updateSettings, useSettings, useStatus, type PageProps } from '../store';
+import type { DictateKey, Patch, Settings, Status } from '../api/types';
 import { Button, Icon, Kbd, ProgressBar, reduced, Segmented, Select, Tile, TileGroup, Toast, Toggle } from '../ui';
 import { Logo } from '../overlay/icons';
 import { AccessGlyph, DownloadGlyph, ICON_GLYPHS } from '../overlay/glyphs';
@@ -22,7 +24,6 @@ import './onboarding.css';
 // permission step shows what macOS says right now (polled while it is open) and never dead-ends: it says
 // what to click in System Settings and opens it, and every step can be skipped and finished later.
 
-type StepId = 'welcome' | 'microphone' | 'accessibility' | 'key' | 'model' | 'dots' | 'try' | 'extras' | 'done';
 const STEPS: { id: StepId; name: string }[] = [
   { id: 'welcome', name: 'Welcome' }, { id: 'microphone', name: 'Microphone' }, { id: 'accessibility', name: 'Accessibility' },
   { id: 'key', name: 'Your key' }, { id: 'model', name: 'Speech' }, { id: 'dots', name: 'The pill' },
@@ -34,15 +35,6 @@ const HOLD_MS = 350;
 // short enough that typing by hand afterwards doesn't count.
 const SETTLE_MS = 4_000;
 
-const voiceReady = (status: Status) => status.enabled && status.modelReady;
-
-/// What still stands between this Mac and dictating, with the step that fixes it.
-const missing = (status: Status) => ([
-  ['microphone', 'allow the microphone', status.microphone !== 'allowed'],
-  ['accessibility', 'turn on Accessibility', !status.accessibility],
-  ['model', 'download the speech model', !voiceReady(status)],
-] as [StepId, string, boolean][]).filter(([, , open]) => open);
-
 type Key = { down: boolean; tested: boolean };
 
 /// The dictate key as the native side reports it (`dictate-fn` follows the chosen key). It counts as
@@ -52,7 +44,7 @@ function useDictateKey(chosen: DictateKey | undefined): Key {
   const [tested, setTested] = useState<DictateKey | null>(null);
   const since = useRef(0), key = useRef(chosen);
   key.current = chosen;
-  useEffect(() => listen<{ down: boolean }>('dictate-fn', event => {
+  useEffect(() => listen('dictate-fn', event => {
     setDown(event.down);
     if (event.down) { since.current = performance.now(); return; }
     if (since.current && performance.now() - since.current > HOLD_MS) setTested(key.current ?? null);
@@ -433,7 +425,7 @@ function TryIt({ status, settings, dictateKey, practiced, onPracticed, go, frame
   // Text counts only while a hold that began in the box lasts, and for a moment after it: a tap, a hold
   // somewhere else and typing by hand don't pass.
   const counts = useRef({ since: 0, until: 0 });
-  useEffect(() => listen<{ down: boolean }>('dictate-fn', ({ down }) => {
+  useEffect(() => listen('dictate-fn', ({ down }) => {
     const now = performance.now(), { since } = counts.current;
     if (down) counts.current = document.activeElement === box.current ? { since: now, until: Infinity } : { since: 0, until: 0 };
     else counts.current = { since: 0, until: since && now - since > HOLD_MS ? now + SETTLE_MS : 0 };

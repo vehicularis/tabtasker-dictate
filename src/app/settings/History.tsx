@@ -1,51 +1,26 @@
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { invoke, listen } from '../../bridge';
-import { DAY, dateOf, dayTitle, localDay } from '../../lib/dates';
+import { copyText } from '../../lib/clipboard';
+import { dateOf, dayTitle, localDay } from '../../lib/dates';
 import { message } from '../../lib/errors';
+import { count } from '../../lib/format';
+import { barHeight, byDay, figures, HEIGHT, removedBy, searchHistory, share, sharePercent } from '../../lib/history';
+import { searchWords } from '../../lib/text';
 import { KEY_NAMES } from '../../lib/keyNames';
-import type { HistoryEntry, HoldMode, Keep, PageProps } from '../../store';
+import type { PageProps } from '../../store';
+import type { HistoryEntry, HistoryStats, HoldMode, Keep } from '../../api/types';
 import { Button, EmptyState, Icon, PageHeader, Section, Select, Tile, TileGroup, Toast } from '../../ui';
 import './history.css';
-
-/// history.rs's stats: `today` is a local day number (days since 1970-01-01 on this Mac) and `days`
-/// the words on each of the last 30, ending on it.
-export type HistoryStats = {
-  dictations: number; wordsToday: number; wordsTotal: number; wpm: number; savedSeconds: number; streak: number;
-  today: number; days: number[]; apps: { bundleId: string; name: string; words: number }[];
-};
 
 const KEEP: { value: Keep; label: string }[] = [
   { value: 'off', label: 'Don’t keep' }, { value: 'day', label: 'For a day' }, { value: 'week', label: 'For a week' }, { value: 'month', label: 'For a month' }, { value: 'forever', label: 'Forever' },
 ];
 const MODE: Partial<Record<HoldMode, string>> = { note: 'Note', command: 'Command', handsfree: 'Hands-free' };
 const PAGE = 100;
-/// How long each Keep holds on to the words, as history.rs prunes them; null is for good.
-const AGE: Record<Keep, number | null> = { off: 0, day: DAY, week: 7 * DAY, month: 30 * DAY, forever: null };
 const FOR: Record<Keep, string> = { off: '', day: ' for a day', week: ' for a week', month: ' for a month', forever: '' };
-/// What search looks through: a note shows no app, since it goes to a file.
-const searchable = (entry: HistoryEntry) => entry.mode === 'note' ? entry.text : `${entry.text} ${entry.appName}`;
 /// Focus for after a confirm closes, which would otherwise drop it to the page.
 const refocus = (selector: string) => requestAnimationFrame(() => document.querySelector<HTMLElement>(selector)?.focus());
 const KEEP_SELECT = '.ui-select[aria-label="Keep what you said"]';
-
-const count = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
-function duration(seconds: number) {
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return { value: minutes.toLocaleString(), unit: 'min' };
-  const hours = Math.floor(minutes / 60), rest = minutes % 60;
-  return { value: hours.toLocaleString(), unit: rest ? `h ${rest} min` : 'h' };
-}
-
-async function copyText(text: string) {
-  try { await navigator.clipboard.writeText(text); return; } catch { /* a web view without the async clipboard */ }
-  const area = Object.assign(document.createElement('textarea'), { value: text });
-  area.style.position = 'fixed'; area.style.opacity = '0';
-  document.body.append(area);
-  area.select();
-  const copied = document.execCommand('copy');
-  area.remove();
-  if (!copied) throw new Error('copy');
-}
 
 export function History({ settings, update }: PageProps) {
   const [stats, setStats] = useState<HistoryStats | null>(null);
@@ -61,8 +36,8 @@ export function History({ settings, update }: PageProps) {
 
   const fail = useCallback((error: unknown, fallback: string) => setToast({ message: message(error, fallback), error: true }), []);
   const refresh = useCallback(() => {
-    void invoke<HistoryStats>('history_stats').then(setStats).catch(error => fail(error, 'Couldn’t load your stats'));
-    void invoke<HistoryEntry[]>('history_list').then(setEntries).catch(error => fail(error, 'Couldn’t load your history'));
+    void invoke('history_stats').then(setStats).catch(error => fail(error, 'Couldn’t load your stats'));
+    void invoke('history_list').then(setEntries).catch(error => fail(error, 'Couldn’t load your history'));
   }, [fail]);
   // A change to Keep prunes on the next read, so read again.
   useEffect(refresh, [refresh, keep]);
@@ -70,8 +45,8 @@ export function History({ settings, update }: PageProps) {
   useEffect(() => { addEventListener('focus', refresh); return () => removeEventListener('focus', refresh); }, [refresh]);
   const hideToast = useCallback(() => setToast(null), []);
 
-  const words = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
-  const matches = (entries ?? []).filter(entry => words.every(word => searchable(entry).toLocaleLowerCase().includes(word)));
+  const words = searchWords(query);
+  const matches = searchHistory(entries ?? [], query);
   const today = stats?.today ?? localDay(Date.now());
 
   const remove = (entry: HistoryEntry) => {
@@ -92,9 +67,7 @@ export function History({ settings, update }: PageProps) {
   };
   // A shorter Keep removes words at once and for good, so it asks first, as Clear does.
   const choose = (next: Keep) => {
-    const age = AGE[next];
-    const before = age === null ? -Infinity : Date.now() - age;
-    const removes = (entries ?? []).filter(entry => entry.atMs < before).length;
+    const removes = removedBy(next, entries ?? [], Date.now());
     if (removes) setNarrowing({ keep: next, removes }); else void update({ history: { keep: next } });
   };
   const narrow = (confirmed: boolean) => {
@@ -106,11 +79,7 @@ export function History({ settings, update }: PageProps) {
   const type = (entry: HistoryEntry) => void invoke('history_type', { at: entry.atMs }).catch(error => fail(error, 'Couldn’t type that again'));
 
   const visible = matches.slice(0, shown);
-  const groups: { day: number; entries: HistoryEntry[] }[] = [];
-  for (const entry of visible) {
-    const day = localDay(entry.atMs);
-    if (groups.at(-1)?.day === day) groups.at(-1)!.entries.push(entry); else groups.push({ day, entries: [entry] });
-  }
+  const groups = byDay(visible);
 
   return <>
     <PageHeader icon="history" title="History & stats">Everything you’ve dictated, and how much typing it’s saved you.</PageHeader>
@@ -181,17 +150,8 @@ export function History({ settings, update }: PageProps) {
 }
 
 function Figures({ stats }: { stats: HistoryStats }) {
-  const saved = duration(stats.savedSeconds);
-  const figures: { label: string; value: string; unit?: string; hint?: string }[] = [
-    { label: 'Words today', value: stats.wordsToday.toLocaleString() },
-    { label: 'Words in total', value: stats.wordsTotal.toLocaleString() },
-    { label: 'Day streak', value: stats.streak.toLocaleString(), unit: stats.streak === 1 ? 'day' : 'days' },
-    { label: 'Average speed', ...(stats.wpm > 0 ? { value: Math.round(stats.wpm).toLocaleString(), unit: 'wpm' } : { value: 'Not yet' }), hint: 'How fast you talk' },
-    { label: 'Time saved', value: saved.value, unit: saved.unit, hint: 'Compared with typing at 40 wpm' },
-    { label: 'Dictations', value: stats.dictations.toLocaleString() },
-  ];
   return <dl className="stats-figures">
-    {figures.map(figure => <div key={figure.label} className="stats-figure">
+    {figures(stats).map(figure => <div key={figure.label} className="stats-figure">
       <dt>{figure.label}</dt>
       <dd><span className="value">{figure.value}</span>{figure.unit && <span className="unit">{figure.unit}</span>}{figure.hint && <span className="hint">{figure.hint}</span>}</dd>
     </div>)}
@@ -199,7 +159,7 @@ function Figures({ stats }: { stats: HistoryStats }) {
 }
 
 // The chart's drawing grid: one column per day, the bars rising from the baseline.
-const COLUMN = 20, BAR = 12, HEIGHT = 96, FLOOR = 3;
+const COLUMN = 20, BAR = 12;
 
 function Chart({ stats }: { stats: HistoryStats }) {
   const [picked, setPicked] = useState<number | null>(null);
@@ -224,7 +184,7 @@ function Chart({ stats }: { stats: HistoryStats }) {
     </p>
     <svg viewBox={`0 0 ${days.length * COLUMN} ${HEIGHT}`} aria-hidden="true">
       {days.map((words, i) => {
-        const height = words ? Math.max(FLOOR + 1, (words / most) * HEIGHT) : FLOOR;
+        const height = barHeight(words, most);
         return <g key={i} data-picked={picked === i || undefined} data-empty={!words || undefined} onMouseEnter={() => setPicked(i)}>
           <rect className="hit" x={i * COLUMN} y={0} width={COLUMN} height={HEIGHT} />
           <rect className="bar" x={i * COLUMN + (COLUMN - BAR) / 2} y={HEIGHT - height} width={BAR} height={height} rx={Math.min(3, height / 2)} />
@@ -240,10 +200,10 @@ function Chart({ stats }: { stats: HistoryStats }) {
 }
 
 function Share({ part, of, label }: { part: number; of: number; label: string }) {
-  const percent = of ? Math.round((part / of) * 100) : 0;
+  const percent = sharePercent(part, of);
   return <span className="stats-share">
     <span className="ui-progress" role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}><i style={{ width: `${percent}%` }} /></span>
-    <span className="percent">{part && percent === 0 ? '<1' : percent}%</span>
+    <span className="percent">{share(part, of)}%</span>
   </span>;
 }
 

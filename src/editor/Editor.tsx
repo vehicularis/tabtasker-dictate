@@ -21,13 +21,11 @@ import { FindBar, FindReplace } from './Find';
 import { Menu } from './Menu';
 import { SlashCommand } from './SlashMenu';
 import { MarkdownTableHeader, TableControls } from './TableControls';
+import { looksLikeMarkdown } from '../lib/markdown';
 import { Toolbar } from './Toolbar';
 import './editor.css';
 
 const lowlight = createLowlight(common);
-
-/// Plain text that is written as Markdown: a heading, a list, a fenced block, bold or a link on one of its lines.
-const looksLikeMarkdown = (text: string) => /^(?:#{1,6} |[-*+] |\d+\. |> |```)/m.test(text) || /\*\*[^*\n]+\*\*|\[[^\]\n]+\]\([^)\n]+\)/.test(text);
 
 // The Text editor, as TabTasker Business's Atlas pages write with it (RichEditor.tsx, on TipTap): the
 // formatting bar that folds into "More" as the pane narrows, the bar over a selection, "/" for blocks,
@@ -51,7 +49,7 @@ export function Editor({ markdown, onChange, placeholder, compact = false, autoF
     if (!path) return false;
     if (!file.type.startsWith('image/')) return false;
     const data = await new Promise<string>((done, fail) => { const reader = new FileReader(); reader.onload = () => done(String(reader.result).split(',')[1] ?? ''); reader.onerror = () => fail(reader.error); reader.readAsDataURL(file); });
-    const src = await invoke<string>('note_attach', { path, name: file.name || 'picture.png', data });
+    const src = await invoke('note_attach', { path, name: file.name || 'picture.png', data });
     const node = { type: 'image', attrs: { src, alt: file.name.replace(/\.[a-z0-9]+$/i, '') } };
     if (at === undefined) editor.chain().focus().insertContent(node).run(); else editor.chain().focus().insertContentAt(at, node).run();
     return true;

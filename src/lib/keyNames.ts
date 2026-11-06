@@ -1,4 +1,4 @@
-import type { CommandKey, DictateKey } from '../store';
+import type { CommandKey, DictateKey } from '../api/types';
 
 /// How each dictate key reads in a sentence and on a key cap.
 export const KEY_NAMES: Record<DictateKey, string> = { fn: 'fn', rightCommand: 'right ⌘', rightOption: 'right ⌥', rightControl: 'right ⌃', rightShift: 'right ⇧' };

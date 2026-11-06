@@ -1,4 +1,4 @@
-import type { Theme } from '../store';
+import type { Theme } from '../api/types';
 
 // `?theme=light|dark` pins the theme in a browser, whatever the settings say.
 const forced = new URLSearchParams(location.search).get('theme');

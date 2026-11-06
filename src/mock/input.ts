@@ -1,4 +1,4 @@
-import type { DictateKey } from '../store';
+import type { DictateKey } from '../api/types';
 import type { Mock } from '.';
 
 // The browser's names for the right-hand keys; fn never reaches a web page.

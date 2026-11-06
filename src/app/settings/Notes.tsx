@@ -2,12 +2,11 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { invoke } from '../../bridge';
 import { stamp } from '../../lib/dates';
 import { message } from '../../lib/errors';
-import { tilde, useStatus, type PageProps, type Settings } from '../../store';
+import { nameProblem, previewLines, tagOf } from '../../lib/notes';
+import { tilde, useStatus, type PageProps } from '../../store';
+import type { Folder, Preview, Settings } from '../../api/types';
 import { Button, ChipList, Icon, PageHeader, Section, Tile, TileGroup, Toggle } from '../../ui';
 import './notes.css';
-
-type Folder = { path: string; vault: string | null };
-type Preview = { fileName: string; text: string };
 
 const DEFAULT_NAME = '{date} {title}';
 // The note the preview saves.
@@ -17,12 +16,6 @@ const SAMPLE = {
   actions: '- [ ] Ask the venue for the bigger room\n- [ ] Send Maria the new floor plan',
 };
 const TOKENS = [{ token: '{date}', label: 'Date' }, { token: '{time}', label: 'Time' }, { token: '{title}', label: 'Title' }];
-
-// The store's rules for a file name, said before it refuses one.
-const nameProblem = (name: string) => /[/:]/.test(name) ? 'A file name can’t contain a slash or a colon.'
-  : name.trimStart().startsWith('.') ? 'A file name can’t start with a dot, because that would hide the note.' : null;
-// A tag as the front matter writes it: no leading #, words joined by hyphens.
-const tagOf = (text: string) => text.trim().replace(/^#+/, '').split(/\s+/).filter(Boolean).join('-');
 
 export function Notes({ settings, update }: PageProps) {
   const notes = settings.notes;
@@ -39,7 +32,7 @@ export function Notes({ settings, update }: PageProps) {
   useEffect(() => setTemplate(notes.fileName), [notes.fileName]);
   useEffect(() => {
     let live = true;
-    void invoke<Folder>('notes_folder').then(next => { if (live) setFolder(next); }).catch(() => {});
+    void invoke('notes_folder').then(next => { if (live) setFolder(next); }).catch(() => {});
     return () => { live = false; };
   }, [notes.folder]);
 
@@ -51,7 +44,7 @@ export function Notes({ settings, update }: PageProps) {
   const previewKey = JSON.stringify([shown, actions]);
   useEffect(() => {
     let live = true;
-    void invoke<Preview>('preview_note', { notes: shown, title: SAMPLE.title, body: SAMPLE.body, actions, stamp: stamp(new Date()) })
+    void invoke('preview_note', { notes: shown, title: SAMPLE.title, body: SAMPLE.body, actions, stamp: stamp(new Date()) })
       .then(next => { if (live) setPreview(next); }).catch(() => {});
     return () => { live = false; };
   }, [previewKey]);
@@ -60,7 +53,7 @@ export function Notes({ settings, update }: PageProps) {
     setChoosing(true);
     setFolderProblem(null);
     try {
-      const path = await invoke<string | null>('choose_folder', { message: 'Choose where to save your notes.', start: folder?.path ?? null });
+      const path = await invoke('choose_folder', { message: 'Choose where to save your notes.', start: folder?.path ?? null });
       if (!path) return;
       const saved = await update({ notes: { folder: path } });
       if (saved && saved.notes.folder !== path) setFolderProblem('Dictate can’t save notes in that folder. Choose another one.');
@@ -147,7 +140,7 @@ export function Notes({ settings, update }: PageProps) {
     <Section title="Preview" note={notes.dailyNote ? 'Each note is added to the end of that day’s file.' : undefined}>
       <div className="ui-tiles notes-preview" role="group" aria-label="Preview of a saved note">
         <div className="notes-file"><Icon name="note" size={16} /><span aria-live="polite">{preview?.fileName ?? ' '}</span></div>
-        <pre className="notes-text">{preview && lines(preview.text)}</pre>
+        <pre className="notes-text">{preview && previewLines(preview.text).map((line, i) => <span key={i} className={line.kind === 'body' ? undefined : line.kind}>{line.text}{'\n'}</span>)}</pre>
       </div>
     </Section>
 
@@ -164,14 +157,4 @@ export function Notes({ settings, update }: PageProps) {
       </TileGroup>
     </Section>
   </>;
-}
-
-// The preview's text, its front matter and headings set apart.
-function lines(text: string) {
-  let inFront = text.startsWith('---\n');
-  return text.replace(/\n$/, '').split('\n').map((line, i) => {
-    const kind = inFront ? 'meta' : line.startsWith('#') ? 'heading' : undefined;
-    if (inFront && i > 0 && line === '---') inFront = false;
-    return <span key={i} className={kind}>{line}{'\n'}</span>;
-  });
 }

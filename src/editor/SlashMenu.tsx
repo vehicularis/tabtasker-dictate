@@ -4,6 +4,7 @@ import { Extension, type Editor, type Range } from '@tiptap/core';
 import Suggestion, { type SuggestionProps } from '@tiptap/suggestion';
 import { Icon, type IconName } from '../ui/Icon';
 import { leave } from '../ui/motion';
+import { filterSlash } from '../lib/find';
 
 /// What "/" offers, as TabTasker Business's Text editor offers it (slashItems.ts): blocks to turn the
 /// line into or put in, each found by its name or a few other words.
@@ -25,12 +26,6 @@ const slashItems = (onImage?: () => void): SlashItem[] => {
   ];
   if (onImage) items.push({ id: 'image', title: 'Picture', detail: 'From your Mac, saved with the note', icon: 'image', keywords: ['image', 'img', 'picture', 'photo', 'screenshot'], run: (editor, range) => { editor.chain().focus().deleteRange(range).run(); onImage(); } });
   return items;
-};
-
-/** Case-insensitive match on the title and the keywords. An empty query is everything. */
-const filterSlash = (items: SlashItem[], query: string) => {
-  const q = query.trim().toLowerCase();
-  return q ? items.filter(item => item.title.toLowerCase().includes(q) || item.keywords.some(word => word.includes(q))) : items;
 };
 
 type SlashMenuHandle = { onKeyDown: (event: KeyboardEvent) => boolean };

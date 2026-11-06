@@ -1,37 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { invoke, listen } from '../../bridge';
-import { listGroup, listWhen, localDay, stamp } from '../../lib/dates';
+import { listWhen, localDay, meetingLength, meetingWhen, noteClock, stamp } from '../../lib/dates';
 import { message } from '../../lib/errors';
 import { KEY_NAMES } from '../../lib/keyNames';
-import { isUnnamed, readers, refreshLibrary } from '../../lib/library';
-import { useSelection } from '../../lib/selection';
+import { isArchived, readers, refreshLibrary, routeTo, rowText, visibleGroups } from '../../lib/library';
+import { useSelection } from '../../ui/selection';
+import { countMessage } from '../../lib/text';
 import { Menu, MenuItem, MenuLine } from '../../editor/Menu';
-import { meetingLength, meetingWhen, useMeetingState } from '../../overlay/MeetingPill';
-import type { LibraryItem, PageProps } from '../../store';
+import { useMeetingState } from '../../overlay/MeetingPill';
+import type { PageProps } from '../../store';
+import type { LibraryItem } from '../../api/types';
 import { PLACE_GLYPHS } from '../../overlay/glyphs';
 import { Button, Icon, Segmented, useFlip } from '../../ui';
 import { ColumnGroup, ColumnHead } from '../Column';
 import { NoteEditor } from './NoteEditor';
 
-// A row is two lines, as Apple Notes has them: the title, then when and the first words, on one line.
-/// A row's two lines. The title is the name the note was given; one still under the name it was made with is called
-/// by its first sentence, as Apple Notes does, or "New note" while it's empty. The glance is what comes after: the
-/// title isn't said twice when it's a line or a sentence of its own, and a transcript's "Name 00:00:09 Words" reads
-/// as "Name: Words".
-const rowText = (item: LibraryItem) => {
-  const text = item.excerpt.replace(/(\S+) \d{1,2}:\d{2}:\d{2} /g, '$1: ').trim();
-  if (isUnnamed(item.title)) {
-    const first = text.match(/^.{1,60}?(?:[.!?](?=\s)|$)/)?.[0] ?? text.slice(0, 60);
-    return { title: first.replace(/[.!?]$/, '') || `New ${item.kind}`, glance: text.slice(first.length).trim() };
-  }
-  const rest = text.startsWith(item.title) ? text.slice(item.title.length) : null;
-  return { title: item.title, glance: rest !== null && /^(?:[.!?:]|\s*$)/.test(rest) ? rest.replace(/^[\s.!?:]+/, '') : text };
-};
-type Props = { kind: 'note' | 'meeting'; path: string | null; onError: (message: string) => void; onOpen: (route: string) => void } & PageProps;
-const routeTo = (kind: 'note' | 'meeting', path: string) => `${kind === 'note' ? 'notes' : 'meetings'}/${path}`;
+type Props = { kind: LibraryItem['kind']; path: string | null; onError: (message: string) => void; onOpen: (route: string) => void } & PageProps;
 /// A note by voice, as the pill's Speak a note: the orb listens until you stop, then the note is saved and listed here.
 const speakNote = (onError: Props['onError']) => void invoke('request', { kind: 'note' }).catch(error => onError(message(error, 'Couldn’t start a spoken note.')));
-const newNote = (onOpen: Props['onOpen'], onError: Props['onError']) => void invoke<string>('note_new', { title: '', text: '', stamp: stamp() }).then(made => onOpen(routeTo('note', made)), error => onError(message(error, 'Couldn’t make a new note.')));
+const newNote = (onOpen: Props['onOpen'], onError: Props['onError']) => void invoke('note_new', { title: '', text: '', stamp: stamp() }).then(made => onOpen(routeTo('note', made)), error => onError(message(error, 'Couldn’t make a new note.')));
 
 // The library as last read, notes and meetings both, for every place that asks: one opened again knows at once
 // whether it has a list, so its column doesn't flash in and out while the folder is read again.
@@ -39,9 +26,9 @@ let known: LibraryItem[] | null = null;
 
 /// The notes, or the meetings (none for `null`), kept fresh as another one opens, a meeting ends or the
 /// window comes forward. Null only before the very first read: the window shows no column until it knows.
-export function useLibrary(kind: 'note' | 'meeting' | null, path: string | null, onError: (message: string) => void) {
+export function useLibrary(kind: LibraryItem['kind'] | null, path: string | null, onError: (message: string) => void) {
   const [all, setAll] = useState(known);
-  const refresh = useCallback(() => { if (kind) void invoke<LibraryItem[]>('library_list').then(items => { known = items; setAll(items); }, error => onError(message(error, 'Couldn’t read your notes.'))); }, [kind, onError]);
+  const refresh = useCallback(() => { if (kind) void invoke('library_list').then(items => { known = items; setAll(items); }, error => onError(message(error, 'Couldn’t read your notes.'))); }, [kind, onError]);
   useEffect(refresh, [refresh, path]);
   useEffect(() => {
     if (!kind) return;
@@ -58,18 +45,13 @@ export function useLibrary(kind: 'note' | 'meeting' | null, path: string | null,
 export function NotesColumn({ kind, path, items, onError, onOpen }: Props & { items: LibraryItem[] | null }) {
   const [query, setQuery] = useState('');
   // The list, or the archive: an archived one opened from a link shows the archive it is in.
-  const [inArchive, setInArchive] = useState(() => !!path && /\/Archive\/[^/]+$/.test(path));
-  useEffect(() => { if (path) setInArchive(/\/Archive\/[^/]+$/.test(path)); }, [path]); // the view follows the note that is open
+  const [inArchive, setInArchive] = useState(() => !!path && isArchived(path));
+  useEffect(() => { if (path) setInArchive(isArchived(path)); }, [path]); // the view follows the note that is open
   const archived = (items ?? []).filter(item => item.archived).length;
   const viewing = inArchive && archived > 0;
-  const words = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
-  const shown = (items ?? []).filter(item => item.archived === viewing && words.every(word => `${item.title} ${item.excerpt}`.toLocaleLowerCase().includes(word)));
+  const groups = visibleGroups(items ?? [], query, viewing, Date.now());
+  const shown = groups.flatMap(group => group.items);
   const today = localDay(Date.now());
-  const groups = shown.reduce<{ title: string; items: LibraryItem[] }[]>((acc, item) => {
-    const title = listGroup(localDay(item.modifiedMs), today), group = acc[acc.length - 1];
-    if (group && group.title === title) group.items.push(item); else acc.push({ title, items: [item] });
-    return acc;
-  }, []);
   const list = useRef<HTMLDivElement>(null);
   useFlip(list, items); // a note added, archived or moved to the top glides there; typing in the search does not
 
@@ -87,7 +69,7 @@ export function NotesColumn({ kind, path, items, onError, onOpen }: Props & { it
     sel.clear(); setAsking(null); setMenu(null);
     let done = 0;
     for (const one of paths) { try { await work(one); done++; } catch { /* left where it was */ } }
-    onError(done === paths.length ? `${said(many(done))}.` : `${said(`${done} of ${many(paths.length)}`)}. The rest weren’t changed.`);
+    onError(countMessage(done, paths.length, said, many));
     if (path && paths.includes(path)) onOpen(home);
     refreshLibrary();
   };
@@ -122,7 +104,7 @@ export function NotesColumn({ kind, path, items, onError, onOpen }: Props & { it
       <MenuItem danger onSelect={() => trash(menu.paths)}><Icon name="trash" size={15} />Move {menu.paths.length > 1 ? `${many(menu.paths.length)} ` : ''}to the Trash</MenuItem>
     </Menu>}
     <div ref={list} key={viewing ? 'archive' : 'list'} className="column-scroll" onKeyDown={sel.keys}>
-      {items && !shown.length && (words.length ? <p className="list-none">Nothing matches that search.</p> : !viewing && <p className="list-none">Everything’s in the archive.</p>)}
+      {items && !shown.length && (query.trim() ? <p className="list-none">Nothing matches that search.</p> : !viewing && <p className="list-none">Everything’s in the archive.</p>)}
       {groups.map(group => <ColumnGroup key={group.title} flip={`group:${group.title}`} title={group.title} count={group.items.length}>
         {group.items.map(item => {
           const { title, glance } = rowText(item);
@@ -172,7 +154,7 @@ function MeetingAction({ onError, labelled = false }: { onError: (message: strin
     if (busy) return;
     setBusy(true);
     const action = recording ? 'stop' : 'start';
-    void invoke<boolean>('meeting', { action }).then(changed => { if (!changed && action === 'start') onError('Couldn’t start the meeting. Check your microphone in Settings.'); refresh(); },
+    void invoke('meeting', { action }).then(changed => { if (!changed && action === 'start') onError('Couldn’t start the meeting. Check your microphone in Settings.'); refresh(); },
       error => onError(message(error, 'Couldn’t start the meeting.'))).finally(() => setBusy(false));
   };
   return <button type="button" className={`ui-button record${recording ? ' on' : labelled ? ' primary' : ' quiet'}`} aria-label={recording ? 'Stop the meeting' : 'Start a meeting'} title={recording ? 'Stop the meeting' : 'Start a meeting'} disabled={!state || busy} onClick={toggle}>
@@ -189,14 +171,13 @@ function MeetingStrip({ onError }: { onError: (message: string) => void }) {
   useEffect(() => { if (!recording) return; const timer = setInterval(() => setTick(n => n + 1), 1000); return () => clearInterval(timer); }, [recording]);
   const recover = (id: string, save: boolean) => { setConfirming(null); void invoke('meeting_recover', { id, save }).then(refresh, error => onError(message(error, save ? 'Couldn’t save the recording. Try again.' : 'Couldn’t discard the recording. Try again.'))); };
   const since = recording?.since ?? 0;
-  const seconds = since ? Math.max(0, Math.floor((Date.now() - since) / 1000)) : 0;
-  const elapsed = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+  const elapsed = noteClock(since, Date.now());
   if (!recording && !state?.saving.length && !state?.leftovers.length) return null;
   return <div className="meeting-strip">
     {recording && <span className="meeting-live"><i />{elapsed} · {recording.system === 'on' ? 'you and the call' : 'your microphone'}</span>}
     {!recording && !!state?.saving.length && <span className="meeting-live">Saving the last meeting…</span>}
     {state?.leftovers.map(leftover => <div key={leftover.id} className="leftover">
-      <span>{meetingWhen(leftover.sinceMs)} · {meetingLength(leftover.seconds)} · {leftover.saved ? 'partly transcribed' : 'not saved yet'}</span>
+      <span>{meetingWhen(leftover.sinceMs, Date.now())} · {meetingLength(leftover.seconds)} · {leftover.saved ? 'partly transcribed' : 'not saved yet'}</span>
       {confirming === leftover.id
         ? <><Button small variant="quiet" onClick={() => setConfirming(null)}>Keep</Button><Button small variant="danger" onClick={() => recover(leftover.id, false)}>Discard</Button></>
         : <><Button small variant="quiet" onClick={() => setConfirming(leftover.id)}>Discard</Button><Button small variant="primary" onClick={() => recover(leftover.id, true)}>{leftover.saved ? 'Try again' : 'Save'}</Button></>}
