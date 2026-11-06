@@ -3,7 +3,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Listener, Manager};
 use crate::dictation::{context, history, text};
 use crate::{ai, settings};
-use dictate_engine::{models::{self, cancellable, ModelKind as Model, CANCELLED, RETIRED, SILERO}, audio::{self, HANDS_FREE_SAMPLES, HOLD_SAMPLES as MAX_SAMPLES}, error::Error, pieces, prompt::{self, PROMPT_TOKENS}, vad::{Gate, SpeechDetector, Verdict}, whisper::{self, Ask, Segment, Whisper}};
+use dictate_engine::{models::{self, cancellable, ModelKind as Model, CANCELLED, RETIRED, SILERO}, audio::{self, HANDS_FREE_SAMPLES, HOLD_SAMPLES as MAX_SAMPLES}, error::Error, pieces, pipeline::{self, LanguageFrom, SURE}, prompt::{self, PROMPT_TOKENS}, vad::{Gate, SpeechDetector, Verdict}, whisper::{self, Ask, Segment, Whisper}};
 
 struct LocalSpeech {
   root: PathBuf,
@@ -426,29 +426,35 @@ impl LocalSpeech {
   /// A pass in the language Settings pins, or else the hold's: detected by its first pass that is sure
   /// of it, and reused by every later pass, since detecting again would double the work.
   fn pass(&self, engine: &mut Whisper, id: &str, pcm: &[f32], cancelled: Arc<AtomicBool>, quick: bool) -> Result<String, Error> {
-    if cancelled.load(Ordering::Relaxed) { return Err(Error::Cancelled); }
-    let ask = ask_now();
+    if cancelled.load(Ordering::Relaxed) { return Err(Error::Cancelled); } // before counting or logging a pass that never ran
     let started = Instant::now();
+    let ask = ask_now();
     let held = self.hold(id, |hold| hold.language);
-    let (language, how) = match ask.language.map(|language| (language, "Settings".to_owned())).or_else(|| held.map(|language| (language, "this hold".to_owned()))) {
-      Some(found) => found,
-      None => {
-        let (language, sure) = engine.detect_language(pcm)?;
-        if sure >= 0.9 { self.hold(id, |hold| hold.language = Some(language)); }
-        (language, format!("detected, {sure:.2} sure{}", if sure >= 0.9 { "" } else { ", not kept" }))
-      }
-    };
-    self.hold(id, |hold| hold.spoken = Some(language));
-    let result = engine.transcribe(pcm, language, &ask, &|| cancelled.load(Ordering::Relaxed), quick).map(|heard| heard.text);
-    let ms = started.elapsed().as_millis();
+    let result = pipeline::hear(engine, pcm, &ask, held, &|| cancelled.load(Ordering::Relaxed), quick);
+    if let Ok(heard) = &result {
+      self.hold(id, |hold| {
+        if let LanguageFrom::Detected { sure } = heard.from { if sure >= SURE { hold.language = Some(heard.language); } }
+        hold.spoken = Some(heard.language);
+      });
+    }
+    let ms = result.as_ref().map_or_else(|_| started.elapsed().as_millis(), |heard| heard.ms);
     if quick {
       self.hold(id, |hold| { hold.live.passes += 1; hold.live.total_ms += ms; hold.live.slowest_ms = hold.live.slowest_ms.max(ms); });
     } else {
-      let outcome = match &result { Ok(text) => format!("{} word(s)", text.split_whitespace().count()), Err(Error::Unheard) => "nothing it was sure of".into(), Err(error) => format!("failed: {error}") };
+      let outcome = match &result { Ok(heard) => format!("{} word(s)", heard.text.split_whitespace().count()), Err(Error::Unheard) => "nothing it was sure of".into(), Err(error) => format!("failed: {error}") };
+      let (language, how) = match &result {
+        Ok(heard) => (Some(heard.language), match heard.from {
+          LanguageFrom::Settings => "Settings".to_owned(),
+          LanguageFrom::Hold => "this hold".to_owned(),
+          LanguageFrom::Detected { sure } => format!("detected, {sure:.2} sure{}", if sure >= SURE { "" } else { ", not kept" }),
+        }),
+        // hear drops what it learned when the pass fails; the language is still known unless it was to be detected.
+        Err(_) => ask.language.map(|language| (Some(language), "Settings".to_owned())).or_else(|| held.map(|language| (Some(language), "this hold".to_owned()))).unwrap_or((None, "not detected".to_owned())),
+      };
       log::info!("dictation pass: {:.1}s of audio, language {} ({how}){}, 5 beams, {ms} ms, {outcome}", pcm.len() as f32 / 16_000.0,
-        whisper::lang_code(language).unwrap_or("?"), if ask.translate { ", translated" } else { "" });
+        language.and_then(whisper::lang_code).unwrap_or("?"), if ask.translate { ", translated" } else { "" });
     }
-    result
+    result.map(|heard| heard.text)
   }
 
   /// The words once the key is let go. A live pass that already heard everything said is the answer, and

@@ -5,6 +5,7 @@ pub mod audio;
 pub mod cleanup;
 pub mod error;
 pub mod models;
+pub mod pipeline;
 pub mod pieces;
 pub mod prompt;
 pub mod text;
