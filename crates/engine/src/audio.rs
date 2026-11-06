@@ -95,7 +95,9 @@ mod tests {
   fn audio_quieter_than_a_breath_is_silence() {
     assert!(is_silent(&vec![0.0005; 16_000]));
     let mut said = vec![0.0005; 16_000];
-    for (i, sample) in said[4_000..6_000].iter_mut().enumerate() { *sample = 0.02 * (i as f32 * 0.3).sin(); } // a quiet word on the built-in mic
+    for (i, sample) in said[4_000..6_000].iter_mut().enumerate() {
+      *sample = 0.02 * (i as f32 * 0.3).sin();
+    } // a quiet word on the built-in mic
     assert!(!is_silent(&said));
   }
 
@@ -105,13 +107,17 @@ mod tests {
     assert!(!is_voiced(&room(0.001)), "a quiet room");
     // A word: one tenth of a second at RMS 0.004 with a click of 0.025 in it.
     let mut word = room(0.001);
-    for (i, sample) in word[3_200..4_800].iter_mut().enumerate() { *sample = 0.0057 * (i as f32 * 0.3).sin(); }
+    for (i, sample) in word[3_200..4_800].iter_mut().enumerate() {
+      *sample = 0.0057 * (i as f32 * 0.3).sin();
+    }
     assert!(!is_voiced(&word), "RMS 0.004 alone, with no peak, isn't a word");
     word[4_000] = 0.025;
     assert!(is_voiced(&word));
     // Or plainly above that level, peak or not.
     let mut loud = room(0.001);
-    for (i, sample) in loud[8_000..9_600].iter_mut().enumerate() { *sample = 0.0092 * (i as f32 * 0.3).sin(); }
+    for (i, sample) in loud[8_000..9_600].iter_mut().enumerate() {
+      *sample = 0.0092 * (i as f32 * 0.3).sin();
+    }
     assert!(is_voiced(&loud));
     assert!(!is_voiced(&[]));
   }

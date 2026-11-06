@@ -31,7 +31,9 @@ fn home() -> Result<PathBuf, String> {
 }
 
 /// The app data folder, as Tauri names it from the bundle identifier.
-fn data_dir(home: &Path) -> PathBuf { home.join("Library/Application Support/com.tabtasker.dictate") }
+fn data_dir(home: &Path) -> PathBuf {
+  home.join("Library/Application Support/com.tabtasker.dictate")
+}
 
 fn load_settings() -> Settings {
   home().map(|home| crate::settings::use_file(&data_dir(&home).join("settings.json"))).unwrap_or_default()
@@ -40,14 +42,27 @@ fn load_settings() -> Settings {
 // ---------- the tools ----------
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Gate { Notes, Meetings, History, Write }
+enum Gate {
+  Notes,
+  Meetings,
+  History,
+  Write,
+}
 
 impl Gate {
   fn open(self, agents: &Agents) -> bool {
-    agents.mcp && match self { Gate::Notes => agents.share_notes, Gate::Meetings => agents.share_meetings, Gate::History => agents.share_history, Gate::Write => agents.allow_write }
+    agents.mcp
+      && match self {
+        Gate::Notes => agents.share_notes,
+        Gate::Meetings => agents.share_meetings,
+        Gate::History => agents.share_history,
+        Gate::Write => agents.allow_write,
+      }
   }
   fn refusal(self, agents: &Agents) -> &'static str {
-    if !agents.mcp { return "TabTasker Dictate isn’t answering agents. The person can turn on Answer agents in TabTasker Dictate, Settings, Agents."; }
+    if !agents.mcp {
+      return "TabTasker Dictate isn’t answering agents. The person can turn on Answer agents in TabTasker Dictate, Settings, Agents.";
+    }
     match self {
       Gate::Notes => "Sharing notes is off. The person can turn on Notes in TabTasker Dictate, Settings, Agents.",
       Gate::Meetings => "Sharing meetings is off. The person can turn on Meetings in TabTasker Dictate, Settings, Agents.",
@@ -58,10 +73,14 @@ impl Gate {
 }
 
 const TOOLS: [(&str, Gate); 8] = [
-  ("list_notes", Gate::Notes), ("read_note", Gate::Notes), ("search_notes", Gate::Notes),
-  ("list_meetings", Gate::Meetings), ("read_meeting", Gate::Meetings),
+  ("list_notes", Gate::Notes),
+  ("read_note", Gate::Notes),
+  ("search_notes", Gate::Notes),
+  ("list_meetings", Gate::Meetings),
+  ("read_meeting", Gate::Meetings),
   ("recent_dictations", Gate::History),
-  ("create_note", Gate::Write), ("append_to_note", Gate::Write),
+  ("create_note", Gate::Write),
+  ("append_to_note", Gate::Write),
 ];
 
 fn allowed(agents: &Agents) -> Vec<&'static str> {
@@ -69,7 +88,8 @@ fn allowed(agents: &Agents) -> Vec<&'static str> {
 }
 
 fn definition(name: &str) -> Value {
-  let limit = |default: u32, max: u32| json!({ "type": "integer", "minimum": 1, "maximum": max, "description": format!("How many to return, {default} when left out.") });
+  let limit =
+    |default: u32, max: u32| json!({ "type": "integer", "minimum": 1, "maximum": max, "description": format!("How many to return, {default} when left out.") });
   let path = |what: &str| json!({ "type": "string", "description": format!("The {what}’s path, as {what}s are listed.") });
   let read = |title: &str| json!({ "title": title, "readOnlyHint": true, "openWorldHint": false });
   let (title, description, properties, required, annotations) = match name {
@@ -121,7 +141,9 @@ fn text_arg<'a>(args: &'a Value, key: &str) -> Result<&'a str, String> {
 fn limit_arg(args: &Value, default: usize, max: usize) -> Result<usize, String> {
   match args.get("limit") {
     None | Some(Value::Null) => Ok(default),
-    Some(value) => value.as_f64().filter(|n| *n >= 1.0).map(|n| (n as usize).min(max)).ok_or_else(|| format!("“limit” must be a whole number from 1 to {max}.")),
+    Some(value) => {
+      value.as_f64().filter(|n| *n >= 1.0).map(|n| (n as usize).min(max)).ok_or_else(|| format!("“limit” must be a whole number from 1 to {max}."))
+    }
   }
 }
 
@@ -132,7 +154,9 @@ fn run_tool(name: &str, args: &Value, settings: &Settings) -> Result<Value, Stri
   let (notes_dir, meetings_dir) = (real(notes::notes_dir()?), real(notes::meetings_dir()?));
   // Meetings saved inside the notes folder are not notes, so turning meetings off keeps them out of the note tools too.
   let skip = (meetings_dir != notes_dir && meetings_dir.starts_with(&notes_dir)).then_some(meetings_dir.as_path());
-  if meetings_dir == notes_dir { one_folder(name, &settings.agents)?; }
+  if meetings_dir == notes_dir {
+    one_folder(name, &settings.agents)?;
+  }
   match name {
     "list_notes" | "list_meetings" => {
       let limit = limit_arg(args, 50, 500)?;
@@ -146,26 +170,43 @@ fn run_tool(name: &str, args: &Value, settings: &Settings) -> Result<Value, Stri
       let query = text_arg(args, "query")?;
       let limit = limit_arg(args, 20, 100)?;
       let words: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
-      if words.is_empty() || query.chars().count() > 200 { return Err("Give a few words to look for.".into()); }
+      if words.is_empty() || query.chars().count() > 200 {
+        return Err("Give a few words to look for.".into());
+      }
       Ok(structured(json!({ "query": query, "results": search(&notes_dir, skip, &words, limit)? })))
     }
     "recent_dictations" => {
       let limit = limit_arg(args, 20, 200)?;
-      if settings.history.keep == Keep::Off { return Err("TabTasker Dictate keeps no words in its history, so there are none to share. The person can change that in Settings, History & stats.".into()); }
+      if settings.history.keep == Keep::Off {
+        return Err(
+          "TabTasker Dictate keeps no words in its history, so there are none to share. The person can change that in Settings, History & stats.".into(),
+        );
+      }
       Ok(structured(json!({ "dictations": dictations(&data_dir(&home()?).join("history.jsonl"), settings.history.keep, limit, now_ms()) })))
     }
     "create_note" => {
-      let title = match args.get("title") { None | Some(Value::Null) => "", _ => text_arg(args, "title")? };
+      let title = match args.get("title") {
+        None | Some(Value::Null) => "",
+        _ => text_arg(args, "title")?,
+      };
       let text = text_arg(args, "text")?;
-      if text.trim().is_empty() { return Err("“text” is empty.".into()); }
-      if text.chars().count() > MAX_TEXT || title.chars().count() > 200 { return Err("That note is too long.".into()); }
+      if text.trim().is_empty() {
+        return Err("“text” is empty.".into());
+      }
+      if text.chars().count() > MAX_TEXT || title.chars().count() > 200 {
+        return Err("That note is too long.".into());
+      }
       let path = notes::save_markdown(notes::Kind::Note, title.trim(), text, &stamp(now_ms() / 1000), &[])?;
       Ok(structured(json!({ "path": relative(&notes_dir, &real(path)), "saved": true })))
     }
     "append_to_note" => {
       let text = text_arg(args, "text")?;
-      if text.trim().is_empty() { return Err("“text” is empty.".into()); }
-      if text.chars().count() > MAX_TEXT { return Err("That is too long to add at once.".into()); }
+      if text.trim().is_empty() {
+        return Err("“text” is empty.".into());
+      }
+      if text.chars().count() > MAX_TEXT {
+        return Err("That is too long to add at once.".into());
+      }
       let file = resolve(&notes_dir, text_arg(args, "path")?, skip, false)?;
       append(&file, text)?;
       Ok(result(format!("Added to {}.", relative(&notes_dir, &file)), false))
@@ -182,7 +223,9 @@ fn one_folder(name: &str, agents: &Agents) -> Result<(), String> {
     "list_meetings" | "read_meeting" => (!agents.share_notes, "Notes"),
     _ => (false, ""),
   };
-  if !off { return Ok(()); }
+  if !off {
+    return Ok(());
+  }
   Err(format!("Meetings are saved in the notes folder, and sharing {} is off, so that folder isn’t shared. The person can turn on {setting} in TabTasker Dictate, Settings, Agents, or choose a separate meetings folder in Settings, Meetings.", setting.to_lowercase()))
 }
 
@@ -191,13 +234,22 @@ fn one_folder(name: &str, agents: &Agents) -> Result<(), String> {
 const DENIED: &str = "macOS doesn’t let this agent open that folder. The person can allow the app the agent runs in (such as Claude, Terminal or their editor) in System Settings, Privacy & Security, Files and Folders.";
 
 fn unreadable(e: &std::io::Error, otherwise: impl FnOnce() -> String) -> String {
-  if e.kind() == std::io::ErrorKind::PermissionDenied { DENIED.into() } else { otherwise() }
+  if e.kind() == std::io::ErrorKind::PermissionDenied {
+    DENIED.into()
+  } else {
+    otherwise()
+  }
 }
 
 // ---------- files, confined to their folder ----------
 
 #[derive(Debug)]
-struct Doc { path: String, title: String, modified_ms: u64, bytes: u64 }
+struct Doc {
+  path: String,
+  title: String,
+  modified_ms: u64,
+  bytes: u64,
+}
 
 impl Doc {
   fn json(&self) -> Value {
@@ -225,12 +277,18 @@ fn list(root: &Path, skip: Option<&Path>, deep: bool) -> Result<Vec<Doc>, String
     };
     for entry in entries.flatten() {
       seen += 1;
-      if seen > 20_000 { break; }
+      if seen > 20_000 {
+        break;
+      }
       let path = entry.path();
       let Ok(kind) = entry.file_type() else { continue };
-      if entry.file_name().to_string_lossy().starts_with('.') || kind.is_symlink() { continue; }
+      if entry.file_name().to_string_lossy().starts_with('.') || kind.is_symlink() {
+        continue;
+      }
       if kind.is_dir() {
-        if deep && depth < 8 && Some(path.as_path()) != skip { folders.push((path, depth + 1)); }
+        if deep && depth < 8 && Some(path.as_path()) != skip {
+          folders.push((path, depth + 1));
+        }
       } else if kind.is_file() && path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("md")) {
         let Ok(meta) = entry.metadata() else { continue };
         let modified_ms = meta.modified().ok().and_then(|at| at.duration_since(UNIX_EPOCH).ok()).map_or(0, |since| since.as_millis() as u64);
@@ -247,7 +305,9 @@ fn list(root: &Path, skip: Option<&Path>, deep: bool) -> Result<Vec<Doc>, String
 /// outside the folder can be reached. `flat` allows only files directly in `root`.
 fn resolve(root: &Path, path: &str, skip: Option<&Path>, flat: bool) -> Result<PathBuf, String> {
   let path = path.trim();
-  if path.is_empty() || path.contains('\0') { return Err("Give a path, as the list shows it.".into()); }
+  if path.is_empty() || path.contains('\0') {
+    return Err("Give a path, as the list shows it.".into());
+  }
   use std::io::ErrorKind::{NotADirectory, NotFound};
   let root = root.canonicalize().map_err(|e| match e.kind() {
     NotFound => "There are none yet: the folder doesn’t exist.".into(),
@@ -259,17 +319,27 @@ fn resolve(root: &Path, path: &str, skip: Option<&Path>, flat: bool) -> Result<P
   })?;
   let inside = file.strip_prefix(&root).ok().filter(|rest| !rest.as_os_str().is_empty());
   let Some(rest) = inside else { return Err(format!("“{path}” is outside the folder agents can read.")) };
-  if flat && rest.components().count() != 1 { return Err(format!("“{path}” is outside the folder agents can read.")); }
-  if rest.components().any(|part| part.as_os_str().to_string_lossy().starts_with('.')) { return Err(format!("There is nothing at “{path}”.")); }
-  if skip.and_then(|skip| skip.canonicalize().ok()).is_some_and(|skip| file.starts_with(skip)) { return Err(format!("“{path}” is a meeting, not a note.")); }
-  if !file.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("md")) || !file.is_file() { return Err(format!("“{path}” isn’t a Markdown note.")); }
+  if flat && rest.components().count() != 1 {
+    return Err(format!("“{path}” is outside the folder agents can read."));
+  }
+  if rest.components().any(|part| part.as_os_str().to_string_lossy().starts_with('.')) {
+    return Err(format!("There is nothing at “{path}”."));
+  }
+  if skip.and_then(|skip| skip.canonicalize().ok()).is_some_and(|skip| file.starts_with(skip)) {
+    return Err(format!("“{path}” is a meeting, not a note."));
+  }
+  if !file.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("md")) || !file.is_file() {
+    return Err(format!("“{path}” isn’t a Markdown note."));
+  }
   Ok(file)
 }
 
 fn read(file: &Path) -> Result<String, String> {
   let failed = |e: std::io::Error| unreadable(&e, || format!("Couldn’t read it: {e}"));
   let size = std::fs::metadata(file).map_err(failed)?.len();
-  if size > MAX_FILE { return Err("That file is too large to read.".into()); }
+  if size > MAX_FILE {
+    return Err("That file is too large to read.".into());
+  }
   let bytes = std::fs::read(file).map_err(failed)?;
   Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
@@ -278,14 +348,25 @@ fn read(file: &Path) -> Result<String, String> {
 fn search(root: &Path, skip: Option<&Path>, words: &[String], limit: usize) -> Result<Vec<Value>, String> {
   let mut results = Vec::new();
   for file in list(root, skip, true)? {
-    if results.len() == limit { break; }
-    if file.bytes > MAX_FILE { continue; }
+    if results.len() == limit {
+      break;
+    }
+    if file.bytes > MAX_FILE {
+      continue;
+    }
     let Ok(bytes) = std::fs::read(root.join(&file.path)) else { continue };
     let text = String::from_utf8_lossy(&bytes);
     let (title, lower) = (file.title.to_lowercase(), text.to_lowercase());
-    if !words.iter().all(|word| title.contains(word.as_str()) || lower.contains(word.as_str())) { continue; }
-    let lines: Vec<Value> = text.lines().enumerate()
-      .filter(|(_, line)| { let line = line.to_lowercase(); words.iter().any(|word| line.contains(word.as_str())) })
+    if !words.iter().all(|word| title.contains(word.as_str()) || lower.contains(word.as_str())) {
+      continue;
+    }
+    let lines: Vec<Value> = text
+      .lines()
+      .enumerate()
+      .filter(|(_, line)| {
+        let line = line.to_lowercase();
+        words.iter().any(|word| line.contains(word.as_str()))
+      })
       .take(3)
       .map(|(at, line)| json!({ "line": at + 1, "text": line.trim().chars().take(200).collect::<String>() }))
       .collect();
@@ -304,12 +385,24 @@ const NO_FOLLOW: i32 = 0x0100;
 fn append(file: &Path, text: &str) -> Result<(), String> {
   use std::io::{Seek, SeekFrom};
   use std::os::unix::fs::OpenOptionsExt;
-  let mut handle = std::fs::OpenOptions::new().read(true).append(true).custom_flags(NO_FOLLOW).open(file)
+  let mut handle = std::fs::OpenOptions::new()
+    .read(true)
+    .append(true)
+    .custom_flags(NO_FOLLOW)
+    .open(file)
     .map_err(|e| unreadable(&e, || format!("Couldn’t open the note: {e}")))?;
   let mut last = [0];
   let empty = handle.metadata().map_err(|e| e.to_string())?.len() == 0;
-  if !empty { handle.seek(SeekFrom::End(-1)).and_then(|_| handle.read_exact(&mut last)).map_err(|e| format!("Couldn’t read the note: {e}"))?; }
-  let gap = if empty { "" } else if last[0] == b'\n' { "\n" } else { "\n\n" };
+  if !empty {
+    handle.seek(SeekFrom::End(-1)).and_then(|_| handle.read_exact(&mut last)).map_err(|e| format!("Couldn’t read the note: {e}"))?;
+  }
+  let gap = if empty {
+    ""
+  } else if last[0] == b'\n' {
+    "\n"
+  } else {
+    "\n\n"
+  };
   let addition = format!("{gap}{}\n", text.trim_end());
   handle.write_all(addition.as_bytes()).and_then(|_| handle.sync_all()).map_err(|e| format!("Couldn’t add to the note: {e}"))
 }
@@ -317,31 +410,56 @@ fn append(file: &Path, text: &str) -> Result<(), String> {
 /// The newest dictations History keeps the words of, as the stats page writes them to history.jsonl.
 fn dictations(file: &Path, keep: Keep, limit: usize, now: u64) -> Vec<Value> {
   const DAY: u64 = 86_400_000;
-  let since = match keep { Keep::Off => return Vec::new(), Keep::Day => now.saturating_sub(DAY), Keep::Week => now.saturating_sub(7 * DAY), Keep::Month => now.saturating_sub(30 * DAY), Keep::Forever => 0 };
+  let since = match keep {
+    Keep::Off => return Vec::new(),
+    Keep::Day => now.saturating_sub(DAY),
+    Keep::Week => now.saturating_sub(7 * DAY),
+    Keep::Month => now.saturating_sub(30 * DAY),
+    Keep::Forever => 0,
+  };
   let Ok(handle) = std::fs::File::open(file) else { return Vec::new() };
   let mut newest = std::collections::VecDeque::with_capacity(limit + 1);
   for line in std::io::BufReader::new(handle).split(b'\n').map_while(Result::ok) {
     let Ok(entry) = serde_json::from_slice::<Value>(&line) else { continue };
     let (Some(at), Some(text)) = (entry["atMs"].as_u64(), entry["text"].as_str()) else { continue };
-    if at < since || text.trim().is_empty() { continue; }
-    newest.push_back(json!({ "at": iso(at), "app": entry["appName"].as_str().unwrap_or(""), "mode": entry["mode"].as_str().unwrap_or("dictate"), "text": text }));
-    if newest.len() > limit { newest.pop_front(); }
+    if at < since || text.trim().is_empty() {
+      continue;
+    }
+    newest
+      .push_back(json!({ "at": iso(at), "app": entry["appName"].as_str().unwrap_or(""), "mode": entry["mode"].as_str().unwrap_or("dictate"), "text": text }));
+    if newest.len() > limit {
+      newest.pop_front();
+    }
   }
   newest.into_iter().rev().collect()
 }
 
 // ---------- time, in the Mac's time zone ----------
 
-fn local(secs: u64) -> crate::dictation::history::Tm { crate::dictation::history::local(secs as i64) }
+fn local(secs: u64) -> crate::dictation::history::Tm {
+  crate::dictation::history::local(secs as i64)
+}
 
-fn now_ms() -> u64 { SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |since| since.as_millis() as u64) }
+fn now_ms() -> u64 {
+  SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |since| since.as_millis() as u64)
+}
 
 /// "2026-11-02T14:05:09+01:00"
 fn iso(ms: u64) -> String {
   let tm = local(ms / 1000);
   let offset = tm.gmtoff / 60;
-  format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}{}{:02}:{:02}", tm.year + 1900, tm.mon + 1, tm.mday, tm.hour, tm.min, tm.sec,
-    if offset < 0 { '-' } else { '+' }, offset.abs() / 60, offset.abs() % 60)
+  format!(
+    "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}{}{:02}:{:02}",
+    tm.year + 1900,
+    tm.mon + 1,
+    tm.mday,
+    tm.hour,
+    tm.min,
+    tm.sec,
+    if offset < 0 { '-' } else { '+' },
+    offset.abs() / 60,
+    offset.abs() % 60
+  )
 }
 
 /// The note stamp save_markdown takes: "2026-11-02 14.05".
@@ -366,9 +484,15 @@ fn error(id: Value, code: i64, message: &str) -> Value {
 
 /// Who is asking, as the client's `clientInfo` says: its id, and the name it shows people when it gives one.
 #[derive(Default)]
-struct Client { name: String, title: Option<String> }
+struct Client {
+  name: String,
+  title: Option<String>,
+}
 
-struct Session { client: Client, ready: Arc<AtomicBool> }
+struct Session {
+  client: Client,
+  ready: Arc<AtomicBool>,
+}
 
 impl Session {
   /// The answer to one line from the client, or none for a notification.
@@ -378,14 +502,20 @@ impl Session {
     let id = request.get("id").cloned();
     let Some(method) = request.get("method").and_then(Value::as_str).filter(|_| request.get("jsonrpc") == Some(&json!("2.0"))) else {
       // A response to a request this server never sends.
-      if id.is_some() && (request.contains_key("result") || request.contains_key("error")) { return None; }
+      if id.is_some() && (request.contains_key("result") || request.contains_key("error")) {
+        return None;
+      }
       return Some(error(id.unwrap_or(Value::Null), -32600, "Invalid request"));
     };
     let Some(id) = id else {
-      if method == "notifications/initialized" { self.ready.store(true, Ordering::SeqCst); }
+      if method == "notifications/initialized" {
+        self.ready.store(true, Ordering::SeqCst);
+      }
       return None;
     };
-    if !(id.is_string() || id.is_i64() || id.is_u64()) { return Some(error(Value::Null, -32600, "Invalid request: the id must be a string or a number")); }
+    if !(id.is_string() || id.is_i64() || id.is_u64()) {
+      return Some(error(Value::Null, -32600, "Invalid request: the id must be a string or a number"));
+    }
     let params = request.get("params").cloned().unwrap_or(Value::Null);
     let answer = match method {
       "initialize" => Ok(self.initialize(&params)),
@@ -404,7 +534,8 @@ impl Session {
     let asked = params["protocolVersion"].as_str().unwrap_or(PROTOCOL);
     let version = PROTOCOLS.iter().find(|known| **known == asked).copied().unwrap_or(PROTOCOL);
     let clean = |text: &Value| text.as_str().map(|text| text.chars().filter(|c| !c.is_control()).take(64).collect::<String>().trim().to_owned());
-    self.client = Client { name: clean(&params["clientInfo"]["name"]).unwrap_or_default(), title: clean(&params["clientInfo"]["title"]).filter(|title| !title.is_empty()) };
+    self.client =
+      Client { name: clean(&params["clientInfo"]["name"]).unwrap_or_default(), title: clean(&params["clientInfo"]["title"]).filter(|title| !title.is_empty()) };
     json!({
       "protocolVersion": version,
       "capabilities": { "tools": { "listChanged": true } },
@@ -415,7 +546,11 @@ impl Session {
 
   fn call(&self, params: &Value) -> Result<Value, (i64, String)> {
     let name = params["name"].as_str().ok_or((-32602, "Invalid params: “name” is required".to_string()))?;
-    let args = match &params["arguments"] { Value::Null => json!({}), args @ Value::Object(_) => args.clone(), _ => return Err((-32602, "Invalid params: “arguments” must be an object".into())) };
+    let args = match &params["arguments"] {
+      Value::Null => json!({}),
+      args @ Value::Object(_) => args.clone(),
+      _ => return Err((-32602, "Invalid params: “arguments” must be an object".into())),
+    };
     let (name, gate) = TOOLS.iter().find(|(tool, _)| *tool == name).copied().ok_or((-32602, format!("Unknown tool: {name}")))?;
     let settings = load_settings();
     let answer = if gate.open(&settings.agents) {
@@ -449,9 +584,13 @@ pub fn serve(mut input: impl BufRead, output: impl Write + Send + 'static) {
       loop {
         std::thread::sleep(WATCH);
         let now = tools();
-        if now == known { continue; }
+        if now == known {
+          continue;
+        }
         known = now;
-        if ready.load(Ordering::SeqCst) && send(&output, &json!({ "jsonrpc": "2.0", "method": "notifications/tools/list_changed" })).is_err() { return; }
+        if ready.load(Ordering::SeqCst) && send(&output, &json!({ "jsonrpc": "2.0", "method": "notifications/tools/list_changed" })).is_err() {
+          return;
+        }
       }
     });
   }
@@ -462,9 +601,13 @@ pub fn serve(mut input: impl BufRead, output: impl Write + Send + 'static) {
       Ok(0) | Err(_) => return,
       Ok(_) => {}
     }
-    if line.iter().all(u8::is_ascii_whitespace) { continue; }
+    if line.iter().all(u8::is_ascii_whitespace) {
+      continue;
+    }
     if let Some(answer) = session.handle(&line) {
-      if send(&output, &answer).is_err() { return; }
+      if send(&output, &answer).is_err() {
+        return;
+      }
     }
   }
 }
@@ -478,11 +621,18 @@ pub fn main() {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub enum Added { No, Yes, Elsewhere }
+pub enum Added {
+  No,
+  Yes,
+  Elsewhere,
+}
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Install { found: bool, added: Added }
+pub struct Install {
+  found: bool,
+  added: Added,
+}
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -496,11 +646,21 @@ pub struct AgentsStatus {
   problem: Option<String>,
 }
 
-fn exe() -> Result<PathBuf, String> { std::env::current_exe().map_err(|e| format!("Couldn’t find the app: {e}")) }
+fn exe() -> Result<PathBuf, String> {
+  std::env::current_exe().map_err(|e| format!("Couldn’t find the app: {e}"))
+}
 
 /// macOS's struct statvfs, whose block and file counts are 32-bit.
 #[repr(C)]
-struct StatVfs { bsize: u64, frsize: u64, blocks: [u32; 3], files: [u32; 3], fsid: u64, flag: u64, namemax: u64 }
+struct StatVfs {
+  bsize: u64,
+  frsize: u64,
+  blocks: [u32; 3],
+  files: [u32; 3],
+  fsid: u64,
+  flag: u64,
+  namemax: u64,
+}
 
 extern "C" {
   fn statvfs(path: *const std::ffi::c_char, result: *mut StatVfs) -> i32;
@@ -521,7 +681,8 @@ fn read_only(path: &Path) -> bool {
 
 /// A copy run from its disk image, or moved aside by Gatekeeper, is gone once that ends.
 fn problem(exe: &Path) -> Option<String> {
-  (exe.to_string_lossy().contains("/AppTranslocation/") || read_only(exe)).then(|| "Move TabTasker Dictate to Applications first, so agents can always find it.".into())
+  (exe.to_string_lossy().contains("/AppTranslocation/") || read_only(exe))
+    .then(|| "Move TabTasker Dictate to Applications first, so agents can always find it.".into())
 }
 
 /// How an agent's config names this server: absent, this binary, or another copy of the app.
@@ -533,16 +694,24 @@ fn added(entry: Option<&Value>, exe: &Path) -> Added {
   }
 }
 
-fn read_json(path: &Path) -> Option<Value> { std::fs::read(path).ok().and_then(|bytes| serde_json::from_slice(&bytes).ok()) }
+fn read_json(path: &Path) -> Option<Value> {
+  std::fs::read(path).ok().and_then(|bytes| serde_json::from_slice(&bytes).ok())
+}
 
-fn desktop_config(home: &Path) -> PathBuf { home.join("Library/Application Support/Claude/claude_desktop_config.json") }
+fn desktop_config(home: &Path) -> PathBuf {
+  home.join("Library/Application Support/Claude/claude_desktop_config.json")
+}
 
 /// The claude CLI: the path set in Settings › Agents, then the login shell's PATH, then where its installers put it.
 fn find_claude(home: &Path, configured: Option<&str>) -> Option<PathBuf> {
-  if let Some(path) = configured.map(PathBuf::from).filter(|path| path.is_file()) { return Some(path); }
+  if let Some(path) = configured.map(PathBuf::from).filter(|path| path.is_file()) {
+    return Some(path);
+  }
   let shell = std::env::var("SHELL").ok().filter(|shell| shell.starts_with('/')).unwrap_or_else(|| "/bin/zsh".into());
-  let which = run_for(Path::new(&shell), &["-lc", "command -v claude"], &[], Duration::from_secs(5)).ok()
-    .and_then(|out| out.lines().map(str::trim).find(|line| line.starts_with('/')).map(PathBuf::from)).filter(|path| path.is_file());
+  let which = run_for(Path::new(&shell), &["-lc", "command -v claude"], &[], Duration::from_secs(5))
+    .ok()
+    .and_then(|out| out.lines().map(str::trim).find(|line| line.starts_with('/')).map(PathBuf::from))
+    .filter(|path| path.is_file());
   which.or_else(|| [home.join(".local/bin/claude"), "/opt/homebrew/bin/claude".into(), "/usr/local/bin/claude".into()].into_iter().find(|path| path.is_file()))
 }
 
@@ -583,18 +752,24 @@ fn run_for(program: &Path, args: &[&str], path: &[&Path], limit: Duration) -> Re
   let mut child = command.spawn().map_err(|e| format!("Couldn’t start {}: {e}", program.display()))?;
   let started = std::time::Instant::now();
   let status = loop {
-    if let Some(status) = child.try_wait().map_err(|e| e.to_string())? { break status; }
+    if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
+      break status;
+    }
     if started.elapsed() > limit {
       const SIGKILL: i32 = 9;
       // SAFETY: a plain syscall. The child leads its own process group, so this reaches only what it started.
-      unsafe { kill(-(child.id() as i32), SIGKILL); }
+      unsafe {
+        kill(-(child.id() as i32), SIGKILL);
+      }
       let _ = child.wait();
       return Err("It took too long to answer.".into());
     }
     std::thread::sleep(Duration::from_millis(50));
   };
   let (out, err) = (spooled(out), spooled(err));
-  if status.success() { return Ok(out); }
+  if status.success() {
+    return Ok(out);
+  }
   let said = err.lines().chain(out.lines()).map(str::trim).rfind(|line| !line.is_empty()).map(|line| line.chars().take(200).collect::<String>());
   Err(said.unwrap_or_else(|| format!("It stopped with code {}.", status.code().unwrap_or(-1))))
 }
@@ -606,7 +781,9 @@ fn add_to_claude_code(cli: &Path, exe: &Path, now: Added) -> Result<(), String> 
   let failed = |e: String| format!("Claude Code couldn’t add it: {e}");
   match now {
     Added::Yes => return Ok(()),
-    Added::Elsewhere => { run_for(cli, &["mcp", "remove", "--scope", "user", NAME], &[&dir], limit).map_err(failed)?; }
+    Added::Elsewhere => {
+      run_for(cli, &["mcp", "remove", "--scope", "user", NAME], &[&dir], limit).map_err(failed)?;
+    }
     Added::No => {}
   }
   let exe = exe.to_str().ok_or("Dictate is in a folder agents can’t use. Move it to Applications and try again.")?;
@@ -622,9 +799,17 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
   let name = path.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
   let temp = path.with_file_name(format!(".{name}.tabtasker-{}", std::process::id()));
   let written = std::fs::File::create(&temp)
-    .and_then(|mut file| { if let Some(mode) = mode { file.set_permissions(mode)?; } file.write_all(bytes)?; file.sync_all() })
+    .and_then(|mut file| {
+      if let Some(mode) = mode {
+        file.set_permissions(mode)?;
+      }
+      file.write_all(bytes)?;
+      file.sync_all()
+    })
     .and_then(|_| std::fs::rename(&temp, &path));
-  if written.is_err() { let _ = std::fs::remove_file(&temp); }
+  if written.is_err() {
+    let _ = std::fs::remove_file(&temp);
+  }
   written
 }
 
@@ -640,10 +825,14 @@ fn add_to_desktop(config: &Path, exe: &Path) -> Result<(), String> {
   };
   let servers = root.as_object_mut().ok_or(unreadable)?.entry("mcpServers").or_insert_with(|| json!({}));
   let servers = servers.as_object_mut().ok_or("Claude Desktop’s settings aren’t laid out the way Dictate expects, so it left them alone.")?;
-  if added(servers.get(NAME), exe) == Added::Yes { return Ok(()); }
+  if added(servers.get(NAME), exe) == Added::Yes {
+    return Ok(());
+  }
   // An entry of ours keeps anything added to it by hand, such as env.
   let entry = servers.entry(NAME).or_insert_with(|| json!({}));
-  if !entry.is_object() { *entry = json!({}); }
+  if !entry.is_object() {
+    *entry = json!({});
+  }
   entry["command"] = json!(exe);
   entry["args"] = json!(["--mcp"]);
   let dir = config.parent().ok_or("Couldn’t find Claude Desktop’s settings folder.")?;
@@ -661,7 +850,8 @@ fn add_to_desktop(config: &Path, exe: &Path) -> Result<(), String> {
 fn status_in(home: &Path, exe: &Path, configured: Option<&str>) -> AgentsStatus {
   let code = read_json(&home.join(".claude.json"));
   let desktop = read_json(&desktop_config(home));
-  let desktop_found = desktop_config(home).parent().is_some_and(Path::is_dir) || Path::new("/Applications/Claude.app").is_dir() || home.join("Applications/Claude.app").is_dir();
+  let desktop_found =
+    desktop_config(home).parent().is_some_and(Path::is_dir) || Path::new("/Applications/Claude.app").is_dir() || home.join("Applications/Claude.app").is_dir();
   AgentsStatus {
     command: vec![exe.display().to_string(), "--mcp".into()],
     claude_code: Install { found: find_claude(home, configured).is_some(), added: added(code.as_ref().and_then(|code| code["mcpServers"].get(NAME)), exe) },
@@ -685,7 +875,9 @@ pub async fn agents_status() -> Result<AgentsStatus, String> {
 pub async fn agents_add(target: String) -> Result<AgentsStatus, String> {
   blocking(move || {
     let (home, exe) = (home()?, exe()?);
-    if let Some(problem) = problem(&exe) { return Err(problem); }
+    if let Some(problem) = problem(&exe) {
+      return Err(problem);
+    }
     let configured = crate::settings::get().claude.claude_code;
     match target.as_str() {
       "claudeCode" => {
@@ -697,7 +889,8 @@ pub async fn agents_add(target: String) -> Result<AgentsStatus, String> {
       _ => return Err("Unknown agent".into()),
     }
     Ok(status_in(&home, &exe, configured.as_deref()))
-  }).await
+  })
+  .await
 }
 
 #[cfg(test)]
@@ -844,9 +1037,15 @@ mod tests {
   fn dictations_are_the_newest_history_still_keeps() {
     let dir = temp("history");
     let now = 100 * 86_400_000;
-    let line = |at: u64, text: &str| json!({ "atMs": at, "mode": "dictate", "bundleId": "com.apple.mail", "appName": "Mail", "words": 2, "seconds": 1.0, "text": text }).to_string();
+    let line = |at: u64, text: &str| {
+      json!({ "atMs": at, "mode": "dictate", "bundleId": "com.apple.mail", "appName": "Mail", "words": 2, "seconds": 1.0, "text": text }).to_string()
+    };
     let file = dir.join("history.jsonl");
-    std::fs::write(&file, [line(now - 8 * 86_400_000, "last week"), "{broken".into(), line(now - 1000, "older"), line(now - 10, ""), line(now - 5, "newest")].join("\n")).unwrap();
+    std::fs::write(
+      &file,
+      [line(now - 8 * 86_400_000, "last week"), "{broken".into(), line(now - 1000, "older"), line(now - 10, ""), line(now - 5, "newest")].join("\n"),
+    )
+    .unwrap();
     let texts = |keep, limit| dictations(&file, keep, limit, now).iter().map(|entry| entry["text"].as_str().unwrap().to_owned()).collect::<Vec<_>>();
     assert_eq!(texts(Keep::Week, 10), ["newest", "older"]);
     assert_eq!(texts(Keep::Forever, 10), ["newest", "older", "last week"]);
@@ -875,7 +1074,8 @@ mod tests {
     assert_eq!(now["globalShortcut"], "Alt+Space");
     assert_eq!(now["mcpServers"]["files"], theirs["mcpServers"]["files"]);
     assert_eq!(now["mcpServers"][NAME], json!({ "command": exe, "args": ["--mcp"], "env": { "A": "1" } }));
-    let backups: Vec<_> = std::fs::read_dir(dir.join("Claude")).unwrap().flatten().filter(|entry| entry.file_name().to_string_lossy().contains(".backup-")).collect();
+    let backups: Vec<_> =
+      std::fs::read_dir(dir.join("Claude")).unwrap().flatten().filter(|entry| entry.file_name().to_string_lossy().contains(".backup-")).collect();
     assert_eq!(backups.len(), 1);
     assert_eq!(read_json(&backups[0].path()).unwrap(), theirs);
 
@@ -903,7 +1103,10 @@ mod tests {
     std::os::unix::fs::symlink(&real, &config).unwrap();
     add_to_desktop(&config, Path::new("/Applications/TabTasker Dictate.app/Contents/MacOS/tabtasker-dictate")).unwrap();
     assert!(config.symlink_metadata().unwrap().file_type().is_symlink());
-    assert_eq!(added(read_json(&real).unwrap()["mcpServers"].get(NAME), Path::new("/Applications/TabTasker Dictate.app/Contents/MacOS/tabtasker-dictate")), Added::Yes);
+    assert_eq!(
+      added(read_json(&real).unwrap()["mcpServers"].get(NAME), Path::new("/Applications/TabTasker Dictate.app/Contents/MacOS/tabtasker-dictate")),
+      Added::Yes
+    );
     assert_eq!(std::fs::metadata(&real).unwrap().permissions().mode() & 0o777, 0o600);
     assert_eq!(std::fs::read_dir(dir.join("dotfiles")).unwrap().count(), 1, "no temp file left behind");
     std::fs::remove_dir_all(dir).unwrap();
@@ -927,7 +1130,9 @@ mod tests {
     // SAFETY: signal 0 only asks whether the process is there.
     let alive = || unsafe { kill(job, 0) == 0 };
     let gone = std::time::Instant::now();
-    while alive() && gone.elapsed() < Duration::from_secs(2) { std::thread::sleep(Duration::from_millis(20)); }
+    while alive() && gone.elapsed() < Duration::from_secs(2) {
+      std::thread::sleep(Duration::from_millis(20));
+    }
     assert!(!alive(), "the background job outlived the limit");
 
     assert_eq!(run_for(Path::new("/bin/sh"), &["-c", "echo nope >&2; exit 3"], &[], Duration::from_secs(5)).unwrap_err(), "nope");
@@ -941,8 +1146,16 @@ mod tests {
     let log = dir.join("calls.txt");
     let cli = dir.join("claude");
     // A stand-in for the claude CLI: it notes its arguments, and fails when told to.
-    std::fs::write(&cli, format!("#!/bin/sh\nprintf '%s|' \"$@\" >> '{}'\necho >> '{}'\n[ -e '{}' ] && echo 'MCP server tabtasker-dictate already exists' >&2 && exit 1\nexit 0\n",
-      log.display(), log.display(), dir.join("fail").display())).unwrap();
+    std::fs::write(
+      &cli,
+      format!(
+        "#!/bin/sh\nprintf '%s|' \"$@\" >> '{}'\necho >> '{}'\n[ -e '{}' ] && echo 'MCP server tabtasker-dictate already exists' >&2 && exit 1\nexit 0\n",
+        log.display(),
+        log.display(),
+        dir.join("fail").display()
+      ),
+    )
+    .unwrap();
     std::fs::set_permissions(&cli, std::fs::Permissions::from_mode(0o755)).unwrap();
     let exe = Path::new("/Applications/TabTasker Dictate.app/Contents/MacOS/tabtasker-dictate");
 

@@ -16,22 +16,33 @@ static PREPARING: AtomicBool = AtomicBool::new(false);
 pub async fn prepare(root: PathBuf) -> Result<(), String> {
   let never = AtomicBool::new(false);
   models::fetch(&root, MODELS, &never, &speech::free_space, &|line, _| log::info!("speakers: {line}")).await.map_err(String::from)?;
-  if root.join(SEGMENTATION_ONNX).is_file() { return Ok(()); }
+  if root.join(SEGMENTATION_ONNX).is_file() {
+    return Ok(());
+  }
   let dir = root.join("speakers");
   let (archive, into) = (root.join(SEGMENTATION.name).display().to_string(), dir.display().to_string());
   let unpacked = tauri::async_runtime::spawn_blocking(move || {
     std::process::Command::new("/usr/bin/tar").args(["-xjf", &archive, "-C", &into, "--strip-components=1", ARCHIVE_MEMBER]).output()
-  }).await.map_err(|e| e.to_string())?.map_err(|e| format!("Couldn’t unpack the speaker model: {e}"))?;
-  if !unpacked.status.success() { return Err(format!("Couldn’t unpack the speaker model: {}", String::from_utf8_lossy(&unpacked.stderr).trim())); }
+  })
+  .await
+  .map_err(|e| e.to_string())?
+  .map_err(|e| format!("Couldn’t unpack the speaker model: {e}"))?;
+  if !unpacked.status.success() {
+    return Err(format!("Couldn’t unpack the speaker model: {}", String::from_utf8_lossy(&unpacked.stderr).trim()));
+  }
   std::fs::rename(dir.join("model.onnx"), root.join(SEGMENTATION_ONNX)).map_err(|e| format!("Couldn’t install the speaker model: {e}"))
 }
 
 /// Starts the download in the background when Meetings wants speakers told apart and the models aren't
 /// here yet: called as a meeting begins, so they are usually ready by the time it ends.
 pub fn prepare_in_background() {
-  if !crate::settings::get().meetings.speakers { return; }
+  if !crate::settings::get().meetings.speakers {
+    return;
+  }
   let Some(root) = speech::models_root() else { return };
-  if ready(&root) || PREPARING.swap(true, Ordering::SeqCst) { return; }
+  if ready(&root) || PREPARING.swap(true, Ordering::SeqCst) {
+    return;
+  }
   tauri::async_runtime::spawn(async move {
     match prepare(root).await {
       Ok(()) => log::info!("speakers: models ready"),

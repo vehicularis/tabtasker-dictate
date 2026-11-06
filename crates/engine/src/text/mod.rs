@@ -56,10 +56,14 @@ pub struct Rules<'a> {
 /// The text to type for `raw` under `rules`.
 pub fn finish(raw: &str, rules: &Rules) -> String {
   // Raw is Whisper as it heard you: none of your rules apply.
-  if rules.style == Style::Raw { return raw.to_owned(); }
+  if rules.style == Style::Raw {
+    return raw.to_owned();
+  }
   let turkish = matches!(rules.language, Some("tr" | "az"));
   let mut text = words::replace(raw, rules.replacements, turkish);
-  if rules.fillers { text = words::drop_fillers(&text, words::fillers(rules.language), turkish); }
+  if rules.fillers {
+    text = words::drop_fillers(&text, words::fillers(rules.language), turkish);
+  }
   match rules.style {
     Style::Casual => words::casual(&text),
     Style::Formal => words::formal(&text, turkish, rules.live),
@@ -72,11 +76,15 @@ pub fn finish(raw: &str, rules: &Rules) -> String {
 mod tests {
   use super::*;
 
-  fn pair(from: &str, to: &str) -> Replacement { Replacement { from: from.into(), to: to.into() } }
+  fn pair(from: &str, to: &str) -> Replacement {
+    Replacement { from: from.into(), to: to.into() }
+  }
   fn run(raw: &str, style: Style, language: &str, replacements: &[Replacement]) -> String {
     finish(raw, &Rules { style, fillers: true, replacements, language: Some(language), live: false })
   }
-  fn plain(raw: &str) -> String { run(raw, Style::Default, "en", &[]) }
+  fn plain(raw: &str) -> String {
+    run(raw, Style::Default, "en", &[])
+  }
 
   #[test]
   fn replacements_match_whole_words_in_any_case_and_keep_punctuation() {
@@ -226,5 +234,4 @@ mod tests {
       assert!(two.starts_with(&one), "{style:?}: {one:?} then {two:?}");
     }
   }
-
 }

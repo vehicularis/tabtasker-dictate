@@ -9,7 +9,9 @@ pub fn assign_speakers(lines: &mut [Line], source: Source, turns: &[Voice]) {
     let mut best: Option<(u64, u32)> = None;
     for turn in turns {
       let overlap = turn.end.min(line.end).saturating_sub(turn.start.max(line.start));
-      if overlap > 0 && best.is_none_or(|(most, _)| overlap > most) { best = Some((overlap, turn.speaker)); }
+      if overlap > 0 && best.is_none_or(|(most, _)| overlap > most) {
+        best = Some((overlap, turn.speaker));
+      }
     }
     line.speaker = best.map(|(_, speaker)| speaker);
   }
@@ -22,19 +24,26 @@ pub fn speaker_names(lines: &[Line], you: &str, others: &str) -> std::collection
   let (you, others) = (label(you, "You"), label(others, "Others"));
   let mut spoke: std::collections::HashMap<u32, u64> = std::collections::HashMap::new();
   for line in lines.iter().filter(|line| line.source == Source::Mic) {
-    if let Some(voice) = line.speaker { *spoke.entry(voice).or_default() += line.end.saturating_sub(line.start); }
+    if let Some(voice) = line.speaker {
+      *spoke.entry(voice).or_default() += line.end.saturating_sub(line.start);
+    }
   }
   let main = spoke.iter().max_by_key(|(voice, time)| (**time, std::cmp::Reverse(**voice))).map(|(voice, _)| *voice);
   let mut names = std::collections::HashMap::new();
   names.insert((Source::Mic, None), you.clone());
   names.insert((Source::System, None), others);
-  if let Some(main) = main { names.insert((Source::Mic, Some(main)), you); }
+  if let Some(main) = main {
+    names.insert((Source::Mic, Some(main)), you);
+  }
   let mut heard: Vec<&Line> = lines.iter().filter(|line| line.speaker.is_some()).collect();
   heard.sort_by_key(|line| (line.start, line.source.index()));
   let mut n = 0;
   for line in heard {
     let key = (line.source, line.speaker);
-    names.entry(key).or_insert_with(|| { n += 1; format!("Person {n}") });
+    names.entry(key).or_insert_with(|| {
+      n += 1;
+      format!("Person {n}")
+    });
   }
   names
 }
@@ -48,7 +57,11 @@ pub fn clock(samples: u64) -> String {
 /// A speaker label that stays one bold word in Markdown, whatever was typed in Settings.
 pub fn label(name: &str, fallback: &str) -> String {
   let clean = name.replace(['*', '_', '`', '[', ']'], " ").split_whitespace().collect::<Vec<_>>().join(" ");
-  if clean.is_empty() { fallback.to_owned() } else { clean }
+  if clean.is_empty() {
+    fallback.to_owned()
+  } else {
+    clean
+  }
 }
 
 /// Both streams' lines in the order they were said: one paragraph per turn, a speaker's lines that
@@ -56,18 +69,36 @@ pub fn label(name: &str, fallback: &str) -> String {
 /// was. Answers the Markdown (`**You** 00:01:23 words`) and a plain version for Claude
 /// (`You 00:01:23: words`). Speakers are named by `speaker_names`.
 pub fn transcript(lines: &[Line], gaps: &[Gap], you: &str, others: &str) -> (String, String) {
-  struct Turn { who: String, source: Source, start: u64, end: u64, words: String, gap: bool }
+  struct Turn {
+    who: String,
+    source: Source,
+    start: u64,
+    end: u64,
+    words: String,
+    gap: bool,
+  }
   let names = speaker_names(lines, you, others);
   let name = |source: Source, speaker: Option<u32>| names.get(&(source, speaker)).or_else(|| names.get(&(source, None))).cloned().unwrap_or_default();
-  let mut said: Vec<Turn> = lines.iter().filter(|line| !line.text.trim().is_empty())
-    .map(|line| Turn { who: name(line.source, line.speaker), source: line.source, start: line.start, end: line.end, words: line.text.trim().to_owned(), gap: false })
+  let mut said: Vec<Turn> = lines
+    .iter()
+    .filter(|line| !line.text.trim().is_empty())
+    .map(|line| Turn {
+      who: name(line.source, line.speaker),
+      source: line.source,
+      start: line.start,
+      end: line.end,
+      words: line.text.trim().to_owned(),
+      gap: false,
+    })
     .chain(gaps.iter().map(|gap| Turn { who: name(gap.source, None), source: gap.source, start: gap.from, end: gap.to, words: String::new(), gap: true }))
     .collect();
   said.sort_by_key(|turn| (turn.start, turn.source.index(), turn.who.clone())); // the same moment: the microphone first
   let mut turns: Vec<Turn> = Vec::new();
   for turn in said {
     match turns.last_mut() {
-      Some(last) if !last.gap && !turn.gap && last.who == turn.who && turn.start <= last.end + 2 * RATE as u64 && turn.start < last.start + 60 * RATE as u64 => {
+      Some(last)
+        if !last.gap && !turn.gap && last.who == turn.who && turn.start <= last.end + 2 * RATE as u64 && turn.start < last.start + 60 * RATE as u64 =>
+      {
         last.words.push(' ');
         last.words.push_str(&turn.words);
         last.end = last.end.max(turn.end);
@@ -75,9 +106,13 @@ pub fn transcript(lines: &[Line], gaps: &[Gap], you: &str, others: &str) -> (Str
       _ => turns.push(turn),
     }
   }
-  let words = |turn: &Turn, italic: &str| if turn.gap {
-    format!("{italic}({} not transcribed){italic}", length((turn.end - turn.start) / RATE as u64))
-  } else { turn.words.clone() };
+  let words = |turn: &Turn, italic: &str| {
+    if turn.gap {
+      format!("{italic}({} not transcribed){italic}", length((turn.end - turn.start) / RATE as u64))
+    } else {
+      turn.words.clone()
+    }
+  };
   let markdown = turns.iter().map(|turn| format!("**{}** {} {}", turn.who, clock(turn.start), words(turn, "_"))).collect::<Vec<_>>().join("\n\n");
   let plain = turns.iter().map(|turn| format!("{} {}: {}", turn.who, clock(turn.start), words(turn, ""))).collect::<Vec<_>>().join("\n");
   (markdown, plain)
@@ -85,7 +120,9 @@ pub fn transcript(lines: &[Line], gaps: &[Gap], you: &str, others: &str) -> (Str
 
 /// A length for people: "40 s", "12 min", "1 h 5 min".
 pub fn length(seconds: u64) -> String {
-  if seconds < 60 { return format!("{} s", seconds.max(1)); }
+  if seconds < 60 {
+    return format!("{} s", seconds.max(1));
+  }
   let minutes = (seconds + 30) / 60;
   match (minutes / 60, minutes % 60) {
     (0, m) => format!("{m} min"),
@@ -96,11 +133,16 @@ pub fn length(seconds: u64) -> String {
 
 /// A meeting Claude didn't name is called for when it began, "Meeting 2026-11-02 14.05": the notes
 /// template can leave the date and time out of the file name.
-pub fn untitled(stamp: &str) -> String { format!("Meeting {stamp}") }
+pub fn untitled(stamp: &str) -> String {
+  format!("Meeting {stamp}")
+}
 
 /// When the meeting was and how long it ran, under its title: "2026-11-02 14:05 · 47 min".
 pub fn dateline(stamp: &str, samples: u64) -> String {
-  let at = match stamp.split_once(' ') { Some((date, time)) => format!("{date} {}", time.replace('.', ":")), None => stamp.to_owned() };
+  let at = match stamp.split_once(' ') {
+    Some((date, time)) => format!("{date} {}", time.replace('.', ":")),
+    None => stamp.to_owned(),
+  };
   format!("{at} · {}", length(samples / RATE as u64))
 }
 
@@ -109,7 +151,9 @@ pub fn dateline(stamp: &str, samples: u64) -> String {
 pub fn document(dateline: &str, summary: Option<&str>, transcript: &str) -> String {
   let mut body = format!("{dateline}\n\n");
   if let Some(summary) = summary.map(str::trim).filter(|summary| !summary.is_empty()) {
-    if !summary.starts_with('#') { body.push_str("## Summary\n\n"); }
+    if !summary.starts_with('#') {
+      body.push_str("## Summary\n\n");
+    }
     body.push_str(summary);
     body.push_str("\n\n");
   }
@@ -141,9 +185,9 @@ mod tests {
       line(Source::System, 4.0, "Hi, can you hear me?"),
       line(Source::Mic, 0.5, "Hello."),
       line(Source::Mic, 9.0, "Yes, loud and clear."),
-      line(Source::Mic, 11.5, "Shall we start?"), // follows on: the same turn
+      line(Source::Mic, 11.5, "Shall we start?"),  // follows on: the same turn
       line(Source::System, 13.0, " "),             // nothing said
-      line(Source::Mic, 30.0, "Then the budget."),  // a pause: a new turn
+      line(Source::Mic, 30.0, "Then the budget."), // a pause: a new turn
     ];
     let (markdown, plain) = transcript(&lines, &[], "Can", "Others");
     assert_eq!(markdown, "**Can** 00:00:00 Hello.\n\n**Others** 00:00:04 Hi, can you hear me?\n\n**Can** 00:00:09 Yes, loud and clear. Shall we start?\n\n**Can** 00:00:30 Then the budget.");
@@ -155,9 +199,13 @@ mod tests {
 
   #[test]
   fn voices_told_apart_are_named_in_order_and_the_microphones_main_voice_is_you() {
-    
     let s = RATE as u64;
-    let mut lines = vec![line(Source::Mic, 0.0, "Hello all."), line(Source::Mic, 3.0, "Thanks for coming."), line(Source::Mic, 6.0, "Glad to be here."), line(Source::System, 9.0, "Hi from the call.")];
+    let mut lines = vec![
+      line(Source::Mic, 0.0, "Hello all."),
+      line(Source::Mic, 3.0, "Thanks for coming."),
+      line(Source::Mic, 6.0, "Glad to be here."),
+      line(Source::System, 9.0, "Hi from the call."),
+    ];
     // The second voice in the room speaks at 6 s; a stretch nobody covers keeps no voice.
     assign_speakers(&mut lines, Source::Mic, &[Turn { start: 0, end: 5 * s, speaker: 0 }, Turn { start: 6 * s, end: 8 * s, speaker: 1 }]);
     assign_speakers(&mut lines, Source::System, &[Turn { start: 9 * s, end: 11 * s, speaker: 0 }]);

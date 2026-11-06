@@ -3,7 +3,9 @@
 /// Whisper's own test for a window nobody spoke in (openai/whisper transcribe.py, whisper.cpp, WhisperKit):
 /// the no-speech token likely *and* the words found unsure. A likely no-speech token alone is not silence:
 /// clear words after a pause score high on it too, and dropping them is "Didn't catch that" for nothing.
-pub fn is_silent_segment(no_speech: f32, avg_logprob: f32) -> bool { no_speech > 0.6 && avg_logprob < -1.0 }
+pub fn is_silent_segment(no_speech: f32, avg_logprob: f32) -> bool {
+  no_speech > 0.6 && avg_logprob < -1.0
+}
 
 /// Over a phrase said again and again, Whisper can carry on saying it long after the voice stopped: hundreds of
 /// "hello"s for fifteen seconds of them. Nobody says more than about five words a second, so past that the
@@ -20,8 +22,12 @@ pub fn unloop(text: &str, seconds: f32) -> String {
     for start in 0..keys.len() {
       for n in 1..=4.min(keys.len() - start) {
         let mut repeats = 1;
-        while start + (repeats + 1) * n <= keys.len() && keys[start + repeats * n..start + (repeats + 1) * n] == keys[start..start + n] { repeats += 1; }
-        if repeats >= 3 && best.is_none_or(|(_, m, r)| n * repeats > m * r) { best = Some((start, n, repeats)); }
+        while start + (repeats + 1) * n <= keys.len() && keys[start + repeats * n..start + (repeats + 1) * n] == keys[start..start + n] {
+          repeats += 1;
+        }
+        if repeats >= 3 && best.is_none_or(|(_, m, r)| n * repeats > m * r) {
+          best = Some((start, n, repeats));
+        }
       }
     }
     let Some((start, n, repeats)) = best else { break }; // no run to blame: leave it be

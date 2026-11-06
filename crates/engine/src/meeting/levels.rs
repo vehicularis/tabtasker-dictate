@@ -32,8 +32,12 @@ fn thresholds(levels: &[f32]) -> (f32, f32) {
 /// `last` means `pcm` is all that is left of a meeting that has ended: it goes whole. None while the
 /// piece is still being said.
 pub fn pause_cut(pcm: &[f32], last: bool) -> Option<usize> {
-  if pcm.is_empty() { return None; }
-  if last && pcm.len() <= WINDOW_SAMPLES { return Some(pcm.len()); }
+  if pcm.is_empty() {
+    return None;
+  }
+  if last && pcm.len() <= WINDOW_SAMPLES {
+    return Some(pcm.len());
+  }
   let levels = levels(pcm);
   let (quiet, _) = thresholds(&levels);
   let mut at = None;
@@ -44,11 +48,17 @@ pub fn pause_cut(pcm: &[f32], last: bool) -> Option<usize> {
     if run >= PAUSE && closes {
       // In the middle of a pause; one still going at the end keeps a moment for a word starting.
       let frame = if i + 1 == levels.len() { i + 1 - PAUSE / 2 } else { i + 1 - run / 2 };
-      if frame * FRAME >= ENOUGH { at = Some(frame * FRAME); }
+      if frame * FRAME >= ENOUGH {
+        at = Some(frame * FRAME);
+      }
     }
   }
-  if at.is_some() { return at; }
-  if pcm.len() < WINDOW_SAMPLES { return None; }
+  if at.is_some() {
+    return at;
+  }
+  if pcm.len() < WINDOW_SAMPLES {
+    return None;
+  }
   let from = (pcm.len() - 6 * RATE) / FRAME;
   let quietest = (from..levels.len()).min_by(|a, b| levels[*a].total_cmp(&levels[*b]))?;
   Some((quietest * FRAME).max(ENOUGH))
@@ -67,9 +77,12 @@ mod tests {
 
   /// Speech-like audio for `seconds`, or silence with a little hiss.
   fn audio(parts: &[(bool, f64)]) -> Vec<f32> {
-    parts.iter().flat_map(|&(speech, seconds)| (0..(seconds * RATE as f64) as usize).map(move |i| {
-      if speech { 0.2 * (i as f32 * 0.07).sin() } else { 0.0004 * (i as f32 * 1.3).sin() }
-    })).collect()
+    parts
+      .iter()
+      .flat_map(|&(speech, seconds)| {
+        (0..(seconds * RATE as f64) as usize).map(move |i| if speech { 0.2 * (i as f32 * 0.07).sin() } else { 0.0004 * (i as f32 * 1.3).sin() })
+      })
+      .collect()
   }
 
   #[test]

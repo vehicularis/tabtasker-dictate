@@ -2,7 +2,13 @@
 use crate::error::Result;
 use ring::digest::{Context as Digest, SHA256};
 use serde::{Deserialize, Serialize};
-use std::{fs::{self, File}, io::{Read, Write}, path::Path, sync::atomic::{AtomicBool, Ordering}, time::{Duration, Instant}};
+use std::{
+  fs::{self, File},
+  io::{Read, Write},
+  path::Path,
+  sync::atomic::{AtomicBool, Ordering},
+  time::{Duration, Instant},
+};
 
 /// A file the voice features download once and keep, checked against its size and SHA-256 every time.
 #[derive(Debug)]
@@ -22,32 +28,42 @@ pub struct ModelFile {
 // than a 30 s window (FUTO's audio context fine-tuning), in whisper.cpp's 8-bit format.
 /// Whisper large-v3 Turbo, the default speech model.
 pub const TURBO: ModelFile = ModelFile {
-  name: "ggml-acft-large-v3-turbo-q8_0.bin", label: "Whisper large-v3 Turbo", bytes: 874188075,
+  name: "ggml-acft-large-v3-turbo-q8_0.bin",
+  label: "Whisper large-v3 Turbo",
+  bytes: 874188075,
   url: "https://github.com/vehicularis/vehicularis-edge-models/releases/download/voice-v2/ggml-acft-large-v3-turbo-q8_0.bin",
   sha256: "e8d17bf90d61da165773e8a4bb7de3462982eceb9a1ed696c0d6fe7c9136624a",
 };
 // whisper.cpp's own small model in its 8-bit format, as published in ggerganov/whisper.cpp on Hugging Face.
 /// Whisper small, the lighter choice.
 pub const SMALL: ModelFile = ModelFile {
-  name: "ggml-small-q8_0.bin", label: "Whisper small", bytes: 264464607,
+  name: "ggml-small-q8_0.bin",
+  label: "Whisper small",
+  bytes: 264464607,
   url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q8_0.bin",
   sha256: "49c8fb02b65e6049d5fa6c04f81f53b867b5ec9540406812c643f177317f779f",
 };
 /// Speech detection, which every Whisper choice needs beside it.
 pub const SILERO: ModelFile = ModelFile {
-  name: "ggml-silero-v6.2.0.bin", label: "speech detection", bytes: 885098,
+  name: "ggml-silero-v6.2.0.bin",
+  label: "speech detection",
+  bytes: 885098,
   url: "https://github.com/vehicularis/vehicularis-edge-models/releases/download/voice-v1/ggml-silero-v6.2.0.bin",
   sha256: "2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987",
 };
 /// pyannote/segmentation-3.0 as sherpa-onnx ships it (MIT), in its archive; the model inside is kept beside it.
 pub const SPEAKER_SEGMENTATION: ModelFile = ModelFile {
-  name: "speakers/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2", label: "speaker segmentation", bytes: 6_958_444,
+  name: "speakers/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2",
+  label: "speaker segmentation",
+  bytes: 6_958_444,
   url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2",
   sha256: "24615ee884c897d9d2ba09bb4d30da6bb1b15e685065962db5b02e76e4996488",
 };
 /// NVIDIA NeMo's TitaNet small (CC BY 4.0), the English-trained speaker embedding sherpa-onnx recommends.
 pub const SPEAKER_EMBEDDING: ModelFile = ModelFile {
-  name: "speakers/nemo_en_titanet_small.onnx", label: "speaker voices", bytes: 40_257_283,
+  name: "speakers/nemo_en_titanet_small.onnx",
+  label: "speaker voices",
+  bytes: 40_257_283,
   url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/nemo_en_titanet_small.onnx",
   sha256: "ad4a1802485d8b34c722d2a9d04249662f2ece5d28a7a039063ca22f515a789e",
 };
@@ -68,23 +84,39 @@ pub enum ModelKind {
 impl ModelKind {
   /// What this speech model needs on disk: its Whisper first, then the speech detection beside it.
   pub fn files(self) -> &'static [ModelFile] {
-    match self { Self::Turbo => WITH_TURBO, Self::Small => WITH_SMALL }
+    match self {
+      Self::Turbo => WITH_TURBO,
+      Self::Small => WITH_SMALL,
+    }
   }
   /// The other choice.
   pub fn other(self) -> Self {
-    match self { Self::Turbo => Self::Small, Self::Small => Self::Turbo }
+    match self {
+      Self::Turbo => Self::Small,
+      Self::Small => Self::Turbo,
+    }
   }
 }
 
 /// Whether the file at `path` is `model`: the right size and the right SHA-256.
 pub fn verify(path: &Path, model: &ModelFile) -> Result<()> {
   let mut file = File::open(path).map_err(|_| "The speech model isn’t downloaded yet.")?;
-  if file.metadata().map_err(|e| e.to_string())?.len() != model.bytes { return Err("The speech model is incomplete. Download it again.".into()); }
+  if file.metadata().map_err(|e| e.to_string())?.len() != model.bytes {
+    return Err("The speech model is incomplete. Download it again.".into());
+  }
   let mut digest = Digest::new(&SHA256);
   let mut buffer = [0; 64 * 1024];
-  loop { let count = file.read(&mut buffer).map_err(|e| e.to_string())?; if count == 0 { break; } digest.update(&buffer[..count]); }
+  loop {
+    let count = file.read(&mut buffer).map_err(|e| e.to_string())?;
+    if count == 0 {
+      break;
+    }
+    digest.update(&buffer[..count]);
+  }
   let hash: String = digest.finish().as_ref().iter().map(|byte| format!("{byte:02x}")).collect();
-  if hash != model.sha256 { return Err("The speech model didn’t pass its check. Download it again.".into()); }
+  if hash != model.sha256 {
+    return Err("The speech model didn’t pass its check. Download it again.".into());
+  }
   Ok(())
 }
 
@@ -98,24 +130,35 @@ fn stamp(path: &Path, model: &ModelFile) -> Option<String> {
 
 /// Remembers, beside it, that the file at `path` passed its check.
 fn passed(path: &Path, model: &ModelFile) {
-  if let Some(stamp) = stamp(path, model) { let _ = fs::write(path.with_extension("verified"), stamp); }
+  if let Some(stamp) = stamp(path, model) {
+    let _ = fs::write(path.with_extension("verified"), stamp);
+  }
 }
 
 /// `verify`, hashing only a file that changed since it last passed: the 874 MB model would otherwise
 /// cost seconds of hashing at every launch.
 pub fn verified(path: &Path, model: &ModelFile) -> Result<()> {
-  if stamp(path, model).is_some_and(|stamp| fs::read_to_string(path.with_extension("verified")).is_ok_and(|kept| kept == stamp)) { return Ok(()); }
+  if stamp(path, model).is_some_and(|stamp| fs::read_to_string(path.with_extension("verified")).is_ok_and(|kept| kept == stamp)) {
+    return Ok(());
+  }
   verify(path, model)?;
   passed(path, model);
   Ok(())
 }
 
 fn download_client() -> std::result::Result<reqwest::Client, String> {
-  if rustls::crypto::CryptoProvider::get_default().is_none() { let _ = rustls::crypto::ring::default_provider().install_default(); }
+  if rustls::crypto::CryptoProvider::get_default().is_none() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+  }
   // No deadline on the whole download, which a slow connection can't meet: each read gets 30 s instead.
-  reqwest::Client::builder().https_only(true).referer(false)
-    .connect_timeout(Duration::from_secs(20)).read_timeout(Duration::from_secs(30))
-    .redirect(reqwest::redirect::Policy::limited(5)).build().map_err(|e| e.to_string())
+  reqwest::Client::builder()
+    .https_only(true)
+    .referer(false)
+    .connect_timeout(Duration::from_secs(20))
+    .read_timeout(Duration::from_secs(30))
+    .redirect(reqwest::redirect::Policy::limited(5))
+    .build()
+    .map_err(|e| e.to_string())
 }
 
 /// How many bytes short `free` is of downloading `bytes` with a fifth again to spare, so the Mac isn't
@@ -127,7 +170,14 @@ pub fn short_of_space(free: Option<u64>, bytes: u64) -> Option<u64> {
 
 /// What a response says to do with a `.part` holding `have` of `total` bytes.
 #[derive(Debug, PartialEq)]
-enum Resume { Append, Overwrite, Restart, Retry, WrongSize, Refused }
+enum Resume {
+  Append,
+  Overwrite,
+  Restart,
+  Retry,
+  WrongSize,
+  Refused,
+}
 
 /// 206 with the rest from where the part ends adds to it; 200 is the whole file, written over it. Any other
 /// range, or none the server can give, starts the part again. A server error is worth another try, any
@@ -146,14 +196,25 @@ fn resume(status: u16, range: Option<&str>, length: Option<u64>, have: u64, tota
 }
 
 /// The wait before trying a download again: 1, 2 and 4 s, then it gives up.
-fn backoff(tries: u32) -> Option<Duration> { (tries < 3).then(|| Duration::from_secs(1 << tries)) }
+fn backoff(tries: u32) -> Option<Duration> {
+  (tries < 3).then(|| Duration::from_secs(1 << tries))
+}
 
 /// Why a download attempt stopped short: a dropped connection or a server's passing trouble is worth
 /// another try, anything else isn't.
-enum Stop { Retry(String), Fail(String) }
+enum Stop {
+  Retry(String),
+  Fail(String),
+}
 
 /// One attempt at `model` into `partial`, carrying on from what it holds already.
-async fn download(client: &reqwest::Client, model: &ModelFile, partial: &Path, cancel: &AtomicBool, report: &(impl Fn(&str, Option<u8>) + Sync)) -> std::result::Result<(), Stop> {
+async fn download(
+  client: &reqwest::Client,
+  model: &ModelFile,
+  partial: &Path,
+  cancel: &AtomicBool,
+  report: &(impl Fn(&str, Option<u8>) + Sync),
+) -> std::result::Result<(), Stop> {
   let have = match fs::metadata(partial).map_or(0, |meta| meta.len()) {
     have if have == model.bytes => return Ok(()), // all here: its check says whether it's right
     have if have < model.bytes => have,
@@ -161,14 +222,19 @@ async fn download(client: &reqwest::Client, model: &ModelFile, partial: &Path, c
   };
   let interrupted = || Stop::Retry("The speech model download was interrupted. Try again.".into());
   let mut request = client.get(model.url);
-  if have > 0 { request = request.header(reqwest::header::RANGE, format!("bytes={have}-")); }
+  if have > 0 {
+    request = request.header(reqwest::header::RANGE, format!("bytes={have}-"));
+  }
   let mut response = request.send().await.map_err(|_| Stop::Retry("Couldn’t download the speech model. Check your connection and try again.".into()))?;
   let range = response.headers().get(reqwest::header::CONTENT_RANGE).and_then(|value| value.to_str().ok()).map(str::to_owned);
   let save = |e: std::io::Error| Stop::Fail(format!("Couldn’t save the speech model: {e}"));
   let mut file = match resume(response.status().as_u16(), range.as_deref(), response.content_length(), have, model.bytes) {
     Resume::Append => fs::OpenOptions::new().append(true).open(partial).map_err(save)?,
     Resume::Overwrite => File::create(partial).map_err(save)?,
-    Resume::Restart => { File::create(partial).map_err(save)?; return Err(interrupted()); }
+    Resume::Restart => {
+      File::create(partial).map_err(save)?;
+      return Err(interrupted());
+    }
     Resume::Retry => return Err(Stop::Retry("The speech model can’t be downloaded right now. Try again later.".into())),
     Resume::WrongSize => return Err(Stop::Fail("The download isn’t the size it should be. Try again.".into())),
     Resume::Refused => return Err(Stop::Fail("The speech model can’t be downloaded right now. Try again later.".into())),
@@ -176,10 +242,14 @@ async fn download(client: &reqwest::Client, model: &ModelFile, partial: &Path, c
   let mut bytes = file.metadata().map_err(save)?.len();
   let mut last = Instant::now() - Duration::from_secs(1);
   loop {
-    if cancel.load(Ordering::Relaxed) { return Err(Stop::Fail(CANCELLED.into())); }
+    if cancel.load(Ordering::Relaxed) {
+      return Err(Stop::Fail(CANCELLED.into()));
+    }
     let Some(chunk) = response.chunk().await.map_err(|_| interrupted())? else { break };
     bytes += chunk.len() as u64;
-    if bytes > model.bytes { return Err(Stop::Fail("The download is bigger than it should be. Try again.".into())); }
+    if bytes > model.bytes {
+      return Err(Stop::Fail("The download is bigger than it should be. Try again.".into()));
+    }
     file.write_all(&chunk).map_err(save)?;
     if last.elapsed() >= Duration::from_millis(500) {
       let percent = (bytes * 100 / model.bytes) as u8;
@@ -187,7 +257,9 @@ async fn download(client: &reqwest::Client, model: &ModelFile, partial: &Path, c
       last = Instant::now();
     }
   }
-  if bytes < model.bytes { return Err(interrupted()); } // the connection closed early: the rest comes next try
+  if bytes < model.bytes {
+    return Err(interrupted());
+  } // the connection closed early: the rest comes next try
   file.sync_all().map_err(save)
 }
 
@@ -195,14 +267,24 @@ async fn download(client: &reqwest::Client, model: &ModelFile, partial: &Path, c
 /// a line for the person, and how much of the download is done while it is downloading. A download that
 /// stops carries on where it stopped, here or at the next try; its `.part` goes only when it fails its
 /// check or setup is cancelled. `free_space` says how many bytes are free where the file goes.
-pub async fn fetch(root: &Path, models: &'static [ModelFile], cancel: &AtomicBool, free_space: &(dyn Fn(&Path) -> Option<u64> + Sync), report: &(impl Fn(&str, Option<u8>) + Sync)) -> Result<()> {
+pub async fn fetch(
+  root: &Path,
+  models: &'static [ModelFile],
+  cancel: &AtomicBool,
+  free_space: &(dyn Fn(&Path) -> Option<u64> + Sync),
+  report: &(impl Fn(&str, Option<u8>) + Sync),
+) -> Result<()> {
   for model in models {
-    if cancel.load(Ordering::Relaxed) { return Err(CANCELLED.into()); }
+    if cancel.load(Ordering::Relaxed) {
+      return Err(CANCELLED.into());
+    }
     let path = root.join(model.name);
     let dir = path.parent().unwrap_or(root);
     fs::create_dir_all(dir).map_err(|e| format!("Couldn’t make a folder for the speech model: {e}"))?;
     let check = path.clone();
-    if tokio::task::spawn_blocking(move || verified(&check, model)).await.map_err(|e| e.to_string())?.is_ok() { continue; }
+    if tokio::task::spawn_blocking(move || verified(&check, model)).await.map_err(|e| e.to_string())?.is_ok() {
+      continue;
+    }
     let partial = path.with_extension("part");
     let left = fs::metadata(&partial).ok().and_then(|meta| model.bytes.checked_sub(meta.len())).unwrap_or(model.bytes);
     if let Some(short) = short_of_space(free_space(dir), left) {
@@ -217,7 +299,9 @@ pub async fn fetch(root: &Path, models: &'static [ModelFile], cancel: &AtomicBoo
         Err(Stop::Fail(error)) => return Err(error.into()),
         Err(Stop::Retry(error)) => {
           // Three tries in a row that get nowhere; one that got further starts the count again.
-          if fs::metadata(&partial).is_ok_and(|meta| meta.len() > before) { tries = 0; }
+          if fs::metadata(&partial).is_ok_and(|meta| meta.len() > before) {
+            tries = 0;
+          }
           let Some(wait) = backoff(tries) else { return Err(error.into()) };
           tries += 1;
           tokio::time::sleep(wait).await;
@@ -230,7 +314,9 @@ pub async fn fetch(root: &Path, models: &'static [ModelFile], cancel: &AtomicBoo
       let _ = fs::remove_file(&partial); // what it holds is wrong somewhere, so it starts again
       return Err(error);
     }
-    if cancel.load(Ordering::Relaxed) { return Err(CANCELLED.into()); }
+    if cancel.load(Ordering::Relaxed) {
+      return Err(CANCELLED.into());
+    }
     fs::rename(&partial, &path).map_err(|e| format!("Couldn’t install the speech model: {e}"))?;
     passed(&path, model);
   }
@@ -242,7 +328,9 @@ pub async fn fetch(root: &Path, models: &'static [ModelFile], cancel: &AtomicBoo
 pub const CANCELLED: &str = "Speech model setup was cancelled.";
 
 async fn wait_cancelled(cancel: &AtomicBool) {
-  while !cancel.load(Ordering::Relaxed) { tokio::time::sleep(Duration::from_millis(100)).await; }
+  while !cancel.load(Ordering::Relaxed) {
+    tokio::time::sleep(Duration::from_millis(100)).await;
+  }
 }
 
 /// `work`, or `CANCELLED` as soon as `cancel` is set.
@@ -276,7 +364,9 @@ mod tests {
     }
     let output = std::process::Command::new(std::env::current_exe().unwrap())
       .args(["--exact", "models::tests::download_client_initializes_tls_in_a_fresh_process", "--nocapture"])
-      .env(PROBE, "1").output().unwrap();
+      .env(PROBE, "1")
+      .output()
+      .unwrap();
     assert!(output.status.success(), "{}\n{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
     assert!(String::from_utf8_lossy(&output.stdout).contains("1 passed"), "the probe ran: {}", String::from_utf8_lossy(&output.stdout));
   }
@@ -287,9 +377,12 @@ mod tests {
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("model.bin");
     let model = ModelFile { name: "model.bin", label: "test", url: "", bytes: 3, sha256: "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad" };
-    std::fs::write(&path, b"abc").unwrap(); assert!(verify(&path, &model).is_ok());
-    std::fs::write(&path, b"abd").unwrap(); assert!(verify(&path, &model).is_err());
-    std::fs::write(&path, b"ab").unwrap(); assert!(verify(&path, &model).is_err());
+    std::fs::write(&path, b"abc").unwrap();
+    assert!(verify(&path, &model).is_ok());
+    std::fs::write(&path, b"abd").unwrap();
+    assert!(verify(&path, &model).is_err());
+    std::fs::write(&path, b"ab").unwrap();
+    assert!(verify(&path, &model).is_err());
     std::fs::remove_dir_all(dir).unwrap();
   }
 
@@ -297,9 +390,7 @@ mod tests {
   async fn cancellation_interrupts_a_stalled_download() {
     let cancel = Arc::new(AtomicBool::new(false));
     let signal = cancel.clone();
-    let waiting = tokio::spawn(async move {
-      cancellable(&signal, std::future::pending::<Result<()>>()).await
-    });
+    let waiting = tokio::spawn(async move { cancellable(&signal, std::future::pending::<Result<()>>()).await });
     tokio::task::yield_now().await;
     cancel.store(true, Ordering::Relaxed);
     assert!(tokio::time::timeout(Duration::from_millis(500), waiting).await.unwrap().unwrap().is_err());
@@ -390,11 +481,46 @@ mod tests {
   #[test]
   fn catalog_is_unchanged() {
     let all = [
-      (TURBO, "ggml-acft-large-v3-turbo-q8_0.bin", "Whisper large-v3 Turbo", 874188075, "https://github.com/vehicularis/vehicularis-edge-models/releases/download/voice-v2/ggml-acft-large-v3-turbo-q8_0.bin", "e8d17bf90d61da165773e8a4bb7de3462982eceb9a1ed696c0d6fe7c9136624a"),
-      (SMALL, "ggml-small-q8_0.bin", "Whisper small", 264464607, "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q8_0.bin", "49c8fb02b65e6049d5fa6c04f81f53b867b5ec9540406812c643f177317f779f"),
-      (SILERO, "ggml-silero-v6.2.0.bin", "speech detection", 885098, "https://github.com/vehicularis/vehicularis-edge-models/releases/download/voice-v1/ggml-silero-v6.2.0.bin", "2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987"),
-      (SPEAKER_SEGMENTATION, "speakers/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2", "speaker segmentation", 6_958_444, "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2", "24615ee884c897d9d2ba09bb4d30da6bb1b15e685065962db5b02e76e4996488"),
-      (SPEAKER_EMBEDDING, "speakers/nemo_en_titanet_small.onnx", "speaker voices", 40_257_283, "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/nemo_en_titanet_small.onnx", "ad4a1802485d8b34c722d2a9d04249662f2ece5d28a7a039063ca22f515a789e"),
+      (
+        TURBO,
+        "ggml-acft-large-v3-turbo-q8_0.bin",
+        "Whisper large-v3 Turbo",
+        874188075,
+        "https://github.com/vehicularis/vehicularis-edge-models/releases/download/voice-v2/ggml-acft-large-v3-turbo-q8_0.bin",
+        "e8d17bf90d61da165773e8a4bb7de3462982eceb9a1ed696c0d6fe7c9136624a",
+      ),
+      (
+        SMALL,
+        "ggml-small-q8_0.bin",
+        "Whisper small",
+        264464607,
+        "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q8_0.bin",
+        "49c8fb02b65e6049d5fa6c04f81f53b867b5ec9540406812c643f177317f779f",
+      ),
+      (
+        SILERO,
+        "ggml-silero-v6.2.0.bin",
+        "speech detection",
+        885098,
+        "https://github.com/vehicularis/vehicularis-edge-models/releases/download/voice-v1/ggml-silero-v6.2.0.bin",
+        "2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987",
+      ),
+      (
+        SPEAKER_SEGMENTATION,
+        "speakers/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2",
+        "speaker segmentation",
+        6_958_444,
+        "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2",
+        "24615ee884c897d9d2ba09bb4d30da6bb1b15e685065962db5b02e76e4996488",
+      ),
+      (
+        SPEAKER_EMBEDDING,
+        "speakers/nemo_en_titanet_small.onnx",
+        "speaker voices",
+        40_257_283,
+        "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/nemo_en_titanet_small.onnx",
+        "ad4a1802485d8b34c722d2a9d04249662f2ece5d28a7a039063ca22f515a789e",
+      ),
     ];
     for (file, name, label, bytes, url, sha256) in all {
       assert_eq!((file.name, file.label, file.bytes, file.url, file.sha256), (name, label, bytes, url, sha256));

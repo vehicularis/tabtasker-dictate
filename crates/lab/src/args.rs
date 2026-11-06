@@ -111,25 +111,9 @@ Exit codes:
      or say failing.";
 
 /// Flags that take the next argument as their value.
-const VALUED: &[&str] = &[
-  "--models",
-  "--style",
-  "--language",
-  "--replace",
-  "--model",
-  "--words",
-  "--out",
-];
+const VALUED: &[&str] = &["--models", "--style", "--language", "--replace", "--model", "--words", "--out"];
 /// Flags that stand alone.
-const SWITCHES: &[&str] = &[
-  "--json",
-  "--help",
-  "-h",
-  "--fillers",
-  "--live",
-  "--translate",
-  "--note",
-];
+const SWITCHES: &[&str] = &["--json", "--help", "-h", "--fillers", "--live", "--translate", "--note"];
 /// Flags every command takes.
 const GLOBAL: &[&str] = &["--json", "--models"];
 
@@ -138,15 +122,7 @@ fn takes(command: &str) -> Option<&'static [&'static str]> {
   Some(match command {
     "text" => &["--style", "--fillers", "--language", "--replace", "--live"],
     "fetch" => &["--model"],
-    "run" => &[
-      "--model",
-      "--language",
-      "--translate",
-      "--words",
-      "--style",
-      "--fillers",
-      "--note",
-    ],
+    "run" => &["--model", "--language", "--translate", "--words", "--style", "--fillers", "--note"],
     "fixtures" => &["--out"],
     "eval" => &["--model"],
     _ => return None,
@@ -157,12 +133,7 @@ fn takes(command: &str) -> Option<&'static [&'static str]> {
 /// The repo root is fixed at build time, which is fine for a dev tool.
 fn target(dir: &str) -> PathBuf {
   let lab = Path::new(env!("CARGO_MANIFEST_DIR"));
-  lab
-    .ancestors()
-    .nth(2)
-    .unwrap_or(lab)
-    .join("target")
-    .join(dir)
+  lab.ancestors().nth(2).unwrap_or(lab).join("target").join(dir)
 }
 
 /// Whether `path` is inside one of the app's own folders, which the lab never reads or writes.
@@ -172,18 +143,13 @@ fn app_data(path: &Path) -> bool {
     return false;
   };
   let home = Path::new(&home);
-  [
-    "Library/Application Support/com.tabtasker.dictate",
-    "Documents/TabTasker Dictate",
-    "Library/Logs/TabTasker Dictate",
-  ]
-  .iter()
-  .any(|dir| path.starts_with(home.join(dir)))
+  ["Library/Application Support/com.tabtasker.dictate", "Documents/TabTasker Dictate", "Library/Logs/TabTasker Dictate"]
+    .iter()
+    .any(|dir| path.starts_with(home.join(dir)))
 }
 
 fn style_of(s: &str) -> Result<Style, String> {
-  serde_json::from_value(serde_json::Value::String(s.to_string()))
-    .map_err(|_| format!("--style: unknown style {s}; use default, casual, formal, code or raw"))
+  serde_json::from_value(serde_json::Value::String(s.to_string())).map_err(|_| format!("--style: unknown style {s}; use default, casual, formal, code or raw"))
 }
 
 fn model_of(s: &str) -> Result<ModelKind, String> {
@@ -195,19 +161,12 @@ fn model_of(s: &str) -> Result<ModelKind, String> {
 }
 
 /// Parses the arguments after the program name. `env_models` is `$DICTATE_MODELS`.
-pub fn parse(
-  args: impl Iterator<Item = String>,
-  env_models: Option<PathBuf>,
-) -> Result<Args, String> {
+pub fn parse(args: impl Iterator<Item = String>, env_models: Option<PathBuf>) -> Result<Args, String> {
   let args: Vec<String> = args.collect();
   // `--` ends the flags: everything after it is positional.
   let end = args.iter().position(|a| a == "--").unwrap_or(args.len());
   let env_models = env_models.filter(|dir| !dir.as_os_str().is_empty());
-  let help = || Args {
-    command: Command::Help,
-    json: false,
-    models: env_models.clone().unwrap_or_else(|| target("models")),
-  };
+  let help = || Args { command: Command::Help, json: false, models: env_models.clone().unwrap_or_else(|| target("models")) };
   // --help wins over everything else on the line, however wrong the rest is.
   if args[..end].iter().any(|a| a == "--help" || a == "-h") {
     return Ok(help());
@@ -217,10 +176,7 @@ pub fn parse(
   let mut line = args[..end].iter();
   while let Some(a) = line.next() {
     if VALUED.contains(&a.as_str()) {
-      let value = line
-        .next()
-        .filter(|v| !VALUED.contains(&v.as_str()) && !SWITCHES.contains(&v.as_str()))
-        .ok_or_else(|| format!("{a} needs a value"))?;
+      let value = line.next().filter(|v| !VALUED.contains(&v.as_str()) && !SWITCHES.contains(&v.as_str())).ok_or_else(|| format!("{a} needs a value"))?;
       flags.push((a, value));
     } else if SWITCHES.contains(&a.as_str()) {
       flags.push((a, ""));
@@ -240,10 +196,8 @@ pub fn parse(
   let takes = takes(command).ok_or_else(|| format!("unknown command {command}; try --help"))?;
 
   let (mut json, mut models) = (false, None);
-  let (mut style, mut fillers, mut language, mut replacements, mut live) =
-    (Style::Default, false, None, Vec::new(), false);
-  let (mut model, mut translate, mut words, mut note, mut out) =
-    (ModelKind::Small, false, Vec::new(), false, None);
+  let (mut style, mut fillers, mut language, mut replacements, mut live) = (Style::Default, false, None, Vec::new(), false);
+  let (mut model, mut translate, mut words, mut note, mut out) = (ModelKind::Small, false, Vec::new(), false, None);
   for (flag, value) in flags {
     if !GLOBAL.contains(&flag) && !takes.contains(&flag) {
       return Err(format!("{command} does not take {flag}"));
@@ -256,24 +210,12 @@ pub fn parse(
       "--live" => live = true,
       "--language" => language = Some(value.to_string()),
       "--replace" => {
-        let (from, to) = value
-          .split_once('=')
-          .ok_or_else(|| format!("--replace needs FROM=TO, got {value}"))?;
-        replacements.push(Replacement {
-          from: from.to_string(),
-          to: to.to_string(),
-        });
+        let (from, to) = value.split_once('=').ok_or_else(|| format!("--replace needs FROM=TO, got {value}"))?;
+        replacements.push(Replacement { from: from.to_string(), to: to.to_string() });
       }
       "--model" => model = model_of(value)?,
       "--translate" => translate = true,
-      "--words" => {
-        words = value
-          .split(',')
-          .map(str::trim)
-          .filter(|w| !w.is_empty())
-          .map(String::from)
-          .collect()
-      }
+      "--words" => words = value.split(',').map(str::trim).filter(|w| !w.is_empty()).map(String::from).collect(),
       "--note" => note = true,
       "--out" => out = Some(PathBuf::from(value)),
       _ => unreachable!("{flag} is in VALUED or SWITCHES but not handled"),
@@ -281,10 +223,7 @@ pub fn parse(
   }
   let models = models.or(env_models).unwrap_or_else(|| target("models"));
   let elsewhere = |path: PathBuf, what: &str| match app_data(&path) {
-    true => Err(format!(
-      "{} is the app's own data; the lab keeps its {what} elsewhere",
-      path.display()
-    )),
+    true => Err(format!("{} is the app's own data; the lab keeps its {what} elsewhere", path.display())),
     false => Ok(path),
   };
   let models = elsewhere(models, "models")?;
@@ -294,18 +233,9 @@ pub fn parse(
   };
   let command = match command {
     "text" => {
-      let (raw, extra) = free
-        .split_first()
-        .ok_or("text needs the raw string to finish")?;
+      let (raw, extra) = free.split_first().ok_or("text needs the raw string to finish")?;
       unexpected(extra)?;
-      Command::Text(Text {
-        raw: raw.to_string(),
-        style,
-        fillers,
-        language,
-        replacements,
-        live,
-      })
+      Command::Text(Text { raw: raw.to_string(), style, fillers, language, replacements, live })
     }
     "fetch" => {
       unexpected(free)?;
@@ -314,9 +244,7 @@ pub fn parse(
     "fixtures" => {
       unexpected(free)?;
       let out = out.unwrap_or_else(|| target("fixtures"));
-      Command::Fixtures {
-        out: elsewhere(out, "fixtures")?,
-      }
+      Command::Fixtures { out: elsewhere(out, "fixtures")? }
     }
     "eval" => {
       let (dir, extra) = match free.split_first() {
@@ -324,10 +252,7 @@ pub fn parse(
         None => (target("fixtures"), free),
       };
       unexpected(extra)?;
-      Command::Eval {
-        dir: elsewhere(dir, "fixtures")?,
-        model,
-      }
+      Command::Eval { dir: elsewhere(dir, "fixtures")?, model }
     }
     _ => {
       if free.is_empty() {
@@ -335,29 +260,12 @@ pub fn parse(
       }
       let language = match language.as_deref() {
         None | Some("auto") => None,
-        Some(code) => Some(whisper::lang_id(code).ok_or_else(|| {
-          format!("--language: unknown language {code}; use auto or a code such as en")
-        })?),
+        Some(code) => Some(whisper::lang_id(code).ok_or_else(|| format!("--language: unknown language {code}; use auto or a code such as en"))?),
       };
-      Command::Run {
-        files: free.iter().map(PathBuf::from).collect(),
-        model,
-        hearing: Hearing {
-          language,
-          translate,
-          words,
-          style,
-          fillers,
-          note,
-        },
-      }
+      Command::Run { files: free.iter().map(PathBuf::from).collect(), model, hearing: Hearing { language, translate, words, style, fillers, note } }
     }
   };
-  Ok(Args {
-    command,
-    json,
-    models,
-  })
+  Ok(Args { command, json, models })
 }
 
 #[cfg(test)]
@@ -373,37 +281,13 @@ mod tests {
   }
 
   fn text(raw: &str) -> Text {
-    Text {
-      raw: raw.into(),
-      style: Style::Default,
-      fillers: false,
-      language: None,
-      replacements: Vec::new(),
-      live: false,
-    }
+    Text { raw: raw.into(), style: Style::Default, fillers: false, language: None, replacements: Vec::new(), live: false }
   }
 
   #[test]
   fn text_takes_all_its_flags_and_repeats_replace() {
-    let a = p(
-      &[
-        "text",
-        "hi there",
-        "--style",
-        "formal",
-        "--fillers",
-        "--language",
-        "en",
-        "--replace",
-        "a=b",
-        "--replace",
-        "c=d=e",
-        "--live",
-        "--json",
-      ],
-      None,
-    )
-    .unwrap();
+    let a = p(&["text", "hi there", "--style", "formal", "--fillers", "--language", "en", "--replace", "a=b", "--replace", "c=d=e", "--live", "--json"], None)
+      .unwrap();
     assert!(a.json);
     assert_eq!(
       a.command,
@@ -412,16 +296,7 @@ mod tests {
         style: Style::Formal,
         fillers: true,
         language: Some("en".into()),
-        replacements: vec![
-          Replacement {
-            from: "a".into(),
-            to: "b".into()
-          },
-          Replacement {
-            from: "c".into(),
-            to: "d=e".into()
-          }
-        ],
+        replacements: vec![Replacement { from: "a".into(), to: "b".into() }, Replacement { from: "c".into(), to: "d=e".into() }],
         live: true,
       })
     );
@@ -429,30 +304,10 @@ mod tests {
 
   #[test]
   fn fetch_and_run_take_their_flags() {
-    assert_eq!(
-      command(&["fetch"]),
-      Command::Fetch {
-        model: ModelKind::Small
-      }
-    );
-    assert_eq!(
-      command(&["fetch", "--model", "turbo"]),
-      Command::Fetch {
-        model: ModelKind::Turbo
-      }
-    );
-    assert_eq!(
-      p(&["fetch", "--speakers"], None).unwrap_err(),
-      "unknown flag --speakers"
-    );
-    assert_eq!(
-      command(&["run", "a.wav"]),
-      Command::Run {
-        files: vec!["a.wav".into()],
-        model: ModelKind::Small,
-        hearing: Hearing::default(),
-      }
-    );
+    assert_eq!(command(&["fetch"]), Command::Fetch { model: ModelKind::Small });
+    assert_eq!(command(&["fetch", "--model", "turbo"]), Command::Fetch { model: ModelKind::Turbo });
+    assert_eq!(p(&["fetch", "--speakers"], None).unwrap_err(), "unknown flag --speakers");
+    assert_eq!(command(&["run", "a.wav"]), Command::Run { files: vec!["a.wav".into()], model: ModelKind::Small, hearing: Hearing::default() });
     assert_eq!(
       command(&[
         "run",
@@ -483,19 +338,12 @@ mod tests {
         },
       }
     );
-    assert_eq!(
-      command(&["run", "a.wav", "--language", "auto"]),
-      command(&["run", "a.wav"])
-    );
+    assert_eq!(command(&["run", "a.wav", "--language", "auto"]), command(&["run", "a.wav"]));
   }
 
   #[test]
   fn global_flags_go_anywhere_on_the_line() {
-    for line in [
-      &["--json", "--models", "/a", "text", "x"][..],
-      &["text", "--models", "/a", "x", "--json"],
-      &["--models", "/a", "text", "--json", "x"],
-    ] {
+    for line in [&["--json", "--models", "/a", "text", "x"][..], &["text", "--models", "/a", "x", "--json"], &["--models", "/a", "text", "--json", "x"]] {
       let a = p(line, None).unwrap();
       assert!(a.json, "{line:?}");
       assert_eq!(a.models, PathBuf::from("/a"), "{line:?}");
@@ -505,22 +353,9 @@ mod tests {
 
   #[test]
   fn a_double_dash_ends_the_flags() {
-    assert_eq!(
-      command(&["text", "--", "--text"]),
-      Command::Text(text("--text"))
-    );
-    assert_eq!(
-      command(&["text", "--json", "--", "--help"]),
-      Command::Text(text("--help"))
-    );
-    assert_eq!(
-      command(&["run", "--", "--note.wav"]),
-      Command::Run {
-        files: vec!["--note.wav".into()],
-        model: ModelKind::Small,
-        hearing: Hearing::default(),
-      }
-    );
+    assert_eq!(command(&["text", "--", "--text"]), Command::Text(text("--text")));
+    assert_eq!(command(&["text", "--json", "--", "--help"]), Command::Text(text("--help")));
+    assert_eq!(command(&["run", "--", "--note.wav"]), Command::Run { files: vec!["--note.wav".into()], model: ModelKind::Small, hearing: Hearing::default() });
   }
 
   #[test]
@@ -547,99 +382,46 @@ mod tests {
     assert_eq!(err(&["text", "x", "--nope"]), "unknown flag --nope");
     assert_eq!(err(&["text", "x", "--style"]), "--style needs a value");
     // A flag that needs a value never takes another flag as it.
-    assert_eq!(
-      err(&["text", "x", "--style", "--fillers"]),
-      "--style needs a value"
-    );
-    assert_eq!(
-      err(&["--models", "--json", "text", "x"]),
-      "--models needs a value"
-    );
-    assert_eq!(
-      err(&["text", "x", "--style", "--"]),
-      "--style needs a value"
-    );
+    assert_eq!(err(&["text", "x", "--style", "--fillers"]), "--style needs a value");
+    assert_eq!(err(&["--models", "--json", "text", "x"]), "--models needs a value");
+    assert_eq!(err(&["text", "x", "--style", "--"]), "--style needs a value");
     assert!(err(&["text", "x", "--style", "loud"]).starts_with("--style: unknown style loud"));
     assert!(err(&["text", "x", "--replace", "ab"]).starts_with("--replace needs FROM=TO"));
     assert_eq!(err(&["text"]), "text needs the raw string to finish");
     assert_eq!(err(&["text", "x", "y"]), "unexpected argument y");
     assert!(err(&["dance"]).starts_with("unknown command dance"));
     assert_eq!(err(&["fetch", "x"]), "unexpected argument x");
-    assert_eq!(
-      err(&["fetch", "--model", "huge"]),
-      "--model: unknown model huge; use small or turbo"
-    );
+    assert_eq!(err(&["fetch", "--model", "huge"]), "--model: unknown model huge; use small or turbo");
     assert_eq!(err(&["run"]), "run needs at least one .wav file");
     assert_eq!(err(&["run", "a.wav", "--live"]), "run does not take --live");
     assert_eq!(err(&["text", "x", "--note"]), "text does not take --note");
-    assert_eq!(
-      err(&["run", "a.wav", "--language", "xx"]),
-      "--language: unknown language xx; use auto or a code such as en"
-    );
+    assert_eq!(err(&["run", "a.wav", "--language", "xx"]), "--language: unknown language xx; use auto or a code such as en");
   }
 
   #[test]
   fn models_flag_beats_env_beats_default() {
-    assert_eq!(
-      p(&["text", "x", "--models", "/a"], Some("/b"))
-        .unwrap()
-        .models,
-      PathBuf::from("/a")
-    );
-    assert_eq!(
-      p(&["text", "x"], Some("/b")).unwrap().models,
-      PathBuf::from("/b")
-    );
+    assert_eq!(p(&["text", "x", "--models", "/a"], Some("/b")).unwrap().models, PathBuf::from("/a"));
+    assert_eq!(p(&["text", "x"], Some("/b")).unwrap().models, PathBuf::from("/b"));
     let default = p(&["text", "x"], None).unwrap().models;
     assert!(default.ends_with("target/models"), "{default:?}");
     assert!(default.is_absolute(), "{default:?}");
-    assert!(
-      !default
-        .components()
-        .any(|c| c == std::path::Component::ParentDir),
-      "{default:?}"
-    );
+    assert!(!default.components().any(|c| c == std::path::Component::ParentDir), "{default:?}");
     // An empty $DICTATE_MODELS is unset.
     assert_eq!(p(&["text", "x"], Some("")).unwrap().models, default);
   }
 
   #[test]
   fn fixtures_and_eval_take_their_folders() {
-    assert_eq!(
-      command(&["fixtures"]),
-      Command::Fixtures {
-        out: target("fixtures")
-      }
-    );
+    assert_eq!(command(&["fixtures"]), Command::Fixtures { out: target("fixtures") });
     assert!(target("fixtures").is_absolute());
-    assert_eq!(
-      command(&["fixtures", "--out", "/tmp/f"]),
-      Command::Fixtures {
-        out: "/tmp/f".into()
-      }
-    );
-    assert_eq!(
-      command(&["eval"]),
-      Command::Eval {
-        dir: target("fixtures"),
-        model: ModelKind::Small
-      }
-    );
-    assert_eq!(
-      command(&["eval", "mine", "--model", "turbo", "--json"]),
-      Command::Eval {
-        dir: "mine".into(),
-        model: ModelKind::Turbo
-      }
-    );
+    assert_eq!(command(&["fixtures", "--out", "/tmp/f"]), Command::Fixtures { out: "/tmp/f".into() });
+    assert_eq!(command(&["eval"]), Command::Eval { dir: target("fixtures"), model: ModelKind::Small });
+    assert_eq!(command(&["eval", "mine", "--model", "turbo", "--json"]), Command::Eval { dir: "mine".into(), model: ModelKind::Turbo });
     let err = |s: &[&str]| p(s, None).unwrap_err();
     assert_eq!(err(&["eval", "a", "b"]), "unexpected argument b");
     assert_eq!(err(&["fixtures", "a"]), "unexpected argument a");
     assert_eq!(err(&["eval", "--note"]), "eval does not take --note");
-    assert_eq!(
-      err(&["run", "a.wav", "--out", "x"]),
-      "run does not take --out"
-    );
+    assert_eq!(err(&["run", "a.wav", "--out", "x"]), "run does not take --out");
   }
 
   #[test]
@@ -647,18 +429,12 @@ mod tests {
     let home = PathBuf::from(std::env::var_os("HOME").unwrap());
     let app = home.join("Library/Application Support/com.tabtasker.dictate/models");
     let app = app.to_str().unwrap();
-    assert_eq!(
-      p(&["fetch", "--models", app], None).unwrap_err(),
-      format!("{app} is the app's own data; the lab keeps its models elsewhere")
-    );
+    assert_eq!(p(&["fetch", "--models", app], None).unwrap_err(), format!("{app} is the app's own data; the lab keeps its models elsewhere"));
     assert!(p(&["fetch"], Some(app)).is_err());
     // Nor are fixtures written there, or read from there.
     let docs = home.join("Documents/TabTasker Dictate");
     let docs = docs.to_str().unwrap();
-    assert_eq!(
-      p(&["fixtures", "--out", docs], None).unwrap_err(),
-      format!("{docs} is the app's own data; the lab keeps its fixtures elsewhere")
-    );
+    assert_eq!(p(&["fixtures", "--out", docs], None).unwrap_err(), format!("{docs} is the app's own data; the lab keeps its fixtures elsewhere"));
     assert!(p(&["eval", docs], None).is_err());
   }
 }

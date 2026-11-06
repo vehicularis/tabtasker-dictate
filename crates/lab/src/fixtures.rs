@@ -83,19 +83,9 @@ impl Fixture {
   pub fn hearing(&self) -> Result<Hearing, String> {
     let language = match self.language.as_deref() {
       None | Some("auto") => None,
-      Some(code) => Some(
-        whisper::lang_id(code)
-          .ok_or_else(|| format!("unknown language {code}; use auto or a code such as en"))?,
-      ),
+      Some(code) => Some(whisper::lang_id(code).ok_or_else(|| format!("unknown language {code}; use auto or a code such as en"))?),
     };
-    Ok(Hearing {
-      language,
-      translate: false,
-      words: self.words.clone(),
-      style: self.style,
-      fillers: self.fillers,
-      note: self.note,
-    })
+    Ok(Hearing { language, translate: false, words: self.words.clone(), style: self.style, fillers: self.fillers, note: self.note })
   }
 
   /// The words that should be typed: none when it should be unheard.
@@ -110,8 +100,7 @@ impl Fixture {
 
 /// Every `x.json` in `dir`, as (`x`, its path), by name.
 pub fn listed(dir: &Path) -> Result<Vec<(String, PathBuf)>, String> {
-  let entries =
-    std::fs::read_dir(dir).map_err(|e| format!("cannot read {}: {e}", dir.display()))?;
+  let entries = std::fs::read_dir(dir).map_err(|e| format!("cannot read {}: {e}", dir.display()))?;
   let mut listed: Vec<(String, PathBuf)> = entries
     .filter_map(|entry| {
       let path = entry.ok()?.path();
@@ -138,18 +127,9 @@ fn voices_in(list: &str) -> Vec<String> {
     .lines()
     .filter_map(|line| {
       // NAME, then the locale, then `#` and a sample.
-      let (name, _locale) = line
-        .split_once('#')?
-        .0
-        .trim()
-        .rsplit_once(char::is_whitespace)?;
+      let (name, _locale) = line.split_once('#')?.0.trim().rsplit_once(char::is_whitespace)?;
       let name = name.trim();
-      Some(
-        name
-          .split_once(" (")
-          .map_or(name, |(name, _)| name)
-          .to_string(),
-      )
+      Some(name.split_once(" (").map_or(name, |(name, _)| name).to_string())
     })
     .collect()
 }
@@ -169,16 +149,10 @@ fn failed(said: &Output) -> String {
 /// The voices `say -v '?'` lists, run as `say`. A `say` that can't run or fails stops the lab: no voice
 /// would be found, and every fixture would be skipped as if its voice were missing.
 fn voices(say: &str) -> Result<Vec<String>, Failure> {
-  let list = Command::new(say).args(["-v", "?"]).output().map_err(|e| {
-    Failure::Broken(format!(
-      "cannot run {say}, which renders the fixtures on macOS: {e}"
-    ))
-  })?;
+  let list =
+    Command::new(say).args(["-v", "?"]).output().map_err(|e| Failure::Broken(format!("cannot run {say}, which renders the fixtures on macOS: {e}")))?;
   if !list.status.success() {
-    return Err(Failure::Broken(format!(
-      "{say} -v '?' failed, so the voices can't be listed: {}",
-      failed(&list)
-    )));
+    return Err(Failure::Broken(format!("{say} -v '?' failed, so the voices can't be listed: {}", failed(&list))));
   }
   Ok(voices_in(&String::from_utf8_lossy(&list.stdout)))
 }
@@ -217,20 +191,11 @@ pub struct Rendered {
 /// each to `log`. A fixture whose voice isn't one of `voices` is skipped: its JSON still goes, so eval
 /// can say so, and an old WAV of it goes, so eval can't score stale audio. A fixture that can't be read
 /// fails as a fixture; `say` failing, or a file that can't be written, stops the lab.
-pub fn render(
-  source: &Path,
-  out: &Path,
-  say: &str,
-  voices: &[String],
-  log: &mut dyn Write,
-) -> Result<Rendered, Failure> {
+pub fn render(source: &Path, out: &Path, say: &str, voices: &[String], log: &mut dyn Write) -> Result<Rendered, Failure> {
   std::fs::create_dir_all(out).map_err(|e| format!("cannot make {}: {e}", out.display()))?;
   // A JSON copied onto itself is cut short, and audio beside the committed JSON could be committed.
   if matches!((source.canonicalize(), out.canonicalize()), (Ok(a), Ok(b)) if a == b) {
-    return Err(Failure::Broken(format!(
-      "{} holds the fixtures themselves; render them into another folder",
-      out.display()
-    )));
+    return Err(Failure::Broken(format!("{} holds the fixtures themselves; render them into another folder", out.display())));
   }
   let wrote = |e: std::io::Error| format!("cannot write the log: {e}");
   let mut done = Rendered::default();
@@ -242,8 +207,7 @@ pub fn render(
     match (&fixture.say, &fixture.voice, fixture.synth) {
       (Some(_), Some(voice), None) if !installed(voices, voice) => {
         if wav.exists() {
-          std::fs::remove_file(&wav)
-            .map_err(|e| format!("cannot remove the old {}: {e}", wav.display()))?;
+          std::fs::remove_file(&wav).map_err(|e| format!("cannot remove the old {}: {e}", wav.display()))?;
         }
         writeln!(log, "{name}: skipped, the voice {voice} is not installed").map_err(wrote)?;
         done.skipped.push(name);
@@ -254,19 +218,11 @@ pub fn render(
           .args(["-v", voice, "-o"])
           .arg(&wav)
           // `--` ends say's flags, so a text starting with "-" is read aloud.
-          .args([
-            "--file-format=WAVE",
-            "--data-format=LEI16@16000",
-            "--",
-            text,
-          ])
+          .args(["--file-format=WAVE", "--data-format=LEI16@16000", "--", text])
           .output()
           .map_err(|e| format!("cannot run {say}: {e}"))?;
         if !said.status.success() {
-          return Err(Failure::Broken(format!(
-            "{say} failed on {name}: {}",
-            failed(&said)
-          )));
+          return Err(Failure::Broken(format!("{say} failed on {name}: {}", failed(&said))));
         }
         let seconds = wav::read(&wav)?.len() as f32 / SAMPLE_RATE as f32;
         writeln!(log, "{name}: said by {voice}, {seconds:.2} s").map_err(wrote)?;
@@ -278,11 +234,7 @@ pub fn render(
         let seconds = pcm.len() as f32 / SAMPLE_RATE as f32;
         writeln!(log, "{name}: synthesized {kind}, {seconds:.2} s").map_err(wrote)?;
       }
-      _ => {
-        return Err(Failure::Failed(format!(
-          "{name}.json needs say with a voice, or synth"
-        )))
-      }
+      _ => return Err(Failure::Failed(format!("{name}.json needs say with a voice, or synth"))),
     }
     done.rendered.push(name);
   }
@@ -293,24 +245,14 @@ pub fn render(
 pub fn run(out: &Path, json: bool) -> Result<(), Failure> {
   let voices = voices(SAY)?;
   // With --json the lines go to stderr, so stdout holds the one document.
-  let mut log: Box<dyn Write> = if json {
-    Box::new(std::io::stderr())
-  } else {
-    Box::new(std::io::stdout())
-  };
+  let mut log: Box<dyn Write> = if json { Box::new(std::io::stderr()) } else { Box::new(std::io::stdout()) };
   let done = render(&source(), out, SAY, &voices, &mut log)?;
   if json {
-    let document =
-      serde_json::json!({ "folder": out, "rendered": done.rendered, "skipped": done.skipped });
+    let document = serde_json::json!({ "folder": out, "rendered": done.rendered, "skipped": done.skipped });
     println!("{document}");
   } else {
     let total = done.rendered.len() + done.skipped.len();
-    println!(
-      "{total} fixtures in {}: {} rendered, {} skipped",
-      out.display(),
-      done.rendered.len(),
-      done.skipped.len()
-    );
+    println!("{total} fixtures in {}: {} rendered, {} skipped", out.display(), done.rendered.len(), done.skipped.len());
   }
   Ok(())
 }
@@ -352,11 +294,7 @@ pub(crate) mod tests {
           assert!(!f.expect.is_empty() && !f.expect_unheard, "{name}");
           // A budget from a real run: a multiple of 0.05, at least 0.05.
           let steps = f.max_wer / 0.05;
-          assert!(
-            f.max_wer >= 0.05 && (steps - steps.round()).abs() < 1e-9,
-            "{name}: {}",
-            f.max_wer
-          );
+          assert!(f.max_wer >= 0.05 && (steps - steps.round()).abs() < 1e-9, "{name}: {}", f.max_wer);
         }
         (None, None, Some(_)) => assert!(f.expect_unheard && f.expect.is_empty(), "{name}"),
         _ => panic!("{name}: say with a voice, or synth"),
@@ -368,17 +306,10 @@ pub(crate) mod tests {
     }
     // A misspelt field is refused, not ignored.
     let dir = scratch("typo");
-    std::fs::write(
-      dir.join("typo.json"),
-      r#"{ "expect": "hi", "max_wr": 0.1 }"#,
-    )
-    .unwrap();
+    std::fs::write(dir.join("typo.json"), r#"{ "expect": "hi", "max_wr": 0.1 }"#).unwrap();
     let err = load(&dir.join("typo.json")).unwrap_err();
     std::fs::remove_dir_all(dir).unwrap();
-    assert!(
-      err.starts_with("typo.json: unknown field `max_wr`"),
-      "{err}"
-    );
+    assert!(err.starts_with("typo.json: unknown field `max_wr`"), "{err}");
   }
 
   #[test]
@@ -390,12 +321,7 @@ pub(crate) mod tests {
       if path.file_name().unwrap().to_string_lossy().starts_with('.') {
         continue;
       }
-      assert_eq!(
-        path.extension().and_then(|e| e.to_str()),
-        Some("json"),
-        "{}",
-        path.display()
-      );
+      assert_eq!(path.extension().and_then(|e| e.to_str()), Some("json"), "{}", path.display());
     }
   }
 
@@ -435,14 +361,8 @@ Samantha (English (US)) en_US    # Hello! My name is Samantha.
     std::fs::create_dir_all(&source).unwrap();
     for (name, json) in [
       ("noise", r#"{ "synth": "noise", "expect_unheard": true }"#),
-      (
-        "said",
-        r#"{ "say": "Hello.", "voice": "Nobody", "expect": "Hello." }"#,
-      ),
-      (
-        "silence",
-        r#"{ "synth": "silence", "expect_unheard": true }"#,
-      ),
+      ("said", r#"{ "say": "Hello.", "voice": "Nobody", "expect": "Hello." }"#),
+      ("silence", r#"{ "synth": "silence", "expect_unheard": true }"#),
     ] {
       std::fs::write(source.join(format!("{name}.json")), json).unwrap();
     }
@@ -452,10 +372,7 @@ Samantha (English (US)) en_US    # Hello! My name is Samantha.
     crate::wav::write(&out.join("said.wav"), &[0.5; 16_000]).unwrap();
     let mut log = Vec::new();
     let done = render(&source, &out, SAY, &["Samantha".into()], &mut log).unwrap();
-    assert_eq!(
-      (done.rendered, done.skipped),
-      (vec!["noise".into(), "silence".into()], vec!["said".into()])
-    );
+    assert_eq!((done.rendered, done.skipped), (vec!["noise".into(), "silence".into()], vec!["said".into()]));
     assert_eq!(
       String::from_utf8(log).unwrap(),
       "noise: synthesized noise, 3.00 s\n\
@@ -466,10 +383,7 @@ Samantha (English (US)) en_US    # Hello! My name is Samantha.
     for name in ["noise", "said", "silence"] {
       assert!(out.join(format!("{name}.json")).exists(), "{name}");
     }
-    assert_eq!(
-      crate::wav::read(&out.join("noise.wav")).unwrap().len(),
-      3 * 16_000
-    );
+    assert_eq!(crate::wav::read(&out.join("noise.wav")).unwrap().len(), 3 * 16_000);
     assert!(crate::wav::read(&out.join("silence.wav")).is_ok());
     // A skipped fixture leaves no audio, so eval can't score the old one.
     assert!(!out.join("said.wav").exists());
@@ -478,19 +392,13 @@ Samantha (English (US)) en_US    # Hello! My name is Samantha.
     // could be committed.
     assert_eq!(
       render(&source, &source.join("."), SAY, &[], &mut Vec::new()).unwrap_err(),
-      Failure::Broken(format!(
-        "{} holds the fixtures themselves; render them into another folder",
-        source.join(".").display()
-      ))
+      Failure::Broken(format!("{} holds the fixtures themselves; render them into another folder", source.join(".").display()))
     );
     assert!(load(&source.join("noise.json")).is_ok());
 
     // A fixture that is neither said nor synthesized can't be rendered.
     std::fs::write(source.join("bare.json"), r#"{ "expect": "Hi." }"#).unwrap();
-    assert_eq!(
-      render(&source, &out, SAY, &[], &mut Vec::new()).unwrap_err(),
-      Failure::Failed("bare.json needs say with a voice, or synth".into())
-    );
+    assert_eq!(render(&source, &out, SAY, &[], &mut Vec::new()).unwrap_err(), Failure::Failed("bare.json needs say with a voice, or synth".into()));
     std::fs::remove_dir_all(dir).unwrap();
   }
 
@@ -500,43 +408,19 @@ Samantha (English (US)) en_US    # Hello! My name is Samantha.
     let dir = scratch("say-fails");
     let (source, out) = (dir.join("source"), dir.join("out"));
     std::fs::create_dir_all(&source).unwrap();
-    std::fs::write(
-      source.join("said.json"),
-      r#"{ "say": "Hello.", "voice": "Samantha", "expect": "Hello." }"#,
-    )
-    .unwrap();
-    let rendered = render(
-      &source,
-      &out,
-      "false",
-      &["Samantha".into()],
-      &mut Vec::new(),
-    );
+    std::fs::write(source.join("said.json"), r#"{ "say": "Hello.", "voice": "Samantha", "expect": "Hello." }"#).unwrap();
+    let rendered = render(&source, &out, "false", &["Samantha".into()], &mut Vec::new());
     std::fs::remove_dir_all(dir).unwrap();
-    assert_eq!(
-      rendered.unwrap_err(),
-      Failure::Broken("false failed on said: exit status: 1".into())
-    );
+    assert_eq!(rendered.unwrap_err(), Failure::Broken("false failed on said: exit status: 1".into()));
     // Nor can the voices be listed, which would skip every fixture as if its voice were missing.
-    assert_eq!(
-      voices("false").unwrap_err(),
-      Failure::Broken("false -v '?' failed, so the voices can't be listed: exit status: 1".into())
-    );
-    let Err(Failure::Broken(missing)) = voices("/nonexistent/say") else {
-      panic!("a say that isn't there stops the lab")
-    };
-    assert!(
-      missing.starts_with("cannot run /nonexistent/say, which renders the fixtures on macOS: "),
-      "{missing}"
-    );
+    assert_eq!(voices("false").unwrap_err(), Failure::Broken("false -v '?' failed, so the voices can't be listed: exit status: 1".into()));
+    let Err(Failure::Broken(missing)) = voices("/nonexistent/say") else { panic!("a say that isn't there stops the lab") };
+    assert!(missing.starts_with("cannot run /nonexistent/say, which renders the fixtures on macOS: "), "{missing}");
   }
 
   /// A folder of its own for each test, which the test removes.
   pub(crate) fn scratch(test: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!(
-      "dictate-lab-fixtures-{test}-{}",
-      std::process::id()
-    ));
+    let dir = std::env::temp_dir().join(format!("dictate-lab-fixtures-{test}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir

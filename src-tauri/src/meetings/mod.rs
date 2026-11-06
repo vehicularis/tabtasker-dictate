@@ -6,6 +6,16 @@
 //! launch offers to save what the spool holds.
 pub mod speakers;
 
+use crate::dictation::speech;
+use crate::library::notes;
+use crate::{ai, settings};
+use dictate_engine::meeting::levels::{has_speech, pause_cut, WINDOW_SAMPLES};
+use dictate_engine::meeting::speakers::{diarize, ready, Turn};
+use dictate_engine::meeting::transcript::{assign_speakers, clock, dateline, document, length, transcript, untitled};
+use dictate_engine::meeting::{fill, Gap, Line, Source, SOURCES};
+use dictate_engine::{error::Error, whisper::Segment};
+use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::ffi::{c_char, CStr};
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
@@ -13,17 +23,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use serde::{Deserialize, Serialize};
-use serde_json::json;
 use tauri::{AppHandle, Emitter, Manager};
-use crate::dictation::speech;
-use dictate_engine::meeting::levels::{has_speech, pause_cut, WINDOW_SAMPLES};
-use dictate_engine::meeting::speakers::{diarize, ready, Turn};
-use dictate_engine::meeting::transcript::{assign_speakers, clock, dateline, document, length, transcript, untitled};
-use dictate_engine::meeting::{fill, Gap, Line, Source, SOURCES};
-use dictate_engine::{error::Error, whisper::Segment};
-use crate::library::notes;
-use crate::{ai, settings};
 
 const RATE: usize = 16000;
 /// A stream further behind the meeting's clock than this has stalled, and the time it lost is filled.
@@ -34,7 +34,14 @@ const LOW_DISK: u64 = 512 * 1024 * 1024;
 /// One piece as the spool keeps it: `from..done` of its stream, and what was said there. `failed` is
 /// audio Whisper couldn't read, kept to try again.
 #[derive(Debug, Serialize, Deserialize)]
-struct Piece { source: Source, from: u64, done: u64, lines: Vec<Line>, #[serde(default, skip_serializing_if = "std::ops::Not::not")] failed: bool }
+struct Piece {
+  source: Source,
+  from: u64,
+  done: u64,
+  lines: Vec<Line>,
+  #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+  failed: bool,
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -49,11 +56,19 @@ struct Header {
 // ---------- the spool ----------
 
 /// The file a stream's samples are spooled to.
-fn file(source: Source) -> &'static str { match source { Source::Mic => "mic.pcm", Source::System => "system.pcm" } }
+fn file(source: Source) -> &'static str {
+  match source {
+    Source::Mic => "mic.pcm",
+    Source::System => "system.pcm",
+  }
+}
 
 /// One meeting's audio and transcribed pieces on disk: `meeting.json`, a 16-bit file per stream, and
 /// `pieces.jsonl`. Removed once the meeting is saved.
-struct Spool { dir: PathBuf, header: Header }
+struct Spool {
+  dir: PathBuf,
+  header: Header,
+}
 
 impl Spool {
   fn create(root: &Path, header: Header) -> io::Result<Self> {
@@ -75,7 +90,9 @@ impl Spool {
   /// The meeting has a file, but some of its audio has no transcript yet: the spool stays for that.
   fn mark_saved(&self, path: &Path) {
     let header = Header { saved: Some(path.display().to_string()), ..self.header.clone() };
-    if let Err(e) = self.keep_header(&header) { log::warn!("meeting: couldn’t mark the recording saved: {e}"); }
+    if let Err(e) = self.keep_header(&header) {
+      log::warn!("meeting: couldn’t mark the recording saved: {e}");
+    }
   }
 
   fn open(dir: &Path) -> Option<Self> {
@@ -83,7 +100,9 @@ impl Spool {
     Some(Self { dir: dir.to_owned(), header })
   }
 
-  fn id(&self) -> String { self.header.since_ms.to_string() }
+  fn id(&self) -> String {
+    self.header.since_ms.to_string()
+  }
 
   fn samples(&self, source: Source) -> u64 {
     fs::metadata(self.dir.join(file(source))).map_or(0, |meta| meta.len() / 2)
@@ -119,10 +138,16 @@ impl Spool {
       let (i, source) = (piece.source.index(), piece.source);
       if piece.done > at.done[i] {
         // Audio before this piece that no piece kept is a gap too.
-        if piece.from > at.done[i] { at.gaps.push(Gap { source, from: at.done[i], to: piece.from }); }
+        if piece.from > at.done[i] {
+          at.gaps.push(Gap { source, from: at.done[i], to: piece.from });
+        }
         let from = piece.from.max(at.done[i]);
         at.done[i] = piece.done;
-        if piece.failed { at.gaps.push(Gap { source, from, to: piece.done }); } else { at.lines.extend(piece.lines); }
+        if piece.failed {
+          at.gaps.push(Gap { source, from, to: piece.done });
+        } else {
+          at.lines.extend(piece.lines);
+        }
       } else if !piece.failed && fill(&mut at.gaps, source, piece.from, piece.done) {
         at.lines.extend(piece.lines);
       }
@@ -137,18 +162,26 @@ impl Spool {
     // A line a crash cut short gets its end, so this one is read on its own.
     if file.seek(SeekFrom::End(-1)).is_ok() {
       let mut last = [0u8];
-      if file.read_exact(&mut last).is_ok() && last[0] != b'\n' { line.insert(0, '\n'); }
+      if file.read_exact(&mut last).is_ok() && last[0] != b'\n' {
+        line.insert(0, '\n');
+      }
     }
     file.write_all(line.as_bytes()).and_then(|_| file.sync_data()).map_err(|e| e.to_string())
   }
 
   fn remove(&self) {
-    if let Err(e) = fs::remove_dir_all(&self.dir) { log::warn!("meeting: couldn’t remove the spool: {e}"); }
+    if let Err(e) = fs::remove_dir_all(&self.dir) {
+      log::warn!("meeting: couldn’t remove the spool: {e}");
+    }
   }
 }
 
 #[derive(Default)]
-struct Progress { done: [u64; 2], lines: Vec<Line>, gaps: Vec<Gap> }
+struct Progress {
+  done: [u64; 2],
+  lines: Vec<Line>,
+  gaps: Vec<Gap>,
+}
 
 fn pcm16(samples: &[f32]) -> Vec<u8> {
   samples.iter().flat_map(|sample| ((sample.clamp(-1.0, 1.0) * 32767.0).round() as i16).to_le_bytes()).collect()
@@ -179,12 +212,21 @@ impl Job {
     let writers = if recording { [Some(spool.writer(Source::Mic)?), Some(spool.writer(Source::System)?)] } else { [None, None] };
     let written = SOURCES.map(|source| AtomicU64::new(spool.samples(source)));
     Ok(Self {
-      spool, written, writers: Mutex::new((writers, Instant::now())), started: Instant::now(), ended: AtomicBool::new(!recording),
-      system: Mutex::new("pending".into()), problem: Mutex::default(), stopping: AtomicBool::new(false), closing: AtomicBool::new(!recording),
+      spool,
+      written,
+      writers: Mutex::new((writers, Instant::now())),
+      started: Instant::now(),
+      ended: AtomicBool::new(!recording),
+      system: Mutex::new("pending".into()),
+      problem: Mutex::default(),
+      stopping: AtomicBool::new(false),
+      closing: AtomicBool::new(!recording),
     })
   }
 
-  fn len(&self, source: Source) -> u64 { self.written[source.index()].load(Ordering::SeqCst) }
+  fn len(&self, source: Source) -> u64 {
+    self.written[source.index()].load(Ordering::SeqCst)
+  }
 
   fn stopped_early(&self, problem: &str) {
     self.problem.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert_with(|| problem.to_owned());
@@ -208,7 +250,9 @@ impl Job {
     if let Err(e) = file.write_all(&bytes) {
       log::warn!("meeting: couldn’t write audio: {e}");
       // Back to the last whole sample, and nothing more on this stream, so what is there stays readable.
-      if let Err(e) = file.set_len(written * 2) { log::warn!("meeting: couldn’t trim the audio: {e}"); }
+      if let Err(e) = file.set_len(written * 2) {
+        log::warn!("meeting: couldn’t trim the audio: {e}");
+      }
       writers.0[i] = None;
       drop(writers);
       let full = matches!(e.kind(), io::ErrorKind::StorageFull | io::ErrorKind::QuotaExceeded);
@@ -218,7 +262,9 @@ impl Job {
     self.written[i].fetch_add(gap + pcm.len() as u64, Ordering::SeqCst);
     // Written is safe from a crash; flushed is safe from a power cut too.
     if writers.1.elapsed() >= Duration::from_secs(5) {
-      for file in writers.0.iter().flatten() { let _ = file.sync_data(); }
+      for file in writers.0.iter().flatten() {
+        let _ = file.sync_data();
+      }
       writers.1 = Instant::now();
     }
   }
@@ -226,21 +272,28 @@ impl Job {
   /// The files are closed and flushed: the meeting has all the audio it will get.
   fn end(&self) {
     let mut writers = self.writers.lock().unwrap_or_else(|e| e.into_inner());
-    for file in writers.0.iter_mut().filter_map(Option::take) { let _ = file.sync_all(); }
+    for file in writers.0.iter_mut().filter_map(Option::take) {
+      let _ = file.sync_all();
+    }
     drop(writers);
     self.ended.store(true, Ordering::SeqCst);
   }
 }
 
 #[derive(Default)]
-struct Meetings { recording: Option<Arc<Job>>, finishing: Vec<String> }
+struct Meetings {
+  recording: Option<Arc<Job>>,
+  finishing: Vec<String>,
+}
 static STATE: Mutex<Meetings> = Mutex::new(Meetings { recording: None, finishing: Vec::new() });
 static APP: OnceLock<AppHandle> = OnceLock::new();
 static ROOT: OnceLock<PathBuf> = OnceLock::new();
 /// Why the last meeting asked for didn't start.
 static REFUSED: Mutex<Option<String>> = Mutex::new(None);
 
-fn state() -> std::sync::MutexGuard<'static, Meetings> { STATE.lock().unwrap_or_else(|e| e.into_inner()) }
+fn state() -> std::sync::MutexGuard<'static, Meetings> {
+  STATE.lock().unwrap_or_else(|e| e.into_inner())
+}
 
 pub fn init(app: &AppHandle) -> Result<(), String> {
   let root = app.path().app_data_dir().map_err(|e| e.to_string())?.join("meetings");
@@ -251,7 +304,9 @@ pub fn init(app: &AppHandle) -> Result<(), String> {
 
 /// Why the meeting asked for last didn't start, once; None when the caller has nothing better to say
 /// than its own words (the microphone card already explains a missing permission).
-pub fn start_problem() -> Option<String> { REFUSED.lock().unwrap_or_else(|e| e.into_inner()).take() }
+pub fn start_problem() -> Option<String> {
+  REFUSED.lock().unwrap_or_else(|e| e.into_inner()).take()
+}
 
 fn refuse(why: &str) -> i32 {
   *REFUSED.lock().unwrap_or_else(|e| e.into_inner()) = Some(why.to_owned());
@@ -259,7 +314,9 @@ fn refuse(why: &str) -> i32 {
 }
 
 fn emit(payload: serde_json::Value) {
-  if let Some(app) = APP.get() { let _ = app.emit("dictate-meeting", payload); }
+  if let Some(app) = APP.get() {
+    let _ = app.emit("dictate-meeting", payload);
+  }
 }
 
 fn recording_payload(job: &Job) -> serde_json::Value {
@@ -284,11 +341,19 @@ fn free_space(dir: &Path) -> Option<u64> {
 
 /// Stops the recording meeting from a thread that is not the main one, once.
 fn stop_soon(job: &Job) {
-  if job.stopping.swap(true, Ordering::SeqCst) { return; }
-  if let Some(app) = APP.get() { let _ = app.run_on_main_thread(|| unsafe { dictate_meeting(c"stop".as_ptr()); }); }
+  if job.stopping.swap(true, Ordering::SeqCst) {
+    return;
+  }
+  if let Some(app) = APP.get() {
+    let _ = app.run_on_main_thread(|| unsafe {
+      dictate_meeting(c"stop".as_ptr());
+    });
+  }
 }
 
-fn now_ms() -> u64 { SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |since| since.as_millis() as u64) }
+fn now_ms() -> u64 {
+  SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |since| since.as_millis() as u64)
+}
 
 fn text(text: *const c_char) -> Option<String> {
   (!text.is_null()).then(|| unsafe { CStr::from_ptr(text) }.to_string_lossy().into_owned())
@@ -302,15 +367,25 @@ extern "C" fn dictate_meeting_begin(stamp: *const c_char) -> i32 {
   REFUSED.lock().unwrap_or_else(|e| e.into_inner()).take();
   let Some(root) = ROOT.get() else { return refuse("Meetings aren’t ready yet. Try again in a moment.") };
   speakers::prepare_in_background();
-  let Some(stamp) = text(stamp).filter(|stamp| stamp.len() == 16 && stamp.chars().all(|c| c.is_ascii_digit() || matches!(c, '-' | ' ' | '.'))) else { return refuse("Couldn’t start the meeting.") };
+  let Some(stamp) = text(stamp).filter(|stamp| stamp.len() == 16 && stamp.chars().all(|c| c.is_ascii_digit() || matches!(c, '-' | ' ' | '.'))) else {
+    return refuse("Couldn’t start the meeting.");
+  };
   let mut meetings = state();
-  if meetings.recording.is_some() { return refuse("The last meeting is still saving. Try again in a moment."); }
-  if free_space(root.parent().unwrap_or(root)).is_some_and(|free| free < LOW_DISK) { return refuse("Your disk is almost full, so the meeting can’t start."); }
+  if meetings.recording.is_some() {
+    return refuse("The last meeting is still saving. Try again in a moment.");
+  }
+  if free_space(root.parent().unwrap_or(root)).is_some_and(|free| free < LOW_DISK) {
+    return refuse("Your disk is almost full, so the meeting can’t start.");
+  }
   let job = match Spool::create(root, Header { stamp, since_ms: now_ms(), saved: None }).and_then(|spool| Job::new(spool, true)) {
     Ok(job) => Arc::new(job),
     Err(e) => {
       log::warn!("meeting: couldn’t make the spool: {e}");
-      return refuse(if e.kind() == io::ErrorKind::StorageFull { "Your disk is full, so the meeting can’t start." } else { "Couldn’t make room for the meeting’s audio." });
+      return refuse(if e.kind() == io::ErrorKind::StorageFull {
+        "Your disk is full, so the meeting can’t start."
+      } else {
+        "Couldn’t make room for the meeting’s audio."
+      });
     }
   };
   let worker = job.clone();
@@ -330,8 +405,14 @@ extern "C" fn dictate_meeting_begin(stamp: *const c_char) -> i32 {
 /// the first of them captured `age` seconds ago.
 #[no_mangle]
 extern "C" fn dictate_meeting_audio(source: i32, samples: *const f32, count: usize, age: f64) {
-  let source = match source { 0 => Source::Mic, 1 => Source::System, _ => return };
-  if samples.is_null() || count == 0 || count > 10 * RATE { return; }
+  let source = match source {
+    0 => Source::Mic,
+    1 => Source::System,
+    _ => return,
+  };
+  if samples.is_null() || count == 0 || count > 10 * RATE {
+    return;
+  }
   let Some(job) = state().recording.clone() else { return };
   // The native side owns the buffer until this synchronous call returns.
   job.append(source, unsafe { std::slice::from_raw_parts(samples, count) }, age);
@@ -342,13 +423,17 @@ extern "C" fn dictate_meeting_sources(system: *const c_char) {
   let Some(system) = text(system).filter(|system| matches!(system.as_str(), "on" | "off" | "unsupported" | "denied" | "failed")) else { return };
   let Some(job) = state().recording.clone() else { return };
   *job.system.lock().unwrap_or_else(|e| e.into_inner()) = system;
-  if !job.closing.load(Ordering::SeqCst) { emit(recording_payload(&job)); }
+  if !job.closing.load(Ordering::SeqCst) {
+    emit(recording_payload(&job));
+  }
 }
 
 /// The meeting is saving from here on: the tray, the pill and Settings say so at once, while the
 /// devices close and the last buffers arrive.
 fn closing(job: &Job) {
-  if job.closing.swap(true, Ordering::SeqCst) { return; }
+  if job.closing.swap(true, Ordering::SeqCst) {
+    return;
+  }
   crate::app::menu::meeting_changed(false);
   emit(saving_payload(job, "Finishing the transcript"));
 }
@@ -363,7 +448,9 @@ extern "C" fn dictate_meeting_stopping() {
 /// On the main thread: a meeting asked for couldn't start, from its shortcut or once the last one closed.
 #[no_mangle]
 extern "C" fn dictate_meeting_unstarted() {
-  if let (Some(app), Some(why)) = (APP.get(), start_problem()) { let _ = app.emit("dictate-notice", json!({ "message": why })); }
+  if let (Some(app), Some(why)) = (APP.get(), start_problem()) {
+    let _ = app.emit("dictate-notice", json!({ "message": why }));
+  }
 }
 
 /// Every buffer of the recording meeting is in: the worker transcribes what is left and saves it.
@@ -373,27 +460,39 @@ extern "C" fn dictate_meeting_end(problem: *const c_char) {
   let Some(job) = meetings.recording.take() else { return };
   meetings.finishing.push(job.spool.id());
   drop(meetings);
-  if let Some(problem) = text(problem) { job.problem.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert(problem); }
+  if let Some(problem) = text(problem) {
+    job.problem.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert(problem);
+  }
   closing(&job);
   job.end();
 }
 
 // ---------- transcribing while the meeting runs ----------
 
-enum Trouble { Interrupted, Waiting(&'static str), Unreadable }
+enum Trouble {
+  Interrupted,
+  Waiting(&'static str),
+  Unreadable,
+}
 
 fn transcribe(pcm: &[f32]) -> Result<Vec<Segment>, Trouble> {
   let settings = settings::get();
   // The person's own words, most recent first, so Whisper spells names right.
   let mut prompt = String::new();
   for word in &settings.vocabulary.words {
-    if prompt.len() + word.len() > 600 { break; }
-    if !prompt.is_empty() { prompt.push_str(", "); }
+    if prompt.len() + word.len() > 600 {
+      break;
+    }
+    if !prompt.is_empty() {
+      prompt.push_str(", ");
+    }
     prompt.push_str(word);
   }
   let options = speech::PieceOptions {
-    language: Some(settings.dictation.language.clone()), prompt: (!prompt.is_empty()).then_some(prompt),
-    translate: settings.dictation.translate_to_english, cancel: None,
+    language: Some(settings.dictation.language.clone()),
+    prompt: (!prompt.is_empty()).then_some(prompt),
+    translate: settings.dictation.translate_to_english,
+    cancel: None,
   };
   speech::transcribe_piece(pcm, options).map_err(|error| match &error {
     Error::Interrupted => Trouble::Interrupted,
@@ -408,7 +507,9 @@ fn transcribe(pcm: &[f32]) -> Result<Vec<Segment>, Trouble> {
 
 fn keep(job: &Job, piece: &Piece) {
   // The lines stay in memory either way; a piece the spool missed is a gap after a crash, tried again.
-  if let Err(e) = job.spool.record(piece) { log::warn!("meeting: couldn’t keep a piece: {e}"); }
+  if let Err(e) = job.spool.record(piece) {
+    log::warn!("meeting: couldn’t keep a piece: {e}");
+  }
 }
 
 /// The next piece of `source`, if one is ready: true once it is transcribed, or given up on and kept
@@ -420,8 +521,13 @@ fn step(job: &Job, source: Source, at: &mut Progress, retry: &mut Vec<Gap>, fail
     Some(r) => (retry[r].from, retry[r].to - retry[r].from, true),
     None => (at.done[i], job.len(source).saturating_sub(at.done[i]), job.ended.load(Ordering::SeqCst)),
   };
-  if left == 0 { return Ok(false); }
-  let pcm = job.spool.read(source, from, (left as usize).min(WINDOW_SAMPLES)).map_err(|e| { log::warn!("meeting: {e}"); Trouble::Waiting("Waiting for the speech model to finish the transcript.") })?;
+  if left == 0 {
+    return Ok(false);
+  }
+  let pcm = job.spool.read(source, from, (left as usize).min(WINDOW_SAMPLES)).map_err(|e| {
+    log::warn!("meeting: {e}");
+    Trouble::Waiting("Waiting for the speech model to finish the transcript.")
+  })?;
   let Some(cut) = pause_cut(&pcm, last && left as usize <= WINDOW_SAMPLES) else { return Ok(false) };
   let piece = &pcm[..cut];
   let to = from + cut as u64;
@@ -430,13 +536,20 @@ fn step(job: &Job, source: Source, at: &mut Progress, retry: &mut Vec<Gap>, fail
       Ok(heard) => Some(heard),
       // Three times over, a piece Whisper can't read is kept as audio and the meeting moves on.
       Err(Trouble::Unreadable) if failures[i] >= 2 => None,
-      Err(Trouble::Unreadable) => { failures[i] += 1; return Err(Trouble::Interrupted); }
+      Err(Trouble::Unreadable) => {
+        failures[i] += 1;
+        return Err(Trouble::Interrupted);
+      }
       Err(trouble) => return Err(trouble),
     }
-  } else { Some(Vec::new()) };
+  } else {
+    Some(Vec::new())
+  };
   failures[i] = 0;
   match again {
-    Some(r) if to >= retry[r].to => { retry.remove(r); }
+    Some(r) if to >= retry[r].to => {
+      retry.remove(r);
+    }
     Some(r) => retry[r].from = to,
     None => at.done[i] = to,
   }
@@ -449,9 +562,14 @@ fn step(job: &Job, source: Source, at: &mut Progress, retry: &mut Vec<Gap>, fail
     }
     return Ok(true);
   };
-  let found: Vec<Line> = heard.into_iter().map(|segment| Line { source, start: from + segment.start as u64, end: from + segment.end as u64, text: segment.text, speaker: None }).collect();
+  let found: Vec<Line> = heard
+    .into_iter()
+    .map(|segment| Line { source, start: from + segment.start as u64, end: from + segment.end as u64, text: segment.text, speaker: None })
+    .collect();
   keep(job, &Piece { source, from, done: to, lines: found.clone(), failed: false });
-  if again.is_some() { fill(&mut at.gaps, source, from, to); }
+  if again.is_some() {
+    fill(&mut at.gaps, source, from, to);
+  }
   at.lines.extend(found);
   Ok(true)
 }
@@ -470,7 +588,9 @@ fn work(job: Arc<Job>) {
     let ended = job.ended.load(Ordering::SeqCst);
     if !ended && looked.is_none_or(|looked| looked.elapsed() >= Duration::from_secs(30)) {
       looked = Some(Instant::now());
-      if free_space(&job.spool.dir).is_some_and(|free| free < LOW_DISK) { job.stopped_early("Your disk is almost full, so the meeting stopped"); }
+      if free_space(&job.spool.dir).is_some_and(|free| free < LOW_DISK) {
+        job.stopped_early("Your disk is almost full, so the meeting stopped");
+      }
     }
     let mut moved = false;
     let mut waiting = None;
@@ -482,12 +602,22 @@ fn work(job: Arc<Job>) {
         Err(Trouble::Unreadable) => {}
       }
     }
-    if ended && retry.is_empty() && SOURCES.iter().all(|source| at.done[source.index()] >= job.len(*source)) { break; }
+    if ended && retry.is_empty() && SOURCES.iter().all(|source| at.done[source.index()] >= job.len(*source)) {
+      break;
+    }
     if ended && waiting.is_some() && waiting != told {
       told = waiting;
       emit(saving_payload(&job, waiting.unwrap_or_default()));
     }
-    if !moved { std::thread::sleep(if waiting.is_some() { Duration::from_secs(2) } else if ended { Duration::from_millis(100) } else { Duration::from_millis(700) }); }
+    if !moved {
+      std::thread::sleep(if waiting.is_some() {
+        Duration::from_secs(2)
+      } else if ended {
+        Duration::from_millis(100)
+      } else {
+        Duration::from_millis(700)
+      });
+    }
   }
   let outcome = finish(&job, &at, missing(&at.gaps) < before);
   // Out of `finishing` before anyone hears: a recording kept to try again is a leftover at once.
@@ -502,11 +632,21 @@ fn work(job: Arc<Job>) {
 fn with_speakers(job: &Job, lines: &[Line]) -> Vec<Line> {
   let mut lines = lines.to_vec();
   let Some(root) = speech::models_root() else { return lines };
-  if !ready(&root) { log::info!("meeting: the speaker models aren’t downloaded yet, so lines are labelled by stream"); return lines; }
+  if !ready(&root) {
+    log::info!("meeting: the speaker models aren’t downloaded yet, so lines are labelled by stream");
+    return lines;
+  }
   emit(saving_payload(job, "Working out who said what"));
-  let wanted: Vec<Source> = SOURCES.into_iter().filter(|source| job.len(*source) > 0 && lines.iter().any(|line| line.source == *source && !line.text.trim().is_empty())).collect();
+  let wanted: Vec<Source> =
+    SOURCES.into_iter().filter(|source| job.len(*source) > 0 && lines.iter().any(|line| line.source == *source && !line.text.trim().is_empty())).collect();
   let one = |source: Source| -> Option<Vec<Turn>> {
-    let pcm = match job.spool.read(source, 0, job.len(source) as usize) { Ok(pcm) => pcm, Err(e) => { log::warn!("meeting: couldn’t read the {source:?} stream for speakers: {e}"); return None; } };
+    let pcm = match job.spool.read(source, 0, job.len(source) as usize) {
+      Ok(pcm) => pcm,
+      Err(e) => {
+        log::warn!("meeting: couldn’t read the {source:?} stream for speakers: {e}");
+        return None;
+      }
+    };
     let began = Instant::now();
     match diarize(&root, &pcm) {
       Ok(turns) => {
@@ -514,7 +654,10 @@ fn with_speakers(job: &Job, lines: &[Line]) -> Vec<Line> {
         log::info!("meeting: {source:?} stream: {voices} voice(s) in {} turns, {:.1}s", turns.len(), began.elapsed().as_secs_f32());
         Some(turns)
       }
-      Err(e) => { log::warn!("meeting: speakers in the {source:?} stream: {e}"); None }
+      Err(e) => {
+        log::warn!("meeting: speakers in the {source:?} stream: {e}");
+        None
+      }
     }
   };
   let together = wanted.len() > 1 && wanted.iter().all(|source| job.len(*source) < 2 * 3600 * RATE as u64);
@@ -523,13 +666,25 @@ fn with_speakers(job: &Job, lines: &[Line]) -> Vec<Line> {
       let threads: Vec<_> = wanted.iter().map(|&source| scope.spawn(move || (source, one(source)))).collect();
       threads.into_iter().filter_map(|thread| thread.join().ok()).collect()
     })
-  } else { wanted.iter().map(|&source| (source, one(source))).collect() };
-  for (source, turns) in heard { if let Some(turns) = turns { assign_speakers(&mut lines, source, &turns); } }
+  } else {
+    wanted.iter().map(|&source| (source, one(source))).collect()
+  };
+  for (source, turns) in heard {
+    if let Some(turns) = turns {
+      assign_speakers(&mut lines, source, &turns);
+    }
+  }
   lines
 }
 
 /// "1 part" or "3 parts".
-fn parts(n: usize) -> String { if n == 1 { "1 part".into() } else { format!("{n} parts") } }
+fn parts(n: usize) -> String {
+  if n == 1 {
+    "1 part".into()
+  } else {
+    format!("{n} parts")
+  }
+}
 
 /// Saves the meeting, and answers what the pill and Settings hear. A recording with audio Whisper
 /// couldn't read is kept, so it can be tried again; nothing is deleted that wasn't transcribed.
@@ -542,13 +697,19 @@ fn finish(job: &Job, at: &Progress, recovered: bool) -> serde_json::Value {
     job.spool.remove();
     return json!({ "state": "error", "id": id, "message": problem.unwrap_or_else(|| "Nothing was said, so there’s nothing to save".into()) });
   }
-  if !said { return json!({ "state": "error", "id": id, "message": "Couldn’t transcribe the meeting.", "leftover": id }); }
+  if !said {
+    return json!({ "state": "error", "id": id, "message": "Couldn’t transcribe the meeting.", "leftover": id });
+  }
   let kept = (!at.gaps.is_empty()).then(|| format!("{} not transcribed. The audio is kept.", parts(at.gaps.len())));
   let outcome = |path: &str, kept: Option<String>| {
     let message = [problem.as_ref().map(|problem| format!("{problem}.")), kept].into_iter().flatten().collect::<Vec<_>>().join(" ");
     let mut outcome = json!({ "state": "saved", "id": id, "path": path });
-    if !message.is_empty() { outcome["message"] = message.into(); }
-    if !at.gaps.is_empty() { outcome["leftover"] = id.clone().into(); }
+    if !message.is_empty() {
+      outcome["message"] = message.into();
+    }
+    if !at.gaps.is_empty() {
+      outcome["leftover"] = id.clone().into();
+    }
     outcome
   };
   // Tried again and nothing more came through: the file saved before stands.
@@ -558,15 +719,23 @@ fn finish(job: &Job, at: &Progress, recovered: bool) -> serde_json::Value {
   let lines = if settings.meetings.speakers { with_speakers(job, &at.lines) } else { at.lines.clone() };
   let (markdown, plain) = transcript(&lines, &at.gaps, &settings.meetings.you, &settings.meetings.others);
   let claude = settings.claude.enabled && settings.meetings.summarize;
-  if claude { emit(saving_payload(job, "Writing the summary")); }
+  if claude {
+    emit(saving_payload(job, "Writing the summary"));
+  }
   let summary = if claude { ai::summarize(ai::Kind::Meeting, &plain) } else { None };
-  let title = if claude { ai::title(&plain) } else { None }.map(|title| title.trim().to_owned()).filter(|title| !title.is_empty())
+  let title = if claude { ai::title(&plain) } else { None }
+    .map(|title| title.trim().to_owned())
+    .filter(|title| !title.is_empty())
     .unwrap_or_else(|| untitled(&job.spool.header.stamp));
   let length = SOURCES.iter().map(|source| job.len(*source)).max().unwrap_or(0);
   let body = document(&dateline(&job.spool.header.stamp, length), summary.as_deref(), &markdown);
   match notes::save_markdown(notes::Kind::Meeting, &title, &body, &job.spool.header.stamp, &[("duration".into(), clock(length))]) {
     Ok(path) => {
-      if at.gaps.is_empty() { job.spool.remove(); } else { job.spool.mark_saved(&path); }
+      if at.gaps.is_empty() {
+        job.spool.remove();
+      } else {
+        job.spool.mark_saved(&path);
+      }
       outcome(&path.display().to_string(), kept)
     }
     // The spool stays: the recording can be saved again from the pill or Settings.
@@ -583,19 +752,31 @@ fn finish(job: &Job, at: &Progress, recovered: bool) -> serde_json::Value {
 /// or one `saved` with audio Whisper couldn't read.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Leftover { id: String, since_ms: u64, seconds: u64, saved: bool }
+pub struct Leftover {
+  id: String,
+  since_ms: u64,
+  seconds: u64,
+  saved: bool,
+}
 
 fn leftovers(root: &Path, busy: &[String]) -> Vec<Leftover> {
   let Ok(entries) = fs::read_dir(root) else { return Vec::new() };
-  let mut found: Vec<Leftover> = entries.filter_map(|entry| {
-    let dir = entry.ok()?.path();
-    let spool = Spool::open(&dir)?;
-    if busy.contains(&spool.id()) { return None; }
-    let samples = SOURCES.iter().map(|source| spool.samples(*source)).max().unwrap_or(0);
-    // Under a second and no words: nothing to keep.
-    if samples < RATE as u64 && spool.progress().lines.is_empty() { spool.remove(); return None; }
-    Some(Leftover { id: spool.id(), since_ms: spool.header.since_ms, seconds: samples / RATE as u64, saved: spool.header.saved.is_some() })
-  }).collect();
+  let mut found: Vec<Leftover> = entries
+    .filter_map(|entry| {
+      let dir = entry.ok()?.path();
+      let spool = Spool::open(&dir)?;
+      if busy.contains(&spool.id()) {
+        return None;
+      }
+      let samples = SOURCES.iter().map(|source| spool.samples(*source)).max().unwrap_or(0);
+      // Under a second and no words: nothing to keep.
+      if samples < RATE as u64 && spool.progress().lines.is_empty() {
+        spool.remove();
+        return None;
+      }
+      Some(Leftover { id: spool.id(), since_ms: spool.header.since_ms, seconds: samples / RATE as u64, saved: spool.header.saved.is_some() })
+    })
+    .collect();
   found.sort_by_key(|leftover| std::cmp::Reverse(leftover.since_ms));
   found
 }
@@ -606,7 +787,9 @@ fn busy(meetings: &Meetings) -> Vec<String> {
 }
 
 /// A meeting recording or being saved, which a restart for an update waits for.
-pub(crate) fn in_progress() -> bool { !busy(&state()).is_empty() }
+pub(crate) fn in_progress() -> bool {
+  !busy(&state()).is_empty()
+}
 
 /// What the pill shows when the overlay loads, and what Settings shows: the meeting recording, those
 /// being saved, the recordings kept, and whether macOS lets the Mac's sound be recorded.
@@ -621,7 +804,12 @@ pub fn meeting_state() -> serde_json::Value {
   let finishing: Vec<String> = job.filter(|_| closing).map(|job| job.spool.id()).into_iter().chain(meetings.finishing.iter().cloned()).collect();
   drop(meetings);
   let leftovers = ROOT.get().map(|root| leftovers(root, &busy)).unwrap_or_default();
-  let permission = match unsafe { dictate_meeting_permission() } { -1 => "unsupported", 1 => "allowed", 2 => "denied", _ => "notDetermined" };
+  let permission = match unsafe { dictate_meeting_permission() } {
+    -1 => "unsupported",
+    1 => "allowed",
+    2 => "denied",
+    _ => "notDetermined",
+  };
   json!({ "recording": recording, "saving": finishing, "leftovers": leftovers, "systemAudio": permission })
 }
 
@@ -632,10 +820,15 @@ pub fn meeting_recover(id: String, save: bool) -> Result<(), String> {
   let root = ROOT.get().ok_or("Meetings aren’t ready yet. Try again in a moment.")?;
   let mut meetings = state();
   let busy = busy(&meetings);
-  if !leftovers(root, &busy).iter().any(|leftover| leftover.id == id) { return Err("That recording isn’t there any more.".into()); }
+  if !leftovers(root, &busy).iter().any(|leftover| leftover.id == id) {
+    return Err("That recording isn’t there any more.".into());
+  }
   let spool = Spool::open(&root.join(&id)).ok_or("That recording isn’t there any more.")?;
   if !save {
-    return fs::remove_dir_all(&spool.dir).map_err(|e| { log::warn!("meeting: couldn’t discard: {e}"); "Couldn’t discard the recording.".into() });
+    return fs::remove_dir_all(&spool.dir).map_err(|e| {
+      log::warn!("meeting: couldn’t discard: {e}");
+      "Couldn’t discard the recording.".into()
+    });
   }
   let job = Arc::new(Job::new(spool, false).map_err(|e| e.to_string())?);
   meetings.finishing.push(id.clone());
@@ -654,15 +847,20 @@ pub fn meeting_recover(id: String, save: bool) -> Result<(), String> {
 pub fn meeting_reveal(path: String) -> Result<(), String> {
   let dir = notes::meetings_dir()?.canonicalize().map_err(|e| e.to_string())?;
   let file = PathBuf::from(path).canonicalize().map_err(|_| "That meeting isn’t there any more.")?;
-  if !file.starts_with(&dir) { return Err("That file isn’t a meeting.".into()); }
+  if !file.starts_with(&dir) {
+    return Err("That file isn’t a meeting.".into());
+  }
   std::process::Command::new("/usr/bin/open").arg("-R").arg(file).spawn().map(|_| ()).map_err(|e| e.to_string())
 }
 
 /// Opens Privacy & Security where System Audio Recording is allowed.
 #[tauri::command]
 pub fn meeting_privacy() -> Result<(), String> {
-  std::process::Command::new("/usr/bin/open").arg("x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")
-    .spawn().map(|_| ()).map_err(|e| e.to_string())
+  std::process::Command::new("/usr/bin/open")
+    .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")
+    .spawn()
+    .map(|_| ())
+    .map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
@@ -758,7 +956,10 @@ mod tests {
     let root = temp("gaps");
     let spool = Spool::create(&root, Header { stamp: "2026-11-02 14.05".into(), since_ms: 3, saved: None }).unwrap();
     let piece = |source, from, done, text: Option<&str>| Piece {
-      source, from, done, failed: text.is_none(),
+      source,
+      from,
+      done,
+      failed: text.is_none(),
       lines: text.map(|text| vec![Line { source, start: from, end: done, text: text.into(), speaker: None }]).unwrap_or_default(),
     };
     spool.record(&piece(Source::Mic, 0, 100, Some("one"))).unwrap();
@@ -790,7 +991,10 @@ mod tests {
     assert_eq!(outcome["message"], "Couldn’t transcribe the meeting.");
     assert!(job.spool.dir.exists());
     // Tried again after a save with gaps, and still nothing: the saved file stands.
-    let saved = Job { spool: Spool { header: Header { saved: Some("/x/2026-11-02 14.05 Meeting.md".into()), ..job.spool.header.clone() }, dir: job.spool.dir.clone() }, ..Job::new(Spool::open(&job.spool.dir).unwrap(), false).unwrap() };
+    let saved = Job {
+      spool: Spool { header: Header { saved: Some("/x/2026-11-02 14.05 Meeting.md".into()), ..job.spool.header.clone() }, dir: job.spool.dir.clone() },
+      ..Job::new(Spool::open(&job.spool.dir).unwrap(), false).unwrap()
+    };
     let at = Progress { lines: vec![line(Source::Mic, 0.0, "Hello.")], ..at };
     let outcome = finish(&saved, &at, false);
     assert_eq!((outcome["state"].as_str(), outcome["path"].as_str()), (Some("saved"), Some("/x/2026-11-02 14.05 Meeting.md")));

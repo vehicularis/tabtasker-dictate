@@ -19,6 +19,8 @@ step "Typecheck and build the frontend"
 npm run build
 step "Frontend unit tests"
 npm test
+step "Formatting"
+cargo fmt --all --check
 step "Clippy"
 cargo clippy --workspace --all-targets --locked -- -D warnings
 step "Rust tests"

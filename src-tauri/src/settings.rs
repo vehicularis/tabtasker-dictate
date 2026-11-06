@@ -1,11 +1,14 @@
 //! The settings store: one JSON file in the app data folder, read once at launch and written whole on
 //! every change. A file from another version, or one edited by hand, loses only the fields it gets wrong.
+use dictate_engine::whisper;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
-use std::sync::{atomic::{AtomicBool, Ordering}, Mutex, OnceLock, RwLock};
+use std::sync::{
+  atomic::{AtomicBool, Ordering},
+  Mutex, OnceLock, RwLock,
+};
 use tauri::{AppHandle, Emitter, Manager};
-use dictate_engine::whisper;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -35,21 +38,39 @@ pub struct General {
   pub check_for_updates: bool,
 }
 impl Default for General {
-  fn default() -> Self { Self { menu_bar_icon: true, show_in_dock: false, check_for_updates: true } }
+  fn default() -> Self {
+    Self { menu_bar_icon: true, show_in_dock: false, check_for_updates: true }
+  }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub enum DictateKey { Fn, RightCommand, RightOption, RightControl, RightShift }
+pub enum DictateKey {
+  Fn,
+  RightCommand,
+  RightOption,
+  RightControl,
+  RightShift,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub enum CommandKey { Control, Option, Command, Shift, Off }
+pub enum CommandKey {
+  Control,
+  Option,
+  Command,
+  Shift,
+  Off,
+}
 
 /// A global shortcut: a macOS virtual key code, NSEvent modifier mask bits, and how it reads ("⌥⌘N").
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Chord { pub key_code: u16, pub modifiers: u64, pub label: String }
+pub struct Chord {
+  pub key_code: u16,
+  pub modifiers: u64,
+  pub label: String,
+}
 
 const SHIFT: u64 = 1 << 17;
 const CONTROL: u64 = 1 << 18;
@@ -61,7 +82,9 @@ const FUNCTION_KEYS: [u16; 20] = [122, 120, 99, 118, 96, 97, 98, 100, 101, 109, 
 impl Chord {
   /// A key with ⌃, ⌥ or ⌘ (⇧ only beside them), or a function key alone, and no other modifier bits.
   pub fn valid(&self) -> bool {
-    self.key_code < 0x80 && self.modifiers & !(SHIFT | CONTROL | OPTION | COMMAND) == 0 && !self.label.trim().is_empty()
+    self.key_code < 0x80
+      && self.modifiers & !(SHIFT | CONTROL | OPTION | COMMAND) == 0
+      && !self.label.trim().is_empty()
       && (self.modifiers & (CONTROL | OPTION | COMMAND) != 0 || FUNCTION_KEYS.contains(&self.key_code))
   }
 }
@@ -82,12 +105,24 @@ pub struct Shortcuts {
 }
 impl Default for Shortcuts {
   fn default() -> Self {
-    Self { dictate: DictateKey::Fn, hands_free: true, command: CommandKey::Control, note: None, meeting: None, paste_last: None, write_note: None, sticky: None, ask: None }
+    Self {
+      dictate: DictateKey::Fn,
+      hands_free: true,
+      command: CommandKey::Control,
+      note: None,
+      meeting: None,
+      paste_last: None,
+      write_note: None,
+      sticky: None,
+      ask: None,
+    }
   }
 }
 impl Shortcuts {
   /// Every global chord, set or not, in the order the Shortcuts page lists them.
-  pub fn chords(&self) -> [&Option<Chord>; 6] { [&self.note, &self.meeting, &self.paste_last, &self.write_note, &self.sticky, &self.ask] }
+  pub fn chords(&self) -> [&Option<Chord>; 6] {
+    [&self.note, &self.meeting, &self.paste_last, &self.write_note, &self.sticky, &self.ask]
+  }
 }
 
 pub use dictate_engine::models::ModelKind as Model;
@@ -113,7 +148,16 @@ pub struct Dictation {
 }
 impl Default for Dictation {
   fn default() -> Self {
-    Self { language: "auto".into(), translate_to_english: false, remove_fillers: true, sounds: true, sound_volume: DEFAULT_VOLUME, start_sound: "Tink".into(), stop_sound: "Pop".into(), model: Model::Turbo }
+    Self {
+      language: "auto".into(),
+      translate_to_english: false,
+      remove_fillers: true,
+      sounds: true,
+      sound_volume: DEFAULT_VOLUME,
+      start_sound: "Tink".into(),
+      stop_sound: "Pop".into(),
+      model: Model::Turbo,
+    }
   }
 }
 
@@ -128,28 +172,46 @@ pub struct Vocabulary {
   pub suggestions: Vec<String>,
 }
 impl Default for Vocabulary {
-  fn default() -> Self { Self { words: Vec::new(), replacements: Vec::new(), learn: true, suggestions: Vec::new() } }
+  fn default() -> Self {
+    Self { words: Vec::new(), replacements: Vec::new(), learn: true, suggestions: Vec::new() }
+  }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppStyle {
-  pub bundle_id: String, pub name: String, pub style: Style, #[serde(default)] pub polish: bool,
+  pub bundle_id: String,
+  pub name: String,
+  pub style: Style,
+  #[serde(default)]
+  pub polish: bool,
   /// Press Return once the words are typed, as sending a message. None is the app's own default: on in
   /// chat apps (`CHAT_APPS`), off elsewhere.
-  #[serde(default)] pub send: Option<bool>,
+  #[serde(default)]
+  pub send: Option<bool>,
 }
 
 /// Apps where what you dictate is a message to send, so Return follows the words unless the app's style
 /// says otherwise.
 pub const CHAT_APPS: [&str; 10] = [
-  "com.tinyspeck.slackmacgap", "com.apple.MobileSMS", "net.whatsapp.WhatsApp", "com.microsoft.teams2", "com.microsoft.teams",
-  "ru.keepcoder.Telegram", "com.tdesktop.Telegram", "com.hnc.Discord", "com.facebook.archon", "com.signal.desktop",
+  "com.tinyspeck.slackmacgap",
+  "com.apple.MobileSMS",
+  "net.whatsapp.WhatsApp",
+  "com.microsoft.teams2",
+  "com.microsoft.teams",
+  "ru.keepcoder.Telegram",
+  "com.tdesktop.Telegram",
+  "com.hnc.Discord",
+  "com.facebook.archon",
+  "com.signal.desktop",
 ];
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
-pub struct Apps { pub styles: Vec<AppStyle>, pub default_style: Style }
+pub struct Apps {
+  pub styles: Vec<AppStyle>,
+  pub default_style: Style,
+}
 impl Apps {
   /// The style for the app with `bundle_id`, and whether Claude polishes there.
   pub fn style_for(&self, bundle_id: &str) -> (Style, bool) {
@@ -175,7 +237,9 @@ pub struct Notes {
   pub claude_actions: bool,
 }
 impl Default for Notes {
-  fn default() -> Self { Self { folder: None, file_name: "{date} {title}".into(), frontmatter: true, daily_note: false, tags: Vec::new(), claude_title: true, claude_actions: false } }
+  fn default() -> Self {
+    Self { folder: None, file_name: "{date} {title}".into(), frontmatter: true, daily_note: false, tags: Vec::new(), claude_title: true, claude_actions: false }
+  }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -194,21 +258,36 @@ pub struct Meetings {
   pub action_items: bool,
 }
 impl Default for Meetings {
-  fn default() -> Self { Self { folder: None, system_audio: true, summarize: true, you: "You".into(), others: "Others".into(), speakers: true, decisions: true, action_items: true } }
+  fn default() -> Self {
+    Self { folder: None, system_audio: true, summarize: true, you: "You".into(), others: "Others".into(), speakers: true, decisions: true, action_items: true }
+  }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum Effort { Low, Medium, High }
+pub enum Effort {
+  Low,
+  Medium,
+  High,
+}
 impl Effort {
-  pub fn as_str(self) -> &'static str { match self { Self::Low => "low", Self::Medium => "medium", Self::High => "high" } }
+  pub fn as_str(self) -> &'static str {
+    match self {
+      Self::Low => "low",
+      Self::Medium => "medium",
+      Self::High => "high",
+    }
+  }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ClaudeModel {
-  #[serde(rename = "claude-haiku-5-5")] Haiku,
-  #[serde(rename = "claude-sonnet-5-5")] Sonnet,
-  #[serde(rename = "claude-opus-5-5")] Opus,
+  #[serde(rename = "claude-haiku-5-5")]
+  Haiku,
+  #[serde(rename = "claude-sonnet-5-5")]
+  Sonnet,
+  #[serde(rename = "claude-opus-5-5")]
+  Opus,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -235,18 +314,40 @@ pub struct Claude {
   pub open_ai_model: String,
 }
 impl Default for Claude {
-  fn default() -> Self { Self { enabled: false, via: ClaudeVia::Api, model: ClaudeModel::Haiku, effort: Effort::Medium, commands: true, claude_code: None, local_endpoint: "http://localhost:11434".into(), local_model: "llama3.2".into(), open_ai_endpoint: "https://api.openai.com".into(), open_ai_model: String::new() } }
+  fn default() -> Self {
+    Self {
+      enabled: false,
+      via: ClaudeVia::Api,
+      model: ClaudeModel::Haiku,
+      effort: Effort::Medium,
+      commands: true,
+      claude_code: None,
+      local_endpoint: "http://localhost:11434".into(),
+      local_model: "llama3.2".into(),
+      open_ai_endpoint: "https://api.openai.com".into(),
+      open_ai_model: String::new(),
+    }
+  }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub enum ClaudeVia { Api, ClaudeCode, Local, OpenAi }
+pub enum ClaudeVia {
+  Api,
+  ClaudeCode,
+  Local,
+  OpenAi,
+}
 
 /// An address a key may be sent to: https, or http only to this Mac (localhost, 127.0.0.1, ::1), so the key never
 /// crosses a network in the clear.
 pub fn secure_endpoint(endpoint: &str) -> bool {
-  if endpoint.len() > 200 || endpoint.contains(char::is_whitespace) { return false; }
-  if let Some(rest) = endpoint.strip_prefix("https://") { return !rest.is_empty(); }
+  if endpoint.len() > 200 || endpoint.contains(char::is_whitespace) {
+    return false;
+  }
+  if let Some(rest) = endpoint.strip_prefix("https://") {
+    return !rest.is_empty();
+  }
   let Some(rest) = endpoint.strip_prefix("http://") else { return false };
   let host = rest.split(['/', '?', '#']).next().unwrap_or_default();
   let host = host.strip_prefix('[').map_or_else(|| host.split(':').next().unwrap_or_default(), |v6| v6.split(']').next().unwrap_or_default());
@@ -255,44 +356,91 @@ pub fn secure_endpoint(endpoint: &str) -> bool {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
-pub struct Agents { pub mcp: bool, pub share_history: bool, pub share_notes: bool, pub share_meetings: bool, pub allow_write: bool }
+pub struct Agents {
+  pub mcp: bool,
+  pub share_history: bool,
+  pub share_notes: bool,
+  pub share_meetings: bool,
+  pub allow_write: bool,
+}
 impl Default for Agents {
-  fn default() -> Self { Self { mcp: true, share_history: false, share_notes: true, share_meetings: true, allow_write: false } }
+  fn default() -> Self {
+    Self { mcp: true, share_history: false, share_notes: true, share_meetings: true, allow_write: false }
+  }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub enum Keep { Off, Day, #[default] Week, Month, Forever }
+pub enum Keep {
+  Off,
+  Day,
+  #[default]
+  Week,
+  Month,
+  Forever,
+}
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
-pub struct History { pub keep: Keep }
+pub struct History {
+  pub keep: Keep,
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub enum Theme { #[default] System, Light, Dark }
+pub enum Theme {
+  #[default]
+  System,
+  Light,
+  Dark,
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub enum Edge { #[default] Bottom, Left, Right }
+pub enum Edge {
+  #[default]
+  Bottom,
+  Left,
+  Right,
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub enum Size { Small, #[default] Medium, Large }
+pub enum Size {
+  Small,
+  #[default]
+  Medium,
+  Large,
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub enum Idle { #[default] Dots, Hidden }
+pub enum Idle {
+  #[default]
+  Dots,
+  Hidden,
+}
 
 /// A button on the pill the dots open into. The pill keeps this order, whatever order they were picked in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub enum PillButton { Note, Write, Sticky, Meeting, Library, Settings }
+pub enum PillButton {
+  Note,
+  Write,
+  Sticky,
+  Meeting,
+  Library,
+  Settings,
+}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Appearance {
-  pub theme: Theme, pub edge: Edge, pub size: Size, pub idle: Idle, pub hint: bool,
+  pub theme: Theme,
+  pub edge: Edge,
+  pub size: Size,
+  pub idle: Idle,
+  pub hint: bool,
   /// The buttons on the pill, in its order; never none.
   pub pill: Vec<PillButton>,
   /// How far the dots sit from the screen's edge, in points (0 to 120).
@@ -303,16 +451,34 @@ pub struct Appearance {
 impl Default for Appearance {
   fn default() -> Self {
     use PillButton::*;
-    Self { theme: Theme::System, edge: Edge::Right, size: Size::Medium, idle: Idle::Dots, hint: true, pill: vec![Note, Write, Sticky, Meeting, Library, Settings], margin: 8, avoid_dock: true }
+    Self {
+      theme: Theme::System,
+      edge: Edge::Right,
+      size: Size::Medium,
+      idle: Idle::Dots,
+      hint: true,
+      pill: vec![Note, Write, Sticky, Meeting, Library, Settings],
+      margin: 8,
+      avoid_dock: true,
+    }
   }
 }
 
 impl Default for Settings {
   fn default() -> Self {
     Self {
-      version: VERSION, general: General::default(), shortcuts: Shortcuts::default(), dictation: Dictation::default(), vocabulary: Vocabulary::default(),
-      apps: Apps { styles: default_styles(), default_style: Style::Default }, notes: Notes::default(), meetings: Meetings::default(),
-      claude: Claude::default(), agents: Agents::default(), history: History::default(), appearance: Appearance::default(),
+      version: VERSION,
+      general: General::default(),
+      shortcuts: Shortcuts::default(),
+      dictation: Dictation::default(),
+      vocabulary: Vocabulary::default(),
+      apps: Apps { styles: default_styles(), default_style: Style::Default },
+      notes: Notes::default(),
+      meetings: Meetings::default(),
+      claude: Claude::default(),
+      agents: Agents::default(),
+      history: History::default(),
+      appearance: Appearance::default(),
     }
   }
 }
@@ -325,22 +491,32 @@ const MAX_TEXT: usize = 200;
 fn default_styles() -> Vec<AppStyle> {
   let app = |bundle_id: &str, name: &str, style| AppStyle { bundle_id: bundle_id.into(), name: name.into(), style, polish: false, send: None };
   vec![
-    app("com.apple.Terminal", "Terminal", Style::Code), app("com.googlecode.iterm2", "iTerm", Style::Code),
-    app("com.mitchellh.ghostty", "Ghostty", Style::Code), app("dev.warp.Warp-Stable", "Warp", Style::Code),
-    app("com.microsoft.VSCode", "Visual Studio Code", Style::Code), app("com.todesktop.230313mzl4w4u92", "Cursor", Style::Code),
-    app("com.apple.dt.Xcode", "Xcode", Style::Code), app("dev.zed.Zed", "Zed", Style::Code),
-    app("com.apple.MobileSMS", "Messages", Style::Casual), app("com.tinyspeck.slackmacgap", "Slack", Style::Casual),
-    app("net.whatsapp.WhatsApp", "WhatsApp", Style::Casual), app("com.hnc.Discord", "Discord", Style::Casual),
-    app("com.apple.mail", "Mail", Style::Formal), app("com.microsoft.Outlook", "Outlook", Style::Formal),
+    app("com.apple.Terminal", "Terminal", Style::Code),
+    app("com.googlecode.iterm2", "iTerm", Style::Code),
+    app("com.mitchellh.ghostty", "Ghostty", Style::Code),
+    app("dev.warp.Warp-Stable", "Warp", Style::Code),
+    app("com.microsoft.VSCode", "Visual Studio Code", Style::Code),
+    app("com.todesktop.230313mzl4w4u92", "Cursor", Style::Code),
+    app("com.apple.dt.Xcode", "Xcode", Style::Code),
+    app("dev.zed.Zed", "Zed", Style::Code),
+    app("com.apple.MobileSMS", "Messages", Style::Casual),
+    app("com.tinyspeck.slackmacgap", "Slack", Style::Casual),
+    app("net.whatsapp.WhatsApp", "WhatsApp", Style::Casual),
+    app("com.hnc.Discord", "Discord", Style::Casual),
+    app("com.apple.mail", "Mail", Style::Formal),
+    app("com.microsoft.Outlook", "Outlook", Style::Formal),
   ]
 }
 
 /// Characters, not bytes: a clamp never splits a letter.
-fn clip(text: &str, max: usize) -> String { text.trim().chars().take(max).collect() }
+fn clip(text: &str, max: usize) -> String {
+  text.trim().chars().take(max).collect()
+}
 
 fn clip_list(list: &mut Vec<String>, max_items: usize, max_chars: usize) {
   let mut seen = std::collections::HashSet::new();
-  let clean: Vec<String> = list.iter().map(|item| clip(item, max_chars)).filter(|item| !item.is_empty() && seen.insert(item.to_lowercase())).take(max_items).collect();
+  let clean: Vec<String> =
+    list.iter().map(|item| clip(item, max_chars)).filter(|item| !item.is_empty() && seen.insert(item.to_lowercase())).take(max_items).collect();
   *list = clean;
 }
 
@@ -356,14 +532,22 @@ impl Settings {
     let file_name = &self.notes.file_name;
     let language = &self.dictation.language;
     let local = &self.claude;
-    folder(&self.notes.folder) && folder(&self.meetings.folder) && folder(&self.claude.claude_code)
-      && (local.local_endpoint.starts_with("http://") || local.local_endpoint.starts_with("https://")) && local.local_endpoint.len() <= 200 && !local.local_endpoint.contains(char::is_whitespace)
-      && !local.local_model.trim().is_empty() && local.local_model.len() <= 80
+    folder(&self.notes.folder)
+      && folder(&self.meetings.folder)
+      && folder(&self.claude.claude_code)
+      && (local.local_endpoint.starts_with("http://") || local.local_endpoint.starts_with("https://"))
+      && local.local_endpoint.len() <= 200
+      && !local.local_endpoint.contains(char::is_whitespace)
+      && !local.local_model.trim().is_empty()
+      && local.local_model.len() <= 80
       && secure_endpoint(&local.open_ai_endpoint)
       && local.open_ai_model.len() <= 80
-      && chords.iter().all(|chord| chord.valid()) && distinct
-      && !file_name.contains(['/', ':', '\0']) && !file_name.trim_start().starts_with('.')
-      && SOUNDS.contains(&self.dictation.start_sound.as_str()) && SOUNDS.contains(&self.dictation.stop_sound.as_str())
+      && chords.iter().all(|chord| chord.valid())
+      && distinct
+      && !file_name.contains(['/', ':', '\0'])
+      && !file_name.trim_start().starts_with('.')
+      && SOUNDS.contains(&self.dictation.start_sound.as_str())
+      && SOUNDS.contains(&self.dictation.stop_sound.as_str())
       && (language == "auto" || whisper::lang_codes().any(|code| code == language.as_str()))
   }
 
@@ -376,31 +560,59 @@ impl Settings {
     let pill = &mut self.appearance.pill;
     pill.sort();
     pill.dedup();
-    if pill.is_empty() { *pill = Appearance::default().pill; }
+    if pill.is_empty() {
+      *pill = Appearance::default().pill;
+    }
     let vocabulary = &mut self.vocabulary;
     clip_list(&mut vocabulary.words, MAX_LIST, MAX_WORD);
     clip_list(&mut vocabulary.suggestions, MAX_LIST, MAX_WORD);
-    for pair in &mut vocabulary.replacements { pair.from = clip(&pair.from, MAX_TEXT); pair.to = clip(&pair.to, MAX_TEXT); }
+    for pair in &mut vocabulary.replacements {
+      pair.from = clip(&pair.from, MAX_TEXT);
+      pair.to = clip(&pair.to, MAX_TEXT);
+    }
     vocabulary.replacements.retain(|pair| !pair.from.is_empty());
     vocabulary.replacements.truncate(MAX_LIST);
     // Trimmed before comparing, and without case: bundle ids are case-insensitive.
-    for app in &mut self.apps.styles { app.bundle_id = clip(&app.bundle_id, MAX_TEXT); app.name = clip(&app.name, MAX_TEXT); }
+    for app in &mut self.apps.styles {
+      app.bundle_id = clip(&app.bundle_id, MAX_TEXT);
+      app.name = clip(&app.name, MAX_TEXT);
+    }
     let mut seen = std::collections::HashSet::new();
     self.apps.styles.retain(|app| !app.bundle_id.is_empty() && seen.insert(app.bundle_id.to_lowercase()));
     self.apps.styles.truncate(MAX_LIST);
     clip_list(&mut self.notes.tags, 50, MAX_WORD);
     self.notes.file_name = clip(&self.notes.file_name, MAX_TEXT);
-    if self.notes.file_name.is_empty() { self.notes.file_name = Notes::default().file_name; }
+    if self.notes.file_name.is_empty() {
+      self.notes.file_name = Notes::default().file_name;
+    }
     self.meetings.you = clip(&self.meetings.you, MAX_WORD);
     self.meetings.others = clip(&self.meetings.others, MAX_WORD);
-    if self.meetings.you.is_empty() { self.meetings.you = Meetings::default().you; }
-    if self.meetings.others.is_empty() { self.meetings.others = Meetings::default().others; }
-    for chord in [&mut self.shortcuts.note, &mut self.shortcuts.meeting, &mut self.shortcuts.paste_last, &mut self.shortcuts.write_note, &mut self.shortcuts.sticky, &mut self.shortcuts.ask].into_iter().flatten() { chord.label = clip(&chord.label, 16); }
+    if self.meetings.you.is_empty() {
+      self.meetings.you = Meetings::default().you;
+    }
+    if self.meetings.others.is_empty() {
+      self.meetings.others = Meetings::default().others;
+    }
+    for chord in [
+      &mut self.shortcuts.note,
+      &mut self.shortcuts.meeting,
+      &mut self.shortcuts.paste_last,
+      &mut self.shortcuts.write_note,
+      &mut self.shortcuts.sticky,
+      &mut self.shortcuts.ask,
+    ]
+    .into_iter()
+    .flatten()
+    {
+      chord.label = clip(&chord.label, 16);
+    }
   }
 
   /// `patch` merged into these settings, one value at a time: a value of the wrong type, an unknown
   /// choice or an invalid path keeps the old value, and unknown keys are ignored.
-  pub fn patched(&self, patch: &Value) -> Settings { self.merged(patch).0 }
+  pub fn patched(&self, patch: &Value) -> Settings {
+    self.merged(patch).0
+  }
 
   /// `patched`, and whether any of `patch` was left out: a refused value, a list entry or an unknown key.
   fn merged(&self, patch: &Value) -> (Settings, bool) {
@@ -410,13 +622,18 @@ impl Settings {
     let mut lost = collect(patch, &good, &mut Vec::new(), &mut leaves);
     for (path, value) in leaves {
       let trial = put(&good, &path, value.clone());
-      if accepts(&trial) { good = trial; continue; }
+      if accepts(&trial) {
+        good = trial;
+        continue;
+      }
       lost = true;
       // A list keeps the entries that are fine on their own, so one bad entry never costs the rest.
       let Value::Array(items) = value else { continue };
       let kept: Vec<Value> = items.into_iter().filter(|item| accepts(&put(&good, &path, Value::Array(vec![item.clone()])))).collect();
       let trial = put(&good, &path, Value::Array(kept));
-      if accepts(&trial) { good = trial; }
+      if accepts(&trial) {
+        good = trial;
+      }
     }
     let mut settings: Settings = serde_json::from_value(good).unwrap_or_else(|_| self.clone());
     settings.clamp();
@@ -426,7 +643,9 @@ impl Settings {
 
 fn put(base: &Value, path: &[String], value: Value) -> Value {
   let mut trial = base.clone();
-  if let Some(slot) = path.iter().try_fold(&mut trial, |node, key| node.get_mut(key)) { *slot = value; }
+  if let Some(slot) = path.iter().try_fold(&mut trial, |node, key| node.get_mut(key)) {
+    *slot = value;
+  }
   trial
 }
 
@@ -436,16 +655,25 @@ fn collect(patch: &Value, base: &Value, path: &mut Vec<String>, leaves: &mut Vec
   let (Some(patch), Some(base)) = (patch.as_object(), base.as_object()) else { return false };
   let mut unknown = false;
   for (key, value) in patch {
-    let Some(known) = base.get(key) else { unknown = true; continue };
+    let Some(known) = base.get(key) else {
+      unknown = true;
+      continue;
+    };
     path.push(key.clone());
-    if path.len() < 2 && value.is_object() && known.is_object() { unknown |= collect(value, known, path, leaves); } else { leaves.push((path.clone(), value.clone())); }
+    if path.len() < 2 && value.is_object() && known.is_object() {
+      unknown |= collect(value, known, path, leaves);
+    } else {
+      leaves.push((path.clone(), value.clone()));
+    }
     path.pop();
   }
   unknown
 }
 
 /// The settings in `path`, field by field over the defaults; the defaults when it is missing or unreadable.
-pub fn load_from(path: &Path) -> Settings { load(path).0 }
+pub fn load_from(path: &Path) -> Settings {
+  load(path).0
+}
 
 /// `load_from`, and whether the file holds anything this version couldn't keep, so it is worth saving
 /// a copy of before it is replaced.
@@ -478,7 +706,10 @@ pub fn save_to(path: &Path, settings: &Settings) -> Result<(), String> {
   std::fs::create_dir_all(dir).map_err(|e| format!("Couldn’t make the settings folder: {e}"))?;
   let temp = path.with_extension("json.tmp");
   let json = serde_json::to_vec_pretty(settings).map_err(|e| e.to_string())?;
-  let written = std::fs::File::create(&temp).and_then(|mut file| { file.write_all(&json)?; file.sync_all() });
+  let written = std::fs::File::create(&temp).and_then(|mut file| {
+    file.write_all(&json)?;
+    file.sync_all()
+  });
   if let Err(e) = written.and_then(|_| std::fs::rename(&temp, path)) {
     let _ = std::fs::remove_file(&temp);
     return Err(format!("Couldn’t save your settings: {e}"));
@@ -509,7 +740,9 @@ pub fn use_file(path: &Path) -> Settings {
 pub fn init(app: &AppHandle) -> Result<(), String> {
   let path = app.path().app_data_dir().map_err(|e| e.to_string())?.join("settings.json");
   let (settings, damaged) = load(&path);
-  if damaged { log::warn!("settings: {} has values this version can’t use; they are left out", path.display()); }
+  if damaged {
+    log::warn!("settings: {} has values this version can’t use; they are left out", path.display());
+  }
   DAMAGED.store(damaged && path.exists(), Ordering::SeqCst);
   *CURRENT.write().unwrap_or_else(|e| e.into_inner()) = Some(settings);
   let _ = FILE.set(path);
@@ -526,7 +759,11 @@ pub fn apply(app: &AppHandle, settings: &Settings) {
     let _ = app.run_on_main_thread(move || unsafe { dictate_apply_settings(json.as_ptr()) });
   }
   // Settings' sidebar is native vibrancy, which follows the app's appearance, not the page's theme.
-  app.set_theme(match settings.appearance.theme { Theme::System => None, Theme::Light => Some(tauri::Theme::Light), Theme::Dark => Some(tauri::Theme::Dark) });
+  app.set_theme(match settings.appearance.theme {
+    Theme::System => None,
+    Theme::Light => Some(tauri::Theme::Light),
+    Theme::Dark => Some(tauri::Theme::Dark),
+  });
   let _ = app.emit("dictate-settings", settings);
   crate::app::menu::show_tray(app, settings.general.menu_bar_icon);
   crate::app::windows::show_in_dock(app, settings.general.show_in_dock);
@@ -537,7 +774,9 @@ fn replace(app: &AppHandle, next: impl FnOnce(&Settings) -> Settings) -> Result<
   let _writing = WRITING.lock().unwrap_or_else(|e| e.into_inner());
   let settings = next(&get());
   if let Some(path) = FILE.get() {
-    if DAMAGED.swap(false, Ordering::SeqCst) { keep_aside(path); }
+    if DAMAGED.swap(false, Ordering::SeqCst) {
+      keep_aside(path);
+    }
     save_to(path, &settings)?;
   }
   *CURRENT.write().unwrap_or_else(|e| e.into_inner()) = Some(settings.clone());
@@ -552,14 +791,23 @@ pub fn update(app: &AppHandle, patch: &Value) -> Result<Settings, String> {
 }
 
 #[tauri::command]
-pub fn get_settings() -> Settings { get() }
+pub fn get_settings() -> Settings {
+  get()
+}
 
 #[tauri::command]
 pub fn update_settings(app: AppHandle, mut patch: Value) -> Result<Settings, String> {
-  if !patch.is_object() { return Err("Invalid settings".into()); }
+  if !patch.is_object() {
+    return Err("Invalid settings".into());
+  }
   // The OpenAI-compatible address and model go with the key: only `claude_connect_open_ai` sets them, so a page can
   // never point a saved key at another host.
-  if let Some(claude) = patch.get_mut("claude").and_then(Value::as_object_mut) { claude.remove("enabled"); claude.remove("via"); claude.remove("openAiEndpoint"); claude.remove("openAiModel"); }
+  if let Some(claude) = patch.get_mut("claude").and_then(Value::as_object_mut) {
+    claude.remove("enabled");
+    claude.remove("via");
+    claude.remove("openAiEndpoint");
+    claude.remove("openAiModel");
+  }
   update(&app, &patch)
 }
 
@@ -604,7 +852,9 @@ mod tests {
     assert_eq!((refused.dictation.start_sound.as_str(), refused.dictation.stop_sound.as_str(), refused.dictation.sound_volume), ("Glass", "Submarine", 1.0));
     assert_eq!(chosen.patched(&json!({ "dictation": { "soundVolume": -2 } })).dictation.sound_volume, 0.0);
     assert_eq!(chosen.patched(&json!({ "dictation": { "soundVolume": "loud" } })).dictation.sound_volume, 0.75);
-    for name in SOUNDS { assert!(Path::new(&format!("/System/Library/Sounds/{name}.aiff")).is_file(), "{name}"); }
+    for name in SOUNDS {
+      assert!(Path::new(&format!("/System/Library/Sounds/{name}.aiff")).is_file(), "{name}");
+    }
   }
 
   #[test]
@@ -618,7 +868,8 @@ mod tests {
       { "bundleId": "com.apple.Notes", "name": "Notes", "style": "default", "polish": false },
     ] } }));
     assert!(!chosen.apps.send_for("com.tinyspeck.slackmacgap") && chosen.apps.send_for("com.apple.mail") && !chosen.apps.send_for("com.apple.Notes"));
-    assert_eq!(serde_json::to_value(&chosen.apps.styles[2]).unwrap()["send"], Value::Null); // an older file's entry keeps the default
+    assert_eq!(serde_json::to_value(&chosen.apps.styles[2]).unwrap()["send"], Value::Null);
+    // an older file's entry keeps the default
   }
 
   #[test]
@@ -628,7 +879,10 @@ mod tests {
     assert_eq!(base.patched(&json!({ "claude": { "via": "carrier pigeon" } })).claude.via, ClaudeVia::Api);
     // What a page sends loses `enabled` and `via` before it is applied (update_settings), as the mock does too.
     let mut page = json!({ "claude": { "enabled": true, "via": "claudeCode", "model": "claude-opus-5-5" } });
-    if let Some(claude) = page.get_mut("claude").and_then(Value::as_object_mut) { claude.remove("enabled"); claude.remove("via"); }
+    if let Some(claude) = page.get_mut("claude").and_then(Value::as_object_mut) {
+      claude.remove("enabled");
+      claude.remove("via");
+    }
     assert_eq!(page, json!({ "claude": { "model": "claude-opus-5-5" } }));
   }
 
@@ -677,17 +931,39 @@ mod tests {
     let value = serde_json::to_value(Settings::default()).unwrap();
     assert_eq!(value["version"], 1);
     assert_eq!(value["general"], json!({ "menuBarIcon": true, "showInDock": false, "checkForUpdates": true }));
-    assert_eq!(value["shortcuts"], json!({ "dictate": "fn", "handsFree": true, "command": "control", "note": null, "meeting": null, "pasteLast": null, "writeNote": null, "sticky": null, "ask": null }));
-    assert_eq!(value["dictation"], json!({ "language": "auto", "translateToEnglish": false, "removeFillers": true, "sounds": true, "soundVolume": 0.3, "startSound": "Tink", "stopSound": "Pop", "model": "turbo" }));
+    assert_eq!(
+      value["shortcuts"],
+      json!({ "dictate": "fn", "handsFree": true, "command": "control", "note": null, "meeting": null, "pasteLast": null, "writeNote": null, "sticky": null, "ask": null })
+    );
+    assert_eq!(
+      value["dictation"],
+      json!({ "language": "auto", "translateToEnglish": false, "removeFillers": true, "sounds": true, "soundVolume": 0.3, "startSound": "Tink", "stopSound": "Pop", "model": "turbo" })
+    );
     assert_eq!(value["vocabulary"], json!({ "words": [], "replacements": [], "learn": true, "suggestions": [] }));
     assert_eq!(value["apps"]["defaultStyle"], "default");
-    assert!(value["apps"]["styles"].as_array().unwrap().iter().any(|app| app["bundleId"] == "com.apple.Terminal" && app["style"] == "code" && app["polish"] == false));
-    assert_eq!(value["notes"], json!({ "folder": null, "fileName": "{date} {title}", "frontmatter": true, "dailyNote": false, "tags": [], "claudeTitle": true, "claudeActions": false }));
-    assert_eq!(value["meetings"], json!({ "folder": null, "systemAudio": true, "summarize": true, "you": "You", "others": "Others", "speakers": true, "decisions": true, "actionItems": true }));
-    assert_eq!(value["claude"], json!({ "enabled": false, "via": "api", "model": "claude-haiku-5-5", "effort": "medium", "commands": true, "claudeCode": null, "localEndpoint": "http://localhost:11434", "localModel": "llama3.2", "openAiEndpoint": "https://api.openai.com", "openAiModel": "" }));
+    assert!(value["apps"]["styles"]
+      .as_array()
+      .unwrap()
+      .iter()
+      .any(|app| app["bundleId"] == "com.apple.Terminal" && app["style"] == "code" && app["polish"] == false));
+    assert_eq!(
+      value["notes"],
+      json!({ "folder": null, "fileName": "{date} {title}", "frontmatter": true, "dailyNote": false, "tags": [], "claudeTitle": true, "claudeActions": false })
+    );
+    assert_eq!(
+      value["meetings"],
+      json!({ "folder": null, "systemAudio": true, "summarize": true, "you": "You", "others": "Others", "speakers": true, "decisions": true, "actionItems": true })
+    );
+    assert_eq!(
+      value["claude"],
+      json!({ "enabled": false, "via": "api", "model": "claude-haiku-5-5", "effort": "medium", "commands": true, "claudeCode": null, "localEndpoint": "http://localhost:11434", "localModel": "llama3.2", "openAiEndpoint": "https://api.openai.com", "openAiModel": "" })
+    );
     assert_eq!(value["agents"], json!({ "mcp": true, "shareHistory": false, "shareNotes": true, "shareMeetings": true, "allowWrite": false }));
     assert_eq!(value["history"], json!({ "keep": "week" }));
-    assert_eq!(value["appearance"], json!({ "theme": "system", "edge": "right", "size": "medium", "idle": "dots", "hint": true, "pill": ["note", "write", "sticky", "meeting", "library", "settings"], "margin": 8, "avoidDock": true }));
+    assert_eq!(
+      value["appearance"],
+      json!({ "theme": "system", "edge": "right", "size": "medium", "idle": "dots", "hint": true, "pill": ["note", "write", "sticky", "meeting", "library", "settings"], "margin": 8, "avoidDock": true })
+    );
   }
 
   #[test]
@@ -756,7 +1032,8 @@ mod tests {
   #[test]
   fn chords_are_usable_and_never_taken_twice() {
     let chord = |key_code: u16, modifiers: u64| json!({ "keyCode": key_code, "modifiers": modifiers, "label": "x" });
-    let note = |patch: Value| Settings::default().patched(&json!({ "shortcuts": { "note": patch } })).shortcuts.note.map(|chord| (chord.key_code, chord.modifiers));
+    let note =
+      |patch: Value| Settings::default().patched(&json!({ "shortcuts": { "note": patch } })).shortcuts.note.map(|chord| (chord.key_code, chord.modifiers));
     assert_eq!(note(chord(96, 0)), Some((96, 0))); // F5 alone
     assert_eq!(note(chord(96, SHIFT)), Some((96, SHIFT)));
     assert_eq!(note(chord(45, SHIFT)), None); // ⇧N would take a capital letter
@@ -776,11 +1053,15 @@ mod tests {
   #[test]
   fn languages_file_names_and_claude_are_checked() {
     let language = |code: &str| Settings::default().patched(&json!({ "dictation": { "language": code } })).dictation.language;
-    for bad in ["", "x", "zzzzz", "english", "EN"] { assert_eq!(language(bad), "auto", "{bad}"); }
+    for bad in ["", "x", "zzzzz", "english", "EN"] {
+      assert_eq!(language(bad), "auto", "{bad}");
+    }
     assert_eq!(language("tr"), "tr");
     assert_eq!(language("haw"), "haw");
     let file_name = |name: &str| Settings::default().patched(&json!({ "notes": { "fileName": name } })).notes.file_name;
-    for bad in ["../../../Library/LaunchAgents/{title}", "a/b", "{date}: {title}", ".{title}"] { assert_eq!(file_name(bad), "{date} {title}", "{bad}"); }
+    for bad in ["../../../Library/LaunchAgents/{title}", "a/b", "{date}: {title}", ".{title}"] {
+      assert_eq!(file_name(bad), "{date} {title}", "{bad}");
+    }
     assert_eq!(file_name("{date} {time} {title}"), "{date} {time} {title}");
     // Only Rust turns Claude on; a patch from a page can't.
     assert!(Settings::default().patched(&json!({ "claude": { "enabled": true } })).claude.enabled);
@@ -796,7 +1077,8 @@ mod tests {
     let styles: Vec<(&str, Style)> = after.apps.styles.iter().map(|app| (app.bundle_id.as_str(), app.style)).collect();
     assert_eq!(styles, [("com.a", Style::Code), ("com.d", Style::Casual)]);
     assert_eq!(after.apps.style_for("Com.A"), (Style::Code, false));
-    let replacements = Settings::default().patched(&json!({ "vocabulary": { "replacements": [{ "from": "a", "to": "b" }, { "from": "c" }] } })).vocabulary.replacements;
+    let replacements =
+      Settings::default().patched(&json!({ "vocabulary": { "replacements": [{ "from": "a", "to": "b" }, { "from": "c" }] } })).vocabulary.replacements;
     assert_eq!(replacements, [Replacement { from: "a".into(), to: "b".into() }]);
   }
 
@@ -817,7 +1099,11 @@ mod tests {
     save_to(&path, &Settings::default()).unwrap();
     assert!(!load(&path).1); // what this version writes, it keeps
     keep_aside(&path);
-    let copies: Vec<String> = std::fs::read_dir(&dir).unwrap().filter_map(|entry| entry.ok()?.file_name().into_string().ok()).filter(|name| name.starts_with("settings.json.bad-")).collect();
+    let copies: Vec<String> = std::fs::read_dir(&dir)
+      .unwrap()
+      .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
+      .filter(|name| name.starts_with("settings.json.bad-"))
+      .collect();
     assert_eq!(copies.len(), 1);
     std::fs::remove_dir_all(dir).unwrap();
   }

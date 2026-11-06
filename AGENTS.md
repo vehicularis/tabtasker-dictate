@@ -125,8 +125,8 @@ A new `.m` file in `src-tauri/src/native/` is compiled without editing `build.rs
 
 ## Conventions
 
-- **Formatting.** Rust and TypeScript use 2-space indents (`.editorconfig`), and long lines are fine. No
-  formatter is enforced, so match the code around you.
+- **Formatting.** Rust and TypeScript use 2-space indents (`.editorconfig`), and long lines are fine. Run
+  `cargo fmt`, which CI checks; the TypeScript has no formatter, so match the code around you.
 - **Comments** say only what the code can't: the why, an invariant, a gotcha.
   - `///` docs are plain sentences.
   - `ponytail:` marks a deliberate simplification, with its ceiling and the way up.

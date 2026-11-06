@@ -6,7 +6,9 @@ use std::ffi::{c_char, CStr};
 use tauri::Emitter;
 
 pub(super) fn emit(event: &str, payload: serde_json::Value) {
-  if let Some(app) = APP.get() { let _ = app.emit_to(OVERLAY, event, payload); }
+  if let Some(app) = APP.get() {
+    let _ = app.emit_to(OVERLAY, event, payload);
+  }
 }
 fn text(text: *const c_char) -> Option<String> {
   (!text.is_null()).then(|| unsafe { CStr::from_ptr(text) }.to_string_lossy().into_owned())
@@ -15,28 +17,38 @@ fn text(text: *const c_char) -> Option<String> {
 #[no_mangle]
 extern "C" fn dictate_ui_state(phase: *const c_char, level: f64, dictating: bool) {
   let Some(phase) = text(phase) else { return };
-  if !level.is_finite() { return; }
+  if !level.is_finite() {
+    return;
+  }
   super::updates::heard(&phase);
   emit("dictate-state", serde_json::json!({ "phase": phase, "level": level.clamp(0.0, 1.0), "dictating": dictating }));
 }
 #[no_mangle]
 extern "C" fn dictate_ui_error(message: *const c_char) {
   let Some(message) = text(message) else { return };
-  if message != "unheard" { log::warn!("voice: {message}"); }
+  if message != "unheard" {
+    log::warn!("voice: {message}");
+  }
   emit("dictate-error", serde_json::json!({ "message": message }));
 }
 #[no_mangle]
 extern "C" fn dictate_ui_notice(message: *const c_char) {
-  if let Some(message) = text(message) { emit("dictate-notice", serde_json::json!({ "message": message })); }
+  if let Some(message) = text(message) {
+    emit("dictate-notice", serde_json::json!({ "message": message }));
+  }
 }
 /// To every window: setup in Settings tests the key too.
 #[no_mangle]
 extern "C" fn dictate_ui_fn(down: bool) {
-  if let Some(app) = APP.get() { let _ = app.emit("dictate-fn", serde_json::json!({ "down": down })); }
+  if let Some(app) = APP.get() {
+    let _ = app.emit("dictate-fn", serde_json::json!({ "down": down }));
+  }
 }
 #[no_mangle]
 extern "C" fn dictate_ui_said(words: *const c_char, dictated: bool, live: bool) {
-  if let Some(words) = text(words) { emit("dictate-said", serde_json::json!({ "text": words, "dictated": dictated, "live": live })); }
+  if let Some(words) = text(words) {
+    emit("dictate-said", serde_json::json!({ "text": words, "dictated": dictated, "live": live }));
+  }
 }
 /// A global shortcut for something drawn by a page: a note to type or a question for Claude (the overlay
 /// opens its card), or a sticky, which is a window of its own.
@@ -44,7 +56,11 @@ extern "C" fn dictate_ui_said(words: *const c_char, dictated: bool, live: bool) 
 extern "C" fn dictate_ui_open(what: *const c_char) {
   let Some(what) = text(what) else { return };
   if what == "sticky" {
-    if let Some(app) = APP.get() { if let Err(e) = stickies::create(app, None, None) { emit("dictate-notice", serde_json::json!({ "message": e })); } }
+    if let Some(app) = APP.get() {
+      if let Err(e) = stickies::create(app, None, None) {
+        emit("dictate-notice", serde_json::json!({ "message": e }));
+      }
+    }
     return;
   }
   emit("dictate-open", serde_json::json!({ "what": what }));
@@ -57,7 +73,9 @@ extern "C" fn dictate_ui_hands_free(locked: bool) {
 /// A note is done: its words go to the review card.
 #[no_mangle]
 extern "C" fn dictate_ui_note(words: *const c_char) {
-  if let Some(words) = text(words) { emit("dictate-note", serde_json::json!({ "text": words })); }
+  if let Some(words) = text(words) {
+    emit("dictate-note", serde_json::json!({ "text": words }));
+  }
 }
 /// The pointer over the overlay's clickable parts, in page coordinates (null once it leaves them).
 #[no_mangle]
@@ -76,20 +94,29 @@ extern "C" fn dictate_ui_dock(shown: bool, strip: f64, edge: *const c_char) {
 #[no_mangle]
 extern "C" fn dictate_ui_sticky_hover(id: *const c_char, up: bool) {
   let Some(id) = text(id) else { return };
-  if let Some(app) = APP.get() { let _ = app.emit_to(crate::library::stickies::label(&id), "dictate-sticky-hover", serde_json::json!({ "id": id, "up": up })); }
+  if let Some(app) = APP.get() {
+    let _ = app.emit_to(crate::library::stickies::label(&id), "dictate-sticky-hover", serde_json::json!({ "id": id, "up": up }));
+  }
 }
 /// A line for the app log: no speech, just what the microphone delivered.
 #[no_mangle]
 extern "C" fn dictate_log(line: *const c_char) {
-  if let Some(line) = text(line) { log::info!("voice {line}"); }
+  if let Some(line) = text(line) {
+    log::info!("voice {line}");
+  }
 }
 #[no_mangle]
 extern "C" fn dictate_cancel(request: *const c_char) {
-  if let (Some(app), Some(id)) = (APP.get(), text(request)) { speech::cancel(app, &id); context::forget(&id); }
+  if let (Some(app), Some(id)) = (APP.get(), text(request)) {
+    speech::cancel(app, &id);
+    context::forget(&id);
+  }
 }
 
 /// Paste Last Transcript from its chord.
 #[no_mangle]
 extern "C" fn dictate_paste_last() {
-  if let Some(app) = APP.get() { commands::paste_last(app.clone()); }
+  if let Some(app) = APP.get() {
+    commands::paste_last(app.clone());
+  }
 }
