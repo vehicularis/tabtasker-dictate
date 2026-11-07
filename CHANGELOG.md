@@ -3,7 +3,7 @@
 What changed in each release of TabTasker | Dictate, newest first. Every release, with its signed and
 notarized DMG, is on the [releases page](https://github.com/vehicularis/tabtasker-dictate/releases).
 
-## Unreleased
+## [0.1.2] - 2026-11-07
 
 ### Added
 
@@ -12,6 +12,7 @@ notarized DMG, is on the [releases page](https://github.com/vehicularis/tabtaske
   Settings › General, or choose Check for updates… in the pill’s menu or the menu bar.
 - Every release is built in the open by a GitHub workflow, with a SHA256SUMS file and an attestation that
   says which commit and workflow built the DMG. The README says how to check a download with them.
+- Install with Homebrew: `brew install --cask vehicularis/tap/tabtasker-dictate`.
 
 ### Fixed
 
@@ -54,5 +55,6 @@ The first release: hold fn in any app, say what you want to write, and let go.
 - Meeting recordings that tell the voices apart, with a summary if you connect AI.
 - AI only if you want it: Claude, OpenAI, any OpenAI-compatible service, or a model on your Mac.
 
+[0.1.2]: https://github.com/vehicularis/tabtasker-dictate/releases/tag/v0.1.2
 [0.1.1]: https://github.com/vehicularis/tabtasker-dictate/releases/tag/v0.1.1
 [0.1.0]: https://github.com/vehicularis/tabtasker-dictate/releases/tag/v0.1.0

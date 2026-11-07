@@ -762,7 +762,7 @@ dependencies = [
 
 [[package]]
 name = "dictate-engine"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "log",
  "reqwest",
@@ -777,7 +777,7 @@ dependencies = [
 
 [[package]]
 name = "dictate-lab"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "dictate-engine",
  "serde",
@@ -3726,7 +3726,7 @@ dependencies = [
 
 [[package]]
 name = "tabtasker-dictate"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "base64 0.23.1",
  "cc",
