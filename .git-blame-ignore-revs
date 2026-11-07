@@ -1,0 +1,5 @@
+# Commits git blame skips: format-only changes, so blame shows who wrote each line.
+# GitHub reads this file by itself. For git on your Mac: git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# Format-only: cargo fmt the Rust, and check it in CI (#60)
+9bcc96e325b1c8c3fdc17a3a30b292167aa700c3
